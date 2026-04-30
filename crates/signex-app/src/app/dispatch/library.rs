@@ -1905,6 +1905,16 @@ impl Signex {
                 if self.library.settings.digikey_in_flight {
                     return Task::none();
                 }
+                // Bump the generation BEFORE spawning so the worker
+                // captures the current value. `DigiKeyOAuthResult`
+                // discards messages whose generation is stale — i.e.
+                // belonged to a cancelled flow that's only now winding
+                // down. Without this, Cancel + reconnect lets the
+                // first worker's outcome stomp on the second flow's
+                // state.
+                self.library.settings.digikey_flow_generation =
+                    self.library.settings.digikey_flow_generation.wrapping_add(1);
+                let generation = self.library.settings.digikey_flow_generation;
                 self.library.settings.digikey_in_flight = true;
                 self.library.settings.digikey_status = Some("Waiting for browser…".to_string());
                 let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -1930,7 +1940,7 @@ impl Signex {
                             reason: "worker thread panicked".into(),
                         })
                     },
-                    |outcome| {
+                    move |outcome| {
                         let (label, err) = match outcome {
                             digikey_oauth::Outcome::Connected { account_label } => {
                                 (Some(account_label), None)
@@ -1940,6 +1950,7 @@ impl Signex {
                         };
                         Message::Library(LibraryMessage::Settings(
                             SettingsMsg::DigiKeyOAuthResult {
+                                generation,
                                 connected_label: label,
                                 error: err,
                             },
@@ -1951,14 +1962,27 @@ impl Signex {
                 if let Some(flag) = self.library.settings.digikey_cancel.as_ref() {
                     flag.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
+                // Bump the generation so any in-flight worker's eventual
+                // result is treated as stale by the result handler.
+                // Then clear the in-flight flag — the user is now free
+                // to start a fresh OAuth attempt without the old
+                // worker's outcome leaking into the new flow.
+                self.library.settings.digikey_flow_generation =
+                    self.library.settings.digikey_flow_generation.wrapping_add(1);
                 self.library.settings.digikey_cancel = None;
                 self.library.settings.digikey_in_flight = false;
                 self.library.settings.digikey_status = Some("Cancelled".to_string());
             }
             SettingsMsg::DigiKeyOAuthResult {
+                generation,
                 connected_label,
                 error,
             } => {
+                // Drop stale results from a cancelled flow — see the
+                // comment on `DigiKeyConnect` for why.
+                if generation != self.library.settings.digikey_flow_generation {
+                    return Task::none();
+                }
                 self.library.settings.digikey_in_flight = false;
                 self.library.settings.digikey_cancel = None;
                 match (connected_label, error) {
@@ -3035,12 +3059,14 @@ fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     };
     tmp.set_file_name(tmp_name);
     std::fs::write(&tmp, bytes)?;
-    // Windows rename fails if the destination exists; remove it first.
-    // (POSIX rename is atomic-replace by spec; no remove needed there
-    // but the no-op when missing is harmless.)
-    if path.exists() {
-        let _ = std::fs::remove_file(path);
-    }
+    // `std::fs::rename` is atomic-replace on every platform we ship —
+    // POSIX `rename(2)` by spec, and Windows uses `MoveFileExW` with
+    // `MOVEFILE_REPLACE_EXISTING`. A crash mid-write therefore leaves
+    // either the original file intact OR the new bytes at the
+    // destination, never a half-written file. The earlier
+    // `remove_file → rename` two-step opened a window where a crash
+    // between the two calls would orphan the .tmp and leave NO file
+    // at the destination, breaking the invariant the caller expects.
     std::fs::rename(&tmp, path)?;
     Ok(())
 }

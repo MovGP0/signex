@@ -43,6 +43,9 @@ pub fn view<'a>(
         settings.digikey_account_email.as_deref(),
     ) {
         (true, Some(s), _) => s.to_string(),
+        // In-flight with no status set yet — never let "Not connected"
+        // render while the Cancel button is also visible.
+        (true, None, _) => "Connecting…".to_string(),
         (false, _, Some(label)) => format!("Connected as {label}"),
         (false, Some(s), _) => s.to_string(),
         _ => "Not connected".to_string(),
@@ -78,11 +81,12 @@ pub fn view<'a>(
     .spacing(2);
 
     // ── Mouser ──────────────────────────────────────────────
-    let masked: String = if settings.mouser_api_key_buf.is_empty() {
-        String::new()
-    } else {
-        "\u{2022}".repeat(settings.mouser_api_key_buf.len().min(32))
-    };
+    // The text_input must be bound to the real `mouser_api_key_buf` —
+    // the previous version bound it to a `•`-only `masked` string,
+    // which meant the first keystroke fired `MouserApiKeyChanged`
+    // with the bullet string and permanently overwrote the real key.
+    // `secure(true)` is the iced-supplied mask — the buffer stays
+    // cleartext, only the rendered glyphs are bullets.
     let mouser_test_status = settings
         .mouser_status
         .clone()
@@ -95,7 +99,8 @@ pub fn view<'a>(
                 .size(11)
                 .color(text_c)
                 .width(Length::Fixed(96.0)),
-            text_input("Paste API key…", &masked)
+            text_input("Paste API key…", &settings.mouser_api_key_buf)
+                .secure(true)
                 .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))
                 .padding([4, 8])
                 .size(12),

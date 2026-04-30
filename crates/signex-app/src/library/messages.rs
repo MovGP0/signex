@@ -994,6 +994,12 @@ pub enum SettingsMsg {
     DigiKeyConnect,
     DigiKeyCancel,
     DigiKeyOAuthResult {
+        /// Generation tag stamped at the time `DigiKeyConnect` spawned
+        /// the worker. The handler ignores results whose generation
+        /// no longer matches `digikey_flow_generation` — the user has
+        /// since cancelled and started a fresh flow, and applying the
+        /// stale outcome would clobber the new flow's state.
+        generation: u64,
         connected_label: Option<String>,
         error: Option<String>,
     },
