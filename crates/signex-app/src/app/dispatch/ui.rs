@@ -67,6 +67,8 @@ impl Signex {
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(Message::TogglePanelList)
             }
+            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => self
+                .dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel)),
             Message::CanvasEvent(event) => self.handle_canvas_interaction_event(event),
             Message::CanvasEventInWindow { window_id, event } => {
                 self.handle_canvas_event_in_window(window_id, event)

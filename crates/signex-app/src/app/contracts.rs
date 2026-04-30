@@ -735,4 +735,7 @@ pub enum StatusBarRequest {
     ToggleGrid,
     ToggleSnap,
     TogglePanelList,
+    /// Click on the selection-summary segment opens the Properties panel
+    /// scoped to the current selection.
+    OpenPropertiesForSelection,
 }
