@@ -24,7 +24,7 @@ mod mutation_gateway;
 mod runtime;
 mod selection_request;
 mod state;
-mod view;
+pub(crate) mod view;
 
 pub use contracts::{
     ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,

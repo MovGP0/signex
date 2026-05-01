@@ -26,31 +26,31 @@ const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 /// rename modals; 28 keeps the header tight relative to the body.
 /// Close-X follows the same height so there's no empty strip below
 /// the button.
-pub(in crate::app::view) const MODAL_HEADER_HEIGHT: f32 = 28.0;
+pub(crate) const MODAL_HEADER_HEIGHT: f32 = 28.0;
 /// Asymmetric padding inside the modal header strip: zero on the right
 /// so the close-X sits flush against the rounded corner (its own
 /// top-right radius matches `MODAL_CORNER_RADIUS`); zero top/bottom so
 /// the X fills the strip's full height; left inset matched to the
 /// modal body padding (16 px) so the title left-aligns with the
 /// body's first text column.
-pub(in crate::app::view) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
+pub(crate) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
     top: 0.0,
     right: 0.0,
     bottom: 0.0,
     left: 16.0,
 };
 /// Title text size in the modal header.
-pub(in crate::app::view) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
+pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
 /// Close-X hit-box width — same width the chrome close uses
 /// (`view::view_main_window_chrome::chrome_btn`).
-pub(in crate::app::view) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
+pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
 /// Close-X hit-box height — also matches the chrome close (full
 /// menu-bar height) so the modal X is pixel-identical to the OS-window X.
-pub(in crate::app::view) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
+pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
 /// SVG glyph size for the close-X. Same value the chrome close uses.
-pub(in crate::app::view) const MODAL_CLOSE_X_ICON: f32 = 14.0;
+pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
-pub(in crate::app::view) const MODAL_CLOSE_X_HOVER: Color =
+pub(crate) const MODAL_CLOSE_X_HOVER: Color =
     Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
 impl Signex {

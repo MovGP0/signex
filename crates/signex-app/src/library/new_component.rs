@@ -26,14 +26,18 @@
 //! surface the table pick_list with a single "<class>s" placeholder
 //! option so the user always sees the destination filename.
 
-use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::widget::{Space, button, column, container, pick_list, row, svg, text, text_input};
+use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_library::{ComponentClass, PrimitiveKind};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
 use super::state::{BUILTIN_CLASSES, LibraryState, NewComponentState, PrimitivePickerTarget};
+use crate::app::view::dialogs::{
+    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
+    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+};
 
 const MODAL_W: f32 = 520.0;
 const MODAL_H: f32 = 420.0;
@@ -85,20 +89,27 @@ pub fn view<'a>(
     state: &'a LibraryState,
     nc: &'a NewComponentState,
     tokens: &'a ThemeTokens,
+    theme_id: ThemeId,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
+    // Canonical modal header — same constants and shape every other
+    // modal in the app uses (Rename, Remove, Project Options, …) so
+    // the chrome stays in lockstep across surfaces.
     let header = container(
         row![
-            text("New Component").size(14).color(text_c),
+            text("New Component")
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(text_c),
             Space::new().width(Length::Fill),
-            close_x(LibraryMessage::CloseNewComponent, tokens),
+            close_x(LibraryMessage::CloseNewComponent, theme_id),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([10, 14])
+    .padding(MODAL_HEADER_PADDING)
+    .height(MODAL_HEADER_HEIGHT)
     .style(crate::styles::modal_header_strip(tokens));
 
     // Internal PN ────────────────────────────────────────────
@@ -384,30 +395,56 @@ pub fn view<'a>(
     .into()
 }
 
-fn close_x<'a>(message: LibraryMessage, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
-        .on_press(message)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.03,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
+/// Same SVG glyph + hover footprint the shared `close_x_button` uses
+/// (`view::dialogs::close_x_button`), but generic over message type so
+/// it composes into a `LibraryMessage` element. Matches the OS chrome
+/// close: white glyph, full header-height hit-box, Windows-native red
+/// hover. Kept local because the shared helper is `Message`-typed
+/// only.
+fn close_x<'a>(
+    message: LibraryMessage,
+    theme_id: ThemeId,
+) -> Element<'a, LibraryMessage> {
+    let handle = crate::icons::icon_chrome_window_close(theme_id);
+    button(
+        container(
+            svg(handle)
+                .width(MODAL_CLOSE_X_ICON)
+                .height(MODAL_CLOSE_X_ICON)
+                .style(move |_: &Theme, _| svg::Style {
+                    color: Some(Color::WHITE),
+                }),
+        )
+        .width(MODAL_CLOSE_X_HIT_W)
+        .height(MODAL_CLOSE_X_HIT_H)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(0)
+    .on_press(message)
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let hovered = matches!(
+            status,
+            iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed
+        );
+        iced::widget::button::Style {
+            background: if hovered {
+                Some(Background::Color(MODAL_CLOSE_X_HOVER))
+            } else {
+                None
+            },
+            text_color: Color::WHITE,
+            border: Border {
+                radius: iced::border::Radius {
+                    top_left: 0.0,
+                    top_right: 4.0,
+                    bottom_left: 0.0,
+                    bottom_right: 0.0,
                 },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+                ..Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
 }
