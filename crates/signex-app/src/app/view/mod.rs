@@ -3507,6 +3507,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
             || ui.project_close_confirm.is_some()
@@ -4799,6 +4800,10 @@ impl Signex {
             layers.push(crate::keyboard_shortcuts_modal::view(
                 &document.panel_ctx.tokens,
             ));
+        }
+
+        if ui.first_run_tour_open {
+            layers.push(crate::first_run_tour::view(&document.panel_ctx.tokens));
         }
 
         if ui.rename_dialog.is_some() {

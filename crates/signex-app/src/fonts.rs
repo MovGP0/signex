@@ -600,6 +600,41 @@ pub fn write_pin_matrix_overrides(
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// First-run tour (UX_IMPROVEMENTS_OVER_ALTIUM §4.3)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Has the user dismissed the first-run tour card? Default `false` so a
+/// fresh install shows the card on first launch; once dismissed (via the
+/// X button, Esc, or any canvas interaction) the flag flips to `true`
+/// and stays that way for the lifetime of the prefs file.
+pub fn read_first_run_tour_dismissed() -> bool {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return false;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return false;
+    };
+    json["first_run_tour_dismissed"].as_bool().unwrap_or(false)
+}
+
+/// Persist the dismissal flag without clobbering other keys.
+pub fn write_first_run_tour_dismissed(dismissed: bool) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["first_run_tour_dismissed"] = serde_json::Value::Bool(dismissed);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Persistent search queries (UX_IMPROVEMENTS_OVER_ALTIUM §1.1)
 // ──────────────────────────────────────────────────────────────────────────
 

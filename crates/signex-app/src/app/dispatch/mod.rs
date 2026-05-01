@@ -121,6 +121,7 @@ impl Signex {
             | Message::OpenPreferences
             | Message::ClosePreferences
             | Message::CloseKeyboardShortcuts
+            | Message::DismissFirstRunTour
             | Message::PreferencesNav(_)
             | Message::PreferencesMsg(_)
             | Message::FindReplaceMsg(_)

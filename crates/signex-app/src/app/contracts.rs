@@ -151,6 +151,10 @@ pub enum Message {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Dismiss the first-run tour card and persist the flag so it
+    /// never reappears. Fired by the card's ✕ button, by Esc, and by
+    /// the first canvas interaction after launch.
+    DismissFirstRunTour,
     OpenFind,
     OpenReplace,
     ClosePreferences,

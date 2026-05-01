@@ -69,8 +69,21 @@ impl Signex {
             }
             Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => self
                 .dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel)),
-            Message::CanvasEvent(event) => self.handle_canvas_interaction_event(event),
+            Message::CanvasEvent(event) => {
+                // First user gesture on the canvas dismisses the
+                // first-run tour card (UX §4.3). Cheap inline check —
+                // false branch when the card is already dismissed.
+                if self.ui_state.first_run_tour_open {
+                    self.ui_state.first_run_tour_open = false;
+                    crate::fonts::write_first_run_tour_dismissed(true);
+                }
+                self.handle_canvas_interaction_event(event)
+            }
             Message::CanvasEventInWindow { window_id, event } => {
+                if self.ui_state.first_run_tour_open {
+                    self.ui_state.first_run_tour_open = false;
+                    crate::fonts::write_first_run_tour_dismissed(true);
+                }
                 self.handle_canvas_event_in_window(window_id, event)
             }
             _ => unreachable!("dispatch_ui_message received non-ui message"),

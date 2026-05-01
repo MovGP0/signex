@@ -25,6 +25,11 @@ impl Signex {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
+            Message::DismissFirstRunTour => {
+                self.ui_state.first_run_tour_open = false;
+                crate::fonts::write_first_run_tour_dismissed(true);
+                Task::none()
+            }
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),

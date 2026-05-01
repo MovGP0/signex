@@ -9,6 +9,7 @@ mod chrome;
 mod diagnostics;
 mod dock;
 mod find_replace;
+mod first_run_tour;
 mod fonts;
 mod icons;
 mod keyboard_shortcuts_modal;

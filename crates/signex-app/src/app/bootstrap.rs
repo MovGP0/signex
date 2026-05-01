@@ -107,6 +107,7 @@ impl Signex {
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
+                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
                 preferences_draft_theme: ThemeId::Signex,
@@ -440,9 +441,13 @@ impl Signex {
                 self.ui_state.find_replace.open,
                 self.ui_state.command_palette.open,
                 self.ui_state.keyboard_shortcuts_open,
+                self.ui_state.first_run_tour_open,
             ))
             .map(
-                |((find_replace_open, palette_open, kbd_shortcuts_open), event)| match event {
+                |(
+                    (find_replace_open, palette_open, kbd_shortcuts_open, first_run_tour_open),
+                    event,
+                )| match event {
                 keyboard::Event::KeyPressed {
                     key, modifiers: m, ..
                 } => {
@@ -517,6 +522,11 @@ impl Signex {
                         if kbd_shortcuts_open =>
                     {
                         Message::CloseKeyboardShortcuts
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                        if first_run_tour_open =>
+                    {
+                        Message::DismissFirstRunTour
                     }
                     (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                         Message::Tool(ToolMessage::SelectTool(Tool::Select))

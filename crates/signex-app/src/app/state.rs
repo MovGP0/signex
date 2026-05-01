@@ -54,6 +54,12 @@ pub struct UiState {
     /// every binding registered in `crate::shortcuts::SHORTCUTS`.
     /// Toggled from the Help menu and from F1.
     pub keyboard_shortcuts_open: bool,
+    /// First-run tour overlay — a single dismissible card shown only
+    /// before the user has dismissed it once. Initial value is read
+    /// from prefs in `bootstrap`; transitions to `false` on the first
+    /// dismiss gesture and the prefs file flips to "dismissed" so the
+    /// card never reappears. Closes UX §4.3.
+    pub first_run_tour_open: bool,
     pub find_replace: crate::find_replace::FindReplaceState,
     pub preferences_nav: crate::preferences::PrefNav,
     pub preferences_draft_theme: ThemeId,
