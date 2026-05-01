@@ -516,6 +516,7 @@ impl Signex {
                 self.library.create_options = Some(LibraryCreateOptionsState {
                     project_path,
                     lib_path,
+                    enable_git: false,
                     use_lfs: false,
                 });
                 Task::none()
@@ -523,6 +524,19 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsToggleLfs => {
                 if let Some(state) = self.library.create_options.as_mut() {
                     state.use_lfs = !state.use_lfs;
+                }
+                Task::none()
+            }
+            LibraryMessage::LibraryCreateOptionsToggleGit => {
+                if let Some(state) = self.library.create_options.as_mut() {
+                    state.enable_git = !state.enable_git;
+                    // LFS is meaningless without git — keep the two
+                    // toggles consistent so the user doesn't end up
+                    // with LFS-on-no-git which the adapter would
+                    // silently drop anyway.
+                    if !state.enable_git {
+                        state.use_lfs = false;
+                    }
                 }
                 Task::none()
             }
@@ -535,6 +549,7 @@ impl Signex {
                     self.handle_create_library_at_path(
                         state.project_path,
                         state.lib_path,
+                        state.enable_git,
                         state.use_lfs,
                     )
                 } else {
@@ -1888,6 +1903,7 @@ impl Signex {
         &mut self,
         project_path: std::path::PathBuf,
         lib_path: std::path::PathBuf,
+        enable_git: bool,
         use_lfs: bool,
     ) -> Task<Message> {
         let Some(loaded) = self
@@ -1908,6 +1924,7 @@ impl Signex {
             &mut self.library,
             &mut loaded.data,
             lib_path.clone(),
+            enable_git,
             use_lfs,
         ) {
             Ok(library_id) => {

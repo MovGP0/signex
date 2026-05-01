@@ -52,10 +52,12 @@ pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), Libra
 /// Options" modal that pops up after the Save-As dialog; non-UI
 /// callers (tests, fixtures) pass `false` to stay independent of a
 /// local `git lfs` install.
+#[allow(clippy::too_many_arguments)]
 pub fn create_library_at(
     state: &mut LibraryState,
     project: &mut ProjectData,
     lib_path: PathBuf,
+    enable_git: bool,
     use_lfs: bool,
 ) -> Result<Uuid, LibraryError> {
     // Library directories must use the `.snxlib` extension so the
@@ -118,7 +120,17 @@ pub fn create_library_at(
     // after the New Library Save-As dialog feeds `use_lfs` here. The
     // adapter writes `.gitattributes` for `*.step`/`*.stp`/`*.wrl`/
     // `*.iges` and stages it into the initial commit when `true`.
-    let _adapter = LocalGitAdapter::init(&lib_path, manifest, LibraryInitOptions { use_lfs })?;
+    let _adapter = LocalGitAdapter::init(
+        &lib_path,
+        manifest,
+        LibraryInitOptions {
+            enable_git,
+            // LFS only matters when version control is on; force off
+            // when git is disabled so `.gitattributes` doesn't appear
+            // in a non-git directory.
+            use_lfs: enable_git && use_lfs,
+        },
+    )?;
 
     // Register the library on the project FIRST — the on-disk
     // `.snxlib` is the source of truth, and the project should
@@ -192,7 +204,7 @@ pub fn create_library(
     // Legacy convenience wrapper — defaults LFS off so existing
     // callers don't change behaviour. UI flows go through the
     // "Library Options" modal which carries `use_lfs` explicitly.
-    create_library_at(state, project, lib_path, false)
+    create_library_at(state, project, lib_path, false, false)
 }
 
 /// Auto-mount every library referenced by `project.libraries`. Called

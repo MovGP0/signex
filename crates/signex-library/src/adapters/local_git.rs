@@ -56,14 +56,22 @@ const LFS_EXTENSIONS: &[&str] = &["step", "stp", "wrl", "iges"];
 
 /// Library-create options threaded through [`LocalGitAdapter::init`].
 ///
-/// LFS defaults to **off**. The library-create UI flips it on for
-/// production libraries (Stage 11 of `v0.9-snxlib-as-file-plan.md`
-/// wires the checkbox), but unit tests + library-server fixtures stay
-/// off so they don't depend on a local `git lfs` install.
+/// `enable_git` defaults to **off** — fresh libraries land on disk as
+/// plain files with no `.git/` directory. Users opt in via the
+/// "Enable version control" checkbox on the New Library Options
+/// modal; flipping it on runs `git init` + records an initial commit
+/// just like the legacy behaviour. LFS only matters when version
+/// control is on (no point in `.gitattributes` without a repo).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LibraryInitOptions {
+    /// Run `git init` at the parent directory and stage the
+    /// freshly-written `.snxlib` (plus `.gitattributes` when
+    /// `use_lfs`) as the first commit. Off by default — opting in is
+    /// an explicit user choice.
+    pub enable_git: bool,
     /// Write a `.gitattributes` opting `*.step` / `*.stp` / `*.wrl` /
-    /// `*.iges` into Git LFS at init time.
+    /// `*.iges` into Git LFS at init time. Only meaningful when
+    /// `enable_git` is also true.
     pub use_lfs: bool,
 }
 
@@ -118,49 +126,55 @@ impl LocalGitAdapter {
         let text = library_file.write()?;
         fs::write(&file_path, &text)?;
 
-        // LFS attributes go in BEFORE `git init` so the initial commit
-        // already has `.gitattributes` staged; otherwise libgit2's
-        // index update sequence gets fiddly.
-        if opts.use_lfs {
-            write_lfs_attributes(&root_dir)?;
-        }
+        // Git scaffolding — only when the user opted in. Without
+        // `enable_git` the library lives on disk as plain files and
+        // every mutation operation is a best-effort `commit_path`
+        // that no-ops when no `.git/` is present.
+        if opts.enable_git {
+            // LFS attributes go in BEFORE `git init` so the initial commit
+            // already has `.gitattributes` staged; otherwise libgit2's
+            // index update sequence gets fiddly.
+            if opts.use_lfs {
+                write_lfs_attributes(&root_dir)?;
+            }
 
-        let repo = git2::Repository::init(&root_dir)
-            .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-        let (sig_name, sig_email) = identity_for_repo(&repo);
-        let sig = git2::Signature::now(&sig_name, &sig_email)
-            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+            let repo = git2::Repository::init(&root_dir)
+                .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+            let (sig_name, sig_email) = identity_for_repo(&repo);
+            let sig = git2::Signature::now(&sig_name, &sig_email)
+                .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        let snxlib_rel = file_name_str(&file_path)?;
-        index
-            .add_path(Path::new(&snxlib_rel))
-            .map_err(|e| LibraryError::Backend(format!("git add snxlib: {e}")))?;
-        if opts.use_lfs {
+            let mut index = repo
+                .index()
+                .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+            let snxlib_rel = file_name_str(&file_path)?;
             index
-                .add_path(Path::new(GITATTRIBUTES_FILE))
-                .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
+                .add_path(Path::new(&snxlib_rel))
+                .map_err(|e| LibraryError::Backend(format!("git add snxlib: {e}")))?;
+            if opts.use_lfs {
+                index
+                    .add_path(Path::new(GITATTRIBUTES_FILE))
+                    .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
+            }
+            index
+                .write()
+                .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+            let tree_oid = index
+                .write_tree()
+                .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+            let tree = repo
+                .find_tree(tree_oid)
+                .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+            repo.commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                "chore: initialise library",
+                &tree,
+                &[],
+            )
+            .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
         }
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            "chore: initialise library",
-            &tree,
-            &[],
-        )
-        .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
 
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
@@ -186,10 +200,17 @@ impl LocalGitAdapter {
         let text = fs::read_to_string(&file_path)?;
         let library_file = LibraryFile::parse(&text)?;
         let root_dir = parent_dir(&file_path)?;
-        // Validate the repo opens; surfaces dirty installs early so the
-        // recovery dialog can route the user to `recover_init`.
-        git2::Repository::open(&root_dir)
-            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        // Validate the repo opens — but treat a missing `.git/` as a
+        // clean "no version control" state rather than a hard error.
+        // Libraries created with `LibraryInitOptions::enable_git =
+        // false` ship as plain files; opening them must not require
+        // a repo. Other open failures (corrupt repo, partial init)
+        // still surface so the recovery dialog can route the user
+        // to `recover_init`.
+        if root_dir.join(".git").exists() {
+            git2::Repository::open(&root_dir)
+                .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        }
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
             file_path,
@@ -354,13 +375,20 @@ impl LocalGitAdapter {
     }
 
     /// Stage `rel_path` and create a new commit. Used by primitive saves
-    /// (`*.snx*` files) and table writes (the `.snxlib` itself).
+    /// (`*.snx*` files) and table writes (the `.snxlib` itself). When
+    /// the parent directory has no `.git/`, this is a no-op — the file
+    /// has already been written to disk by the caller, and the user
+    /// opted out of version control at create time. They can opt in
+    /// later via the (forthcoming) Enable Version Control flow.
     fn commit_path(
         &self,
         rel_path: &str,
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
+        if !self.root_dir.join(".git").exists() {
+            return Ok(());
+        }
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
@@ -957,6 +985,13 @@ impl LibraryAdapter for LocalGitAdapter {
         };
         let rel_str = rel_path.to_string_lossy().replace('\\', "/");
 
+        // Libraries created with `enable_git = false` have no `.git/`
+        // and therefore no history to walk. Surface that as an empty
+        // log rather than a hard error so the History panel can show
+        // an "(no version control)" placeholder.
+        if !self.root_dir.join(".git").exists() {
+            return Ok(Vec::new());
+        }
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
 

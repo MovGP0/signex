@@ -82,6 +82,11 @@ pub enum LibraryMessage {
     /// "Library Options" modal — toggle the "Use Git LFS for binary
     /// 3D models" checkbox. Default is off.
     LibraryCreateOptionsToggleLfs,
+    /// Toggle the "Enable version control" checkbox on the New
+    /// Library Options modal. Off by default — fresh libraries land
+    /// as plain files; flipping this on triggers `git init` at
+    /// create time.
+    LibraryCreateOptionsToggleGit,
     /// "Library Options" modal — Create Library button. Runs
     /// `commands::create_library_at` with the modal's `use_lfs` flag.
     LibraryCreateOptionsConfirm,

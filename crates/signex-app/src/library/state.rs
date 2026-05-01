@@ -511,9 +511,11 @@ pub struct DocumentOptionsModalState {
 /// the actual `LocalGitAdapter::init` call. Carries the project the
 /// library should attach to + the chosen `.snxlib` path so the
 /// dispatcher can finalise `commands::create_library_at` once the user
-/// confirms. The single user-facing toggle is `use_lfs`; the plan
-/// (§3, §7 step 11) calls out LFS opt-in as the only library-create
-/// option for v0.9.
+/// confirms.
+///
+/// Two user-facing toggles: `enable_git` (opt-in to version control
+/// — default off, fresh libraries land as plain files) and `use_lfs`
+/// (only meaningful when version control is on).
 #[derive(Debug, Clone)]
 pub struct LibraryCreateOptionsState {
     /// Project the library will attach to — re-resolved at confirm
@@ -522,8 +524,15 @@ pub struct LibraryCreateOptionsState {
     pub project_path: PathBuf,
     /// `.snxlib` file path the user picked in the Save-As dialog.
     pub lib_path: PathBuf,
-    /// "Use Git LFS for binary 3D models" — defaults to `false`. The
-    /// adapter writes `.gitattributes` + stages it on init when set.
+    /// "Enable version control" — when on, adapter runs `git init`
+    /// at the parent dir and stages the initial commit. Defaults to
+    /// off so fresh libraries don't surprise users with a hidden
+    /// `.git/`. Users can opt in later via Enable Version Control
+    /// (project-level command, future work).
+    pub enable_git: bool,
+    /// "Use Git LFS for binary 3D models" — defaults to `false`.
+    /// Only meaningful when `enable_git` is also true; the modal
+    /// greys it out otherwise.
     pub use_lfs: bool,
 }
 
