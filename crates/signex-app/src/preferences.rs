@@ -4,11 +4,17 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{
+    Column, Space, button, column, container, row, scrollable, svg, text, text_input,
+};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
+use crate::app::view::dialogs::{
+    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
+    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+};
 use crate::fonts;
 
 // ─── Navigation Items ─────────────────────────────────────────
@@ -171,6 +177,7 @@ pub fn view<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
         nav,
@@ -187,6 +194,7 @@ pub fn view<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        theme_id,
     );
 
     container(
@@ -229,20 +237,24 @@ fn build_dialog<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
-    // ── Header ──
+    // ── Header ── canonical modal chrome (28px, asymmetric padding,
+    // SVG close-X with red hover) — same shape every other modal in
+    // the app uses so the chrome stays consistent across surfaces.
     let header = container(
         row![
-            text("Preferences").size(14).color(TEXT_PRI),
+            text("Preferences")
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(TEXT_PRI),
             Space::new().width(Length::Fill),
-            close_btn(),
+            close_btn(theme_id),
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(8),
+        .align_y(iced::Alignment::Center),
     )
     .width(Length::Fill)
-    .height(HDR_H)
-    .padding([0, 14])
+    .height(MODAL_HEADER_HEIGHT)
+    .padding(MODAL_HEADER_PADDING)
     .style(move |_: &Theme| container::Style {
         background: Some(Background::Color(HDR_BG)),
         border: Border {
@@ -823,21 +835,54 @@ fn theme_card<'a>(
     .into()
 }
 
-fn close_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("✕").size(14).color(TEXT_MUT))
-        .padding([2, 8])
-        .on_press(PrefMsg::Close)
-        .style(move |_: &Theme, status: button::Status| {
-            let tc = match status {
-                button::Status::Hovered => Color::WHITE,
-                _ => TEXT_MUT,
-            };
-            button::Style {
-                text_color: tc,
-                ..button::Style::default()
-            }
-        })
-        .into()
+/// Canonical close-X — same SVG glyph and red hover footprint as the
+/// shared `view::dialogs::close_x_button`, generic over the modal's
+/// message type so this version can compose into a `PrefMsg`
+/// element. Matches the main-window chrome close (white glyph,
+/// 46×28 hit-box, top-right rounded hover, Windows-native red).
+fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
+    let handle = crate::icons::icon_chrome_window_close(theme_id);
+    button(
+        container(
+            svg(handle)
+                .width(MODAL_CLOSE_X_ICON)
+                .height(MODAL_CLOSE_X_ICON)
+                .style(move |_: &Theme, _| svg::Style {
+                    color: Some(Color::WHITE),
+                }),
+        )
+        .width(MODAL_CLOSE_X_HIT_W)
+        .height(MODAL_CLOSE_X_HIT_H)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(0)
+    .on_press(PrefMsg::Close)
+    .style(move |_: &Theme, status: button::Status| {
+        let hovered = matches!(
+            status,
+            button::Status::Hovered | button::Status::Pressed
+        );
+        button::Style {
+            background: if hovered {
+                Some(Background::Color(MODAL_CLOSE_X_HOVER))
+            } else {
+                None
+            },
+            text_color: Color::WHITE,
+            border: Border {
+                radius: iced::border::Radius {
+                    top_left: 0.0,
+                    top_right: 4.0,
+                    bottom_left: 0.0,
+                    bottom_right: 0.0,
+                },
+                ..Border::default()
+            },
+            ..button::Style::default()
+        }
+    })
+    .into()
 }
 
 /// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).

@@ -4868,6 +4868,7 @@ impl Signex {
                 &self.library.settings,
                 &document.panel_ctx.tokens,
                 &ui.preferences_draft_component_classes,
+                ui.theme_id,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
