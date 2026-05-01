@@ -656,6 +656,47 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(names)
     }
 
+    fn create_empty_table(&self, name: &str, msg: &str) -> Result<(), LibraryError> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(LibraryError::Backend("table name cannot be empty".into()));
+        }
+        // Reject the same characters we reject elsewhere for filenames /
+        // identifiers — keeps round-trips through the TOML key safe and
+        // avoids surprising the user with a name they can't see in
+        // their file browser.
+        if trimmed
+            .chars()
+            .any(|c| matches!(c, '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        {
+            return Err(LibraryError::Backend(format!(
+                "table name {trimmed:?} contains illegal characters"
+            )));
+        }
+        let owned = trimmed.to_string();
+        let fallback = format!("create empty table {owned}");
+        self.mutate_library_file(
+            move |lf| {
+                if lf.tables.contains_key(&owned) {
+                    return Err(LibraryError::Conflict(format!(
+                        "table {owned:?} already exists"
+                    )));
+                }
+                lf.tables.insert(
+                    owned,
+                    LibraryTable {
+                        columns: legacy_columns(),
+                        rows: Vec::new(),
+                        column_types: std::collections::BTreeMap::new(),
+                    },
+                );
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
+    }
+
     fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         self.snapshot_table(name)
     }

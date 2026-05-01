@@ -199,6 +199,20 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Create an empty table named `name`. Used by the New Component
+    /// modal's `+ New Table…` flow so users can mint destination
+    /// tables without dropping into the manifest by hand. Adapters
+    /// that don't support manifest mutation surface a `Backend`
+    /// error; the UI should disable the create flow when this fails.
+    /// `msg` is the commit message for storage backends that require
+    /// one (LocalGit). Returns `Conflict` when a table with the same
+    /// name already exists.
+    fn create_empty_table(&self, _name: &str, _msg: &str) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "create_empty_table not implemented for this adapter".into(),
+        ))
+    }
+
     /// Read every row from the named table.
     fn read_table(&self, _name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         Err(LibraryError::Backend(

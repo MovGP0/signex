@@ -1049,6 +1049,21 @@ pub struct NewComponentState {
     pub footprint_ref: Option<PrimitiveRef>,
     /// Latest validation error.
     pub error: Option<String>,
+    /// In-flight "+ New Table…" sub-form. `None` when the user is on
+    /// the regular Table picker; `Some(NewTableDraft)` while they're
+    /// typing a fresh table name. Confirm dispatches a
+    /// `create_empty_table` against the active library and switches
+    /// the picker to the new table; Cancel just clears this field.
+    pub creating_table: Option<NewTableDraft>,
+}
+
+/// Inline form state for "+ New Table…" inside the New Component
+/// modal — collects the name (and validation error if any) before the
+/// dispatcher calls `create_empty_table` on the active library.
+#[derive(Debug, Clone, Default)]
+pub struct NewTableDraft {
+    pub name: String,
+    pub error: Option<String>,
 }
 
 impl Default for NewComponentState {
@@ -1062,6 +1077,7 @@ impl Default for NewComponentState {
             symbol_ref: None,
             footprint_ref: None,
             error: None,
+            creating_table: None,
         }
     }
 }

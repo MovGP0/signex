@@ -154,6 +154,88 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::NewComponentBeginCreateTable => {
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    nc.creating_table = Some(crate::library::state::NewTableDraft::default());
+                    nc.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::NewComponentSetNewTableName(name) => {
+                if let Some(nc) = self.library.new_component.as_mut()
+                    && let Some(draft) = nc.creating_table.as_mut()
+                {
+                    draft.name = name;
+                    draft.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::NewComponentCancelCreateTable => {
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    nc.creating_table = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::NewComponentConfirmCreateTable => {
+                let Some(nc) = self.library.new_component.as_ref() else {
+                    return Task::none();
+                };
+                let Some(draft) = nc.creating_table.as_ref().cloned() else {
+                    return Task::none();
+                };
+                let trimmed = draft.name.trim().to_string();
+                if trimmed.is_empty() {
+                    if let Some(slot) = self.library.new_component.as_mut()
+                        && let Some(d) = slot.creating_table.as_mut()
+                    {
+                        d.error = Some("Table name cannot be empty.".into());
+                    }
+                    return Task::none();
+                }
+                let Some(library_idx) = nc.library_idx else {
+                    if let Some(slot) = self.library.new_component.as_mut()
+                        && let Some(d) = slot.creating_table.as_mut()
+                    {
+                        d.error = Some("Pick a library first.".into());
+                    }
+                    return Task::none();
+                };
+                let lib = match self.library.open_libraries.get(library_idx) {
+                    Some(lib) => lib,
+                    None => return Task::none(),
+                };
+                let library_id = lib.library_id;
+                let lib_path = lib.root.clone();
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                if let Err(error) = adapter.create_empty_table(
+                    &trimmed,
+                    &format!("create empty table {trimmed}"),
+                ) {
+                    if let Some(slot) = self.library.new_component.as_mut()
+                        && let Some(d) = slot.creating_table.as_mut()
+                    {
+                        d.error = Some(error.to_string());
+                    }
+                    return Task::none();
+                }
+                if let Err(e) = self.library.refresh_components(&lib_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %lib_path.display(),
+                        error = %e,
+                        "refresh after create_empty_table failed"
+                    );
+                }
+                if let Some(slot) = self.library.new_component.as_mut() {
+                    slot.creating_table = None;
+                    slot.table = Some(trimmed);
+                    slot.error = None;
+                }
+                Task::none()
+            }
             LibraryMessage::NewComponentSubmit => {
                 let Some(nc) = self.library.new_component.as_ref().cloned() else {
                     return Task::none();
@@ -924,6 +1006,7 @@ impl Signex {
             symbol_ref: None,
             footprint_ref: None,
             error: None,
+            creating_table: None,
         });
         Task::none()
     }

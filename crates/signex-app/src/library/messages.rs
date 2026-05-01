@@ -103,6 +103,18 @@ pub enum LibraryMessage {
     /// `manifest().tables()` plus the default `<class>s` slot when
     /// the manifest declares no overrides.
     NewComponentSetTable(String),
+    /// User picked the "+ New Table…" sentinel in the Table dropdown
+    /// (or hit the "+ New Table" button) — opens the inline create
+    /// form on `NewComponentState.creating_table`.
+    NewComponentBeginCreateTable,
+    /// Live-edit of the new-table name field.
+    NewComponentSetNewTableName(String),
+    /// Cancel the inline create-table form without writing anything.
+    NewComponentCancelCreateTable,
+    /// Confirm — calls `create_empty_table` on the active library's
+    /// adapter, refreshes the components cache, switches the modal's
+    /// `table` selection to the freshly-minted name.
+    NewComponentConfirmCreateTable,
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
     /// Submit the New Component modal — creates the draft, persists,

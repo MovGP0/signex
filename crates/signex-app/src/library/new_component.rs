@@ -148,50 +148,124 @@ pub fn view<'a>(
         .into()
     };
 
-    // Table picker — populated from the selected library's
-    // manifest. When the manifest declares no `[[tables]]` overrides
-    // we still surface a single placeholder row carrying the
-    // default-pluralised filename (`<class>s`) so the user always
-    // sees the destination.
+    // Table picker — populated from the selected library. We pull the
+    // *actual* tables that exist in the .snxlib (`list_tables`) plus
+    // the manifest's `[[tables]]` overrides, deduplicated. When the
+    // library has none yet, fall back to the mechanical-plural slot
+    // derived from the chosen class so the user always sees a
+    // destination.
     let table_picks: Vec<TablePick> = nc
         .library_idx
         .and_then(|i| state.open_libraries.get(i))
         .and_then(|lib| state.set.get(lib.library_id))
         .map(|adapter| {
-            let configured = adapter.manifest().tables();
-            if configured.is_empty() {
-                vec![TablePick {
-                    name: adapter.manifest().table_for_class(nc.class.as_str()),
-                }]
-            } else {
-                configured
-                    .iter()
-                    .map(|cfg| TablePick {
-                        name: cfg.name.clone(),
-                    })
-                    .collect()
+            let mut names: Vec<String> = Vec::new();
+            if let Ok(actual) = adapter.list_tables() {
+                names.extend(actual);
             }
+            for cfg in adapter.manifest().tables() {
+                if !names.iter().any(|n| n == &cfg.name) {
+                    names.push(cfg.name.clone());
+                }
+            }
+            if names.is_empty() {
+                names.push(adapter.manifest().table_for_class(nc.class.as_str()));
+            }
+            names.into_iter().map(|name| TablePick { name }).collect()
         })
         .unwrap_or_default();
     let selected_table_pick = nc
         .table
         .as_deref()
         .and_then(|t| table_picks.iter().find(|p| p.name == t).cloned());
-    let table_picker: Element<'_, LibraryMessage> = if table_picks.is_empty() {
-        text("Pick a library first; tables come from the library manifest.")
+    let library_picked = nc.library_idx.is_some();
+    let table_picker: Element<'_, LibraryMessage> = if !library_picked {
+        text("Pick a library first; tables come from the library file.")
             .size(11)
             .color(muted)
             .into()
+    } else if let Some(draft) = nc.creating_table.as_ref() {
+        // Inline create-table form — replaces the picker while the
+        // user is naming a fresh table. Confirm dispatches
+        // `NewComponentConfirmCreateTable` which writes a `[tables.<name>]`
+        // block via the adapter and re-points `nc.table` at the new
+        // entry.
+        let name_input = text_input("new_table_name", &draft.name)
+            .on_input(LibraryMessage::NewComponentSetNewTableName)
+            .on_submit(LibraryMessage::NewComponentConfirmCreateTable)
+            .padding(6)
+            .size(12);
+        let confirm_btn =
+            button(container(text("Create").size(11).color(text_c)).padding([4, 12]))
+                .on_press(LibraryMessage::NewComponentConfirmCreateTable)
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.18, 0.36, 0.58,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+        let cancel_btn =
+            button(container(text("Cancel").size(11).color(text_c)).padding([4, 12]))
+                .on_press(LibraryMessage::NewComponentCancelCreateTable)
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    text_color: text_c,
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border,
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+        let mut form = column![
+            row![name_input, Space::new().width(6), cancel_btn, Space::new().width(6), confirm_btn,]
+                .align_y(iced::Alignment::Center),
+        ]
+        .spacing(4);
+        if let Some(err) = draft.error.as_ref() {
+            form = form.push(
+                text(err.clone())
+                    .size(11)
+                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+            );
+        }
+        form.into()
     } else {
-        pick_list(
+        let picker = pick_list(
             table_picks.clone(),
             selected_table_pick,
             |pick: TablePick| LibraryMessage::NewComponentSetTable(pick.name),
         )
         .placeholder("Select table…")
         .padding(6)
-        .text_size(12)
-        .into()
+        .text_size(12);
+        let new_table_btn = button(
+            container(text("+ New Table…").size(11).color(text_c)).padding([4, 10]),
+        )
+        .on_press(LibraryMessage::NewComponentBeginCreateTable)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: text_c,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        });
+        row![picker, Space::new().width(6), new_table_btn,]
+            .align_y(iced::Alignment::Center)
+            .into()
     };
 
     // Class picker ───────────────────────────────────────────
