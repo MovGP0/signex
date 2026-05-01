@@ -213,6 +213,13 @@ impl Signex {
             return;
         }
         let items = collect_track_items(project_dir, &project.data);
+        let intro_text = format!(
+            "Initialise a Git repository at {} and stage the items \
+             you tick below. From then on, every save commits through \
+             libgit2 — including library mutations inside the \
+             project's `.snxlib` directories.",
+            project_dir.display()
+        );
         self.ui_state.enable_version_control =
             Some(crate::app::EnableVersionControlState {
                 project_path: project.path.clone(),
@@ -220,6 +227,7 @@ impl Signex {
                 project_name: project.data.name.clone(),
                 use_lfs: false,
                 items,
+                intro_text,
                 error: None,
             });
     }

@@ -809,6 +809,10 @@ pub struct EnableVersionControlState {
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.
     pub error: Option<String>,
+    /// Pre-formatted intro paragraph that interpolates `project_dir`.
+    /// Computed once at modal-open time so the view doesn't allocate
+    /// a fresh `String` on every render frame.
+    pub intro_text: String,
 }
 
 /// Kind discriminant for a per-item row in the Enable Version

@@ -1094,15 +1094,7 @@ impl Signex {
             self.interaction_state.last_mouse_pos,
         );
 
-        let intro = text(format!(
-            "Initialise a Git repository at {} and stage the items \
-             you tick below. From then on, every save commits through \
-             libgit2 — including library mutations inside the \
-             project's `.snxlib` directories.",
-            st.project_dir.display()
-        ))
-        .size(11)
-        .color(text_muted);
+        let intro = text(st.intro_text.as_str()).size(11).color(text_muted);
         let summary = text(format!("Project: {}", st.project_name))
             .size(12)
             .color(text_c);
