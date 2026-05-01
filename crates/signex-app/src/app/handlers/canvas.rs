@@ -7,7 +7,7 @@ use super::super::helpers::constrain_segments;
 use super::super::*;
 
 /// Default stroke width applied when the user hasn't edited the
-/// pre_placement Width value yet. "default line width"
+/// pre_placement Width value yet. Standard's "default line width"
 /// is ~0.15 mm in schematics; showing 0 in the properties panel
 /// used to confuse users because the line was still visible
 /// (renderer substitutes its own default for 0).
@@ -308,6 +308,45 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
+                // Hover detection: fast hit-test against the active
+                // schematic snapshot so the tooltip overlay (in
+                // `view::collect_overlays`) can show after a 250 ms
+                // dwell on a placed symbol. Snapshot lookups are cheap
+                // (Vec scan keyed by world bounds), so doing this on
+                // every cursor tick is fine. Other hit kinds (wires,
+                // labels) intentionally fall through — only Symbol
+                // hovers carry library metadata worth surfacing.
+                let hover_uuid: Option<uuid::Uuid> = self
+                    .interaction_state
+                    .active_canvas()
+                    .active_snapshot()
+                    .and_then(|snap| {
+                        signex_render::schematic::hit_test::hit_test(
+                            snap,
+                            x as f64,
+                            y as f64,
+                        )
+                    })
+                    .and_then(|hit| {
+                        matches!(
+                            hit.kind,
+                            signex_types::schematic::SelectedKind::Symbol
+                        )
+                        .then_some(hit.uuid)
+                    });
+                if hover_uuid != self.interaction_state.hover_symbol_uuid {
+                    self.interaction_state.hover_symbol_uuid = hover_uuid;
+                    self.interaction_state.hover_started_at =
+                        hover_uuid.map(|_| std::time::Instant::now());
+                }
+                // Track screen position for the tooltip's translate
+                // offset on every move, even if the symbol is the
+                // same (the card follows the cursor).
+                self.interaction_state.hover_screen_pos = if hover_uuid.is_some() {
+                    Some(self.interaction_state.last_mouse_pos)
+                } else {
+                    None
+                };
                 // Lasso auto-sample: while a lasso is anchored (>= 1
                 // vertex already committed), sample a new vertex each
                 // time the cursor moves more than SAMPLE_MIN from the
@@ -403,7 +442,7 @@ impl Signex {
                 // Active Bar and is now clicking a wire. Union-find the
                 // whole connected net and apply the colour (or clear it
                 // if alpha == 0). Colours stay in app state so the
-                // .snxsch round-trips unchanged — There is no
+                // .standard_sch round-trips unchanged — Standard has no
                 // notion of per-wire override colours.
                 if let Some(pending) = self.ui_state.pending_net_color {
                     // Snap the click point to the grid before hit
@@ -648,7 +687,7 @@ impl Signex {
                 // IDEs (Escape cancels, click elsewhere confirms).
                 if let Some(state) = self.interaction_state.editing_text.take() {
                     if state.text != state.original_text {
-                        let stored = signex_render::schematic::text::escape_for_storage(&state.text);
+                        let stored = signex_render::schematic::text::escape_for_standard(&state.text);
                         let cmd = match state.kind {
                             signex_types::schematic::SelectedKind::Label => {
                                 Some(signex_engine::Command::UpdateText {
@@ -780,6 +819,9 @@ impl Signex {
                                 custom_properties: Vec::new(),
                                 pin_uuids: std::collections::HashMap::new(),
                                 instances: Vec::new(),
+                                library_id: None,
+                                row_id: None,
+                                library_version: String::new(),
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSymbol { symbol: sym },
@@ -1074,7 +1116,7 @@ impl Signex {
                 // stored `position`) lands on a grid dot after the move, not
                 // just the drag delta. Snapping only the delta preserves an
                 // off-grid origin; users expect the endpoint to be on-grid
-                // matching Altium do.
+                // like Standard/Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
                     let primary = self
@@ -1355,7 +1397,7 @@ impl Signex {
                         };
                         if let Some((raw_text, kind, wx, wy)) = edit_info {
                             // Show the user the visible form (e.g. "/OE"), not
-                            // the escape-form storage form ("{slash}OE").
+                            // the Standard-escaped storage form ("{slash}OE").
                             let display_text = expand_char_escapes(&raw_text);
                             self.interaction_state.editing_text = Some(TextEditState {
                                 uuid: hit.uuid,
@@ -1444,6 +1486,7 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+        crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {
