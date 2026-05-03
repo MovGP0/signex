@@ -125,6 +125,10 @@ pub struct FootprintCanvas<'a> {
     /// Pre-allocated empty cache so `draw` can reuse iced's caching
     /// layer if profiling later motivates it.
     pub cache: &'a canvas::Cache,
+    /// v0.13.1 Phase 6.2 — sketch entities are read-only here so the
+    /// canvas can render them when [`EditorMode::Sketch`] is active.
+    /// `None` for footprints with no sketch field set (legacy v1).
+    pub sketch: Option<&'a signex_sketch::SketchData>,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
@@ -234,6 +238,21 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             // space without crossing a pad doesn't
                             // place anything.
                             return None;
+                        }
+                        // v0.13.1 Phase 6.3 — Sketch mode redirects
+                        // empty-canvas click-add to the Place Point
+                        // sketch-tool path. Normal mode keeps the
+                        // existing FootprintAddPad behaviour.
+                        if matches!(self.state.mode, super::state::EditorMode::Sketch) {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintSketchPlacePoint {
+                                    x_mm: drag.grab_offset_mm.0,
+                                    y_mm: drag.grab_offset_mm.1,
+                                },
+                            }));
                         }
                         // Click-add at the press position (world coords
                         // were stashed in grab_offset_mm).
@@ -399,6 +418,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 }
                 draw_pad(frame, cstate, pad, self.state.selected_pad == Some(idx));
             }
+
+            // v0.13.1 Phase 6.2 — sketch entities overlay. Only drawn
+            // when the editor is in Sketch mode AND a sketch exists.
+            // DOF colour pulls from `state.last_solve.colours` so an
+            // under-constrained Point lights up blue, fully pinned
+            // black, over-constrained red.
+            if matches!(self.state.mode, super::state::EditorMode::Sketch)
+                && let Some(sketch) = self.sketch
+            {
+                draw_sketch_overlay(frame, cstate, sketch, self.state);
+            }
         });
 
         vec![geom]
@@ -420,6 +450,168 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
+        }
+    }
+}
+
+/// Render the sketch entities (Phase 6.2). Points draw as small
+/// filled circles, Lines stroke between their endpoints (dashed if
+/// `construction == true`), Circles stroke the radius circle, Arcs
+/// stroke a polyline approximation between start/end. DOF colour
+/// drives the tint.
+fn draw_sketch_overlay(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    sketch: &signex_sketch::SketchData,
+    state: &FootprintEditorState,
+) {
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::SketchEntityId;
+
+    fn point_world(
+        id: SketchEntityId,
+        sketch: &signex_sketch::SketchData,
+        state: &FootprintEditorState,
+    ) -> Option<(f64, f64)> {
+        // Prefer the solved state if available; fall back to the
+        // entity's authored coords.
+        if let Some(solve) = state.last_solve.as_ref() {
+            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+                id,
+                &solve.result.state,
+                &solve.result.index,
+                sketch,
+            ) {
+                return Some((x, y));
+            }
+        }
+        sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+    }
+
+    let dof_colour = |id: SketchEntityId| -> Color {
+        use signex_sketch::solver::dof::DofColor;
+        if let Some(solve) = state.last_solve.as_ref() {
+            match solve.colours.get(&id) {
+                Some(DofColor::Under) => Color::from_rgba(0.20, 0.40, 1.00, 1.00), // blue
+                Some(DofColor::Over) => Color::from_rgba(1.00, 0.20, 0.20, 1.00),  // red
+                Some(DofColor::Full) => Color::from_rgba(0.20, 0.85, 0.30, 1.00),  // green
+                None => Color::from_rgba(0.85, 0.85, 0.85, 1.00),
+            }
+        } else {
+            Color::from_rgba(0.85, 0.85, 0.85, 1.00)
+        }
+    };
+
+    for entity in &sketch.entities {
+        match entity.kind {
+            EntityKind::Point { .. } => {
+                let world = match point_world(entity.id, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let p = cstate.world_to_screen(world);
+                let r = if entity.construction { 2.5 } else { 4.0 };
+                let path = Path::circle(Point::new(p.x, p.y), r);
+                let col = dof_colour(entity.id);
+                frame.fill(&path, col);
+                frame.stroke(
+                    &path,
+                    Stroke::default()
+                        .with_width(1.0)
+                        .with_color(Color {
+                            a: 1.0,
+                            r: col.r * 0.6,
+                            g: col.g * 0.6,
+                            b: col.b * 0.6,
+                        }),
+                );
+            }
+            EntityKind::Line { start, end } => {
+                let s = match point_world(start, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let e = match point_world(end, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let p0 = cstate.world_to_screen(s);
+                let p1 = cstate.world_to_screen(e);
+                let col = dof_colour(start);
+                let stroke = Stroke::default().with_width(1.5).with_color(col);
+                if entity.construction {
+                    // Dashed line via short segments.
+                    let dx = p1.x - p0.x;
+                    let dy = p1.y - p0.y;
+                    let len = (dx * dx + dy * dy).sqrt();
+                    if len > 0.0 {
+                        let dash_len = 6.0_f32;
+                        let n = (len / dash_len).floor() as i32;
+                        for i in (0..n).step_by(2) {
+                            let t0 = i as f32 / n as f32;
+                            let t1 = ((i + 1) as f32 / n as f32).min(1.0);
+                            let q0 = Point::new(p0.x + dx * t0, p0.y + dy * t0);
+                            let q1 = Point::new(p0.x + dx * t1, p0.y + dy * t1);
+                            frame.stroke(&Path::line(q0, q1), stroke);
+                        }
+                    }
+                } else {
+                    frame.stroke(&Path::line(p0, p1), stroke);
+                }
+            }
+            EntityKind::Circle { center, radius } => {
+                let c = match point_world(center, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let centre = cstate.world_to_screen(c);
+                let r_screen = (radius as f32) * cstate.scale;
+                let path = Path::circle(Point::new(centre.x, centre.y), r_screen);
+                let col = dof_colour(entity.id);
+                frame.stroke(&path, Stroke::default().with_width(1.5).with_color(col));
+            }
+            EntityKind::Arc {
+                center, start, end, ..
+            } => {
+                // Approximate the arc by a 16-segment polyline between
+                // start and end on the circle through `center`.
+                let c = match point_world(center, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let s = match point_world(start, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let e = match point_world(end, sketch, state) {
+                    Some(w) => w,
+                    None => continue,
+                };
+                let r = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
+                let a0 = (s.1 - c.1).atan2(s.0 - c.0);
+                let a1 = (e.1 - c.1).atan2(e.0 - c.0);
+                let mut delta = a1 - a0;
+                while delta < 0.0 {
+                    delta += std::f64::consts::TAU;
+                }
+                let segs = 16;
+                let mut prev = cstate.world_to_screen(s);
+                let col = dof_colour(entity.id);
+                for i in 1..=segs {
+                    let t = (i as f64) / (segs as f64);
+                    let a = a0 + delta * t;
+                    let p = (c.0 + r * a.cos(), c.1 + r * a.sin());
+                    let q = cstate.world_to_screen(p);
+                    frame.stroke(
+                        &Path::line(prev, q),
+                        Stroke::default().with_width(1.5).with_color(col),
+                    );
+                    prev = q;
+                }
+            }
         }
     }
 }

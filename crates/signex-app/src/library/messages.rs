@@ -699,6 +699,15 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.13.1 Phase 6.3 — Sketch-mode click-to-place. Fires when
+    /// `EditorMode::Sketch` is active and the user clicks empty
+    /// canvas. Routes through the dispatcher's
+    /// `FootprintSketchPlacePoint` handler which adds the Point +
+    /// runs solve + bake.
+    FootprintSketchPlacePoint {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// Delete-key — remove the currently-selected pad.

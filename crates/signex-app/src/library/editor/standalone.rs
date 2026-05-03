@@ -568,6 +568,7 @@ fn view_footprint_canvas<'a>(
         bg_color: bg,
         grid_color: grid,
         cache: &editor.canvas_cache,
+        sketch: editor.primitive.sketch.as_ref(),
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)
@@ -607,6 +608,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
     match msg {
         EditorMsg::FootprintAddPad { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintAddPad { x_mm, y_mm }
+        }
+        EditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm }
         }
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }

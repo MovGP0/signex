@@ -4560,6 +4560,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SymbolDismissAiPreview
         | EditorMsg::SaveSymbol(_, _)
         | EditorMsg::FootprintAddPad { .. }
+        | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)
