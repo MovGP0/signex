@@ -10,6 +10,11 @@ pub enum SketchError {
     Expr(#[from] crate::expr::ExprError),
     #[error("unit error: {0}")]
     Unit(#[from] crate::unit::UnitError),
+    /// Phase 5.4 dispatcher — a non-Timeout failure from the LM
+    /// solver. Timeout is consumed silently by the dispatcher (it
+    /// feeds the auto-pause state machine instead).
+    #[error("solve failed: {0}")]
+    SolveFailed(#[from] SolveError),
 }
 
 #[derive(Debug, Error)]

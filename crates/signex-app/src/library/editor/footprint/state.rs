@@ -100,11 +100,32 @@ impl EditorPad {
     }
 }
 
+/// Footprint editor mode — gate sketch tooling on / off without
+/// rewriting the canvas state machine. Phase 5.3 of the v0.13 sketch-
+/// mode plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EditorMode {
+    /// Direct pad-list editing (the existing Phase 0–v0.10 surface).
+    #[default]
+    Normal,
+    /// Parametric sketch mode — Phase 6 UI lives behind this.
+    Sketch,
+    /// 3D body preview (existing v0.10 viewer).
+    View3d,
+}
+
 /// Live, in-memory state of the Footprint canvas — drives interaction
 /// and rendering. The authoritative pad list lives on
 /// `ComponentEditorState.footprint.pads`; this struct mirrors it for
 /// the canvas's hit-test + draw layer.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `PartialEq` is intentionally NOT derived: Phase 5.3 added
+/// `sketch_solver` / `last_solve` / `auto_pause` whose underlying
+/// types in `signex-sketch` don't implement `PartialEq`. The editor
+/// uses pointer-equality / dirty-flag patterns elsewhere; no test or
+/// production call site compared two `FootprintEditorState` values
+/// for structural equality.
+#[derive(Debug, Clone)]
 pub struct FootprintEditorState {
     pub pads: Vec<EditorPad>,
     pub layer_visibility: LayerVisibility,
@@ -116,6 +137,25 @@ pub struct FootprintEditorState {
     /// Last known cursor world position in mm — drives the footer
     /// readout.
     pub cursor_mm: Option<(f64, f64)>,
+    /// Phase 5.3: which editor mode the user has switched to.
+    pub mode: EditorMode,
+    /// Phase 5.3: shared LM solver config + last solution. Cloned
+    /// per-edit by the dispatcher so the editor's clone-per-frame iced
+    /// flow keeps working without `Arc`. The Solver struct is small
+    /// (three numbers); `last_solve` is replaced wholesale on every
+    /// solve.
+    pub sketch_solver: signex_sketch::solver::Solver,
+    /// Output of the most recent solve — `None` until first solve.
+    /// Carried so the canvas DOF overlay + render layer can read the
+    /// solved entity coordinates without rerunning the LM iteration.
+    pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
+    /// Hysteresis state for live-solve auto-pause. Phase 3.6 ships
+    /// `AutoPauseState`; the dispatcher feeds elapsed_ms into it on
+    /// every solve.
+    pub auto_pause: signex_sketch::solver::timeout::AutoPauseState,
+    /// Last solve's audit / over-constraint warnings. Cleared per
+    /// solve. Surfaced by the inspector panel in Phase 6.
+    pub solve_warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -137,6 +177,11 @@ impl FootprintEditorState {
             auto_fit_courtyard: true,
             courtyard_mm: None,
             cursor_mm: None,
+            mode: EditorMode::Normal,
+            sketch_solver: signex_sketch::solver::Solver::default(),
+            last_solve: None,
+            auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
+            solve_warnings: Vec::new(),
         };
         s.recompute_courtyard();
         s
@@ -153,6 +198,11 @@ impl FootprintEditorState {
             auto_fit_courtyard: true,
             courtyard_mm: None,
             cursor_mm: None,
+            mode: EditorMode::Normal,
+            sketch_solver: signex_sketch::solver::Solver::default(),
+            last_solve: None,
+            auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
+            solve_warnings: Vec::new(),
         };
         s.recompute_courtyard();
         s

@@ -11,6 +11,10 @@ pub mod body3d;
 pub mod canvas;
 pub mod layers;
 pub mod preview3d;
+pub mod sketch_dispatch;
+#[cfg(test)]
+mod sketch_dispatch_tests;
+pub mod sketch_mode;
 pub mod state;
 pub mod step_attach;
 
