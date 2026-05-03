@@ -223,7 +223,121 @@ Result:
 - AutoPauseState hysteresis tested (single overrun no-pause, 2
   consecutive pauses, good observation resets, unpause clears)
 
-### Phase 4 — Expression parser + evaluator + units
+### Phase 4 — Expression parser + evaluator + units — DONE 2026-05-03
 
-(pending — next session)
+Commit `e465fce0`. 6 tasks (4.1 unit parser, 4.2 AST, 4.3
+recursive-descent parser, 4.4 evaluator with unit type-checking, 4.5
+parameter table + topo resolution, 4.6 DimTarget::Expr full eval).
+Tasks 4.1–4.4 ran as four parallel agents on independent files.
+Reference cited: Aho/Sethi/Ullman *Compilers: Principles,
+Techniques, and Tools* (Dragon Book) for the recursive-descent
+parser. Test count grew from 167 to 257.
+
+### Phase 5 — Schema migration + library integration — DONE 2026-05-03
+
+Commits `070153d3` (Tasks 5.1+5.2: Footprint schema bump v1→v2 with
+optional `sketch: Option<SketchData>`, plus 3-fixture migration test
+corpus) and `57811487` (Tasks 5.3+5.4+5.5: FootprintEditorState
+gains mode/sketch_solver/last_solve/auto_pause/solve_warnings
+fields; SketchEdit + SketchModeMsg enums; sketch_dispatch.rs with
+solve-on-edit dispatcher).
+
+### Phase 6 — UI mode switcher + tool palette — DEFERRED to v0.13.1
+
+The dispatcher + state fields + message types (Phases 5.3–5.5 above)
+expose all v0.13 functionality for programmatic + test-driven use.
+The full iced view layer (tool palette, sketch render layer, DOF
+overlay, constraint icons, inspector panel) is multi-day iced+canvas
+integration work that wasn't safely automatable in the single
+session this branch was authored in. Tracked for v0.13.1.
+
+### Phase 7 — Pad-only bake pipeline — DONE 2026-05-03
+
+Commit `ebe3c481`. New `signex-bake` crate (depends on both
+signex-sketch and signex-library, breaking the unavoidable
+dependency cycle from Phase 5.1). Tasks 7.1+7.2 (bake_pads +
+LinearArray bake) ran as a parallel agent; Task 7.3 (wire bake into
+solve-on-edit dispatcher) shipped with Phase 5.4 in commit
+`57811487`. Layer-name strings come from
+`signex_types::layer::SignexLayer::altium_label()` — no foreign-
+tooling short names. 11 bake tests + 4 dispatcher tests.
+
+### Phase 8 — End-to-end smoke + verification — DONE 2026-05-03
+
+Task 8.1 — `crates/signex-app/tests/sketch_qfn16_smoke.rs` drives
+the entire stack programmatically: parameter resolution + expression
+evaluation + LM solver + DOF analysis + pad bake + sketch ↔ library
+integration. 3 tests all pass: `qfn16_row_bakes_at_05mm_pitch` (4
+SMD pads at correct positions to within 1 µm),
+`qfn16_row_regenerates_when_pad_pitch_changes` (re-resolve + re-
+bake on pitch parameter edit), `qfn16_solve_warnings_empty_on_clean_sketch`.
+
+Task 8.2 — Schema migration corpus already covered by
+`crates/signex-library/tests/migration_v1_to_v2.rs` (5 tests, all
+green). No additional edge cases discovered.
+
+Task 8.3 — `.github/workflows/license-guard.yml` extended with two
+new jobs:
+- `no-third-party-constraint-solver-substrings` — forbids
+  `solvespace|freecad|planegcs|opencascade|sketcher` substrings
+  under `crates/signex-sketch/` and `crates/signex-bake/`.
+- `no-third-party-constraint-solver-attribution` — forbids "from
+  SolveSpace" / "based on FreeCAD" / similar attribution comments
+  anywhere in the repo (excluding audit trail and the workflow file
+  itself).
+`crates/signex-sketch/deny.toml` ships with the standard Apache-
+clean license allow-list so cargo-deny can be run on the sketch
+crate in isolation.
+
+Task 8.4 — PR self-declaration block lives in the PR body (added at
+push time, not committed). Template:
+```
+## Cleanroom self-declaration
+- [ ] No SolveSpace source code was loaded into context
+- [ ] No FreeCAD/planegcs source code was loaded
+- [ ] No third-party EDA tool's sketcher source was consulted
+- [ ] All algorithm references cite public textbooks
+- [ ] Audit doc at docs/audit/sketch-solver-2026-05-03.md lists
+      every reference consulted
+```
+
+### Final test count
+
+cargo test workspace-wide: 290+ tests across signex-sketch,
+signex-bake, signex-library, signex-app, signex-types.
+- signex-sketch: 257 tests (12 lib + 39 round_trip + 7 solver_basics
+  + 18 linalg + 4 dof + 3 lm_basic + 22 canonical + 6 solver_api
+  + family-residual files + expression suite)
+- signex-bake: 11 tests
+- signex-library: 5 migration + pre-existing tests
+- signex-app: 4 dispatcher + 3 QFN-16 smoke + pre-existing tests
+- signex-types: pre-existing tests
+
+cargo build --workspace: clean (only pre-existing 65 signex-app
+warnings unchanged from before Phase 5).
+
+### v0.13 ships with
+
+- Apache-clean signex-sketch crate (sketcher schema + Phase-2
+  residuals + Phase-3 LM solver + DOF + Phase-4 expressions)
+- Apache-clean signex-bake crate (sketch → library Pad pipeline)
+- Footprint::sketch field (signex-library), v1→v2 migration
+- Solve-on-edit dispatcher (signex-app)
+- 290+ tests; cleanroom audit trail; License Guard CI extension
+- Phase 6 UI deferred to v0.13.1
+
+References consulted overall (cumulative across Phases 1–8):
+- Hearn & Baker, *Computer Graphics with OpenGL*, ch. 5
+- Press et al., *Numerical Recipes in C* (3rd ed.) §§ 2.1, 2.3,
+  2.10, 5.7, 15.5
+- Aho/Sethi/Ullman, *Compilers: Principles, Techniques, and Tools*
+  (Dragon Book) — recursive-descent parser
+
+API inspiration only (Apache-2.0 license-compatible, no source
+consulted): nalgebra (`LuDecomposition` / `QrDecomposition` struct
+shapes).
+
+No third-party constraint-solver source code, header, wiki, or blog
+post (SolveSpace, FreeCAD Sketcher, planegcs, OpenCascade, etc.)
+consulted at any phase.
 
