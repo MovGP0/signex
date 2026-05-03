@@ -171,6 +171,8 @@ fn fixture_footprint(name: &str) -> Footprint {
         released: false,
         created: now,
         updated: now,
+        schema_version: 2,
+        sketch: None,
     }
 }
 

@@ -271,10 +271,24 @@ pub struct Footprint {
     pub released: bool,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+    /// Schema version — bump on breaking format change. Defaults to 2
+    /// when missing (legacy v1 footprints had no `schema_version`).
+    #[serde(default = "default_schema_v2")]
+    pub schema_version: u32,
+    /// Optional 2D parametric sketch — drives pad layout via the
+    /// signex-sketch solver in v0.13+. v1 footprints (no
+    /// `schema_version`) deserialise with `sketch == None` and
+    /// preserve their literal pad-list authoring.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch: Option<signex_sketch::SketchData>,
 }
 
 fn default_footprint_version() -> String {
     "0.0.1".to_string()
+}
+
+fn default_schema_v2() -> u32 {
+    2
 }
 
 impl Footprint {
@@ -298,6 +312,8 @@ impl Footprint {
             released: false,
             created: now,
             updated: now,
+            schema_version: default_schema_v2(),
+            sketch: None,
         }
     }
 }
@@ -358,6 +374,8 @@ mod tests {
             released: false,
             created: Utc::now(),
             updated: Utc::now(),
+            schema_version: 2,
+            sketch: None,
         };
         let json = serde_json::to_string(&fp).unwrap();
         let back: Footprint = serde_json::from_str(&json).unwrap();

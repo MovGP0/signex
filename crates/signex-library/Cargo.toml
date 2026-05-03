@@ -18,6 +18,9 @@ anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
 csv = "1.3"
 
+# Optional 2D parametric sketch field on Footprint (v0.13+).
+signex-sketch = { workspace = true }
+
 # Heuristic AI-stub for symbol pinout extraction (WS-F).
 pdf-extract = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
