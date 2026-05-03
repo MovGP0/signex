@@ -1,3 +1,8 @@
+use signex_sketch::attr::{
+    BoardCutoutAttr, BoardLayer, ChamferedCorners, CustomPadShape, DrillSpec, KeepoutAttr,
+    KeepoutKinds, MaskOpeningAttr, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
+    PasteApertureAttr, PourAttr, PourFillType, ThermalRelief, VScoreHintAttr, VScoreSide,
+};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -47,12 +52,7 @@ fn plane_body_top_round_trip() {
 fn point_entity_round_trip() {
     let pt_id = SketchEntityId::new();
     let plane_id = PlaneId::new();
-    let e = Entity {
-        id: pt_id,
-        plane: plane_id,
-        construction: false,
-        kind: EntityKind::Point { x: 1.5, y: 2.5 },
-    };
+    let e = Entity::new(pt_id, plane_id, EntityKind::Point { x: 1.5, y: 2.5 });
     let s = toml::to_string(&e).unwrap();
     let back: Entity = toml::from_str(&s).unwrap();
     assert_eq!(e, back);
@@ -63,12 +63,12 @@ fn line_entity_round_trip() {
     let plane_id = PlaneId::new();
     let p1 = SketchEntityId::new();
     let p2 = SketchEntityId::new();
-    let e = Entity {
-        id: SketchEntityId::new(),
-        plane: plane_id,
-        construction: true,
-        kind: EntityKind::Line { start: p1, end: p2 },
-    };
+    let mut e = Entity::new(
+        SketchEntityId::new(),
+        plane_id,
+        EntityKind::Line { start: p1, end: p2 },
+    );
+    e.construction = true;
     let s = toml::to_string(&e).unwrap();
     let back: Entity = toml::from_str(&s).unwrap();
     assert_eq!(e, back);
@@ -77,17 +77,16 @@ fn line_entity_round_trip() {
 #[test]
 fn arc_entity_round_trip() {
     let plane_id = PlaneId::new();
-    let e = Entity {
-        id: SketchEntityId::new(),
-        plane: plane_id,
-        construction: false,
-        kind: EntityKind::Arc {
+    let e = Entity::new(
+        SketchEntityId::new(),
+        plane_id,
+        EntityKind::Arc {
             center: SketchEntityId::new(),
             start: SketchEntityId::new(),
             end: SketchEntityId::new(),
             sweep_ccw: true,
         },
-    };
+    );
     let s = toml::to_string(&e).unwrap();
     let back: Entity = toml::from_str(&s).unwrap();
     assert_eq!(e, back);
@@ -96,16 +95,362 @@ fn arc_entity_round_trip() {
 #[test]
 fn circle_entity_round_trip() {
     let plane_id = PlaneId::new();
-    let e = Entity {
-        id: SketchEntityId::new(),
-        plane: plane_id,
-        construction: false,
-        kind: EntityKind::Circle {
+    let e = Entity::new(
+        SketchEntityId::new(),
+        plane_id,
+        EntityKind::Circle {
             center: SketchEntityId::new(),
             radius: 0.75,
         },
-    };
+    );
     let s = toml::to_string(&e).unwrap();
     let back: Entity = toml::from_str(&s).unwrap();
     assert_eq!(e, back);
+}
+
+// ─── PadAttr round-trips ───
+
+fn smd_rect_pad(num: &str) -> PadAttr {
+    PadAttr {
+        number: num.into(),
+        kind: PadKind::Smd,
+        side: PadSide::Top,
+        shape: PadShape::Rect,
+        size_x_expr: "0.25mm".into(),
+        size_y_expr: "0.65mm".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: None,
+        mask_margin_expr: None,
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+    }
+}
+
+#[test]
+fn pad_attr_round_trip_rect() {
+    let a = smd_rect_pad("1");
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_round_rect_corner_radius_round_trip() {
+    let mut a = smd_rect_pad("1");
+    a.shape = PadShape::RoundRect {
+        radius_ratio_expr: "0.25".into(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_chamfered_round_trip() {
+    let mut a = smd_rect_pad("1");
+    a.shape = PadShape::Chamfered {
+        chamfer_ratio_expr: "0.2".into(),
+        corners: ChamferedCorners {
+            top_left: true,
+            top_right: true,
+            ..Default::default()
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_custom_static_round_trip() {
+    let mut a = smd_rect_pad("1");
+    a.shape = PadShape::Custom(CustomPadShape::StaticPoints {
+        points: vec![
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 0.5],
+            [0.5, 1.0],
+            [0.0, 0.5],
+        ],
+    });
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_with_rotation_and_offset_round_trip() {
+    let mut a = smd_rect_pad("1");
+    a.rotation_expr = Some("= leg_angle".into());
+    a.offset_x_expr = Some("0.1mm".into());
+    a.offset_y_expr = Some("= -row_offset".into());
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_tht_with_drill_round_trip() {
+    let a = PadAttr {
+        number: "1".into(),
+        kind: PadKind::Tht,
+        side: PadSide::All,
+        shape: PadShape::Round,
+        size_x_expr: "1.6mm".into(),
+        size_y_expr: "1.6mm".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: Some(DrillSpec {
+            diameter_expr: "0.8mm".into(),
+            slot_length_expr: None,
+            plated: true,
+        }),
+        mask_margin_expr: None,
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_npt_mounting_hole_round_trip() {
+    let a = PadAttr {
+        number: "MH1".into(),
+        kind: PadKind::NptHole,
+        side: PadSide::All,
+        shape: PadShape::Round,
+        size_x_expr: "3.2mm".into(),
+        size_y_expr: "3.2mm".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: Some(DrillSpec {
+            diameter_expr: "3.2mm".into(),
+            slot_length_expr: None,
+            plated: false,
+        }),
+        mask_margin_expr: None,
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_with_mask_paste_overrides_round_trip() {
+    let mut a = smd_rect_pad("1");
+    a.mask_margin_expr = Some("0.05mm".into());
+    a.paste_margin_expr = Some("-0.025mm".into());
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pad_attr_thermal_grid_round_trip() {
+    let mut a = smd_rect_pad("EP");
+    a.size_x_expr = "= thermal_w".into();
+    a.size_y_expr = "= thermal_h".into();
+    a.mask_margin_expr = Some("0mm".into());
+    a.paste_apertures = PasteAperturePattern::Grid {
+        nx_expr: "3".into(),
+        ny_expr: "3".into(),
+        coverage_expr: "0.6".into(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn standalone_mask_opening_round_trip() {
+    let a = MaskOpeningAttr {
+        layer: BoardLayer::FMask,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: MaskOpeningAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn standalone_paste_aperture_round_trip() {
+    let a = PasteApertureAttr {
+        layer: BoardLayer::FPaste,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PasteApertureAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn fiducial_pad_round_trip() {
+    let a = PadAttr {
+        number: "FID1".into(),
+        kind: PadKind::Fiducial,
+        side: PadSide::Top,
+        shape: PadShape::Round,
+        size_x_expr: "1.0mm".into(),
+        size_y_expr: "1.0mm".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: None,
+        mask_margin_expr: Some("1.0mm".into()),
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pour_attr_round_trip_default() {
+    let a = PourAttr {
+        layer: BoardLayer::FCu,
+        net: Some("GND".into()),
+        fill_type: PourFillType::Solid,
+        thermal_relief: ThermalRelief::default(),
+        clearance_expr: None,
+        min_thickness_expr: None,
+        priority: 0,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PourAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn pour_attr_hatched_with_overrides_round_trip() {
+    let a = PourAttr {
+        layer: BoardLayer::FCu,
+        net: Some("GND".into()),
+        fill_type: PourFillType::Hatched,
+        thermal_relief: ThermalRelief {
+            enabled: true,
+            gap_expr: "= relief_gap".into(),
+            spoke_width_expr: "0.3mm".into(),
+            spoke_count: 2,
+        },
+        clearance_expr: Some("0.2mm".into()),
+        min_thickness_expr: Some("0.15mm".into()),
+        priority: 5,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PourAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn keepout_attr_no_copper_round_trip() {
+    let a = KeepoutAttr {
+        layer: BoardLayer::FCu,
+        kinds: KeepoutKinds::ALL_COPPER,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: KeepoutAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn keepout_attr_antenna_preset_round_trip() {
+    let a = KeepoutAttr {
+        layer: BoardLayer::FCu,
+        kinds: KeepoutKinds::ANTENNA,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: KeepoutAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn keepout_attr_routing_only_round_trip() {
+    let a = KeepoutAttr {
+        layer: BoardLayer::FCu,
+        kinds: KeepoutKinds::NO_ROUTING,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: KeepoutAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn board_cutout_through_round_trip() {
+    let a = BoardCutoutAttr {
+        edge_radius_expr: Some("0.8mm".into()),
+        through: true,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: BoardCutoutAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn board_cutout_sharp_round_trip() {
+    let a = BoardCutoutAttr {
+        edge_radius_expr: None,
+        through: true,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: BoardCutoutAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn castellated_pad_round_trip() {
+    let a = PadAttr {
+        number: "1".into(),
+        kind: PadKind::Castellated,
+        side: PadSide::All,
+        shape: PadShape::RoundRect {
+            radius_ratio_expr: "0.25".into(),
+        },
+        size_x_expr: "1.5mm".into(),
+        size_y_expr: "1.0mm".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: Some(DrillSpec {
+            diameter_expr: "0.6mm".into(),
+            slot_length_expr: None,
+            plated: true,
+        }),
+        mask_margin_expr: None,
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: PadAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn v_score_hint_default_round_trip() {
+    let a = VScoreHintAttr {
+        depth_fraction_expr: "0.333".into(),
+        min_web_expr: None,
+        side: VScoreSide::Both,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: VScoreHintAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn v_score_hint_with_overrides_round_trip() {
+    let a = VScoreHintAttr {
+        depth_fraction_expr: "= v_depth".into(),
+        min_web_expr: Some("0.5mm".into()),
+        side: VScoreSide::Top,
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: VScoreHintAttr = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
 }
