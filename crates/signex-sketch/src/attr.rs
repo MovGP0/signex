@@ -1,25 +1,7 @@
 use serde::{Deserialize, Serialize};
+use signex_types::layer::SignexLayer;
 
 use crate::id::SketchEntityId;
-
-/// Layer identifier — minimal subset needed for sketch attrs. Maps
-/// to the existing `signex_library::primitive::footprint::LayerId`
-/// at bake time.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum BoardLayer {
-    FCu,
-    BCu,
-    FMask,
-    BMask,
-    FPaste,
-    BPaste,
-    FSilk,
-    BSilk,
-    FCourtyard,
-    BCourtyard,
-    FFab,
-    BFab,
-}
 
 /// Pad mounting style.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,7 +154,7 @@ impl Default for PasteAperturePattern {
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SilkAttr {
-    pub layer: BoardLayer,
+    pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as the courtyard polygon.
@@ -184,27 +166,27 @@ pub struct CourtyardAttr;
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MaskOpeningAttr {
-    pub layer: BoardLayer,
+    pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as an explicit mask cover.
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MaskExcludeAttr {
-    pub layer: BoardLayer,
+    pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as a stencil paste aperture.
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PasteApertureAttr {
-    pub layer: BoardLayer,
+    pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as a copper-fill region.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PourAttr {
-    pub layer: BoardLayer,
+    pub layer: SignexLayer,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub net: Option<String>,
     #[serde(default)]
@@ -268,7 +250,7 @@ fn default_thermal_spoke_count() -> u8 {
 /// Closed sketch profile bakes as a keepout region.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct KeepoutAttr {
-    pub layer: BoardLayer,
+    pub layer: SignexLayer,
     pub kinds: KeepoutKinds,
 }
 
