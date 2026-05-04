@@ -557,6 +557,12 @@ pub enum Message {
     /// otherwise no-op so the keys don't steal text input on other
     /// tabs.
     FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// v0.15 — Esc-key tool cancel routed through the dispatcher.
+    /// If the active tab is a footprint editor, fires
+    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
+    /// tool_pending); otherwise falls back to the schematic
+    /// `Tool::Select` reset.
+    EscapePressed,
     Noop,
 }
 

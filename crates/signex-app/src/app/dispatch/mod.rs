@@ -690,6 +690,30 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
+            Message::EscapePressed => {
+                // v0.15 — if active tab is a footprint editor, reset
+                // its tool state via `FootprintToolEscape`; otherwise
+                // fall back to the schematic Tool::Select reset.
+                let footprint_path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_footprint_editor())
+                    .cloned();
+                if let Some(path) = footprint_path {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintToolEscape,
+                        },
+                    ));
+                } else {
+                    let _ = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+                        crate::app::Tool::Select,
+                    )));
+                }
+                Task::none()
+            }
             Message::FootprintModeShortcut(target) => {
                 // v0.14.2 — gate on "active tab is a footprint
                 // editor". When yes, route through the existing

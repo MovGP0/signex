@@ -1149,6 +1149,11 @@ pub enum PrimitiveEditorMsg {
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
     FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),
+    /// v0.15 — global tool-cancel (Esc). Resets both `pads_tool`
+    /// AND `active_tool` (sketch) to Select + clears
+    /// `tool_pending`. Mode-agnostic, so the same Esc dispatch
+    /// works whichever mode the user is in.
+    FootprintToolEscape,
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate

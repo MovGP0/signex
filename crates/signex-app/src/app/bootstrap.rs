@@ -622,7 +622,13 @@ impl Signex {
                                 )
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Select))
+                                // v0.15 — route through the
+                                // dispatcher so Esc resets the
+                                // footprint editor's tool state when
+                                // a `.snxfpt` tab is active, and
+                                // falls back to the schematic
+                                // Tool::Select reset otherwise.
+                                Message::EscapePressed
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                                 Message::CanvasEvent(CanvasEvent::FitAll)

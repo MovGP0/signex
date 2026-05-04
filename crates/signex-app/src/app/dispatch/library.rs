@@ -3918,6 +3918,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintToggleLayer(_)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
         | PrimitiveEditorMsg::FootprintSetPadsTool(_)
+        | PrimitiveEditorMsg::FootprintToolEscape
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
@@ -4225,6 +4226,17 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
             editor.state.pads_tool = tool;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintToolEscape => {
+            // v0.15 — global Esc tool cancel. Resets both Pads and
+            // Sketch tool state, mode-agnostic.
+            editor.state.pads_tool =
+                crate::library::editor::footprint::state::PadsTool::Select;
+            editor.state.active_tool =
+                crate::library::editor::footprint::state::SketchTool::Select;
+            editor.state.tool_pending =
+                crate::library::editor::footprint::state::ToolPending::Idle;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
