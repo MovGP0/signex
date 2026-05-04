@@ -380,10 +380,11 @@ pub fn view_footprint<'a>(
                 .push(canvas_area)
                 .push(active_bar)
                 .push(mode_switcher);
-            let inspector = crate::library::editor::footprint::sketch_mode::inspector::view(
-                editor, tokens,
-            );
-            column![canvas_with_bar, inspector, layers_strip, footer]
+            // v0.16.2 — sketch-mode inspector strip migrated into the
+            // right-dock Properties panel (DOF / Parameters / Role /
+            // Solve warnings). The bottom of the canvas now goes
+            // straight to the layers strip + footer.
+            column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
                 .height(Length::Fill)

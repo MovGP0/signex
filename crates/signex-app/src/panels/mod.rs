@@ -2,7 +2,10 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, svg, text};
+use iced::widget::{
+    Column, Row, Space, button, column, container, pick_list, row, scrollable, svg, text,
+    text_input,
+};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
@@ -544,6 +547,25 @@ pub struct FootprintEditorPanelContext {
     /// in the Footprint Library panel breadcrumb. `None` for
     /// lone-file edits.
     pub library_stem: Option<String>,
+    /// v0.16.2 — Sketch parameter table (name → expression). Drives
+    /// the Properties panel's Parameters section in Sketch mode.
+    /// Empty when the footprint has no `SketchData` yet.
+    pub sketch_parameters: Vec<(String, String)>,
+    /// v0.16.2 — solver warnings from the most recent solve + bake.
+    /// Drives the Properties panel's "Solve warnings" section.
+    pub solve_warnings: Vec<String>,
+    /// v0.16.2 — sketch-entity ID of the primary selection. Wired
+    /// through so the Properties panel's Role pick_list can emit
+    /// `FootprintSketchSetRole` with the right id.
+    pub selected_sketch_entity_id: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.16.2 — current role of the primary selected sketch entity
+    /// (or `Unassigned` when no entity is selected). Inspected via
+    /// `current_role_of` against the entity's `*Attr` slots.
+    pub selected_sketch_role: crate::library::messages::RoleTag,
+    /// v0.16.2 — `true` when the primary selected sketch entity is a
+    /// Point. Drives the "Pad role applies to Points only" hint on
+    /// the Role pick_list.
+    pub selected_sketch_is_point: bool,
 }
 
 /// One row in the Footprint Library panel — a sibling `.snxfpt`
@@ -1035,6 +1057,21 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
+    /// v0.16.2 — Properties-panel Role pick_list emit. Routed
+    /// through the dock handler which forwards to
+    /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchSetRole }`
+    /// keyed on the active footprint editor tab.
+    FpEditorSetRole {
+        id: signex_sketch::id::SketchEntityId,
+        role: crate::library::messages::RoleTag,
+    },
+    /// v0.16.2 — Properties-panel Parameter row text input. Routed
+    /// through the dock handler which forwards to
+    /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchEditParameter }`.
+    FpEditorEditParameter {
+        name: String,
+        expr: String,
+    },
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -3633,7 +3670,11 @@ fn view_footprint_editor_properties<'a>(
     );
     col = col.push(thin_sep(border_c));
 
-    // Branch on (mode × selection).
+    // Selection-specific top section. Pads + selected pad → pad
+    // summary; Sketch + selected entity → entity summary + Role
+    // pick_list; otherwise → footprint summary. Sketch-mode-only
+    // sections (Parameters / DOF / Warnings) follow regardless of
+    // selection, so the user can monitor solve state while authoring.
     match (fp.mode_kind, fp.selected_pad.as_ref(), fp.selected_sketch_entity.as_ref()) {
         (FootprintModeKind::Pads, Some(pad), _) => {
             col = col.push(props_section_header("Pad", primary));
@@ -3688,6 +3729,34 @@ fn view_footprint_editor_properties<'a>(
                 "Attached constraints",
                 ent.attached_constraint_count.to_string(),
             );
+
+            // v0.16.2 — Role pick_list. Visible when an entity is
+            // selected; pick_list value mirrors the entity's
+            // currently-attached `*Attr` slot (or `Unassigned`).
+            col = col.push(props_section_header("Role", primary));
+            if let Some(id) = fp.selected_sketch_entity_id {
+                use crate::library::messages::RoleTag;
+                let current = fp.selected_sketch_role;
+                let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
+                    PanelMsg::FpEditorSetRole {
+                        id,
+                        role: new_role,
+                    }
+                })
+                .text_size(11)
+                .padding([3, 8])
+                .width(Length::Fill);
+                col = col.push(
+                    container(dropdown).padding([4, 8]).width(Length::Fill),
+                );
+                if !fp.selected_sketch_is_point {
+                    col = col.push(
+                        container(text("Pad role applies to Points only").size(9).color(muted))
+                            .padding([0, 8])
+                            .width(Length::Fill),
+                    );
+                }
+            }
         }
         _ => {
             // No selection — show the footprint summary.
@@ -3696,14 +3765,12 @@ fn view_footprint_editor_properties<'a>(
             col = props_kv_row(col, muted, primary, "Version", fp.version.clone());
             col = props_kv_row(col, muted, primary, "Mode", mode_label.into());
             col = props_kv_row(col, muted, primary, "Pads", fp.pad_count.to_string());
-
             if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
-                col = col.push(props_section_header("Sketch", primary));
                 col = props_kv_row(
                     col,
                     muted,
                     primary,
-                    "Entities",
+                    "Sketch entities",
                     fp.sketch_entity_count.to_string(),
                 );
                 col = props_kv_row(
@@ -3713,92 +3780,185 @@ fn view_footprint_editor_properties<'a>(
                     "Constraints",
                     fp.sketch_constraint_count.to_string(),
                 );
-                if let Some(s) = fp.last_solve.as_ref() {
-                    col = col.push(props_section_header("Last solve", primary));
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        primary,
-                        "Iterations",
-                        s.iterations.to_string(),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        primary,
-                        "Elapsed",
-                        format!("{} ms", s.elapsed_ms),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        primary,
-                        "Residual norm",
-                        format!("{:.3e}", s.final_residual_norm),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        primary,
-                        "Over-constrained",
-                        s.over_constraint_count.to_string(),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        primary,
-                        "Auto-pause",
-                        if s.auto_paused { "PAUSED".into() } else { "running".into() },
-                    );
-                }
             }
+        }
+    }
 
-            // v0.14.2 — footprint-level settings live here on the
-            // Properties panel default body (no selection). Auto-fit
-            // Courtyard moved off the active bar's top strip.
-            col = col.push(props_section_header("Settings", primary));
-            let auto_fit_label = if fp.auto_fit_courtyard {
-                "Auto-fit Courtyard \u{2713}"
-            } else {
-                "Auto-fit Courtyard"
-            };
-            let auto_fit_btn = iced::widget::button(
-                text(auto_fit_label).size(10).color(primary),
-            )
-            .padding([4, 8])
-            .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(if fp.auto_fit_courtyard {
-                    iced::Color::from_rgba(0.40, 0.70, 1.00, 0.18)
-                } else {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-                })),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                },
-                ..iced::widget::button::Style::default()
-            });
+    // v0.16.2 — Sketch-mode-only sections (Parameters, DOF, Solve
+    // warnings). Always visible when the editor is in Sketch mode so
+    // the user can monitor solve state while authoring, regardless of
+    // whether anything is selected. Migrated out of the bottom-of-canvas
+    // inspector strip that shipped in v0.13.1.
+    if fp.mode_kind == FootprintModeKind::Sketch {
+        // Parameters
+        col = col.push(props_section_header("Parameters", primary));
+        if fp.sketch_parameters.is_empty() {
             col = col.push(
-                container(auto_fit_btn).padding([4, 8]).width(Length::Fill),
+                container(text("(none — add via expression)").size(10).color(muted))
+                    .padding([2, 8])
+                    .width(Length::Fill),
             );
+        } else {
+            for (name, expr) in &fp.sketch_parameters {
+                let name_clone = name.clone();
+                let row = row![
+                    text(name).size(10).color(primary).width(Length::Fixed(110.0)),
+                    text_input("expression…", expr)
+                        .size(10)
+                        .padding(2)
+                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                            background: iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            icon: iced::Color::TRANSPARENT,
+                            placeholder: muted,
+                            value: primary,
+                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                        })
+                        .on_input(move |new_expr| PanelMsg::FpEditorEditParameter {
+                            name: name_clone.clone(),
+                            expr: new_expr,
+                        }),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center);
+                col = col.push(
+                    container(row).padding([2, 8]).width(Length::Fill),
+                );
+            }
+        }
 
-            col = col.push(props_section_header("Hint", primary));
-            let hint = match fp.mode_kind {
-                FootprintModeKind::Pads => "Click a pad to edit its properties.",
-                FootprintModeKind::Sketch => {
-                    "Click a sketch entity (Point / Line / Arc / Circle) to edit it."
-                }
-                FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
-            };
+        // DOF / Last solve
+        col = col.push(props_section_header("DOF / Last solve", primary));
+        col = props_kv_row(
+            col,
+            muted,
+            primary,
+            "Sketch entities",
+            fp.sketch_entity_count.to_string(),
+        );
+        col = props_kv_row(
+            col,
+            muted,
+            primary,
+            "Constraints",
+            fp.sketch_constraint_count.to_string(),
+        );
+        if let Some(s) = fp.last_solve.as_ref() {
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Iterations",
+                s.iterations.to_string(),
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Elapsed",
+                format!("{} ms", s.elapsed_ms),
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Residual norm",
+                format!("{:.3e}", s.final_residual_norm),
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Over-constrained",
+                s.over_constraint_count.to_string(),
+            );
+        } else {
             col = col.push(
-                container(text(hint).size(10).color(muted))
-                    .padding([4, 8])
+                container(text("(no solve yet)").size(10).color(muted))
+                    .padding([2, 8])
                     .width(Length::Fill),
             );
         }
+
+        // Solve warnings
+        col = col.push(props_section_header("Solve warnings", primary));
+        if fp.solve_warnings.is_empty() {
+            col = col.push(
+                container(text("(none)").size(10).color(muted))
+                    .padding([2, 8])
+                    .width(Length::Fill),
+            );
+        } else {
+            for w in fp.solve_warnings.iter().take(8) {
+                col = col.push(
+                    container(text(w).size(9).color(muted))
+                        .padding([2, 8])
+                        .width(Length::Fill),
+                );
+            }
+            if fp.solve_warnings.len() > 8 {
+                col = col.push(
+                    container(
+                        text(format!("… +{} more", fp.solve_warnings.len() - 8))
+                            .size(9)
+                            .color(muted),
+                    )
+                    .padding([2, 8])
+                    .width(Length::Fill),
+                );
+            }
+        }
     }
+
+    // Settings + hint — always visible at the bottom of the panel
+    // regardless of mode / selection so common toggles stay reachable.
+    col = col.push(props_section_header("Settings", primary));
+    let auto_fit_label = if fp.auto_fit_courtyard {
+        "Auto-fit Courtyard \u{2713}"
+    } else {
+        "Auto-fit Courtyard"
+    };
+    let auto_fit_btn = iced::widget::button(
+        text(auto_fit_label).size(10).color(primary),
+    )
+    .padding([4, 8])
+    .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(if fp.auto_fit_courtyard {
+            iced::Color::from_rgba(0.40, 0.70, 1.00, 0.18)
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+        })),
+        border: iced::Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border_c,
+        },
+        ..iced::widget::button::Style::default()
+    });
+    col = col.push(
+        container(auto_fit_btn).padding([4, 8]).width(Length::Fill),
+    );
+
+    col = col.push(props_section_header("Hint", primary));
+    let hint = match fp.mode_kind {
+        FootprintModeKind::Pads => "Click a pad to edit its properties.",
+        FootprintModeKind::Sketch => {
+            "Click a sketch entity (Point / Line / Arc / Circle) to edit it."
+        }
+        FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
+    };
+    col = col.push(
+        container(text(hint).size(10).color(muted))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
 
     scrollable(col).width(Length::Fill).into()
 }

@@ -54,6 +54,58 @@ impl Signex {
                 }
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetRole { id, role } => {
+                // v0.16.2 — Properties-panel Role pick_list. Resolve
+                // the active footprint editor tab and forward through
+                // the standard PrimitiveEditorEvent path so the role
+                // mutation goes through `apply_sketch_role_with_warnings`
+                // (clears all attrs, sets matching one, runs solve+bake).
+                if let Some(active_tab) = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchSetRole {
+                                    id: *id,
+                                    role: *role,
+                                },
+                            },
+                        ));
+                        self.refresh_panel_ctx();
+                    }
+                }
+                true
+            }
+            crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
+                // v0.16.2 — Properties-panel parameter row edit.
+                // Forwards to `FootprintSketchEditParameter` which
+                // upserts the parameter and triggers a solve+bake.
+                if let Some(active_tab) = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchEditParameter {
+                                    name: name.clone(),
+                                    expr: expr.clone(),
+                                },
+                            },
+                        ));
+                        self.refresh_panel_ctx();
+                    }
+                }
+                true
+            }
             crate::panels::PanelMsg::SchLibrarySelectSymbol(idx) => {
                 self.sch_library_select_symbol(*idx);
                 true

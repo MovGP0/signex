@@ -1182,6 +1182,47 @@ fn build_footprint_editor_panel_ctx(
         });
     }
 
+    // v0.16.2 — Properties-panel migration of the bottom inspector
+    // strip. Surfaces parameters, solve warnings, and the selected
+    // entity's role so the panel can host the Role pick_list +
+    // Parameter inputs.
+    let sketch_parameters: Vec<(String, String)> = editor
+        .primitive
+        .sketch
+        .as_ref()
+        .map(|s| {
+            s.parameters
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let solve_warnings = editor.state.solve_warnings.clone();
+    let selected_sketch_entity_id = editor.state.selected_sketch;
+    let (selected_sketch_role, selected_sketch_is_point) = match selected_sketch_entity_id {
+        Some(id) => {
+            use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+            use crate::library::messages::RoleTag;
+            use signex_sketch::entity::EntityKind;
+            editor
+                .primitive
+                .sketch
+                .as_ref()
+                .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                .map(|e| {
+                    (
+                        current_role_of(e),
+                        matches!(e.kind, EntityKind::Point { .. }),
+                    )
+                })
+                .unwrap_or((RoleTag::Unassigned, false))
+        }
+        None => (
+            crate::library::messages::RoleTag::Unassigned,
+            false,
+        ),
+    };
+
     Some(FootprintEditorPanelContext {
         path,
         footprint_name: editor.primitive.name.clone(),
@@ -1196,6 +1237,11 @@ fn build_footprint_editor_panel_ctx(
         auto_fit_courtyard: editor.state.auto_fit_courtyard,
         library_siblings,
         library_stem,
+        sketch_parameters,
+        solve_warnings,
+        selected_sketch_entity_id,
+        selected_sketch_role,
+        selected_sketch_is_point,
     })
 }
 
