@@ -375,6 +375,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         }));
                     }
                 }
+                // v0.14.2: when the user is in Sketch mode AND a
+                // multi-click tool has placed its anchor (line first
+                // endpoint / circle centre / arc centre / arc start),
+                // clear the canvas cache on every cursor tick so the
+                // dashed ghost preview drawn by
+                // `draw_sketch_tool_preview` re-renders against the
+                // new cursor position. Without this the ghost stayed
+                // frozen at the position when the cache was last
+                // cleared.
+                use crate::library::editor::footprint::state::{EditorMode, ToolPending};
+                if matches!(self.state.mode, EditorMode::Sketch)
+                    && !matches!(self.state.tool_pending, ToolPending::Idle)
+                {
+                    self.cache.clear();
+                }
+
                 // Background hover — push the cursor position so the
                 // footer readout updates.
                 return Some(canvas::Action::publish(LibraryMessage::EditorEvent {

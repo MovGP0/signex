@@ -690,6 +690,31 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
+            Message::FootprintModeShortcut(target) => {
+                // v0.14.2 — gate on "active tab is a footprint
+                // editor". When yes, route through the existing
+                // FootprintSetMode dispatch (which also runs the
+                // sketch dispatcher's SetMode handler so the
+                // SetMode side-effects fire). Otherwise no-op so the
+                // bare digits don't hijack other tabs.
+                let path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_footprint_editor())
+                    .cloned();
+                if let Some(path) = path {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintSetMode(
+                                target,
+                            ),
+                        },
+                    ));
+                }
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }

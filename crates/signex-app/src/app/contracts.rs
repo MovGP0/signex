@@ -550,6 +550,13 @@ pub enum Message {
         path: std::path::PathBuf,
         result: Result<Vec<signex_widgets::HistoryEntry>, String>,
     },
+    /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
+    /// Routed from the global `1` / `2` / `3` key handler in
+    /// `bootstrap.rs::subscription`. The dispatcher checks whether
+    /// the active tab is a footprint editor; if yes, sets the mode;
+    /// otherwise no-op so the keys don't steal text input on other
+    /// tabs.
+    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
     Noop,
 }
 

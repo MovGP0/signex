@@ -705,6 +705,23 @@ impl Signex {
                             (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
                                 Message::SaveFile
                             }
+                            // v0.14.2 — footprint editor mode shortcuts.
+                            // 1 = Sketch, 2 = Pads, 3 = 3D View. The
+                            // dispatcher gates on "active tab is a
+                            // footprint editor" so the bare digits
+                            // don't steal text input on other tabs.
+                            (keyboard::Key::Character(c), m) if c == "1" && !m.command() && !m.alt() => {
+                                use crate::library::editor::footprint::state::EditorMode;
+                                Message::FootprintModeShortcut(EditorMode::Sketch)
+                            }
+                            (keyboard::Key::Character(c), m) if c == "2" && !m.command() && !m.alt() => {
+                                use crate::library::editor::footprint::state::EditorMode;
+                                Message::FootprintModeShortcut(EditorMode::Normal)
+                            }
+                            (keyboard::Key::Character(c), m) if c == "3" && !m.command() && !m.alt() => {
+                                use crate::library::editor::footprint::state::EditorMode;
+                                Message::FootprintModeShortcut(EditorMode::View3d)
+                            }
                             // Ctrl+A select all
                             (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
                                 Message::Selection(selection_request::SelectionRequest::SelectAll)
