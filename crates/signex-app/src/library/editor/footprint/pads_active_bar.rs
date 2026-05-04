@@ -132,7 +132,6 @@ pub fn footprint_tabs_overlay<'a>(
     let panel_bg = theme_ext::to_color(&tokens.panel_bg);
 
     let active_idx = editor.active_idx;
-    let total = editor.file.footprints.len();
 
     let tab_btn = move |idx: usize,
                         label: String,
@@ -206,7 +205,6 @@ pub fn footprint_tabs_overlay<'a>(
     // Single-footprint files with no sibling action: still render the
     // strip so "+" is reachable. The visual rhythm matches the mode
     // switcher chip on the opposite corner.
-    let _ = total;
     iced::widget::container(
         iced::widget::container(tabs)
             .padding(4)

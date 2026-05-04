@@ -202,6 +202,16 @@ impl SimFile {
                     model_index: idx,
                 });
             }
+            // v0.18.12.1 — also reject the sentinel prefix in body
+            // content. Without this, a SPICE source containing the
+            // literal string `__SIGNEX_SIM_BODY_a1b2c3d4_` would
+            // confuse the post-emit `str::replace` pass and corrupt
+            // the output. Practically improbable but cheap to guard.
+            if model.body.contains(BODY_PLACEHOLDER_PREFIX) {
+                return Err(SimFileError::InvalidBody {
+                    model_index: idx,
+                });
+            }
         }
         let mut wire_models: Vec<SimModelWire> = Vec::with_capacity(self.models.len());
         for (idx, model) in self.models.iter().enumerate() {

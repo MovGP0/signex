@@ -1250,24 +1250,32 @@ impl Signex {
 
         let mk_input = |placeholder: &'static str,
                         value: &str,
-                        on_input: fn(String) -> Message|
+                        on_input: fn(String) -> Message,
+                        enabled: bool|
          -> Element<'_, Message> {
-            text_input(placeholder, value)
-                .on_input(on_input)
-                .on_submit(Message::GridPropertiesApply)
+            let mut input = text_input(placeholder, value)
                 .size(12)
                 .padding(6)
-                .width(Length::Fixed(140.0))
-                .into()
+                .width(Length::Fixed(140.0));
+            if enabled {
+                input = input
+                    .on_input(on_input)
+                    .on_submit(Message::GridPropertiesApply);
+            }
+            input.into()
         };
 
         let link_label = if st.link_xy { "🔗 Linked" } else { "🔓 Unlinked" };
 
+        // v0.18.12.1 — when linked (the default), the Step Y input
+        // is disabled to make the "Y mirrors X" semantics visible
+        // instead of accepting input that Apply would silently
+        // discard. Toggle the chain icon to enable it.
         let body = column![
             row![
                 container(text("Step X").size(11).color(text_muted))
                     .width(Length::Fixed(80.0)),
-                mk_input("0.127", &st.step_x_mm, Message::GridPropertiesSetStepX),
+                mk_input("0.127", &st.step_x_mm, Message::GridPropertiesSetStepX, true),
                 Space::new().width(8),
                 iced::widget::button(text(link_label).size(11).color(text_c))
                     .padding([4, 10])
@@ -1278,14 +1286,19 @@ impl Signex {
             row![
                 container(text("Step Y").size(11).color(text_muted))
                     .width(Length::Fixed(80.0)),
-                mk_input("0.127", &st.step_y_mm, Message::GridPropertiesSetStepY),
+                mk_input(
+                    "0.127",
+                    &st.step_y_mm,
+                    Message::GridPropertiesSetStepY,
+                    !st.link_xy,
+                ),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
             text(
                 "Step Y currently mirrors Step X (single-axis snap_options.grid_step_mm). \
                  The Y field is wired for forward compatibility — separate-axis storage lands \
-                 in a follow-up."
+                 in a follow-up. Toggle the chain to edit Y independently."
             )
             .size(10)
             .color(text_muted),

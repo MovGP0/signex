@@ -529,13 +529,14 @@ impl Signex {
                                 Message::GridPickerOpen
                             }
                             (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("g")
-                                    && m.command()
-                                    && !m.shift() =>
+                                if c == "g" && m.command() && !m.shift() =>
                             {
                                 // v0.18.11 — Ctrl+G opens the Cartesian
                                 // Grid Editor modal (Step X / Y, link
-                                // toggle, Apply / Cancel).
+                                // toggle, Apply / Cancel). Matched
+                                // before the Shift+Ctrl+G `GridToggle`
+                                // arm — guards don't overlap (`!m.shift()`
+                                // vs `m.shift()`).
                                 Message::GridPropertiesOpen
                             }
                             (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {

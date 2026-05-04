@@ -4464,6 +4464,64 @@ pub(crate) fn apply_footprint_primitive_edit(
                     pad.position_mm = (new_cx, new_cy);
                     pad.size_mm = (new_w, new_h);
                     let centre_id = pad.sketch_entity_id;
+                    // v0.18.12.1 bugfix — re-align the OTHER three
+                    // corner Points to the new pad bbox. Previously
+                    // only the dragged corner moved, leaving the
+                    // pad rectangle (drawn at the new bbox) and the
+                    // non-dragged corners stranded at their old
+                    // positions — visible as the dashed-construction
+                    // outline drifting off the rendered pad on
+                    // subsequent corner drags.
+                    let new_positions: [(f64, f64); 4] = [
+                        (max_x, min_y), // ne
+                        (max_x, max_y), // se
+                        (min_x, max_y), // sw
+                        (min_x, min_y), // nw
+                    ];
+                    for (corner_id, (target_x, target_y)) in
+                        corners.iter().zip(new_positions.iter())
+                    {
+                        // Skip the corner the user just dragged — it's
+                        // already at the right position, and emitting
+                        // a zero-delta MovePoint would still trip the
+                        // solver.
+                        if *corner_id == id {
+                            continue;
+                        }
+                        let cur = editor
+                            .primitive()
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| {
+                                s.entities.iter().find(|e| e.id == *corner_id)
+                            })
+                            .and_then(|e| {
+                                if let signex_sketch::entity::EntityKind::Point { x, y } =
+                                    e.kind
+                                {
+                                    Some((x, y))
+                                } else {
+                                    None
+                                }
+                            });
+                        if let Some((cx, cy)) = cur {
+                            let cdx = *target_x - cx;
+                            let cdy = *target_y - cy;
+                            if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
+                                editor.with_parts(|state, primitive| {
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::MovePoint {
+                                            id: *corner_id,
+                                            dx: cdx,
+                                            dy: cdy,
+                                        },
+                                    );
+                                });
+                            }
+                        }
+                    }
                     // Move the centre Point to the new bbox centre +
                     // rewrite the PadAttr size exprs so the bake
                     // emits the new size.

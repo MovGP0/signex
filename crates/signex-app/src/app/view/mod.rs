@@ -3863,6 +3863,8 @@ impl Signex {
             || ui.project_close_confirm.is_some()
             || ui.project_options.is_some()
             || ui.enable_version_control.is_some()
+            || ui.grid_properties.is_some()
+            || interaction.grid_picker.is_some()
             || document.bom_preview.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm

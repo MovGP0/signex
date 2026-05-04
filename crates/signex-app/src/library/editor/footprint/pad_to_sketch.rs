@@ -259,6 +259,19 @@ fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
 }
 
 fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
+    use signex_library::primitive::footprint::PadKind as LibPadKind;
+    // v0.18.12.1 — carry `drill_diameter_mm` into the sketch
+    // PadAttr. Without this, NPT-hole pads minted via Place Hole
+    // lose their drill on the first sketch round-trip (the bake
+    // emits `Pad::drill = None`). Plated/NPT semantics follow the
+    // pad kind.
+    let drill = pad
+        .drill_diameter_mm
+        .map(|d| signex_sketch::attr::DrillSpec {
+            diameter_expr: format!("{}mm", format_f64(d)),
+            slot_length_expr: None,
+            plated: !matches!(pad.kind, LibPadKind::NptHole),
+        });
     PadAttr {
         number: pad.number.clone(),
         kind: map_kind(pad.kind),
@@ -269,7 +282,7 @@ fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
         rotation_expr: None,
         offset_x_expr: None,
         offset_y_expr: None,
-        drill: None,
+        drill,
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
