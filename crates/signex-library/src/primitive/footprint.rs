@@ -44,6 +44,10 @@ impl std::fmt::Display for LayerId {
 }
 
 /// Pad mounting style.
+///
+/// Variant names persist in PascalCase to preserve v1 / v2 fixture
+/// compatibility — adding `rename_all = "snake_case"` would break
+/// every existing footprint TOML.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum PadKind {
@@ -55,6 +59,38 @@ pub enum PadKind {
     NptHole,
     /// Edge / mezzanine connector pad.
     ConnectorPad,
+    /// Castellated edge pad — half-hole on the board edge. Bake emits
+    /// drill semantics + an outline-edge truncation hint so gerber
+    /// outline export can identify the halved hole. v0.14+.
+    Castellated,
+    /// Fiducial vision marker — copper + mask only, no paste, no drill.
+    /// v0.14+.
+    Fiducial,
+}
+
+/// Which corners of a chamfered-rectangle pad are cut.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ChamferedCorners {
+    #[serde(default)]
+    pub top_left: bool,
+    #[serde(default)]
+    pub top_right: bool,
+    #[serde(default)]
+    pub bottom_left: bool,
+    #[serde(default)]
+    pub bottom_right: bool,
+}
+
+impl ChamferedCorners {
+    pub const fn all() -> Self {
+        Self {
+            top_left: true,
+            top_right: true,
+            bottom_left: true,
+            bottom_right: true,
+        }
+    }
 }
 
 /// Pad geometry shape.
@@ -68,6 +104,14 @@ pub enum PadShape {
         radius_ratio: f64,
     },
     Oval,
+    /// Chamfered-corner rectangle. v0.14+.
+    Chamfered {
+        /// Chamfer extent as a ratio of pad min-dimension (0.0 = no
+        /// chamfer, 0.5 = full diagonal cut).
+        chamfer_ratio: f64,
+        /// Per-corner enable flags.
+        corners: ChamferedCorners,
+    },
     /// Custom outline polygon — points relative to pad centre, mm.
     Custom(Polygon),
 }
@@ -211,6 +255,123 @@ impl Default for Body3D {
     }
 }
 
+/// Net reference — string for now, will become a UUID once nets are
+/// first-class library citizens (v0.16+). v0.14 introduces this as a
+/// thin wrapper so future migration can be one-shot.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct NetRef(pub Option<String>);
+
+impl NetRef {
+    pub fn named(s: impl Into<String>) -> Self {
+        Self(Some(s.into()))
+    }
+}
+
+/// Pour fill mode — drives the polygon raster fill at PCB-render time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum PourFillType {
+    #[default]
+    Solid,
+    Hatched,
+    None,
+}
+
+/// Thermal-relief connection style for pads inside a pour. v0.14
+/// records the choice; the actual relief geometry is generated at
+/// pour-render time (v0.15).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ThermalReliefStyle {
+    Direct,
+    #[default]
+    Spoke,
+    None,
+}
+
+/// Copper pour / region. Fill generation lives in v0.15 — v0.14 stores
+/// the boundary + metadata only.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FpPour {
+    pub boundary: Polygon,
+    pub layer: LayerId,
+    #[serde(default)]
+    pub net: NetRef,
+    #[serde(default)]
+    pub fill_type: PourFillType,
+    #[serde(default)]
+    pub thermal_relief: ThermalReliefStyle,
+    #[serde(default)]
+    pub clearance: f64,
+    #[serde(default)]
+    pub min_thickness: f64,
+    #[serde(default)]
+    pub priority: u8,
+}
+
+/// What a keepout zone forbids. DRC enforcement lands in v0.15.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum KeepoutForbid {
+    #[default]
+    All,
+    Tracks,
+    Pads,
+    Vias,
+    Copper,
+}
+
+/// DRC keepout zone. v0.14 stores the polygon + layer + forbid kind.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FpKeepout {
+    pub boundary: Polygon,
+    pub layer: LayerId,
+    #[serde(default)]
+    pub forbids: KeepoutForbid,
+}
+
+/// Board cutout — subtracts from the PCB outline (mounting hole, slot,
+/// edge cutout). Outline subtraction itself runs at PCB-export time.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FpCutout {
+    pub boundary: Polygon,
+}
+
+/// V-score panelisation hint — straight-line score on the PCB surface.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FpVScore {
+    /// Score line endpoints (mm).
+    pub line: [[f64; 2]; 2],
+    /// Score depth in mm.
+    #[serde(default)]
+    pub depth: f64,
+}
+
+/// Solder-mask opening (cutout) — copper without solder mask covering.
+/// Distinct from a pad's mask margin: this is a standalone profile for
+/// e.g. an exposed copper region or a panel-level marker.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FpMaskOpening {
+    pub boundary: Polygon,
+    pub layer: LayerId,
+}
+
+/// Solder-mask exclusion (cover) — solder mask explicitly extended over
+/// copper. Same shape as `FpMaskOpening`; semantics flip.
+pub type FpMaskExclude = FpMaskOpening;
+
+/// Standalone paste aperture — a paste opening separate from any pad
+/// (used for thermal-pad split-aperture patterns and panel fiducials).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FpPasteAperture {
+    pub boundary: Polygon,
+    pub layer: LayerId,
+}
+
 /// Optional STEP/WRL attachment for mech-CAD export. Content-hashed so two
 /// MPNs with identical STEP geometry de-duplicate to one file in
 /// `mylib.snxlib/step/<sha256>.step`.
@@ -281,6 +442,29 @@ pub struct Footprint {
     /// preserve their literal pad-list authoring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<signex_sketch::SketchData>,
+    /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pours: Vec<FpPour>,
+    /// DRC keepout zones. v0.14 records; v0.15 enforces.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keepouts: Vec<FpKeepout>,
+    /// Board cutouts. v0.14 records; outline subtraction at PCB-export.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cutouts: Vec<FpCutout>,
+    /// V-score panelisation hints. v0.14 records; panelisation tool
+    /// consumes them in v0.16+.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub v_scores: Vec<FpVScore>,
+    /// Standalone solder-mask openings (separate from pad mask margins).
+    /// v0.14+.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mask_openings: Vec<FpMaskOpening>,
+    /// Standalone solder-mask exclusions (mask cover). v0.14+.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mask_excludes: Vec<FpMaskExclude>,
+    /// Standalone paste apertures (separate from pad paste). v0.14+.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paste_apertures: Vec<FpPasteAperture>,
 }
 
 fn default_footprint_version() -> String {
@@ -290,6 +474,14 @@ fn default_footprint_version() -> String {
 fn default_schema_v2() -> u32 {
     2
 }
+
+/// Schema version emitted by `Footprint::empty()`. v3 (the current
+/// version) adds optional pour / keepout / cutout / v_score /
+/// mask_opening / mask_exclude / paste_aperture fields. v2 files load
+/// cleanly as v2 (the new fields default to empty Vecs); the version
+/// number is bumped only so consumers can see at a glance which fields
+/// the file may use.
+pub const FOOTPRINT_SCHEMA_VERSION: u32 = 3;
 
 impl Footprint {
     /// Empty footprint with no pads — what the New Component flow seeds.
@@ -312,8 +504,15 @@ impl Footprint {
             released: false,
             created: now,
             updated: now,
-            schema_version: default_schema_v2(),
+            schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
+            pours: Vec::new(),
+            keepouts: Vec::new(),
+            cutouts: Vec::new(),
+            v_scores: Vec::new(),
+            mask_openings: Vec::new(),
+            mask_excludes: Vec::new(),
+            paste_apertures: Vec::new(),
         }
     }
 }
@@ -376,6 +575,13 @@ mod tests {
             updated: Utc::now(),
             schema_version: 2,
             sketch: None,
+            pours: Vec::new(),
+            keepouts: Vec::new(),
+            cutouts: Vec::new(),
+            v_scores: Vec::new(),
+            mask_openings: Vec::new(),
+            mask_excludes: Vec::new(),
+            paste_apertures: Vec::new(),
         };
         let json = serde_json::to_string(&fp).unwrap();
         let back: Footprint = serde_json::from_str(&json).unwrap();

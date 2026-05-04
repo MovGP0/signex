@@ -173,6 +173,13 @@ fn fixture_footprint(name: &str) -> Footprint {
         updated: now,
         schema_version: 2,
         sketch: None,
+        pours: Vec::new(),
+        keepouts: Vec::new(),
+        cutouts: Vec::new(),
+        v_scores: Vec::new(),
+        mask_openings: Vec::new(),
+        mask_excludes: Vec::new(),
+        paste_apertures: Vec::new(),
     }
 }
 
