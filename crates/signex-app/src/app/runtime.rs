@@ -1274,6 +1274,24 @@ fn build_footprint_editor_panel_ctx(
         None => (None, None, None),
     };
 
+    // v0.18.8 — surface every footprint inside the active envelope
+    // for the Footprint Library panel rows (Altium PCB Library
+    // parity). The `is_active` flag mirrors `editor.active_idx`;
+    // panel rendering uses it to highlight the currently-edited
+    // sibling.
+    let internal_footprints: Vec<crate::panels::FootprintLibInternalRow> = editor
+        .file
+        .footprints
+        .iter()
+        .enumerate()
+        .map(|(i, fp)| crate::panels::FootprintLibInternalRow {
+            name: fp.name.clone(),
+            pad_count: fp.pads.len(),
+            is_active: i == editor.active_idx,
+        })
+        .collect();
+    let internal_selected_idx = editor.panel_selected_idx;
+
     Some(FootprintEditorPanelContext {
         path,
         footprint_name: editor.primitive().name.clone(),
@@ -1288,6 +1306,8 @@ fn build_footprint_editor_panel_ctx(
         auto_fit_courtyard: editor.state.auto_fit_courtyard,
         library_siblings,
         library_stem,
+        internal_footprints,
+        internal_selected_idx,
         sketch_parameters,
         solve_warnings,
         selected_sketch_entity_id,

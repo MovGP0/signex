@@ -299,9 +299,15 @@ pub struct FootprintEditorState {
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
-    /// The Footprint Library left-dock panel will eventually drive
-    /// this index; for now it always lands on the first footprint.
+    /// The Footprint Library left-dock panel + canvas tab strip
+    /// drive this; defaults to the first footprint.
     pub active_idx: usize,
+    /// v0.18.8 — Footprint Library panel single-click selection.
+    /// Independent of `active_idx`: a single click highlights the
+    /// row, double-click (or the panel's Edit button) promotes the
+    /// selection to `active_idx`. `None` until the user clicks a
+    /// row.
+    pub panel_selected_idx: Option<usize>,
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
@@ -322,6 +328,7 @@ impl FootprintEditorState {
             path,
             file,
             active_idx,
+            panel_selected_idx: None,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,

@@ -547,6 +547,14 @@ pub struct FootprintEditorPanelContext {
     /// in the Footprint Library panel breadcrumb. `None` for
     /// lone-file edits.
     pub library_stem: Option<String>,
+    /// v0.18.8 — every footprint inside the active multi-footprint
+    /// `.snxfpt` envelope. Mirror of one row in Altium's PCB Library
+    /// panel. Drives the Footprint Library panel's primary list.
+    pub internal_footprints: Vec<FootprintLibInternalRow>,
+    /// v0.18.8 — single-click selection within the panel's internal
+    /// footprint list. `None` until the user clicks a row. Drives
+    /// the Place / Delete / Edit button enable state.
+    pub internal_selected_idx: Option<usize>,
     /// v0.16.2 — Sketch parameter table (name → expression). Drives
     /// the Properties panel's Parameters section in Sketch mode.
     /// Empty when the footprint has no `SketchData` yet.
@@ -666,6 +674,20 @@ pub struct FootprintLibSibling {
     /// `true` when this sibling is the currently-open footprint
     /// (the active tab). The panel renders this row with the
     /// selection highlight.
+    pub is_active: bool,
+}
+
+/// v0.18.8 — one row in the Footprint Library panel representing a
+/// footprint *inside* the active `.snxfpt` envelope. Mirror of one
+/// component row in Altium's PCB Library panel.
+#[derive(Debug, Clone)]
+pub struct FootprintLibInternalRow {
+    /// `Footprint::name` — primary display label.
+    pub name: String,
+    /// Pad count, surfaced in a secondary column.
+    pub pad_count: usize,
+    /// `true` when this index matches the editor's `active_idx` —
+    /// the row that the canvas / Properties panel currently shows.
     pub is_active: bool,
 }
 
@@ -1213,6 +1235,27 @@ pub enum PanelMsg {
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
     /// `FootprintEditorState` (or activates an existing tab).
     FpLibraryOpenSibling(std::path::PathBuf),
+    /// v0.18.8 — Footprint Library panel single-click on an internal
+    /// footprint row. Sets `panel_selected_idx` (independent of
+    /// `active_idx`) so the row highlights and the bottom button
+    /// row gates Place / Delete / Edit on it.
+    FpLibrarySelectInternal(usize),
+    /// v0.18.8 — `+ Add` button: append an empty `Footprint` to the
+    /// active envelope and switch onto it. Routes through the
+    /// existing `FootprintAddNewSibling` handler.
+    FpLibraryAddInternal,
+    /// v0.18.8 — `Delete` button: remove the selected internal
+    /// footprint from the envelope. The active footprint clamps to
+    /// the new last index when the deleted row was the active one.
+    FpLibraryDeleteInternal(usize),
+    /// v0.18.8 — `Edit` button (also fires on row double-click):
+    /// promote `panel_selected_idx` to `active_idx` so the canvas
+    /// switches to the selected sibling.
+    FpLibraryEditInternal(usize),
+    /// v0.18.8 — `Place` button: place the selected internal
+    /// footprint as a Component on the active PCB. Stubbed until
+    /// the PCB integration lands; for now no-op + tracing-warn.
+    FpLibraryPlaceInternal(usize),
     /// Clear the current ERC violations list and canvas markers.
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
@@ -2187,22 +2230,20 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         .with_dirty(project.is_dirty)
 }
 
-/// v0.14.2 — Footprint Library panel. Lists every `.snxfpt` sibling
-/// inside the containing `.snxlib`'s `footprints/` directory. Each
-/// row shows the footprint's display name; clicking opens it in a
-/// new tab (or activates an existing tab). The currently-active
-/// footprint is highlighted with the selection accent.
+/// v0.18.8 — Footprint Library panel. Mirror of Altium's PCB Library
+/// panel: rows are the footprints *inside* the active `.snxfpt`
+/// envelope (one per `file.footprints[i]`), with a Place / Add /
+/// Delete / Edit button row at the bottom. Single-click highlights;
+/// double-click (or Edit) promotes the selection to `active_idx`.
 ///
-/// Mirrors `view_sch_library`'s layout: title, breadcrumb, single-
-/// column list. Differs in two ways: footprints live as one-per-file
-/// (so the list reads from sibling `.snxfpt` files in the library
-/// rather than from a multi-symbol container's in-memory `Vec`), and
-/// the click action opens a new tab instead of switching an
-/// in-tab `active_idx`.
+/// Cross-file navigation (sibling `.snxfpt` files inside the same
+/// `.snxlib`) is reachable through the project tree — keeping the
+/// panel single-purpose so the button row's targets are unambiguous.
 fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
+    let bg_active = crate::styles::ti(ctx.tokens.selection);
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
@@ -2216,9 +2257,9 @@ fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             container(
                 text(
-                    "Open a `.snxfpt` to see its sibling footprints in the containing \
-                     library here. Right-click a `.snxlib` in the project tree and pick \
-                     `Add New ▸ Footprint` to create one.",
+                    "Open a `.snxfpt` to see its footprints here. Right-click a \
+                     `.snxlib` (or a project) in the project tree and pick \
+                     `Add New ▸ Footprint Library` to create one.",
                 )
                 .size(10)
                 .color(muted),
@@ -2229,67 +2270,75 @@ fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return scrollable(col).width(Length::Fill).into();
     };
 
-    let breadcrumb = match &fp.library_stem {
-        Some(lib) => format!(
-            "{}  ›  footprints/  ({} footprints)",
-            lib,
-            fp.library_siblings.len(),
-        ),
-        None => format!("(lone file)  ({} footprints)", fp.library_siblings.len()),
-    };
+    // Breadcrumb — file name + footprint count.
+    let file_name = fp
+        .path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("<unknown>")
+        .to_string();
+    let breadcrumb = format!(
+        "{}  ({} footprint{})",
+        file_name,
+        fp.internal_footprints.len(),
+        if fp.internal_footprints.len() == 1 { "" } else { "s" },
+    );
     col = col.push(
         container(text(breadcrumb).size(10).color(muted))
             .padding([4, 8]),
     );
     col = col.push(thin_sep(border_c));
 
-    if fp.library_siblings.is_empty() {
-        col = col.push(
-            container(
-                text(
-                    "No `.snxfpt` files in this library. Right-click the `.snxlib` in the \
-                     project tree and pick `Add New ▸ Footprint` to create one.",
-                )
-                .size(10)
-                .color(muted),
-            )
-            .padding([6, 8])
-            .width(Length::Fill),
-        );
-        return scrollable(col).width(Length::Fill).into();
-    }
-
-    // Column header — single column ("Name") for v0.14.2; pad count
-    // / 3D body summary land in v0.15 once we cache them at scan
-    // time (avoids re-parsing every sibling .snxfpt per panel build).
+    // Two-column header: Name + Pads (right-aligned count).
     col = col.push(
         container(
-            text("Name")
-                .size(10)
-                .color(muted)
-                .width(Length::Fill),
+            row![
+                text("Name").size(10).color(muted).width(Length::Fill),
+                text("Pads").size(10).color(muted),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
         )
         .padding([4, 8])
         .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
 
-    for sibling in &fp.library_siblings {
-        let label_color = if sibling.is_active { primary } else { muted };
-        let bg_active = crate::styles::ti(ctx.tokens.selection);
-        let row_msg = PanelMsg::FpLibraryOpenSibling(sibling.path.clone());
+    // Internal-footprint rows.
+    for (idx, footprint_row) in fp.internal_footprints.iter().enumerate() {
+        let is_selected = fp.internal_selected_idx == Some(idx);
+        let is_active = footprint_row.is_active;
+        // Active row paints with the selection tint; selected-only
+        // (not yet active) paints with a slightly lighter tint so the
+        // user can tell selection apart from "currently editing".
+        let bg = if is_active {
+            iced::Background::Color(bg_active)
+        } else if is_selected {
+            iced::Background::Color(iced::Color {
+                a: 0.4,
+                ..bg_active
+            })
+        } else {
+            iced::Background::Color(iced::Color::TRANSPARENT)
+        };
+        let label_color = if is_active || is_selected { primary } else { muted };
         let row_btn = iced::widget::button(
-            container(text(sibling.display_name.clone()).size(10).color(label_color))
-                .padding([3, 8])
-                .width(Length::Fill),
+            row![
+                text(footprint_row.name.clone())
+                    .size(10)
+                    .color(label_color)
+                    .width(Length::Fill),
+                text(footprint_row.pad_count.to_string())
+                    .size(10)
+                    .color(label_color),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
         )
-        .on_press(row_msg)
+        .padding([3, 8])
+        .on_press(PanelMsg::FpLibrarySelectInternal(idx))
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: if sibling.is_active {
-                Some(iced::Background::Color(bg_active))
-            } else {
-                Some(iced::Background::Color(iced::Color::TRANSPARENT))
-            },
+            background: Some(bg),
             border: iced::Border {
                 width: 0.0,
                 radius: 0.0.into(),
@@ -2301,7 +2350,91 @@ fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(row_btn);
     }
 
-    scrollable(col).width(Length::Fill).into()
+    // Place / Add / Delete / Edit button row pinned at the bottom of
+    // the panel (Altium PCB Library parity). Place / Delete / Edit
+    // require a selection; greyed when `internal_selected_idx` is
+    // None. Add is always live.
+    let selected = fp.internal_selected_idx;
+    let footer = view_footprint_library_button_row(ctx, selected);
+
+    iced::widget::column![
+        scrollable(col).width(Length::Fill).height(Length::Fill),
+        thin_sep(border_c),
+        footer,
+    ]
+    .into()
+}
+
+/// Bottom button row for the Footprint Library panel — Altium's
+/// `Place / Add / Delete / Edit` quartet.
+fn view_footprint_library_button_row<'a>(
+    ctx: &'a PanelContext,
+    selected: Option<usize>,
+) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    let border_c = theme_ext::border_color(&ctx.tokens);
+
+    let mk_btn = |label: &'static str,
+                  on_press: Option<PanelMsg>|
+     -> Element<'a, PanelMsg> {
+        let enabled = on_press.is_some();
+        let label_color = if enabled { primary } else { muted };
+        let mut btn = iced::widget::button(
+            text(label)
+                .size(11)
+                .color(label_color)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([4, 12])
+        .width(Length::Fixed(64.0))
+        .style(move |_: &Theme, status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered if enabled => {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                }
+                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+            };
+            iced::widget::button::Style {
+                background: Some(iced::Background::Color(bg)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+        if let Some(msg) = on_press {
+            btn = btn.on_press(msg);
+        }
+        btn.into()
+    };
+
+    let place = mk_btn(
+        "Place",
+        // PCB integration not wired yet — keep the button visible
+        // but disabled to advertise the intended affordance.
+        selected.map(PanelMsg::FpLibraryPlaceInternal).filter(|_| false),
+    );
+    let add = mk_btn("Add", Some(PanelMsg::FpLibraryAddInternal));
+    let delete = mk_btn(
+        "Delete",
+        selected.map(PanelMsg::FpLibraryDeleteInternal),
+    );
+    let edit = mk_btn(
+        "Edit",
+        selected.map(PanelMsg::FpLibraryEditInternal),
+    );
+
+    container(
+        row![place, add, delete, edit]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([6, 8])
+    .width(Length::Fill)
+    .into()
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {

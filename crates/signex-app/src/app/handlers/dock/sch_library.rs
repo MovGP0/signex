@@ -10,6 +10,17 @@
 use super::super::super::*;
 
 impl Signex {
+    /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`
+    /// path, if any. The Footprint Library panel handlers below all
+    /// need this; centralising it keeps the dispatch arms tight.
+    fn active_footprint_editor_path(&self) -> Option<std::path::PathBuf> {
+        let active_tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        active_tab.kind.as_footprint_editor().cloned()
+    }
+
     pub(super) fn handle_dock_sch_library_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
@@ -21,6 +32,112 @@ impl Signex {
                 // via the existing primitive-open flow.
                 let _ = self.handle_open_primitive(sibling_path.clone());
                 self.refresh_panel_ctx();
+                true
+            }
+            // v0.18.8 — Footprint Library panel internal-row select.
+            // Stores `panel_selected_idx` on the active footprint
+            // editor so the row tints + button row gates correctly.
+            // Independent of `active_idx`: only the Edit button (or
+            // a double-click hook later) promotes selection to active.
+            crate::panels::PanelMsg::FpLibrarySelectInternal(idx) => {
+                if let Some(path) = self.active_footprint_editor_path() {
+                    if let Some(editor) =
+                        self.document_state.footprint_editors.get_mut(&path)
+                    {
+                        let last = editor.file.footprints.len().saturating_sub(1);
+                        editor.panel_selected_idx = Some((*idx).min(last));
+                    }
+                    self.refresh_panel_ctx();
+                }
+                true
+            }
+            // v0.18.8 — `+ Add` button. Routes through the existing
+            // `FootprintAddNewSibling` dispatcher which appends an
+            // empty Footprint and switches `active_idx` onto it.
+            crate::panels::PanelMsg::FpLibraryAddInternal => {
+                if let Some(path) = self.active_footprint_editor_path() {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path: path.clone(),
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintAddNewSibling,
+                        },
+                    ));
+                    if let Some(editor) =
+                        self.document_state.footprint_editors.get_mut(&path)
+                    {
+                        // Mirror the panel selection onto the just-
+                        // added sibling so Delete/Edit immediately
+                        // operate on it.
+                        editor.panel_selected_idx = Some(editor.active_idx);
+                    }
+                    self.refresh_panel_ctx();
+                }
+                true
+            }
+            // v0.18.8 — `Delete` button. Removes the selected
+            // footprint from the envelope. Refuses to remove the
+            // last remaining footprint (an empty FootprintFile would
+            // fail to load on next open).
+            crate::panels::PanelMsg::FpLibraryDeleteInternal(idx) => {
+                if let Some(path) = self.active_footprint_editor_path() {
+                    if let Some(editor) =
+                        self.document_state.footprint_editors.get_mut(&path)
+                    {
+                        let last = editor.file.footprints.len();
+                        if last > 1 && *idx < last {
+                            editor.file.footprints.remove(*idx);
+                            // Clamp `active_idx` so the canvas keeps
+                            // pointing at a valid sibling.
+                            if editor.active_idx >= editor.file.footprints.len() {
+                                editor.active_idx =
+                                    editor.file.footprints.len().saturating_sub(1);
+                            }
+                            // Re-derive canvas-side state from the
+                            // (possibly different) active primitive.
+                            editor.state =
+                                crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                                    editor.primitive(),
+                                );
+                            editor.panel_selected_idx = None;
+                            editor.canvas_cache.clear();
+                            editor.dirty = true;
+                            self.document_state.dirty_paths.insert(path.clone());
+                        } else if last == 1 {
+                            tracing::warn!(
+                                target: "signex::library",
+                                path = %path.display(),
+                                "Footprint Library: refused to delete the last footprint in the envelope",
+                            );
+                        }
+                    }
+                    self.refresh_panel_ctx();
+                }
+                true
+            }
+            // v0.18.8 — `Edit` button. Promotes the panel selection
+            // to `active_idx` via the existing
+            // `FootprintSelectActiveIdx` dispatcher.
+            crate::panels::PanelMsg::FpLibraryEditInternal(idx) => {
+                if let Some(path) = self.active_footprint_editor_path() {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintSelectActiveIdx(*idx),
+                        },
+                    ));
+                    self.refresh_panel_ctx();
+                }
+                true
+            }
+            // v0.18.8 — `Place` button. PCB Component placement is
+            // not wired yet; log a warn so the action is observable
+            // without a visible no-op.
+            crate::panels::PanelMsg::FpLibraryPlaceInternal(idx) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    idx = idx,
+                    "Footprint Library: Place is not yet wired (PCB integration pending)",
+                );
                 true
             }
             crate::panels::PanelMsg::FpEditorToggleAutoFitCourtyard => {
