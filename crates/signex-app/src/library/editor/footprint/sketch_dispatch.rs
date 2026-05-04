@@ -99,6 +99,12 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
 
 /// Resolve parameters, run LM, capture DOF, bake pads.
 ///
+/// v0.16.1 — solver is always live. The previous auto-pause /
+/// hysteresis early-return was removed because footprint sketches
+/// stay small (tens-to-low-hundreds of entities) and the solver's
+/// per-frame cost is well below the per-frame budget. `AutoPauseState`
+/// still observes elapsed_ms for telemetry but never blocks.
+///
 /// On `SolveError::Timeout`: feeds the AutoPauseState and returns
 /// `Ok(())` (silent — UI handles the pause toast). Other errors
 /// propagate.
@@ -106,9 +112,6 @@ fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
 ) -> Result<(), SketchError> {
-    if state.auto_pause.paused() {
-        return Ok(());
-    }
     let sketch = match footprint.sketch.as_ref() {
         Some(s) => s,
         None => return Ok(()),

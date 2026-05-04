@@ -575,10 +575,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // new cursor position. Without this the ghost stayed
                 // frozen at the position when the cache was last
                 // cleared.
-                use crate::library::editor::footprint::state::{EditorMode, ToolPending};
-                if matches!(self.state.mode, EditorMode::Sketch)
-                    && !matches!(self.state.tool_pending, ToolPending::Idle)
-                {
+                // v0.16.1: also clear in Pads mode + PlacePad so the
+                // pad-placement ghost rectangle re-renders at the
+                // moving cursor.
+                use crate::library::editor::footprint::state::{
+                    EditorMode, PadsTool, ToolPending,
+                };
+                let in_sketch_with_anchor = matches!(self.state.mode, EditorMode::Sketch)
+                    && !matches!(self.state.tool_pending, ToolPending::Idle);
+                let in_pads_place = matches!(self.state.mode, EditorMode::Normal)
+                    && self.state.pads_tool == PadsTool::PlacePad;
+                if in_sketch_with_anchor || in_pads_place {
                     self.cache.clear();
                 }
 
@@ -691,6 +698,39 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     continue;
                 }
                 draw_pad(frame, cstate, pad, self.state.selected_pad == Some(idx));
+            }
+
+            // v0.16.1 — Pads-mode placement ghost. When PlacePad is
+            // active, render a translucent 1×1 mm rectangle at the
+            // cursor showing where the next pad will land. Mirrors
+            // schematic placement-tool's pre-placement preview.
+            use crate::library::editor::footprint::state::{EditorMode, PadsTool};
+            if matches!(self.state.mode, EditorMode::Normal)
+                && self.state.pads_tool == PadsTool::PlacePad
+                && let Some((cx, cy)) = self.state.cursor_mm
+            {
+                let half = 0.5_f32 * cstate.scale; // 1 mm pad
+                let centre = cstate.world_to_screen((cx, cy));
+                let p0 = Point::new(centre.x - half, centre.y - half);
+                let size = iced::Size::new(half * 2.0, half * 2.0);
+                let ghost_fill = Color {
+                    r: 0.85,
+                    g: 0.20,
+                    b: 0.20,
+                    a: 0.35,
+                };
+                let ghost_stroke = Color {
+                    r: 0.85,
+                    g: 0.20,
+                    b: 0.20,
+                    a: 0.85,
+                };
+                let rect = Path::rectangle(p0, size);
+                frame.fill(&rect, ghost_fill);
+                frame.stroke(
+                    &rect,
+                    Stroke::default().with_width(1.0).with_color(ghost_stroke),
+                );
             }
 
             // v0.13.1 Phase 6.2 — sketch entities overlay. Only drawn
@@ -1174,6 +1214,16 @@ fn draw_sketch_overlay(
     // constraints; muted otherwise.
     draw_constraint_icons(frame, cstate, sketch, state);
 
+    // v0.16.1 — Filled rendering for closed loops. Walks the line
+    // graph, finds simple cycles whose Lines are NOT all
+    // construction-flagged, and fills the polygon with a faint
+    // role-tinted fill. Pad-corner outlines (whose Lines are all
+    // construction-flagged) are skipped so they don't double-fill
+    // over the rendered pads. Role-attr-driven layer tinting comes
+    // with the role-assignment UI; for now everything assigns to a
+    // neutral grey at low opacity.
+    draw_filled_closed_loops(frame, cstate, sketch, state);
+
     for entity in &sketch.entities {
         match entity.kind {
             EntityKind::Point { .. } => {
@@ -1297,6 +1347,130 @@ fn draw_sketch_overlay(
                 }
             }
         }
+    }
+}
+
+/// v0.16.1 — Walk the sketch's line graph, find simple closed
+/// cycles, and render each as a filled polygon. Skips cycles where
+/// every Line is `construction = true` (those are pad-corner
+/// outlines or user-authored guides — already rendered as dashed
+/// strokes elsewhere; double-filling would obscure the rendered
+/// pad). Arc-bounded loops are deferred to v0.16.2.
+fn draw_filled_closed_loops(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    sketch: &signex_sketch::SketchData,
+    state: &FootprintEditorState,
+) {
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::SketchEntityId;
+    use std::collections::{HashMap, HashSet};
+
+    fn point_pos(
+        id: SketchEntityId,
+        sketch: &signex_sketch::SketchData,
+        state: &FootprintEditorState,
+    ) -> Option<(f64, f64)> {
+        if let Some(solve) = state.last_solve.as_ref() {
+            if let Some(p) = signex_sketch::solver::state::point_xy(
+                id,
+                &solve.result.state,
+                &solve.result.index,
+                sketch,
+            ) {
+                return Some(p);
+            }
+        }
+        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
+            match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            }
+        })
+    }
+
+    // Build adjacency: Point ID -> Vec<(other_endpoint, line_id, construction)>.
+    let mut adj: HashMap<SketchEntityId, Vec<(SketchEntityId, SketchEntityId, bool)>> =
+        HashMap::new();
+    for e in &sketch.entities {
+        if let EntityKind::Line { start, end } = e.kind {
+            adj.entry(start).or_default().push((end, e.id, e.construction));
+            adj.entry(end).or_default().push((start, e.id, e.construction));
+        }
+    }
+
+    let mut visited_lines: HashSet<SketchEntityId> = HashSet::new();
+    for seed in &sketch.entities {
+        let (seed_start, seed_end) = match seed.kind {
+            EntityKind::Line { start, end } => (start, end),
+            _ => continue,
+        };
+        if visited_lines.contains(&seed.id) {
+            continue;
+        }
+        // Walk: start at seed_start, follow seed → seed_end → next →
+        // ... until we return to seed_start or fail.
+        let mut points: Vec<SketchEntityId> = vec![seed_start];
+        let mut lines: Vec<SketchEntityId> = vec![seed.id];
+        let mut all_construction = seed.construction;
+        let mut current = seed_end;
+        let mut prev_line = seed.id;
+        let mut closed = false;
+        for _ in 0..256 {
+            if current == seed_start {
+                closed = true;
+                break;
+            }
+            let neighbors = match adj.get(&current) {
+                Some(n) if n.len() == 2 => n,
+                _ => break,
+            };
+            let next = neighbors.iter().find(|(_, lid, _)| *lid != prev_line);
+            match next {
+                Some((other, lid, construction)) => {
+                    points.push(current);
+                    lines.push(*lid);
+                    all_construction &= *construction;
+                    prev_line = *lid;
+                    current = *other;
+                }
+                None => break,
+            }
+        }
+        if !closed || points.len() < 3 || all_construction {
+            // Mark seed line visited so we don't re-walk it; but
+            // don't fill.
+            visited_lines.insert(seed.id);
+            continue;
+        }
+        for lid in &lines {
+            visited_lines.insert(*lid);
+        }
+        // Resolve to world positions, drop loops with missing data.
+        let positions: Vec<(f64, f64)> = points
+            .iter()
+            .filter_map(|id| point_pos(*id, sketch, state))
+            .collect();
+        if positions.len() < 3 {
+            continue;
+        }
+        // Render: faint grey fill (role-tinting comes with role UI).
+        let path = Path::new(|builder| {
+            let p0 = cstate.world_to_screen(positions[0]);
+            builder.move_to(p0);
+            for pos in positions.iter().skip(1) {
+                let p = cstate.world_to_screen(*pos);
+                builder.line_to(p);
+            }
+            builder.close();
+        });
+        let fill = Color {
+            r: 0.50,
+            g: 0.55,
+            b: 0.60,
+            a: 0.10,
+        };
+        frame.fill(&path, fill);
     }
 }
 

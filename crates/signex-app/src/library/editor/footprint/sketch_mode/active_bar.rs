@@ -91,26 +91,6 @@ pub fn items<'a>(
         })
     };
 
-    // Section 5 — Solve toggle.
-    let auto_paused = editor.state.auto_pause.paused();
-    let solve_path = path.clone();
-    let solve_button = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph(if auto_paused { "\u{25B6}" } else { "\u{23F8}" }),
-        // ▶ = paused (click to resume); ⏸ = running (click to pause).
-        tooltip: if auto_paused {
-            "Resume live solve".into()
-        } else {
-            "Pause live solve".into()
-        },
-        enabled: true,
-        selected: auto_paused,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: solve_path,
-            msg: PrimitiveEditorMsg::FootprintSketchToggleAutoPause,
-        }),
-        ..ActiveBarButton::default()
-    });
-
     // v0.16.1 — Construction-mode toggle. Sticky pill: while on, every
     // newly-minted entity gets `construction = true` (rendered dashed-
     // grey, skipped by bake). Useful for guides + symmetry without
@@ -235,9 +215,9 @@ pub fn items<'a>(
         // Section 4: Dimension input
         ActiveBarItem::Custom(dim_input),
         ActiveBarItem::Separator,
-        // Section 5: Construction toggle + Solve toggle
+        // Section 5: Construction toggle. Solver is always live in
+        // v0.16.1 — the pause toggle was retired.
         construction_button,
-        solve_button,
     ]
 }
 
