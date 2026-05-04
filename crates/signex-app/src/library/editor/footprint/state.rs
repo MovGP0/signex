@@ -34,6 +34,14 @@ pub struct EditorPad {
     /// Layers the pad lives on — first entry is treated as the
     /// primary layer for hit-test/visibility gating.
     pub layers: Vec<LayerId>,
+    /// v0.15 — bidirectional sketch ↔ pads link. `Some(id)` when
+    /// the pad has a backing sketch entity (a `Point` carrying a
+    /// `PadAttr`); edits in either mode mirror through this ID.
+    /// `None` for pads created in Pads mode before v0.15 and not
+    /// yet mirrored, or footprints opened from disk on v0.14 or
+    /// earlier (the auto-mint on first Sketch entry will populate
+    /// these IDs going forward).
+    pub sketch_entity_id: Option<signex_sketch::id::SketchEntityId>,
 }
 
 impl EditorPad {
@@ -49,6 +57,7 @@ impl EditorPad {
                 LayerId::new("F.Mask"),
                 LayerId::new("F.Paste"),
             ],
+            sketch_entity_id: None,
         }
     }
 
@@ -81,6 +90,7 @@ impl EditorPad {
             kind: p.kind,
             shape: p.shape.clone(),
             layers: p.layers.clone(),
+            sketch_entity_id: None,
         }
     }
 

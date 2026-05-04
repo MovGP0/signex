@@ -4046,15 +4046,43 @@ pub(crate) fn apply_footprint_primitive_edit(
     use crate::library::editor::footprint::layers::FpLayer;
     use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 
+    use crate::library::editor::footprint::pad_to_sketch;
+
+    /// v0.15 — gate the Pads → Sketch mirror on whether the
+    /// footprint already has a sketch (i.e. the user has visited
+    /// Sketch mode at least once OR auto-mint has already fired).
+    /// Mirroring into a non-existent sketch would create one
+    /// silently, which is undesirable for users who only ever work
+    /// in Pads mode.
+    fn footprint_sketch_is_active(fp: &signex_library::primitive::footprint::Footprint) -> bool {
+        match fp.sketch.as_ref() {
+            Some(s) => !s.entities.is_empty(),
+            None => false,
+        }
+    }
+
     match msg {
         PrimitiveEditorMsg::FootprintAddPad { x_mm, y_mm } => {
-            let _idx = editor.state.add_pad_at(x_mm, y_mm);
+            let idx = editor.state.add_pad_at(x_mm, y_mm);
+            // v0.15 — bidirectional Pads → Sketch mirror. The new
+            // pad gets a backing sketch Point + PadAttr (when the
+            // sketch already has any other backed entity, i.e. the
+            // user has been in Sketch mode at least once).
+            if let Some(pad) = editor.state.pads.get_mut(idx) {
+                if footprint_sketch_is_active(&editor.primitive) {
+                    pad_to_sketch::mirror_add_pad_to_sketch(pad, &mut editor.primitive);
+                }
+            }
             CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             editor.state.move_pad(idx, x_mm, y_mm);
+            // v0.15 — mirror the move into the sketch.
+            if let Some(pad) = editor.state.pads.get(idx) {
+                pad_to_sketch::mirror_move_pad_in_sketch(pad, &mut editor.primitive);
+            }
             CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -4068,6 +4096,12 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintDeleteSelected => {
             if let Some(idx) = editor.state.selected_pad {
+                // v0.15 — mirror the deletion into the sketch
+                // BEFORE removing from state.pads (we still need
+                // the pad's sketch_entity_id).
+                if let Some(pad) = editor.state.pads.get(idx) {
+                    pad_to_sketch::mirror_delete_pad_from_sketch(pad, &mut editor.primitive);
+                }
                 editor.state.delete_pad(idx);
                 CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
                 editor.canvas_cache.clear();
@@ -4099,7 +4133,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             if entering_sketch {
                 use crate::library::editor::footprint::pad_to_sketch;
                 let _ = pad_to_sketch::auto_mint_for_literal_pads(
-                    &editor.state.pads,
+                    &mut editor.state.pads,
                     &mut editor.primitive,
                 );
             }

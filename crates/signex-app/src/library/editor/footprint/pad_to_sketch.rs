@@ -28,16 +28,18 @@ use super::state::EditorPad;
 
 /// When the user transitions into Sketch mode for the first time on
 /// a footprint that has literal pads but an empty sketch, mint a
-/// `Point` + `PadAttr` for each pad. Returns the number of entities
-/// minted (zero if the sketch already had content or no literal
-/// pads existed).
+/// `Point` + `PadAttr` for each pad. Writes the minted sketch entity
+/// IDs back into each `EditorPad.sketch_entity_id` so subsequent
+/// Pads-mode edits can mirror through the link. Returns the number
+/// of entities minted (zero if the sketch already had content or no
+/// literal pads existed).
 ///
 /// The minted sketch produces the same pad set when re-baked through
 /// `signex_bake::bake_pads`, so the bake immediately after this call
 /// re-emits the original pads — no visual change for the user, but
 /// every pad now has a sketch backing they can edit.
 pub fn auto_mint_for_literal_pads(
-    pads: &[EditorPad],
+    pads: &mut [EditorPad],
     footprint: &mut Footprint,
 ) -> usize {
     if pads.is_empty() {
@@ -52,27 +54,13 @@ pub fn auto_mint_for_literal_pads(
         }
     }
 
+    let plane_id = ensure_board_top_plane(footprint);
     let sketch = footprint
         .sketch
         .get_or_insert_with(SketchData::default);
 
-    // Ensure a BoardTop plane exists (every pad-bearing entity lives
-    // on it).
-    let plane_id = match sketch.planes.iter().find(|p| matches!(p.kind, PlaneKind::BoardTop)) {
-        Some(p) => p.id,
-        None => {
-            let p = Plane {
-                id: PlaneId::new(),
-                kind: PlaneKind::BoardTop,
-            };
-            let id = p.id;
-            sketch.planes.push(p);
-            id
-        }
-    };
-
     let mut minted = 0usize;
-    for pad in pads {
+    for pad in pads.iter_mut() {
         let entity_id = SketchEntityId::new();
         let mut entity = Entity::new(
             entity_id,
@@ -84,9 +72,93 @@ pub fn auto_mint_for_literal_pads(
         );
         entity.pad = Some(pad_attr_from_editor_pad(pad));
         sketch.entities.push(entity);
+        // v0.15 — link the editor pad to its backing sketch entity.
+        pad.sketch_entity_id = Some(entity_id);
         minted += 1;
     }
     minted
+}
+
+/// v0.15 — when a pad is added in Pads mode (canvas click, etc.),
+/// mirror the new pad into the sketch as a `Point` + `PadAttr`.
+/// Stores the minted sketch entity ID back on the editor pad so
+/// later moves / deletes can mirror through.
+pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) {
+    // No-op when the sketch already has a backing entity for this
+    // pad (e.g. caller already wired it up).
+    if pad.sketch_entity_id.is_some() {
+        return;
+    }
+    let plane_id = ensure_board_top_plane(footprint);
+    let sketch = footprint
+        .sketch
+        .get_or_insert_with(SketchData::default);
+    let entity_id = SketchEntityId::new();
+    let mut entity = Entity::new(
+        entity_id,
+        plane_id,
+        EntityKind::Point {
+            x: pad.position_mm.0,
+            y: pad.position_mm.1,
+        },
+    );
+    entity.pad = Some(pad_attr_from_editor_pad(pad));
+    sketch.entities.push(entity);
+    pad.sketch_entity_id = Some(entity_id);
+}
+
+/// v0.15 — when a pad moves in Pads mode (drag), update its backing
+/// sketch `Point`'s coordinates so the sketch stays in sync. No-op
+/// when the pad has no backing sketch entity yet.
+pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
+    let Some(entity_id) = pad.sketch_entity_id else {
+        return;
+    };
+    let Some(sketch) = footprint.sketch.as_mut() else {
+        return;
+    };
+    if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == entity_id) {
+        if let EntityKind::Point { x, y } = &mut entity.kind {
+            *x = pad.position_mm.0;
+            *y = pad.position_mm.1;
+        }
+    }
+}
+
+/// v0.15 — when a pad is deleted in Pads mode, also drop its
+/// backing sketch entity (and any constraints that referenced it).
+/// No-op when the pad has no backing sketch entity yet.
+pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint) {
+    let Some(entity_id) = pad.sketch_entity_id else {
+        return;
+    };
+    let Some(sketch) = footprint.sketch.as_mut() else {
+        return;
+    };
+    sketch.entities.retain(|e| e.id != entity_id);
+    // Drop dangling constraint refs — coarse rule via Debug
+    // stringification (mirrors the SketchEdit::DeleteEntity path in
+    // sketch_dispatch.rs).
+    let id_str = entity_id.to_string();
+    sketch
+        .constraints
+        .retain(|c| !format!("{:?}", c.kind).contains(&id_str));
+}
+
+fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
+    let sketch = footprint
+        .sketch
+        .get_or_insert_with(SketchData::default);
+    if let Some(p) = sketch.planes.iter().find(|p| matches!(p.kind, PlaneKind::BoardTop)) {
+        return p.id;
+    }
+    let p = Plane {
+        id: PlaneId::new(),
+        kind: PlaneKind::BoardTop,
+    };
+    let id = p.id;
+    sketch.planes.push(p);
+    id
 }
 
 fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
@@ -188,7 +260,8 @@ mod tests {
     #[test]
     fn empty_pads_mint_nothing() {
         let mut fp = Footprint::empty("test");
-        let n = auto_mint_for_literal_pads(&[], &mut fp);
+        let mut pads: Vec<EditorPad> = Vec::new();
+        let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 0);
         assert!(fp.sketch.is_none() || fp.sketch.as_ref().unwrap().entities.is_empty());
     }
@@ -196,12 +269,12 @@ mod tests {
     #[test]
     fn three_pads_mint_three_points_with_pad_attrs() {
         let mut fp = Footprint::empty("test");
-        let pads = vec![
+        let mut pads = vec![
             editor_pad("1", 0.0, 0.0),
             editor_pad("2", 1.27, 0.0),
             editor_pad("3", 2.54, 0.0),
         ];
-        let n = auto_mint_for_literal_pads(&pads, &mut fp);
+        let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 3);
         let sketch = fp.sketch.as_ref().unwrap();
         // 1 plane + 3 entities (one Point each).
@@ -213,6 +286,10 @@ mod tests {
             assert!(!attr.number.is_empty());
             assert_eq!(attr.size_x_expr, "1mm");
             assert_eq!(attr.size_y_expr, "0.5mm");
+        }
+        // v0.15: every pad should now carry the minted entity ID.
+        for pad in &pads {
+            assert!(pad.sketch_entity_id.is_some());
         }
     }
 
@@ -233,10 +310,11 @@ mod tests {
         ));
         fp.sketch = Some(sketch);
 
-        let pads = vec![editor_pad("1", 0.0, 0.0)];
-        let n = auto_mint_for_literal_pads(&pads, &mut fp);
+        let mut pads = vec![editor_pad("1", 0.0, 0.0)];
+        let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 0, "auto-mint must skip when sketch is already populated");
         assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 1);
+        assert!(pads[0].sketch_entity_id.is_none(), "skip leaves the link unset");
     }
 
     #[test]
@@ -260,11 +338,73 @@ mod tests {
         sketch.entities.push(construction);
         fp.sketch = Some(sketch);
 
-        let pads = vec![editor_pad("1", 0.0, 0.0)];
-        let n = auto_mint_for_literal_pads(&pads, &mut fp);
+        let mut pads = vec![editor_pad("1", 0.0, 0.0)];
+        let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 1);
         // Construction entity preserved + 1 minted pad point = 2 total.
         assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 2);
+        assert!(pads[0].sketch_entity_id.is_some());
+    }
+
+    #[test]
+    fn mirror_add_pad_links_to_new_sketch_entity() {
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("X", 5.0, 5.0);
+        assert!(pad.sketch_entity_id.is_none());
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+        let id = pad.sketch_entity_id.expect("mirror should mint id");
+        let sketch = fp.sketch.as_ref().unwrap();
+        let entity = sketch.entities.iter().find(|e| e.id == id).expect("entity exists");
+        match entity.kind {
+            EntityKind::Point { x, y } => {
+                assert_eq!((x, y), (5.0, 5.0));
+            }
+            _ => panic!("minted entity must be a Point"),
+        }
+        assert!(entity.pad.is_some(), "Point should carry PadAttr");
+    }
+
+    #[test]
+    fn mirror_add_pad_with_existing_link_is_noop() {
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("X", 0.0, 0.0);
+        pad.sketch_entity_id = Some(SketchEntityId::new());
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+        // Sketch should not have been touched.
+        assert!(fp.sketch.is_none() || fp.sketch.as_ref().unwrap().entities.is_empty());
+    }
+
+    #[test]
+    fn mirror_move_pad_updates_sketch_point() {
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("X", 0.0, 0.0);
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+        // Now move the pad.
+        pad.position_mm = (3.5, 7.25);
+        mirror_move_pad_in_sketch(&pad, &mut fp);
+        let id = pad.sketch_entity_id.unwrap();
+        let entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .unwrap();
+        match entity.kind {
+            EntityKind::Point { x, y } => assert_eq!((x, y), (3.5, 7.25)),
+            _ => panic!("entity must still be a Point"),
+        }
+    }
+
+    #[test]
+    fn mirror_delete_pad_drops_sketch_entity() {
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("X", 0.0, 0.0);
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+        assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 1);
+        mirror_delete_pad_from_sketch(&pad, &mut fp);
+        assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 0);
     }
 
     #[test]
