@@ -116,6 +116,12 @@ pub fn items<'a>(
     let dim_input = build_dimension_input(editor, tokens);
 
     vec![
+        // v0.14.2: shared mode segmented control on the LEFT — same
+        // anchor as the Pads-mode active bar so the control reads
+        // identically and the user's mode-switch click target never
+        // moves.
+        crate::library::editor::footprint::pads_active_bar::mode_segments_item(editor, tokens),
+        ActiveBarItem::Separator,
         // Section 1: Select
         mk_tool(
             "Select",

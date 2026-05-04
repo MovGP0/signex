@@ -19,19 +19,87 @@
 
 use std::path::PathBuf;
 
-use iced::Element;
+use iced::widget::{button, row, text};
+use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
+use signex_widgets::theme_ext;
 
 use crate::app::FootprintEditorState;
 use crate::icons;
 use crate::library::editor::footprint::state::EditorMode;
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
+/// v0.14.2 — segmented mode-switch control rendered as a Custom slot
+/// at the left edge of every footprint editor active bar (Pads +
+/// Sketch). Three connected segments (Pads / Sketch / 3D); the
+/// active segment paints with the accent background. Re-used by
+/// both `pads_active_bar::items` and
+/// `sketch_mode::active_bar::items` so the control reads identically
+/// in either mode, anchored to the same screen position.
+pub fn mode_segments_item(
+    editor: &FootprintEditorState,
+    tokens: &ThemeTokens,
+) -> ActiveBarItem<LibraryMessage> {
+    let mode = editor.state.mode;
+    let path = editor.path.clone();
+    let text_c = theme_ext::text_primary(tokens);
+    let border = theme_ext::border_color(tokens);
+    let accent = theme_ext::to_color(&tokens.accent);
+
+    let segment = move |label: &'static str,
+                        target: EditorMode,
+                        active: bool,
+                        path: PathBuf|
+     -> Element<'static, LibraryMessage> {
+        let label_color = if active { iced::Color::WHITE } else { text_c };
+        button(
+            text(label)
+                .size(11)
+                .color(label_color)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([3, 10])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEditorMsg::FootprintSetMode(target),
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: if active {
+                Some(iced::Background::Color(accent))
+            } else {
+                Some(iced::Background::Color(Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                )))
+            },
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: if active { accent } else { border },
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+    };
+
+    let inner: Element<'static, LibraryMessage> = row![
+        segment("Pads", EditorMode::Normal, matches!(mode, EditorMode::Normal), path.clone()),
+        segment("Sketch", EditorMode::Sketch, matches!(mode, EditorMode::Sketch), path.clone()),
+        segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d), path.clone()),
+    ]
+    .spacing(2)
+    .align_y(iced::Alignment::Center)
+    .height(Length::Shrink)
+    .into();
+
+    ActiveBarItem::Custom(inner)
+}
+
 /// Build the Pads-mode Active Bar items.
 pub fn items(
     editor: &FootprintEditorState,
     theme_id: signex_types::theme::ThemeId,
+    tokens: &ThemeTokens,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path: PathBuf = editor.path.clone();
     let auto_fit_on = editor.state.auto_fit_courtyard;
@@ -111,21 +179,16 @@ pub fn items(
         ..ActiveBarButton::default()
     });
 
-    // Edit Sketch — mode switch into the parametric sketcher.
-    let sketch_path = path.clone();
-    let edit_sketch = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-        tooltip: "Edit Sketch — open the parametric sketcher".into(),
-        enabled: true,
-        selected: false,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: sketch_path,
-            msg: PrimitiveEditorMsg::FootprintSetMode(EditorMode::Sketch),
-        }),
-        ..ActiveBarButton::default()
-    });
+    // v0.14.2: dedicated "Edit Sketch" button removed — mode
+    // segments at the left of the bar drive mode switching.
 
     vec![
+        // v0.14.2: mode segmented control on the LEFT of every
+        // footprint editor active bar (Pads + Sketch). Same widget
+        // anchored to the same screen position whichever mode is
+        // active.
+        mode_segments_item(editor, tokens),
+        ActiveBarItem::Separator,
         select,
         ActiveBarItem::Separator,
         // Altium-parity Place tools — most are stubs in v0.14.x.
@@ -151,8 +214,6 @@ pub fn items(
         ActiveBarItem::Separator,
         delete,
         auto_fit,
-        ActiveBarItem::Separator,
-        edit_sketch,
     ]
 }
 
@@ -162,6 +223,6 @@ pub fn view<'a>(
     editor: &'a FootprintEditorState,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    signex_widgets::active_bar::view(items(editor, theme_id), tokens)
+) -> iced::Element<'a, LibraryMessage> {
+    signex_widgets::active_bar::view(items(editor, theme_id, tokens), tokens)
 }

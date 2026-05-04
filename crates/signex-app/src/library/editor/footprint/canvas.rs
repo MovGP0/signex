@@ -495,6 +495,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 && let Some(sketch) = self.sketch
             {
                 draw_sketch_overlay(frame, cstate, sketch, self.state);
+                draw_sketch_tool_preview(frame, cstate, sketch, self.state);
             }
         });
 
@@ -1114,6 +1115,163 @@ fn draw_grid(frame: &mut canvas::Frame, bounds: Rectangle, offset: Point, step: 
         }
     });
     frame.stroke(&path, stroke);
+}
+
+/// v0.14.2 — live ghost preview for the multi-click sketch drawing
+/// tools. Reads `state.tool_pending` + `state.cursor_mm` and draws a
+/// dashed semi-transparent overlay showing where the next click would
+/// land:
+///
+/// - **Line tool, after click 1** → ghost line from first endpoint
+///   to cursor.
+/// - **Circle tool, after click 1** → ghost circle centred on click 1
+///   with radius = distance(centre, cursor).
+/// - **Arc tool, after click 1** → ghost line from centre to cursor
+///   (cursor will become the start endpoint).
+/// - **Arc tool, after click 2** → ghost arc from start through the
+///   cursor angle, around the centre.
+fn draw_sketch_tool_preview(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    sketch: &signex_sketch::SketchData,
+    state: &FootprintEditorState,
+) {
+    use crate::library::editor::footprint::state::ToolPending;
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::SketchEntityId;
+
+    let cursor = match state.cursor_mm {
+        Some(c) => c,
+        None => return,
+    };
+
+    let resolve_point = |id: SketchEntityId| -> Option<(f64, f64)> {
+        if let Some(solve) = state.last_solve.as_ref() {
+            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+                id,
+                &solve.result.state,
+                &solve.result.index,
+                sketch,
+            ) {
+                return Some((x, y));
+            }
+        }
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+    };
+
+    // Ghost colour — accent at low alpha so it reads as preview, not
+    // committed geometry. Dashed stroke for the same reason.
+    let ghost = Color::from_rgba(0.40, 0.70, 1.00, 0.85);
+    let stroke = Stroke::default().with_width(1.5).with_color(ghost);
+
+    let dashed = |frame: &mut canvas::Frame, p0: Point, p1: Point| {
+        let dx = p1.x - p0.x;
+        let dy = p1.y - p0.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len <= 0.5 {
+            return;
+        }
+        let dash_len = 8.0_f32;
+        let n = ((len / dash_len).ceil() as i32).max(2);
+        for i in (0..n).step_by(2) {
+            let t0 = i as f32 / n as f32;
+            let t1 = ((i + 1) as f32 / n as f32).min(1.0);
+            let q0 = Point::new(p0.x + dx * t0, p0.y + dy * t0);
+            let q1 = Point::new(p0.x + dx * t1, p0.y + dy * t1);
+            frame.stroke(&Path::line(q0, q1), stroke);
+        }
+    };
+
+    let cursor_screen = cstate.world_to_screen(cursor);
+
+    // Crosshair pip at the cursor so the user sees where a click
+    // would commit (in addition to the OS cursor).
+    let pip = Path::circle(cursor_screen, 3.0);
+    frame.stroke(&pip, Stroke::default().with_width(1.0).with_color(ghost));
+
+    match state.tool_pending {
+        ToolPending::Idle => {}
+        ToolPending::LineFirst { first } => {
+            let Some(first_world) = resolve_point(first) else {
+                return;
+            };
+            let p0 = cstate.world_to_screen(first_world);
+            dashed(frame, p0, cursor_screen);
+        }
+        ToolPending::CircleCenter { center } => {
+            let Some(c_world) = resolve_point(center) else {
+                return;
+            };
+            let c_screen = cstate.world_to_screen(c_world);
+            let r_world =
+                ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
+            let r_screen = (r_world as f32) * cstate.scale;
+            // Approximate dashed circle with 32-segment polyline.
+            let segments = 32;
+            for i in (0..segments).step_by(2) {
+                let t0 = i as f32 / segments as f32;
+                let t1 = (i + 1) as f32 / segments as f32;
+                let a0 = t0 * std::f32::consts::TAU;
+                let a1 = t1 * std::f32::consts::TAU;
+                let q0 = Point::new(c_screen.x + r_screen * a0.cos(), c_screen.y + r_screen * a0.sin());
+                let q1 = Point::new(c_screen.x + r_screen * a1.cos(), c_screen.y + r_screen * a1.sin());
+                frame.stroke(&Path::line(q0, q1), stroke);
+            }
+            // Radial guide from centre to cursor.
+            dashed(frame, c_screen, cursor_screen);
+        }
+        ToolPending::ArcCenter { center } => {
+            // Centre placed; cursor will become the start point. Show
+            // a dashed radial line from centre to cursor.
+            let Some(c_world) = resolve_point(center) else {
+                return;
+            };
+            let c_screen = cstate.world_to_screen(c_world);
+            dashed(frame, c_screen, cursor_screen);
+        }
+        ToolPending::ArcStart { center, start } => {
+            // Centre + start placed; cursor will become the end. Draw
+            // a dashed CCW arc from start to cursor angle.
+            let Some(c_world) = resolve_point(center) else {
+                return;
+            };
+            let Some(s_world) = resolve_point(start) else {
+                return;
+            };
+            let c_screen = cstate.world_to_screen(c_world);
+            let r_world =
+                ((s_world.0 - c_world.0).powi(2) + (s_world.1 - c_world.1).powi(2)).sqrt();
+            let r_screen = (r_world as f32) * cstate.scale;
+            let start_angle = (s_world.1 - c_world.1).atan2(s_world.0 - c_world.0) as f32;
+            let end_angle = (cursor.1 - c_world.1).atan2(cursor.0 - c_world.0) as f32;
+            // CCW sweep — wrap end above start by 2π if needed.
+            let mut delta = end_angle - start_angle;
+            while delta < 0.0 {
+                delta += std::f32::consts::TAU;
+            }
+            let segments = 32;
+            for i in (0..segments).step_by(2) {
+                let t0 = i as f32 / segments as f32;
+                let t1 = (i + 1) as f32 / segments as f32;
+                let a0 = start_angle + delta * t0;
+                let a1 = start_angle + delta * t1;
+                let q0 = Point::new(c_screen.x + r_screen * a0.cos(), c_screen.y + r_screen * a0.sin());
+                let q1 = Point::new(c_screen.x + r_screen * a1.cos(), c_screen.y + r_screen * a1.sin());
+                frame.stroke(&Path::line(q0, q1), stroke);
+            }
+            // Radial guides for both endpoints + cursor.
+            let s_screen = cstate.world_to_screen(s_world);
+            dashed(frame, c_screen, s_screen);
+            dashed(frame, c_screen, cursor_screen);
+        }
+    }
 }
 
 fn draw_pad(

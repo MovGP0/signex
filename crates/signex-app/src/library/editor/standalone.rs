@@ -14,7 +14,7 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -349,51 +349,58 @@ pub fn view_footprint<'a>(
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);
 
-    // v0.14.2 — full mode-context switch between Normal (pads
-    // editing) and Sketch (parametric sketcher). Each mode owns its
-    // own toolbar + tool-row + inspector strip; widgets that belong
-    // to one mode never appear in the other.
+    // v0.14.2 — no top strip. Mode segments live INSIDE each active
+    // bar (left edge), so the only horizontal chrome is the floating
+    // active bar + the layer strip at the bottom. Save action is
+    // still reachable via Ctrl+S / File menu / tab right-click; the
+    // tab's dirty asterisk is the visual save indicator.
+    let layers_strip = view_footprint_layers_strip(editor, tokens);
+
+    // Active bar floats OVER the canvas via Stack so the canvas
+    // drawing area extends edge-to-edge behind it instead of being
+    // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch => {
-            let toolbar = view_footprint_sketch_toolbar(editor, tokens);
             let active_bar = container(
                 crate::library::editor::footprint::sketch_mode::active_bar::view(
                     editor, theme_id, tokens,
                 ),
             )
-            .padding([4, 8])
-            .center_x(Length::Fill);
+            .padding([6, 10])
+            .center_x(Length::Fill)
+            .align_y(iced::alignment::Vertical::Top);
+            let canvas_with_bar = iced::widget::Stack::new()
+                .push(canvas_area)
+                .push(active_bar);
             let inspector = crate::library::editor::footprint::sketch_mode::inspector::view(
                 editor, tokens,
             );
-            column![toolbar, active_bar, canvas_area, inspector, footer]
+            column![canvas_with_bar, inspector, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
         }
         EditorMode::Normal => {
-            let toolbar = view_footprint_toolbar(editor, tokens);
-            // v0.14.2 — Pads-mode active bar (Altium PCB Library
-            // parity). Same `signex_widgets::active_bar` widget the
-            // sketch mode uses, but with pad-placement +
-            // courtyard-fit + Edit-Sketch-entry buttons.
             let pads_bar = container(
                 crate::library::editor::footprint::pads_active_bar::view(
                     editor, theme_id, tokens,
                 ),
             )
-            .padding([4, 8])
-            .center_x(Length::Fill);
-            column![toolbar, pads_bar, canvas_area, footer]
+            .padding([6, 10])
+            .center_x(Length::Fill)
+            .align_y(iced::alignment::Vertical::Top);
+            let canvas_with_bar = iced::widget::Stack::new()
+                .push(canvas_area)
+                .push(pads_bar);
+            column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
         }
         EditorMode::View3d => {
-            let toolbar = view_footprint_toolbar(editor, tokens);
-            column![toolbar, canvas_area, footer]
+            column![canvas_area, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -408,6 +415,226 @@ pub fn view_footprint<'a>(
 /// `view_footprint_toolbar` so the workspace reads as "you are now
 /// editing the sketch, not the pads". Carries a "Sketch" title, an
 /// **Exit Sketch** button (returns to Normal mode), and Save.
+/// v0.14.2 — fixed top strip rendered above the active bar in every
+/// mode. Hosts the mode segmented control + Save button. Stays the
+/// same height across mode switches so the active bar's vertical
+/// position is constant.
+#[allow(dead_code)]
+fn view_footprint_top_strip<'a>(
+    editor: &'a FootprintEditorState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    use crate::library::editor::footprint::state::EditorMode;
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+    let accent = theme_ext::to_color(&tokens.accent);
+
+    // Segmented control — three connected segments. Active segment
+    // paints with the accent background; inactive segments stay
+    // muted with a hover affordance.
+    let mode_segment = |label: &'static str,
+                        target: EditorMode,
+                        active: bool|
+     -> Element<'a, LibraryMessage> {
+        let path = editor.path.clone();
+        let label_color = if active { iced::Color::WHITE } else { text_c };
+        button(
+            text(label)
+                .size(11)
+                .color(label_color)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([5, 14])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEditorMsg::FootprintSetMode(target),
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: if active {
+                Some(iced::Background::Color(accent))
+            } else {
+                Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                )))
+            },
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: if active {
+                    accent
+                } else {
+                    border
+                },
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+    };
+
+    let mode = editor.state.mode;
+    let mode_segments = row![
+        text("Mode").size(11).color(muted),
+        Space::new().width(6),
+        mode_segment("Pads", EditorMode::Normal, matches!(mode, EditorMode::Normal)),
+        mode_segment("Sketch", EditorMode::Sketch, matches!(mode, EditorMode::Sketch)),
+        mode_segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d)),
+    ]
+    .spacing(2)
+    .align_y(iced::Alignment::Center);
+
+    let save_path = editor.path.clone();
+    let save_btn = button(
+        text(if editor.dirty { "Save *" } else { "Save" })
+            .size(11)
+            .color(text_c),
+    )
+    .padding([5, 12])
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: save_path,
+        msg: PrimitiveEditorMsg::Save,
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            1.0, 1.0, 1.0, 0.04,
+        ))),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..iced::widget::button::Style::default()
+    });
+
+    let auto_fit_path = editor.path.clone();
+    let auto_fit_on = editor.state.auto_fit_courtyard;
+    let auto_fit_label = if auto_fit_on {
+        "Auto-fit Courtyard \u{2713}"
+    } else {
+        "Auto-fit Courtyard"
+    };
+    let auto_fit_btn = button(text(auto_fit_label).size(11).color(text_c))
+        .padding([5, 12])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: auto_fit_path,
+            msg: PrimitiveEditorMsg::FootprintToggleAutoFit,
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    let row_widget = row![
+        mode_segments,
+        Space::new().width(Length::Fill),
+        auto_fit_btn,
+        Space::new().width(8),
+        save_btn,
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    container(row_widget)
+        .padding([6, 10])
+        .style(crate::styles::tab_bar_strip(tokens))
+        .into()
+}
+
+/// v0.14.2 — Altium PCB-Library-style layer tab strip at the bottom
+/// of the canvas (above the footer). Each layer is a clickable pill
+/// with a colour swatch + label. Click toggles visibility (existing
+/// `FootprintToggleLayer` message).
+///
+/// Replaces the heavy layer pills that used to sit at the top of the
+/// editor; moving them below the canvas keeps the top compact and
+/// matches Altium's bottom-of-canvas layer tab pattern.
+fn view_footprint_layers_strip<'a>(
+    editor: &'a FootprintEditorState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+
+    let layers = editor.state.layer_visibility;
+
+    let mut row_widget = row![text("Layers").size(10).color(muted)]
+        .spacing(4)
+        .align_y(iced::Alignment::Center);
+
+    for layer in FpLayer::ORDER {
+        let on = layers.get(*layer);
+        let swatch = layer.color();
+        let label_color = if on { text_c } else { muted };
+        let toggle_path = editor.path.clone();
+        let layer_standard = layer.standard_name().to_string();
+        let pill = button(
+            row![
+                container(text("").size(10))
+                    .width(Length::Fixed(8.0))
+                    .height(Length::Fixed(8.0))
+                    .style(move |_: &Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(swatch)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: iced::Color { a: 0.5, ..swatch },
+                        },
+                        ..iced::widget::container::Style::default()
+                    }),
+                text(layer.label()).size(10).color(label_color),
+            ]
+            .spacing(5)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([3, 7])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: toggle_path,
+            msg: PrimitiveEditorMsg::FootprintToggleLayer(layer_standard),
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: if on {
+                Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.05,
+                )))
+            } else {
+                Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.01,
+                )))
+            },
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: if on {
+                    swatch
+                } else {
+                    iced::Color { a: 0.5, ..border }
+                },
+            },
+            ..iced::widget::button::Style::default()
+        });
+        row_widget = row_widget.push(pill);
+    }
+
+    container(scrollable(row_widget).direction(
+        iced::widget::scrollable::Direction::Horizontal(
+            iced::widget::scrollable::Scrollbar::default().width(0).margin(0).scroller_width(0),
+        ),
+    ))
+    .padding([4, 10])
+    .width(Length::Fill)
+    .style(crate::styles::tab_bar_strip(tokens))
+    .into()
+}
+
+#[allow(dead_code)]
 fn view_footprint_sketch_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -490,6 +717,7 @@ fn view_footprint_sketch_toolbar<'a>(
         .into()
 }
 
+#[allow(dead_code)]
 fn view_footprint_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
