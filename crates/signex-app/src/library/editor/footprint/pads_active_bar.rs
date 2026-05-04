@@ -19,7 +19,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{button, row, text};
+use iced::widget::{button, row, text, Space};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -108,6 +108,120 @@ pub fn mode_switcher_overlay<'a>(
     )
     .padding([6, 10])
     .align_x(iced::alignment::Horizontal::Right)
+    .align_y(iced::alignment::Vertical::Top)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+/// v0.18.7 — multi-footprint tab strip. Renders one button per
+/// footprint inside the active `.snxfpt` envelope plus a trailing
+/// "+" button that appends a new sibling. The active sibling paints
+/// with the accent background. Hidden when the envelope holds a
+/// single footprint AND the user hasn't yet added one — until then
+/// the chrome would just be noise.
+pub fn footprint_tabs_overlay<'a>(
+    editor: &'a FootprintEditorState,
+    tokens: &'a ThemeTokens,
+) -> iced::Element<'a, LibraryMessage> {
+    let path = editor.path.clone();
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+    let accent = theme_ext::to_color(&tokens.accent);
+    let panel_bg = theme_ext::to_color(&tokens.panel_bg);
+
+    let active_idx = editor.active_idx;
+    let total = editor.file.footprints.len();
+
+    let tab_btn = move |idx: usize,
+                        label: String,
+                        active: bool,
+                        path: PathBuf|
+          -> iced::Element<'a, LibraryMessage> {
+        let label_color = if active { iced::Color::WHITE } else { text_c };
+        button(
+            text(label)
+                .size(11)
+                .color(label_color)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([5, 10])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEditorMsg::FootprintSelectActiveIdx(idx),
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: if active {
+                Some(iced::Background::Color(accent))
+            } else {
+                Some(iced::Background::Color(Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                )))
+            },
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: if active { accent } else { border },
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+    };
+
+    let mut tabs = row![].spacing(2).align_y(iced::Alignment::Center);
+    for (idx, fp) in editor.file.footprints.iter().enumerate() {
+        let is_active = idx == active_idx;
+        tabs = tabs.push(tab_btn(idx, fp.name.clone(), is_active, path.clone()));
+    }
+
+    // Trailing "+" — always present so the user can mint a new
+    // sibling even when the envelope is a one-element file.
+    let add_btn = button(
+        text("+")
+            .size(13)
+            .color(muted)
+            .align_x(iced::alignment::Horizontal::Center),
+    )
+    .padding([3, 9])
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintAddNewSibling,
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(Color::from_rgba(
+            1.0, 1.0, 1.0, 0.02,
+        ))),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..iced::widget::button::Style::default()
+    });
+
+    tabs = tabs.push(Space::new().width(Length::Fixed(4.0)));
+    tabs = tabs.push(add_btn);
+
+    // Single-footprint files with no sibling action: still render the
+    // strip so "+" is reachable. The visual rhythm matches the mode
+    // switcher chip on the opposite corner.
+    let _ = total;
+    iced::widget::container(
+        iced::widget::container(tabs)
+            .padding(4)
+            .style(move |_: &Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(panel_bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: 4.0.into(),
+                    color: border,
+                },
+                ..iced::widget::container::Style::default()
+            }),
+    )
+    .padding([6, 10])
+    .align_x(iced::alignment::Horizontal::Left)
     .align_y(iced::alignment::Vertical::Top)
     .width(Length::Fill)
     .height(Length::Fill)

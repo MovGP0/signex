@@ -373,6 +373,14 @@ pub fn view_footprint<'a>(
         crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
             editor, tokens,
         );
+    // v0.18.7 — multi-footprint tab strip floats at the canvas's
+    // top-LEFT (mode switcher is at top-RIGHT). Visible whenever a
+    // `.snxfpt` envelope is open, with at minimum the active
+    // footprint's tab and a trailing "+" to mint siblings.
+    let footprint_tabs =
+        crate::library::editor::footprint::pads_active_bar::footprint_tabs_overlay(
+            editor, tokens,
+        );
 
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch => {
@@ -387,6 +395,7 @@ pub fn view_footprint<'a>(
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
                 .push(active_bar)
+                .push(footprint_tabs)
                 .push(mode_switcher);
             // v0.16.2 — sketch-mode inspector strip migrated into the
             // right-dock Properties panel (DOF / Parameters / Role /
@@ -410,6 +419,7 @@ pub fn view_footprint<'a>(
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
                 .push(pads_bar)
+                .push(footprint_tabs)
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
@@ -420,6 +430,7 @@ pub fn view_footprint<'a>(
         EditorMode::View3d => {
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
+                .push(footprint_tabs)
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)

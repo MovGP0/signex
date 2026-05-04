@@ -1219,6 +1219,15 @@ pub enum PrimitiveEditorMsg {
     SymbolRemovePart,
 
     // ── Footprint ──────────────────────────────────────────
+    /// v0.18.7 — switch which footprint inside the multi-footprint
+    /// `.snxfpt` envelope is being edited. Wraps `active_idx` on the
+    /// `FootprintEditorState` wrapper. The dispatcher refreshes the
+    /// canvas pad list + camera fit on switch.
+    FootprintSelectActiveIdx(usize),
+    /// v0.18.7 — append a new empty footprint to the active
+    /// `.snxfpt` envelope and switch the editor onto it. Names the
+    /// new footprint `Footprint N` where N is the next free index.
+    FootprintAddNewSibling,
     /// Click-to-place a pad at the given world position.
     FootprintAddPad { x_mm: f64, y_mm: f64 },
     /// Drag the pad at `idx` to a new world position.

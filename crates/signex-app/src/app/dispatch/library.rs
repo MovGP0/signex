@@ -3939,7 +3939,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         // Footprint variants are no-ops on a Symbol editor — the
         // dispatcher uses path-keyed lookup so a misrouted event
         // can't actually reach this match arm in practice.
-        PrimitiveEditorMsg::FootprintAddPad { .. }
+        PrimitiveEditorMsg::FootprintSelectActiveIdx(_)
+        | PrimitiveEditorMsg::FootprintAddNewSibling
+        | PrimitiveEditorMsg::FootprintAddPad { .. }
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
         | PrimitiveEditorMsg::FootprintSelectPad(_)
@@ -4096,6 +4098,43 @@ pub(crate) fn apply_footprint_primitive_edit(
     }
 
     match msg {
+        // v0.18.7 — switch the active footprint within the multi-
+        // footprint envelope. Resets the canvas pad list off the
+        // newly-active primitive, clears selection, refits the
+        // camera on the next frame so a different-sized footprint
+        // doesn't open at a stale zoom.
+        PrimitiveEditorMsg::FootprintSelectActiveIdx(idx) => {
+            let last = editor.file.footprints.len().saturating_sub(1);
+            let clamped = idx.min(last);
+            if clamped == editor.active_idx {
+                return;
+            }
+            editor.active_idx = clamped;
+            // Re-derive the canvas-side state from the new active
+            // primitive so pads / sketch / courtyard mirror what's
+            // on disk for this footprint.
+            editor.state =
+                crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                    editor.primitive(),
+                );
+            editor.canvas_cache.clear();
+        }
+        // v0.18.7 — append a fresh empty footprint to the envelope
+        // and switch onto it. Names the new sibling `Footprint N`
+        // where N counts existing siblings + 1; the user can rename
+        // via the Properties panel.
+        PrimitiveEditorMsg::FootprintAddNewSibling => {
+            let next_n = editor.file.footprints.len() + 1;
+            let new_fp = signex_library::Footprint::empty(format!("Footprint {next_n}"));
+            editor.file.footprints.push(new_fp);
+            editor.active_idx = editor.file.footprints.len() - 1;
+            editor.state =
+                crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                    editor.primitive(),
+                );
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
         PrimitiveEditorMsg::FootprintAddPad { x_mm, y_mm } => {
             // v0.15 — bidirectional Pads → Sketch mirror. The new
             // pad gets a backing sketch Point + PadAttr (when the
