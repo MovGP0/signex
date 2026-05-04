@@ -339,6 +339,30 @@ pub struct FpKeepout {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FpCutout {
     pub boundary: Polygon,
+    /// v0.15 — fillet radius applied to every corner of the cutout
+    /// at fab-export time. `0.0` (default) = sharp corners.
+    #[serde(default)]
+    pub edge_radius_mm: f64,
+    /// v0.15 — `true` (default) = full-depth through-hole cutout;
+    /// `false` = partial-depth pocket / blind cutout. Fab tooling
+    /// reads this to choose between routing and milling.
+    #[serde(default = "default_true")]
+    pub through: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Which side of the PCB the V-score is cut into. v0.15.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum VScoreSide {
+    #[default]
+    Both,
+    Top,
+    Bottom,
 }
 
 /// V-score panelisation hint — straight-line score on the PCB surface.
@@ -349,6 +373,14 @@ pub struct FpVScore {
     /// Score depth in mm.
     #[serde(default)]
     pub depth: f64,
+    /// v0.15 — which board side the score is cut into.
+    #[serde(default)]
+    pub side: VScoreSide,
+    /// v0.15 — minimum web thickness in mm; the panelisation
+    /// consumer enforces this lower bound when evaluating depth /
+    /// nominal-board-thickness ratios. `0.0` (default) = no minimum.
+    #[serde(default)]
+    pub min_web_mm: f64,
 }
 
 /// Solder-mask opening (cutout) — copper without solder mask covering.

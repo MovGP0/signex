@@ -75,10 +75,14 @@ fn v3_cutout_v_score_mask_paste_round_trip() {
     let mut fp = Footprint::empty("misc-test");
     fp.cutouts.push(FpCutout {
         boundary: Polygon::new(vec![[0.0, 0.0], [3.0, 0.0], [3.0, 3.0], [0.0, 3.0]]),
+        edge_radius_mm: 0.0,
+        through: true,
     });
     fp.v_scores.push(FpVScore {
         line: [[0.0, 0.0], [10.0, 0.0]],
         depth: 0.5,
+        side: signex_library::primitive::footprint::VScoreSide::Both,
+        min_web_mm: 0.0,
     });
     fp.mask_openings.push(FpMaskOpening {
         boundary: Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),

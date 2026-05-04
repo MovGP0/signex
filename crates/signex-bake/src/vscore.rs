@@ -91,19 +91,49 @@ pub fn bake_v_scores(
             }
         };
 
-        if attr.min_web_expr.is_some() {
-            warnings.push(format!(
-                "entity {}: VScoreHintAttr.min_web_expr ignored — no min-web lib field in v0.14.1",
-                entity.id
-            ));
-        }
+        // v0.15 — min_web_expr now propagates into FpVScore.min_web_mm.
+        let min_web_mm = match opt_eval_mm(&attr.min_web_expr, &ctx) {
+            Ok(Some(v)) => v.max(0.0),
+            Ok(None) => 0.0,
+            Err(e) => {
+                warnings.push(format!(
+                    "entity {}: VScoreHintAttr.min_web_expr failed to evaluate ({e}); using 0",
+                    entity.id
+                ));
+                0.0
+            }
+        };
 
         out.push(FpVScore {
             line: [from, to],
             depth,
+            side: map_side(attr.side),
+            min_web_mm,
         });
     }
     Ok(())
+}
+
+fn map_side(s: signex_sketch::attr::VScoreSide) -> signex_library::primitive::footprint::VScoreSide {
+    use signex_library::primitive::footprint::VScoreSide as Lib;
+    use signex_sketch::attr::VScoreSide as Sk;
+    match s {
+        Sk::Both => Lib::Both,
+        Sk::Top => Lib::Top,
+        Sk::Bottom => Lib::Bottom,
+    }
+}
+
+fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
+    let s = match expr.as_deref() {
+        Some(s) => s.trim(),
+        None => return Ok(None),
+    };
+    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
+    let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
+    let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;
+    Ok(Some(mm))
 }
 
 fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
@@ -214,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn bake_v_score_min_web_warns() {
+    fn bake_v_score_min_web_baked() {
         let plane = PlaneId::new();
         let mut data = SketchData::default();
         data.planes.push(Plane {
@@ -243,7 +273,9 @@ mod tests {
         let mut warnings = Vec::new();
         bake_v_scores(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
-        assert!(warnings.iter().any(|w| w.contains("min_web_expr")));
+        assert!((out[0].min_web_mm - 0.4).abs() < 1e-9, "v0.15 — min_web_mm now propagates");
+        assert_eq!(out[0].side, signex_library::primitive::footprint::VScoreSide::Both);
+        assert!(warnings.is_empty());
     }
 
     #[test]

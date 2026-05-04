@@ -1,21 +1,27 @@
 //! Board cutout bake — turns BoardCutoutAttr-tagged closed profiles
 //! into `Footprint::cutouts: Vec<FpCutout>` records.
 //!
-//! Phase B / Stage 4 of the v0.14.1 sketch-mode plan. v0.14.1 records
-//! the polygon boundary; PCB outline subtraction (the geometric
-//! op that combines cutouts with the board outline) runs at PCB
-//! gerber-export time and is out of scope here.
+//! v0.14.1 records the polygon boundary; PCB outline subtraction
+//! (the geometric op that combines cutouts with the board outline)
+//! runs at PCB gerber-export time and is out of scope here.
 //!
-//! `BoardCutoutAttr.edge_radius_expr` (corner radius) and
-//! `through` (through-PCB vs partial-depth) are intentionally NOT
-//! propagated into `FpCutout` in v0.14.1 — those need new lib fields
-//! that haven't been schema-bumped yet. They're reported in a warning
-//! so users know the data isn't lost, just deferred.
+//! v0.15 — `edge_radius_mm` (corner fillet radius) and `through`
+//! (full-depth vs partial-depth) now propagate from
+//! `BoardCutoutAttr` into `FpCutout`. The corner radius expression
+//! is evaluated to mm via the parameter table; eval failure falls
+//! back to `0.0` (sharp corner) with a warning.
+
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use signex_library::primitive::footprint::{FpCutout, Polygon};
 use signex_sketch::entity::EntityKind;
+use signex_sketch::expr::ast::ExprNode;
+use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::unit::Quantity;
 use signex_sketch::SketchError;
 
 use crate::profile::{trace_closed_profile, TraceError};
@@ -23,9 +29,11 @@ use crate::profile::{trace_closed_profile, TraceError};
 pub fn bake_cutouts(
     sketch: &SketchData,
     solve: &FullSolveOutput,
+    params_canonical: &HashMap<String, f64>,
     out: &mut Vec<FpCutout>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
+    let ctx = build_ctx(params_canonical);
     for entity in &sketch.entities {
         if entity.construction {
             continue;
@@ -44,20 +52,25 @@ pub fn bake_cutouts(
 
         match trace_closed_profile(sketch, solve, entity.id) {
             Ok(vertices) => {
-                if attr.edge_radius_expr.is_some() {
-                    warnings.push(format!(
-                        "entity {}: BoardCutoutAttr.edge_radius_expr ignored — corner-radius lib field lands in v0.15",
-                        entity.id
-                    ));
-                }
-                if !attr.through {
-                    warnings.push(format!(
-                        "entity {}: BoardCutoutAttr.through=false ignored — partial-depth cutouts lib field lands in v0.15",
-                        entity.id
-                    ));
-                }
+                // v0.15 — evaluate the corner-radius expression into
+                // mm. Empty expression → 0 (sharp corner); eval
+                // failure → 0 + warning so the bake doesn't silently
+                // drop the user's authoring intent.
+                let edge_radius_mm = match opt_eval_mm(&attr.edge_radius_expr, &ctx) {
+                    Ok(Some(v)) => v,
+                    Ok(None) => 0.0,
+                    Err(e) => {
+                        warnings.push(format!(
+                            "entity {}: BoardCutoutAttr.edge_radius_expr failed to evaluate ({e}); using 0",
+                            entity.id
+                        ));
+                        0.0
+                    }
+                };
                 out.push(FpCutout {
                     boundary: Polygon::new(vertices),
+                    edge_radius_mm,
+                    through: attr.through,
                 });
             }
             Err(TraceError::OpenChain) => warnings.push(format!(
@@ -75,6 +88,29 @@ pub fn bake_cutouts(
         }
     }
     Ok(())
+}
+
+fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
+    let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
+    for (name, value) in params_canonical {
+        params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
+    }
+    EvalContext {
+        params,
+        array_index: None,
+    }
+}
+
+fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
+    let s = match expr.as_deref() {
+        Some(s) => s.trim(),
+        None => return Ok(None),
+    };
+    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
+    let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
+    let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;
+    Ok(Some(mm))
 }
 
 #[cfg(test)]
@@ -146,14 +182,16 @@ mod tests {
         let solved = solve(&data);
         let mut out = Vec::new();
         let mut warnings = Vec::new();
-        bake_cutouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].boundary.points.len(), 4);
+        assert_eq!(out[0].edge_radius_mm, 0.0);
+        assert!(out[0].through);
         assert!(warnings.is_empty(), "default cutout should bake without warnings, got {warnings:?}");
     }
 
     #[test]
-    fn bake_cutout_edge_radius_warns() {
+    fn bake_cutout_edge_radius_evaluated() {
         let data = rectangle_with_cutout(BoardCutoutAttr {
             edge_radius_expr: Some("1mm".into()),
             through: true,
@@ -161,13 +199,14 @@ mod tests {
         let solved = solve(&data);
         let mut out = Vec::new();
         let mut warnings = Vec::new();
-        bake_cutouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
-        assert!(warnings.iter().any(|w| w.contains("edge_radius_expr")));
+        assert!((out[0].edge_radius_mm - 1.0).abs() < 1e-9);
+        assert!(warnings.is_empty(), "v0.15 — edge_radius is now baked, no warning expected; got {warnings:?}");
     }
 
     #[test]
-    fn bake_cutout_partial_depth_warns() {
+    fn bake_cutout_partial_depth_baked() {
         let data = rectangle_with_cutout(BoardCutoutAttr {
             edge_radius_expr: None,
             through: false,
@@ -175,8 +214,9 @@ mod tests {
         let solved = solve(&data);
         let mut out = Vec::new();
         let mut warnings = Vec::new();
-        bake_cutouts(&data, &solved, &mut out, &mut warnings).unwrap();
+        bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
-        assert!(warnings.iter().any(|w| w.contains("partial-depth")));
+        assert!(!out[0].through, "v0.15 — partial-depth flag now propagates");
+        assert!(warnings.is_empty());
     }
 }

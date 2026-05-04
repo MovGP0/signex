@@ -224,6 +224,7 @@ fn solve_and_bake(
                 signex_bake::bake_cutouts(
                     sketch,
                     &out,
+                    &resolved,
                     &mut cutouts,
                     &mut state.solve_warnings,
                 )?;
