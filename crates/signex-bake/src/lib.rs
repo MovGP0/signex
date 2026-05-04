@@ -13,6 +13,8 @@
 
 pub mod array;
 pub mod pad;
+pub mod profile;
 
 pub use array::bake_arrays;
 pub use pad::bake_pads;
+pub use profile::{trace_closed_profile, TraceError, TraceResult};
