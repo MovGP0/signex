@@ -137,23 +137,10 @@ pub fn items(
         ..ActiveBarButton::default()
     });
 
-    // Auto-fit Courtyard toggle.
-    let auto_fit_path = path.clone();
-    let auto_fit = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph("\u{25A1}"), // ▢ rectangle (courtyard)
-        tooltip: if auto_fit_on {
-            "Auto-fit Courtyard (on — click to disable)".into()
-        } else {
-            "Auto-fit Courtyard (off — click to enable)".into()
-        },
-        enabled: true,
-        selected: auto_fit_on,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: auto_fit_path,
-            msg: PrimitiveEditorMsg::FootprintToggleAutoFit,
-        }),
-        ..ActiveBarButton::default()
-    });
+    // v0.14.2: Auto-fit Courtyard moved to the Properties panel
+    // default body (Settings section). The active bar stays focused
+    // on placement/edit tools.
+    let _ = auto_fit_on;
 
     // Delete selected pad — emits the existing message; greyed when
     // no pad is selected.
@@ -213,7 +200,6 @@ pub fn items(
         stub("Place Hole", "\u{25CE}"), // ◎
         ActiveBarItem::Separator,
         delete,
-        auto_fit,
     ]
 }
 
