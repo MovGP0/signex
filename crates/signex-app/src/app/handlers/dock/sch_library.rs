@@ -15,6 +15,29 @@ impl Signex {
         panel_msg: &crate::panels::PanelMsg,
     ) -> bool {
         match panel_msg {
+            crate::panels::PanelMsg::FpEditorToggleAutoFitCourtyard => {
+                // v0.14.2 — resolve the active footprint editor's
+                // path and route through the existing
+                // `FootprintToggleAutoFit` dispatch so the toggle
+                // shares its dirty / panel-refresh behaviour with
+                // the active-bar button.
+                if let Some(active_tab) = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintToggleAutoFit,
+                            },
+                        ));
+                    }
+                }
+                true
+            }
             crate::panels::PanelMsg::SchLibrarySelectSymbol(idx) => {
                 self.sch_library_select_symbol(*idx);
                 true

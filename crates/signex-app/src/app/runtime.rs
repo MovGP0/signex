@@ -1122,6 +1122,7 @@ fn build_footprint_editor_panel_ctx(
         last_solve,
         selected_pad,
         selected_sketch_entity,
+        auto_fit_courtyard: editor.state.auto_fit_courtyard,
     })
 }
 

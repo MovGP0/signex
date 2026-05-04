@@ -523,6 +523,10 @@ pub struct FootprintEditorPanelContext {
     /// Read-only summary of the primary selected sketch entity —
     /// populated when in Sketch mode and an entity is selected.
     pub selected_sketch_entity: Option<FootprintSketchEntitySummary>,
+    /// Mirrors `editor.state.auto_fit_courtyard`. v0.14.2 — drives
+    /// the Properties panel's Auto-fit Courtyard toggle (the
+    /// equivalent active-bar button stays for quick access).
+    pub auto_fit_courtyard: bool,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need
@@ -991,6 +995,13 @@ pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
     RunErc,
+    /// v0.14.2 — Properties panel toggle for the active footprint
+    /// editor's Auto-fit Courtyard setting. Routes through
+    /// `handle_dock_sch_library_message` (same dispatcher every other
+    /// `Sym*` / `FpEditor*` panel msg uses) which resolves the active
+    /// footprint editor by tab and flips its `auto_fit_courtyard`
+    /// flag via the existing `FootprintToggleAutoFit` path.
+    FpEditorToggleAutoFitCourtyard,
     /// Clear the current ERC violations list and canvas markers.
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
@@ -3585,6 +3596,37 @@ fn view_footprint_editor_properties<'a>(
                     );
                 }
             }
+
+            // v0.14.2 — footprint-level settings live here on the
+            // Properties panel default body (no selection). Auto-fit
+            // Courtyard moved off the active bar's top strip.
+            col = col.push(props_section_header("Settings", primary));
+            let auto_fit_label = if fp.auto_fit_courtyard {
+                "Auto-fit Courtyard \u{2713}"
+            } else {
+                "Auto-fit Courtyard"
+            };
+            let auto_fit_btn = iced::widget::button(
+                text(auto_fit_label).size(10).color(primary),
+            )
+            .padding([4, 8])
+            .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(if fp.auto_fit_courtyard {
+                    iced::Color::from_rgba(0.40, 0.70, 1.00, 0.18)
+                } else {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                })),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                ..iced::widget::button::Style::default()
+            });
+            col = col.push(
+                container(auto_fit_btn).padding([4, 8]).width(Length::Fill),
+            );
 
             col = col.push(props_section_header("Hint", primary));
             let hint = match fp.mode_kind {
