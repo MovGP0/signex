@@ -741,6 +741,14 @@ pub enum EditorMsg {
     FootprintToggleLayer(String),
     /// Toolbar — toggle the auto-fit-courtyard flag.
     FootprintToggleAutoFit,
+    /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
+    /// click on the canvas publishes this with `Select` to cancel
+    /// the active tool.
+    FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),
+    /// v0.15 — Sketch-mode tool switch (Select / Point / Line /
+    /// Circle / Arc). Right-click on the canvas publishes this
+    /// with `Select` to cancel the active tool / pending gesture.
+    FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
     /// Fire-and-forget save of the active footprint primitive. Boxed
     /// so the containing enum stays cheap to clone and propagate.
     SaveFootprint(uuid::Uuid, Box<signex_library::Footprint>),

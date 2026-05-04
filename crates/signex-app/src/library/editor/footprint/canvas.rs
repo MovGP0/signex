@@ -207,6 +207,50 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                    // v0.15 — schematic-parity tool cancel. Right-
+                    // click while a non-Select tool is active (Pads
+                    // mode PlacePad, or Sketch mode Line/Circle/Arc/
+                    // tool_pending != Idle) cancels the tool back to
+                    // Select instead of starting a pan. Middle-click
+                    // always pans (matches Altium).
+                    use crate::library::editor::footprint::state::{
+                        EditorMode, PadsTool, SketchTool, ToolPending,
+                    };
+                    if *button == mouse::Button::Right {
+                        let cancel_msg: Option<EditorMsg> = match self.state.mode {
+                            EditorMode::Normal => {
+                                if self.state.pads_tool != PadsTool::Select {
+                                    Some(EditorMsg::FootprintSetPadsTool(PadsTool::Select))
+                                } else {
+                                    None
+                                }
+                            }
+                            EditorMode::Sketch => {
+                                let tool_active = self.state.active_tool != SketchTool::Select;
+                                let pending_active =
+                                    !matches!(self.state.tool_pending, ToolPending::Idle);
+                                if tool_active || pending_active {
+                                    Some(EditorMsg::FootprintSketchSetTool(SketchTool::Select))
+                                } else {
+                                    None
+                                }
+                            }
+                            EditorMode::View3d => None,
+                        };
+                        if let Some(msg) = cancel_msg {
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg,
+                                })
+                                .and_capture(),
+                            );
+                        }
+                    }
+                    // Otherwise (Middle, or Right with no active tool)
+                    // → start a pan as usual.
                     cstate.panning = true;
                     cstate.last_pan_pos = cursor.position_in(bounds);
                     return Some(canvas::Action::capture());

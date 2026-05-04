@@ -1009,6 +1009,8 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintDeleteSelected => PrimitiveEditorMsg::FootprintDeleteSelected,
         EditorMsg::FootprintToggleLayer(name) => PrimitiveEditorMsg::FootprintToggleLayer(name),
         EditorMsg::FootprintToggleAutoFit => PrimitiveEditorMsg::FootprintToggleAutoFit,
+        EditorMsg::FootprintSetPadsTool(t) => PrimitiveEditorMsg::FootprintSetPadsTool(t),
+        EditorMsg::FootprintSketchSetTool(t) => PrimitiveEditorMsg::FootprintSketchSetTool(t),
         // Anything not emitted by the footprint canvas is dropped via
         // a benign "save of the wrong tab" — the path-keyed dispatcher
         // ignores mismatches.

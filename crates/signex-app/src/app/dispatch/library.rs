@@ -5000,6 +5000,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintDeleteSelected
         | EditorMsg::FootprintToggleLayer(_)
         | EditorMsg::FootprintToggleAutoFit
+        | EditorMsg::FootprintSetPadsTool(_)
+        | EditorMsg::FootprintSketchSetTool(_)
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)
         | EditorMsg::SetBodyOffsetZ(_)
