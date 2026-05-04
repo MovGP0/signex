@@ -63,6 +63,26 @@ pub enum Message {
     /// payload is the step in mm; the dispatcher writes it to the
     /// active footprint editor's `state.snap_options.grid_step_mm`.
     GridPickerSelect(f64),
+    /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
+    /// Footprint editor only; other contexts no-op.
+    GridPropertiesOpen,
+    /// v0.18.11 — close the Grid Properties modal (Cancel button or
+    /// Esc). Discards in-flight edits.
+    GridPropertiesClose,
+    /// v0.18.11 — Grid Properties modal: text input bound to the
+    /// Step X field. Strings are validated on Apply, not per
+    /// keystroke, so partial input doesn't fight the user.
+    GridPropertiesSetStepX(String),
+    /// v0.18.11 — Grid Properties modal: text input bound to the
+    /// Step Y field.
+    GridPropertiesSetStepY(String),
+    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
+    /// When linked, editing Step X mirrors into Step Y.
+    GridPropertiesToggleLink,
+    /// v0.18.11 — Grid Properties modal: Apply button. Validates +
+    /// writes the active footprint editor's `snap_options.grid_step_mm`
+    /// (and Y if/when separate axes ship).
+    GridPropertiesApply,
     DragStart(DragTarget),
     DragMove(f32, f32),
     DragEnd,
@@ -670,6 +690,16 @@ pub struct ContextMenuState {
 pub struct GridPickerState {
     pub x: f32,
     pub y: f32,
+}
+
+/// v0.18.11 — Cartesian Grid Editor modal state. Carries the
+/// in-flight Step X / Step Y string buffers + the X/Y link toggle.
+/// Writes happen on `GridPropertiesApply`; close discards.
+#[derive(Debug, Clone)]
+pub struct GridPropertiesState {
+    pub step_x_mm: String,
+    pub step_y_mm: String,
+    pub link_xy: bool,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

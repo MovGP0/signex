@@ -91,6 +91,77 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
+            Message::GridPropertiesOpen => {
+                // Pre-populate from the active footprint editor's
+                // current step. No-op for non-footprint tabs (the
+                // modal would have nothing to drive).
+                let active_step = self
+                    .active_footprint_editor()
+                    .map(|e| e.state.snap_options.grid_step_mm);
+                if let Some(step) = active_step {
+                    let s = format!("{step:.4}");
+                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
+                        step_x_mm: s.clone(),
+                        step_y_mm: s,
+                        link_xy: true,
+                    });
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesClose => {
+                self.ui_state.grid_properties = None;
+                self.finish_update()
+            }
+            Message::GridPropertiesSetStepX(value) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.step_x_mm = value;
+                    if state.link_xy {
+                        state.step_y_mm = state.step_x_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetStepY(value) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.step_y_mm = value;
+                    if state.link_xy {
+                        state.step_x_mm = state.step_y_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesToggleLink => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.link_xy = !state.link_xy;
+                    if state.link_xy {
+                        // Re-link mirrors X into Y so re-enabling
+                        // doesn't keep a desynced pair.
+                        state.step_y_mm = state.step_x_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesApply => {
+                // Validate the X step (Y is taken from X for now —
+                // single-axis steps in `SnapOptions`; the Y field
+                // exists in the dialog for forward compatibility).
+                let parsed_x = self
+                    .ui_state
+                    .grid_properties
+                    .as_ref()
+                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                if let Some(step) = parsed_x {
+                    if step > 0.0 && step.is_finite() {
+                        if let Some(editor) = self.active_footprint_editor_mut() {
+                            editor.state.snap_options.grid_step_mm = step;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+                self.ui_state.grid_properties = None;
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
             Message::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =

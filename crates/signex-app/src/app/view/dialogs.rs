@@ -1200,6 +1200,129 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
     }
 
+    /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a footprint
+    /// editor). Mirrors Altium's "Cartesian Grid Editor [mm]" with a
+    /// stripped-down field set: Step X / Step Y + link toggle, plus
+    /// OK / Cancel. Display style + multiplier + per-grid-color land
+    /// in v0.18.11.x as the underlying canvas/grid system grows them.
+    pub(super) fn view_grid_properties_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_grid_properties_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::GridProperties)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (480.0, 280.0))
+    }
+
+    fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
+        use iced::widget::text_input;
+
+        let Some(ref st) = self.ui_state.grid_properties else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Cartesian Grid Editor [mm]")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::GridPropertiesClose, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::GridProperties,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let mk_input = |placeholder: &'static str,
+                        value: &str,
+                        on_input: fn(String) -> Message|
+         -> Element<'_, Message> {
+            text_input(placeholder, value)
+                .on_input(on_input)
+                .on_submit(Message::GridPropertiesApply)
+                .size(12)
+                .padding(6)
+                .width(Length::Fixed(140.0))
+                .into()
+        };
+
+        let link_label = if st.link_xy { "🔗 Linked" } else { "🔓 Unlinked" };
+
+        let body = column![
+            row![
+                container(text("Step X").size(11).color(text_muted))
+                    .width(Length::Fixed(80.0)),
+                mk_input("0.127", &st.step_x_mm, Message::GridPropertiesSetStepX),
+                Space::new().width(8),
+                iced::widget::button(text(link_label).size(11).color(text_c))
+                    .padding([4, 10])
+                    .on_press(Message::GridPropertiesToggleLink),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                container(text("Step Y").size(11).color(text_muted))
+                    .width(Length::Fixed(80.0)),
+                mk_input("0.127", &st.step_y_mm, Message::GridPropertiesSetStepY),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            text(
+                "Step Y currently mirrors Step X (single-axis snap_options.grid_step_mm). \
+                 The Y field is wired for forward compatibility — separate-axis storage lands \
+                 in a follow-up."
+            )
+            .size(10)
+            .color(text_muted),
+        ]
+        .spacing(12);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::GridPropertiesClose,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Apply",
+                            Some(Message::GridPropertiesApply),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(480),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
     fn view_remove_dialog_body(&self) -> Element<'_, Message> {
         let Some(ref st) = self.ui_state.remove_dialog else {
             return container(Space::new()).into();

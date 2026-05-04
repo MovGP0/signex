@@ -893,6 +893,23 @@ impl Signex {
     /// `.snxfpt` editor tabs. Drives the Properties-panel pad-defaults
     /// form so it can mutate `next_pad_defaults` without round-
     /// tripping through `LibraryMessage::PrimitiveEditorEvent`.
+    /// Read-only sibling of [`active_footprint_editor_mut`].
+    /// v0.18.11 — used by the Grid Properties modal open handler
+    /// to seed the dialog buffers from the live snap step.
+    pub(crate) fn active_footprint_editor(
+        &self,
+    ) -> Option<&crate::app::FootprintEditorState> {
+        let path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::FootprintEditor(p) => Some(p.clone()),
+                _ => None,
+            })?;
+        self.document_state.footprint_editors.get(&path)
+    }
+
     pub(crate) fn active_footprint_editor_mut(
         &mut self,
     ) -> Option<&mut crate::app::FootprintEditorState> {

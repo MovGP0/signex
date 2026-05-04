@@ -135,6 +135,7 @@ impl Signex {
                 project_close_confirm: None,
                 project_options: None,
                 enable_version_control: None,
+                grid_properties: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
@@ -526,6 +527,16 @@ impl Signex {
                                 // schematic / PCB tabs ignore (the
                                 // dispatcher's context check no-ops).
                                 Message::GridPickerOpen
+                            }
+                            (keyboard::Key::Character(c), m)
+                                if c.eq_ignore_ascii_case("g")
+                                    && m.command()
+                                    && !m.shift() =>
+                            {
+                                // v0.18.11 — Ctrl+G opens the Cartesian
+                                // Grid Editor modal (Step X / Y, link
+                                // toggle, Apply / Cancel).
+                                Message::GridPropertiesOpen
                             }
                             (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
                                 Message::Tool(ToolMessage::SelectTool(Tool::Wire))

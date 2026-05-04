@@ -30,6 +30,12 @@ impl Signex {
             | Message::GridPickerOpen
             | Message::GridPickerClose
             | Message::GridPickerSelect(_)
+            | Message::GridPropertiesOpen
+            | Message::GridPropertiesClose
+            | Message::GridPropertiesSetStepX(_)
+            | Message::GridPropertiesSetStepY(_)
+            | Message::GridPropertiesToggleLink
+            | Message::GridPropertiesApply
             | Message::StatusBar(_) => self.dispatch_ui_message(message),
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)
@@ -249,6 +255,9 @@ impl Signex {
                             }
                             ModalId::EnableVersionControl => {
                                 self.ui_state.enable_version_control = None;
+                            }
+                            ModalId::GridProperties => {
+                                self.ui_state.grid_properties = None;
                             }
                         },
                         // Closing an undocked-tab window is the reattach

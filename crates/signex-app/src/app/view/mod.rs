@@ -3559,7 +3559,8 @@ impl Signex {
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
             | ModalId::ProjectOptions
-            | ModalId::EnableVersionControl => {
+            | ModalId::EnableVersionControl
+            | ModalId::GridProperties => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
@@ -5268,6 +5269,9 @@ impl Signex {
         }
         if ui.enable_version_control.is_some() {
             layers.push(self.view_enable_version_control_dialog());
+        }
+        if ui.grid_properties.is_some() {
+            layers.push(self.view_grid_properties_dialog());
         }
 
         // Skip overlay rendering for any modal whose detached OS window

@@ -102,6 +102,11 @@ pub struct UiState {
     /// project root context menu when the project dir has no
     /// `.git/` yet.
     pub enable_version_control: Option<crate::app::EnableVersionControlState>,
+    /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
+    /// footprint editor). `Some` while the dialog is visible;
+    /// carries the in-flight Step X / Step Y / link buffers so
+    /// keystrokes don't immediately mutate the active editor.
+    pub grid_properties: Option<crate::app::GridPropertiesState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -307,6 +312,9 @@ pub enum ModalId {
     /// Enable Version Control confirm modal (Projects-panel root →
     /// Enable Version Control...).
     EnableVersionControl,
+    /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
+    /// footprint editor).
+    GridProperties,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
