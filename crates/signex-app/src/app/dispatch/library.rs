@@ -4329,6 +4329,93 @@ pub(crate) fn apply_footprint_primitive_edit(
                     &mut editor.primitive,
                 );
             }
+            // v0.16.1 fix — when the dragged Point is one of any
+            // pad's outline-corner Points, recompute that pad's bbox
+            // from all 4 corner positions. Update the pad's
+            // position_mm + size_mm AND rewrite the centre Point's
+            // PadAttr.size_x_expr / size_y_expr so the bake re-emits
+            // the pad at the new size. This is the "drag-corner-to-
+            // resize-pad" behaviour the user expects when they grab
+            // a corner of the construction outline.
+            let corner_pad_idx = editor.state.pads.iter().position(|p| {
+                p.corner_entity_ids
+                    .as_ref()
+                    .map(|ids| ids.contains(&id))
+                    .unwrap_or(false)
+            });
+            if let Some(pad_idx) = corner_pad_idx {
+                use signex_sketch::entity::EntityKind;
+                let corners = editor.state.pads[pad_idx].corner_entity_ids.unwrap();
+                let mut min_x = f64::INFINITY;
+                let mut min_y = f64::INFINITY;
+                let mut max_x = f64::NEG_INFINITY;
+                let mut max_y = f64::NEG_INFINITY;
+                if let Some(sketch) = editor.primitive.sketch.as_ref() {
+                    for cid in corners {
+                        if let Some(e) = sketch.entities.iter().find(|e| e.id == cid) {
+                            if let EntityKind::Point { x, y } = e.kind {
+                                if x < min_x {
+                                    min_x = x;
+                                }
+                                if y < min_y {
+                                    min_y = y;
+                                }
+                                if x > max_x {
+                                    max_x = x;
+                                }
+                                if y > max_y {
+                                    max_y = y;
+                                }
+                            }
+                        }
+                    }
+                }
+                if min_x.is_finite() && min_y.is_finite() {
+                    let new_w = (max_x - min_x).max(0.05);
+                    let new_h = (max_y - min_y).max(0.05);
+                    let new_cx = (min_x + max_x) / 2.0;
+                    let new_cy = (min_y + max_y) / 2.0;
+                    let pad = &mut editor.state.pads[pad_idx];
+                    let old_centre = pad.position_mm;
+                    pad.position_mm = (new_cx, new_cy);
+                    pad.size_mm = (new_w, new_h);
+                    let centre_id = pad.sketch_entity_id;
+                    // Move the centre Point to the new bbox centre +
+                    // rewrite the PadAttr size exprs so the bake
+                    // emits the new size.
+                    if let Some(centre_id) = centre_id {
+                        let cdx = new_cx - old_centre.0;
+                        let cdy = new_cy - old_centre.1;
+                        if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
+                            apply_sketch_edit_with_warnings(
+                                &mut editor.state,
+                                &mut editor.primitive,
+                                SketchEdit::MovePoint {
+                                    id: centre_id,
+                                    dx: cdx,
+                                    dy: cdy,
+                                },
+                            );
+                        }
+                        if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                            if let Some(centre) = sketch
+                                .entities
+                                .iter_mut()
+                                .find(|e| e.id == centre_id)
+                            {
+                                if let Some(attr) = centre.pad.as_mut() {
+                                    attr.size_x_expr = format!("{:.4}mm", new_w);
+                                    attr.size_y_expr = format!("{:.4}mm", new_h);
+                                }
+                            }
+                        }
+                    }
+                    CanvasState::sync_pads_to_primitive(
+                        &editor.state,
+                        &mut editor.primitive,
+                    );
+                }
+            }
             editor.canvas_cache.clear();
             editor.dirty = true;
         }

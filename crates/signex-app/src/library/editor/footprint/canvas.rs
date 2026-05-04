@@ -718,14 +718,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             }
 
             // v0.16.1 — Pads-mode placement ghost. When PlacePad is
-            // active, render a translucent 1×1 mm rectangle at the
-            // cursor showing where the next pad will land. Mirrors
+            // active, render a solid 1×1 mm rectangle at the cursor
+            // showing where the next pad will land. Mirrors the
             // schematic placement-tool's pre-placement preview.
-            // While `placement_paused` (TAB), the ghost desaturates
-            // to grey + dashed-stroke to signal the click-gate is on.
+            // While `placement_paused` (TAB), the ghost is hidden
+            // entirely so the cursor position no longer implies a
+            // placement target — the user adjusts properties first,
+            // then TAB resumes.
             use crate::library::editor::footprint::state::{EditorMode, PadsTool};
             if matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::PlacePad
+                && !self.state.placement_paused
                 && let Some((cx, cy)) = self.state.cursor_mm
             {
                 let half = 0.5_f32 * cstate.scale; // 1 mm pad
@@ -738,29 +741,29 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         r: 0.55,
                         g: 0.55,
                         b: 0.55,
-                        a: 0.20,
+                        a: 1.0,
                     }
                 } else {
                     Color {
                         r: 0.85,
                         g: 0.20,
                         b: 0.20,
-                        a: 0.35,
+                        a: 1.0,
                     }
                 };
                 let ghost_stroke = if paused {
                     Color {
-                        r: 0.55,
-                        g: 0.55,
-                        b: 0.55,
-                        a: 0.85,
+                        r: 0.40,
+                        g: 0.40,
+                        b: 0.40,
+                        a: 1.0,
                     }
                 } else {
                     Color {
-                        r: 0.85,
-                        g: 0.20,
-                        b: 0.20,
-                        a: 0.85,
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
                     }
                 };
                 let rect = Path::rectangle(p0, size);
