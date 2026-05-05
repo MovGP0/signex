@@ -156,6 +156,62 @@ impl Signex {
                 }
                 self.finish_update()
             }
+            Message::OpenSelectionFilterCustom => {
+                if let Some(editor) = self.active_footprint_editor() {
+                    let f = editor.state.selection_filter;
+                    self.ui_state.selection_filter_custom =
+                        Some(crate::app::SelectionFilterCustomState {
+                            pads: f.pads,
+                            tracks: f.tracks,
+                            arcs: f.arcs,
+                            pours: f.pours,
+                            bodies_3d: f.bodies_3d,
+                            keepouts: f.keepouts,
+                            cutouts: f.cutouts,
+                            texts: f.texts,
+                        });
+                }
+                self.finish_update()
+            }
+            Message::CloseSelectionFilterCustom => {
+                self.ui_state.selection_filter_custom = None;
+                self.finish_update()
+            }
+            Message::ToggleSelectionFilterCustomKind(kind) => {
+                use crate::library::editor::footprint::state::SelectionFilterKind as K;
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    match kind {
+                        K::Pads => state.pads = !state.pads,
+                        K::Tracks => state.tracks = !state.tracks,
+                        K::Arcs => state.arcs = !state.arcs,
+                        K::Pours => state.pours = !state.pours,
+                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
+                        K::Keepouts => state.keepouts = !state.keepouts,
+                        K::Cutouts => state.cutouts = !state.cutouts,
+                        K::Texts => state.texts = !state.texts,
+                    }
+                }
+                self.finish_update()
+            }
+            Message::ApplySelectionFilterCustom => {
+                let draft = self.ui_state.selection_filter_custom.take();
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                    editor.state.selection_filter =
+                        crate::library::editor::footprint::state::SelectionFilter {
+                            pads: d.pads,
+                            tracks: d.tracks,
+                            arcs: d.arcs,
+                            pours: d.pours,
+                            bodies_3d: d.bodies_3d,
+                            keepouts: d.keepouts,
+                            cutouts: d.cutouts,
+                            texts: d.texts,
+                        };
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
             Message::GridPropertiesApply => {
                 // Validate the X step (Y is taken from X for now —
                 // single-axis steps in `SnapOptions`; the Y field

@@ -1336,6 +1336,137 @@ impl Signex {
         dialog.into()
     }
 
+    /// v0.18.14.1 — Custom Selection Filter modal. 8 rows of
+    /// per-kind checkboxes (Pads / Tracks / Arcs / Pours / 3D Bodies
+    /// / Keepouts / Cutouts / Texts) + Apply / Cancel. Apply writes
+    /// the draft into `editor.state.selection_filter`.
+    pub(super) fn view_selection_filter_custom_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_selection_filter_custom_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::SelectionFilterCustom)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (440.0, 380.0))
+    }
+
+    fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
+        use crate::library::editor::footprint::state::SelectionFilterKind as K;
+
+        let Some(ref st) = self.ui_state.selection_filter_custom else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Selection Filter — Customize")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseSelectionFilterCustom, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::SelectionFilterCustom,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let mk_row = |label: &'static str,
+                      kind: K,
+                      on: bool|
+         -> Element<'_, Message> {
+            let glyph = if on { "[x]" } else { "[ ]" };
+            iced::widget::button(
+                row![
+                    text(format!("{glyph}  {label}"))
+                        .size(11)
+                        .color(text_c)
+                        .width(Length::Fill),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([4, 8])
+            .width(Length::Fill)
+            .on_press(Message::ToggleSelectionFilterCustomKind(kind))
+            .style(move |_: &iced::Theme, status| iced::widget::button::Style {
+                background: match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                    )),
+                    _ => Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                },
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+        };
+
+        let body = column![
+            text(
+                "Toggle which kinds the canvas hit-test will accept. \
+                 Pads is the only kind functionally wired today; the \
+                 rest store flags for forward compatibility."
+            )
+            .size(10)
+            .color(text_muted),
+            mk_row("Pads", K::Pads, st.pads),
+            mk_row("Tracks", K::Tracks, st.tracks),
+            mk_row("Arcs", K::Arcs, st.arcs),
+            mk_row("Pours", K::Pours, st.pours),
+            mk_row("3D Bodies", K::Bodies3d, st.bodies_3d),
+            mk_row("Keepouts", K::Keepouts, st.keepouts),
+            mk_row("Cutouts", K::Cutouts, st.cutouts),
+            mk_row("Texts", K::Texts, st.texts),
+        ]
+        .spacing(4);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([12, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::CloseSelectionFilterCustom,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Apply",
+                            Some(Message::ApplySelectionFilterCustom),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(440),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
     fn view_remove_dialog_body(&self) -> Element<'_, Message> {
         let Some(ref st) = self.ui_state.remove_dialog else {
             return container(Space::new()).into();

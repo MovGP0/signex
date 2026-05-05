@@ -107,6 +107,10 @@ pub struct UiState {
     /// carries the in-flight Step X / Step Y / link buffers so
     /// keystrokes don't immediately mutate the active editor.
     pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
+    /// while the dialog is visible; the eight-bool draft mirror
+    /// commits on Apply, discards on Cancel.
+    pub selection_filter_custom: Option<crate::app::SelectionFilterCustomState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -315,6 +319,9 @@ pub enum ModalId {
     /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
     /// footprint editor).
     GridProperties,
+    /// v0.18.14.1 — Custom Selection Filter modal (8-row checkbox
+    /// table; opens from the Properties `Custom…` button).
+    SelectionFilterCustom,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's

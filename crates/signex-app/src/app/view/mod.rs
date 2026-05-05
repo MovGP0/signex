@@ -3560,7 +3560,8 @@ impl Signex {
             | ModalId::RemoveDialog
             | ModalId::ProjectOptions
             | ModalId::EnableVersionControl
-            | ModalId::GridProperties => {
+            | ModalId::GridProperties
+            | ModalId::SelectionFilterCustom => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
@@ -3864,6 +3865,7 @@ impl Signex {
             || ui.project_options.is_some()
             || ui.enable_version_control.is_some()
             || ui.grid_properties.is_some()
+            || ui.selection_filter_custom.is_some()
             || interaction.grid_picker.is_some()
             || document.bom_preview.is_some()
             || ui.annotate_dialog_open
@@ -5274,6 +5276,9 @@ impl Signex {
         }
         if ui.grid_properties.is_some() {
             layers.push(self.view_grid_properties_dialog());
+        }
+        if ui.selection_filter_custom.is_some() {
+            layers.push(self.view_selection_filter_custom_dialog());
         }
 
         // Skip overlay rendering for any modal whose detached OS window

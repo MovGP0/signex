@@ -263,10 +263,7 @@ impl Signex {
                 true
             }
             crate::panels::PanelMsg::FpEditorOpenSelectionFilterCustom => {
-                tracing::warn!(
-                    target: "signex::library",
-                    "Custom Selection Filter modal stubbed; lands with v0.18.14 unified active bar",
-                );
+                let _ = self.update(Message::OpenSelectionFilterCustom);
                 true
             }
             crate::panels::PanelMsg::FpEditorSetSnapSubTab(tab) => {

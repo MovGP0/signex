@@ -83,6 +83,21 @@ pub enum Message {
     /// writes the active footprint editor's `snap_options.grid_step_mm`
     /// (and Y if/when separate axes ship).
     GridPropertiesApply,
+    /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
+    /// the 8-row checkbox table over the active footprint editor.
+    OpenSelectionFilterCustom,
+    /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
+    /// Discards the in-flight draft.
+    CloseSelectionFilterCustom,
+    /// v0.18.14.1 — Custom Selection Filter modal: per-row checkbox
+    /// toggle.
+    ToggleSelectionFilterCustomKind(
+        crate::library::editor::footprint::state::SelectionFilterKind,
+    ),
+    /// v0.18.14.1 — Custom Selection Filter modal: Apply button.
+    /// Writes the draft into the active footprint editor's
+    /// `state.selection_filter` then closes.
+    ApplySelectionFilterCustom,
     DragStart(DragTarget),
     DragMove(f32, f32),
     DragEnd,
@@ -700,6 +715,22 @@ pub struct GridPropertiesState {
     pub step_x_mm: String,
     pub step_y_mm: String,
     pub link_xy: bool,
+}
+
+/// v0.18.14.1 — Custom Selection Filter modal draft state. Mirrors
+/// `SelectionFilter` from `library::editor::footprint::state` so
+/// the user can flip flags without touching the live editor until
+/// they hit Apply.
+#[derive(Debug, Clone)]
+pub struct SelectionFilterCustomState {
+    pub pads: bool,
+    pub tracks: bool,
+    pub arcs: bool,
+    pub pours: bool,
+    pub bodies_3d: bool,
+    pub keepouts: bool,
+    pub cutouts: bool,
+    pub texts: bool,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

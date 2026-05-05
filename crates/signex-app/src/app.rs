@@ -30,8 +30,8 @@ pub use contracts::{
     ContextAction, ContextMenuState, ContextSubmenu, DragTarget, EnableVersionControlState,
     GridPickerState, GridPropertiesState, Message, ProjectCloseChoice, ProjectCloseConfirmState,
     ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RenameDialogState, StatusBarRequest, TabContextAction, TabContextMenuState,
-    TextEditState, TrackItem, VersionControlScope,
+    RemoveDialogState, RenameDialogState, SelectionFilterCustomState, StatusBarRequest,
+    TabContextAction, TabContextMenuState, TextEditState, TrackItem, VersionControlScope,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,

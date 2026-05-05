@@ -136,6 +136,7 @@ impl Signex {
                 project_options: None,
                 enable_version_control: None,
                 grid_properties: None,
+                selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
