@@ -151,6 +151,14 @@ pub struct FootprintCanvas<'a> {
     /// canvas can render them when [`EditorMode::Sketch`] is active.
     /// `None` for footprints with no sketch field set (legacy v1).
     pub sketch: Option<&'a signex_sketch::SketchData>,
+    /// v0.18.16 — silk-front graphics (`Line` / `Arc` / `Text` /
+    /// `Rectangle` / `Circle`). Read-only on the canvas side; the
+    /// active-bar tools (Place String / Track / Arc / Polygon)
+    /// commit through the dispatcher into
+    /// `editor.primitive_mut().silk_f`.
+    pub silk_f: &'a [signex_library::primitive::footprint::FpGraphic],
+    /// v0.18.16 — silk-back graphics (mirror layer for B.SilkS).
+    pub silk_b: &'a [signex_library::primitive::footprint::FpGraphic],
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
@@ -764,11 +772,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 Stroke::default().with_width(1.5).with_color(origin_color),
             );
 
-            // Silk/fab graphics live on the Footprint primitive
-            // (`silk_f` / `silk_b` / `fab_f` / `fab_b`). Pads-only
-            // rendering for now — the graphics pipeline reads
-            // directly from the primitive once the standalone
-            // `.snxfpt` editor grows that surface.
+            // v0.18.16 — silk-layer graphics rendering. The
+            // active-bar tools (Place Track / Arc / String /
+            // Polygon) commit `FpGraphic` entries to
+            // `primitive.silk_f`; without this draw pass the user's
+            // placements were invisible on the canvas.
+            if self.state.layer_visibility.get(FpLayer::FSilks) {
+                draw_silk_graphics(frame, cstate, self.silk_f, FpLayer::FSilks);
+            }
+            if self.state.layer_visibility.get(FpLayer::BSilks) {
+                draw_silk_graphics(frame, cstate, self.silk_b, FpLayer::BSilks);
+            }
 
             // Courtyard — drawn as a hollow rectangle on Edge.Cuts.
             if self.state.layer_visibility.get(FpLayer::EdgeCuts)
@@ -851,6 +865,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     &rect,
                     Stroke::default().with_width(1.0).with_color(ghost_stroke),
                 );
+            }
+
+            // v0.18.16 — Pads-mode multi-click gesture previews
+            // (Track / Arc / Polygon ghost lines). Reads in-flight
+            // state + cursor; no-op for tools without a multi-click
+            // gesture (Select / PlacePad / PlaceHole / PlaceString).
+            if matches!(self.state.mode, super::state::EditorMode::Normal) {
+                draw_pads_tool_preview(frame, cstate, self.state);
             }
 
             // v0.13.1 Phase 6.2 — sketch entities overlay. Only drawn
@@ -2047,5 +2069,216 @@ fn draw_pad(
             align_y: iced::alignment::Vertical::Top,
             ..canvas::Text::default()
         });
+    }
+}
+
+/// v0.18.16 — render the silk-layer graphics list. Each
+/// `FpGraphic` becomes a single Path stroke / fill in the layer's
+/// colour. Used for both `silk_f` (FSilks) and `silk_b` (BSilks)
+/// passes; the colour follows whichever layer the caller passes.
+fn draw_silk_graphics(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    graphics: &[signex_library::primitive::footprint::FpGraphic],
+    layer: FpLayer,
+) {
+    use signex_library::primitive::footprint::FpGraphicKind;
+    let colour = layer.color();
+    let stroke_default_px: f32 = 1.0;
+    for g in graphics {
+        let stroke_px = if g.stroke_width > 0.0 {
+            (g.stroke_width as f32 * cstate.scale).max(0.5)
+        } else {
+            stroke_default_px
+        };
+        match &g.kind {
+            FpGraphicKind::Line { from, to } => {
+                let p0 = cstate.world_to_screen((from[0], from[1]));
+                let p1 = cstate.world_to_screen((to[0], to[1]));
+                frame.stroke(
+                    &Path::line(p0, p1),
+                    Stroke::default().with_width(stroke_px).with_color(colour),
+                );
+            }
+            FpGraphicKind::Rectangle { from, to } => {
+                let p0 = cstate.world_to_screen((from[0], from[1]));
+                let p1 = cstate.world_to_screen((to[0], to[1]));
+                let rect = Path::rectangle(
+                    Point::new(p0.x.min(p1.x), p0.y.min(p1.y)),
+                    iced::Size::new((p1.x - p0.x).abs(), (p1.y - p0.y).abs()),
+                );
+                frame.stroke(
+                    &rect,
+                    Stroke::default().with_width(stroke_px).with_color(colour),
+                );
+            }
+            FpGraphicKind::Circle { center, radius } => {
+                let c = cstate.world_to_screen((center[0], center[1]));
+                let r_px = (*radius as f32) * cstate.scale;
+                frame.stroke(
+                    &Path::circle(c, r_px),
+                    Stroke::default().with_width(stroke_px).with_color(colour),
+                );
+            }
+            FpGraphicKind::Arc {
+                center,
+                radius,
+                start_deg,
+                end_deg,
+            } => {
+                let c_world = (*center)[0..2].try_into().unwrap_or([0.0, 0.0]);
+                let c = cstate.world_to_screen((c_world[0], c_world[1]));
+                let r_px = (*radius as f32) * cstate.scale;
+                // iced's Path API: build the arc via cubic
+                // approximations using `Path::new(|builder|
+                // builder.arc(...))`. For simplicity, sample the
+                // sweep at small angle increments and stroke a
+                // polyline.
+                let start_rad = (*start_deg).to_radians() as f32;
+                let end_rad = (*end_deg).to_radians() as f32;
+                let mut sweep = end_rad - start_rad;
+                // Normalise sweep to [-2π, 2π]; iced's polyline can
+                // handle either sign.
+                if sweep > std::f32::consts::TAU {
+                    sweep -= std::f32::consts::TAU;
+                } else if sweep < -std::f32::consts::TAU {
+                    sweep += std::f32::consts::TAU;
+                }
+                let segments = 64;
+                let path = Path::new(|builder| {
+                    let p0_x = c.x + r_px * start_rad.cos();
+                    let p0_y = c.y + r_px * start_rad.sin();
+                    builder.move_to(Point::new(p0_x, p0_y));
+                    for i in 1..=segments {
+                        let t = (i as f32) / (segments as f32);
+                        let a = start_rad + sweep * t;
+                        let p_x = c.x + r_px * a.cos();
+                        let p_y = c.y + r_px * a.sin();
+                        builder.line_to(Point::new(p_x, p_y));
+                    }
+                });
+                frame.stroke(
+                    &path,
+                    Stroke::default().with_width(stroke_px).with_color(colour),
+                );
+            }
+            FpGraphicKind::Text {
+                position,
+                content,
+                size,
+            } => {
+                let p = cstate.world_to_screen((position[0], position[1]));
+                let size_px = ((*size as f32) * cstate.scale).max(8.0);
+                frame.fill_text(canvas::Text {
+                    content: content.clone(),
+                    position: Point::new(p.x, p.y),
+                    size: size_px.into(),
+                    color: colour,
+                    align_x: iced::alignment::Horizontal::Left.into(),
+                    align_y: iced::alignment::Vertical::Top,
+                    ..canvas::Text::default()
+                });
+            }
+        }
+    }
+}
+
+/// v0.18.16 — Pads-mode multi-click gesture preview. Reads the
+/// in-flight tool state (`track_first` / `place_arc_pending` /
+/// `place_polygon_vertices`) plus `cursor_mm` and draws a ghost
+/// preview of what the next click will commit. Dashed-style ghost
+/// strokes in a dimmed accent so the user can distinguish the
+/// preview from committed silk geometry.
+fn draw_pads_tool_preview(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    state: &FootprintEditorState,
+) {
+    use crate::library::editor::footprint::state::{PadsTool, PlaceArcPending};
+    let Some(cursor) = state.cursor_mm else {
+        return;
+    };
+    let ghost_colour = Color::from_rgba(1.0, 1.0, 1.0, 0.55);
+    let stroke_px = 1.2_f32;
+    let stroke = || Stroke::default().with_width(stroke_px).with_color(ghost_colour);
+
+    match state.pads_tool {
+        PadsTool::PlaceTrack => {
+            if let Some((sx, sy)) = state.track_first {
+                let p0 = cstate.world_to_screen((sx, sy));
+                let p1 = cstate.world_to_screen(cursor);
+                frame.stroke(&Path::line(p0, p1), stroke());
+                let dot = Path::circle(p0, 3.0);
+                frame.fill(&dot, ghost_colour);
+            }
+        }
+        PadsTool::PlaceArc => match state.place_arc_pending {
+            PlaceArcPending::Idle => {}
+            PlaceArcPending::Center { center: (cx, cy) } => {
+                let c = cstate.world_to_screen((cx, cy));
+                let cur = cstate.world_to_screen(cursor);
+                frame.stroke(&Path::line(c, cur), stroke());
+                frame.fill(&Path::circle(c, 3.0), ghost_colour);
+            }
+            PlaceArcPending::Start {
+                center: (cx, cy),
+                start: (sx, sy),
+            } => {
+                let c = cstate.world_to_screen((cx, cy));
+                let radius_world = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                let r_px = (radius_world as f32) * cstate.scale;
+                let start_rad =
+                    ((sy - cy).atan2(sx - cx)) as f32;
+                let end_rad =
+                    ((cursor.1 - cy).atan2(cursor.0 - cx)) as f32;
+                let sweep = end_rad - start_rad;
+                let segments = 64;
+                let path = Path::new(|builder| {
+                    let p0_x = c.x + r_px * start_rad.cos();
+                    let p0_y = c.y + r_px * start_rad.sin();
+                    builder.move_to(Point::new(p0_x, p0_y));
+                    for i in 1..=segments {
+                        let t = (i as f32) / (segments as f32);
+                        let a = start_rad + sweep * t;
+                        let p_x = c.x + r_px * a.cos();
+                        let p_y = c.y + r_px * a.sin();
+                        builder.line_to(Point::new(p_x, p_y));
+                    }
+                });
+                frame.stroke(&path, stroke());
+                frame.fill(&Path::circle(c, 3.0), ghost_colour);
+            }
+        },
+        PadsTool::PlacePolygon => {
+            let verts = &state.place_polygon_vertices;
+            if verts.is_empty() {
+                return;
+            }
+            // Connect every captured vertex with ghost lines, then
+            // a ghost from the last vertex to the cursor, plus a
+            // ghost closing line from the cursor back to the first
+            // vertex so the user can see the loop they're stroking.
+            let path = Path::new(|builder| {
+                let first = cstate.world_to_screen(verts[0]);
+                builder.move_to(first);
+                for v in verts.iter().skip(1) {
+                    builder.line_to(cstate.world_to_screen(*v));
+                }
+                let cur = cstate.world_to_screen(cursor);
+                builder.line_to(cur);
+                if verts.len() >= 2 {
+                    // Closing preview only when there's > 1 vertex
+                    // — a single-vertex stash with cursor doesn't
+                    // need a redundant closing line.
+                    builder.line_to(first);
+                }
+            });
+            frame.stroke(&path, stroke());
+            for v in verts {
+                let p = cstate.world_to_screen(*v);
+                frame.fill(&Path::circle(p, 3.0), ghost_colour);
+            }
+        }
+        _ => {}
     }
 }

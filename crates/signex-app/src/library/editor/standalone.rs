@@ -948,6 +948,8 @@ fn view_footprint_canvas<'a>(
         grid_color: grid,
         cache: &editor.canvas_cache,
         sketch: editor.primitive().sketch.as_ref(),
+        silk_f: editor.primitive().silk_f.as_slice(),
+        silk_b: editor.primitive().silk_b.as_slice(),
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)
