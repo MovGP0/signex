@@ -34,12 +34,12 @@ impl Signex {
 
     pub(crate) fn active_render_snapshot(
         &self,
-    ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
+    ) -> Option<&crate::schematic_runtime::SchematicRenderSnapshot> {
         self.interaction_state.active_canvas().active_snapshot()
     }
 
-    pub(crate) fn active_pcb_snapshot(&self) -> Option<&signex_render::pcb::PcbRenderSnapshot> {
-        self.interaction_state.pcb_canvas.active_snapshot()
+    pub(crate) fn active_pcb_snapshot(&self) -> Option<&PcbBoard> {
+        self.active_pcb()
     }
 
     pub(crate) fn with_active_schematic_session_mut<R>(
@@ -162,7 +162,7 @@ impl Signex {
 
     pub(crate) fn sync_canvas_from_visible_schematic(
         &mut self,
-        invalidation: signex_render::schematic::RenderInvalidation,
+        invalidation: crate::schematic_runtime::RenderInvalidation,
     ) {
         // Active engine drives the render cache — if it's gone the
         // cache is cleared. There is no parked-schematic fallback with
@@ -180,7 +180,7 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .set_render_cache(Some(
-                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
                             engine.document(),
                         ),
                     ));
@@ -194,10 +194,13 @@ impl Signex {
     }
 
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        self.interaction_state.pcb_canvas.set_render_snapshot(
-            self.active_pcb()
-                .map(signex_render::pcb::PcbRenderSnapshot::from_board),
-        );
+        let renderer_snapshot = self
+            .active_pcb()
+            .map(signex_renderer::pcb::PcbSnapshot::from_board);
+
+        self.interaction_state
+            .pcb_canvas
+            .set_renderer_snapshot(renderer_snapshot);
     }
 
     pub(crate) fn open_schematic_tab(
@@ -355,7 +358,7 @@ impl Signex {
 
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
-        self.interaction_state.pcb_canvas.set_render_snapshot(None);
+        self.interaction_state.pcb_canvas.set_renderer_snapshot(None);
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
 
@@ -380,7 +383,7 @@ impl Signex {
         if !self.document_state.has_active_engine() {
             return;
         }
-        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
 
         if fit_to_paper {
             self.interaction_state.active_canvas_mut().fit_to_paper();

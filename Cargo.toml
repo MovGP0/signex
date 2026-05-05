@@ -5,7 +5,8 @@ members = [
     "crates/signex-engine",
     "crates/signex-bom",
     "crates/signex-types",
-    "crates/signex-render",
+    "crates/signex-gfx",
+    "crates/signex-renderer",
     "crates/signex-widgets",
     "crates/signex-erc",
     "crates/signex-erc-dsl",
@@ -15,10 +16,11 @@ members = [
     "crates/signex-library-server",
     "crates/signex-sketch",
     "crates/signex-bake",
+    "crates/signex-3d-model-importer",
 ]
 
 [workspace.package]
-version = "0.18.25"
+version = "0.13.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
@@ -61,11 +63,13 @@ ttf-parser = "0.25"
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
 signex-bom = { path = "crates/signex-bom" }
-signex-render = { path = "crates/signex-render" }
+signex-gfx = { path = "crates/signex-gfx" }
+signex-renderer = { path = "crates/signex-renderer" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-output = { path = "crates/signex-output" }
+signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }

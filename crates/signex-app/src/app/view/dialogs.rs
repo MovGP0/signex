@@ -3243,7 +3243,7 @@ impl super::super::Signex {
 
 #[allow(dead_code)]
 fn preview_annotations(
-    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     _order: AnnotateOrder,
 ) -> Vec<(String, String)> {
     // Power ports (#PWR, #FLG, `is_power`) aren't designators — they're

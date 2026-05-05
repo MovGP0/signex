@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::project::ProjectData;
 use signex_types::theme::ThemeId;
@@ -181,7 +181,7 @@ pub struct UiState {
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
-    pub selection_mode: signex_render::schematic::hit_test::SelectionMode,
+    pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
     /// Net-color override armed from the Active Bar palette. When Some,
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected
