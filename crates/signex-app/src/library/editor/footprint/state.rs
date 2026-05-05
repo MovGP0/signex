@@ -318,6 +318,39 @@ pub struct FootprintEditorState {
     /// aware enforcement lands with the PCB layer system. `Off`
     /// short-circuits all snap priorities to raw cursor today.
     pub snapping_mode: SnappingMode,
+    /// v0.13 — Open active-bar dropdown menu. `None` = no menu open.
+    /// Set by right-clicking (or clicking the chevron on) a tool button
+    /// in the active bar; cleared on item-pick or click-outside.
+    pub active_bar_menu: Option<FpActiveBarMenu>,
+}
+
+/// v0.13 — Altium-style footprint active bar dropdown menus. One per
+/// chevron-bearing button in `pads_active_bar`. The dropdown overlay
+/// reads this enum to render the matching menu body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FpActiveBarMenu {
+    /// Selection Filter — 10 footprint-kind toggle pills.
+    Filter,
+    /// Snap Options — Grids/Guides/Axes pills + 12 snap-object pills.
+    Snap,
+    /// Place / Move / Drag — gesture menu (Move, Drag, Break Track,
+    /// Drag Track End, Move Selection, Move Selection by X Y,
+    /// Rotate Selection, Flip Selection).
+    Place,
+    /// Selection — selection-mode picker (Select overlapped, Select
+    /// next, Lasso Select, Inside Area, Outside Area, Touching
+    /// Rectangle, Touching Line, All on Layer, All, Off Grid Pads,
+    /// Toggle Selection).
+    Select,
+    /// Align — full Altium align/distribute menu.
+    Align,
+    /// 3D Body — 3D Body, Extruded 3D Body.
+    Body3d,
+    /// Text — String, Text Frame.
+    Text,
+    /// Shapes — Line, Arc (Center), Arc (Edge), Arc (Any Angle),
+    /// Full Circle, Fill, Solid Region, Rectangle. Sketch-mode only.
+    Shapes,
 }
 
 /// v0.16.3 — author-controlled defaults for the next placed pad.
@@ -899,6 +932,7 @@ impl FootprintEditorState {
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
+            active_bar_menu: None,
         };
         s.recompute_courtyard();
         s
@@ -941,6 +975,7 @@ impl FootprintEditorState {
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
+            active_bar_menu: None,
         };
         s.recompute_courtyard();
         s
