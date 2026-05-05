@@ -4187,6 +4187,11 @@ fn view_footprint_editor_properties<'a>(
         }
         return scrollable(col).width(Length::Fill).into();
     }
+    // v0.18.14.3 — Altium "Snapping" 3-segment toggle (All Layers /
+    // Current Layer / Off). `Off` short-circuits all priorities in
+    // `snap::snap_cursor`; `CurrentLayer` is a placeholder for the
+    // v0.18.15 layer-aware enforcement.
+    col = render_snapping_mode_row(col, fp, primary, muted, border_c);
     let opts = fp.snap_options;
     let mk_snap_check = move |label: &str,
                               flag: SnapOptionFlag,
@@ -4671,6 +4676,74 @@ fn props_section_header<'a>(label: &str, primary: Color) -> Element<'a, PanelMsg
         .padding([6, 8])
         .width(Length::Fill)
         .into()
+}
+
+/// v0.18.14.3 — Altium "Snapping" 3-segment toggle. `All Layers` is
+/// the default behaviour (current pre-v0.18.14 functionality);
+/// `Current Layer` is a placeholder for the v0.18.15 layer-aware
+/// enforcement; `Off` short-circuits every snap priority in
+/// `snap::snap_cursor` so the cursor returns the raw click.
+fn render_snapping_mode_row<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    primary: Color,
+    muted: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    use crate::library::editor::footprint::state::SnappingMode as M;
+    let current = fp.snapping_mode;
+    let mk_segment =
+        move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
+            let bg = if active {
+                iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+            } else {
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+            };
+            let txt = if active { primary } else { muted };
+            iced::widget::button(
+                container(
+                    text(label)
+                        .size(10)
+                        .color(txt)
+                        .align_x(iced::alignment::Horizontal::Center),
+                )
+                .padding([3, 8])
+                .width(Length::FillPortion(1))
+                .center_x(Length::Fill),
+            )
+            .padding(0)
+            .width(Length::FillPortion(1))
+            .on_press(PanelMsg::FpEditorSetSnappingMode(target))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(bg)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+        };
+    col = col.push(
+        container(text("Snapping").size(10).color(muted))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(
+        container(
+            row![
+                mk_segment("All Layers", M::AllLayers, current == M::AllLayers),
+                mk_segment("Current Layer", M::CurrentLayer, current == M::CurrentLayer),
+                mk_segment("Off", M::Off, current == M::Off),
+            ]
+            .spacing(2)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    col
 }
 
 /// v0.18.14.2 — Snap Options sub-tab strip (Grids / Guides / Axes).

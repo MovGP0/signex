@@ -142,6 +142,14 @@ pub fn snap_cursor(
     state: &FootprintEditorState,
     point_hit: Option<SketchEntityId>,
 ) -> SnapResult {
+    // v0.18.14.3 — Altium "Snapping" 3-state short-circuits all
+    // priorities when set to `Off`. `CurrentLayer` is a placeholder
+    // for the v0.18.15 layer-aware filter; today it behaves like
+    // `AllLayers`.
+    use super::state::SnappingMode;
+    if state.snapping_mode == SnappingMode::Off {
+        return SnapResult::raw(raw);
+    }
     // v0.17.0 — each priority is gated by `state.snap_options.<flag>`.
     // Disabled priorities pass through to the next; if all four are
     // disabled the cursor returns raw (matches Altium's "no snap"
