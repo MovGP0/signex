@@ -480,6 +480,11 @@ pub enum PadsTool {
     /// `Pad` with `kind = NptHole`, no copper / mask / paste, drill
     /// at `next_pad_defaults.size_x_mm` (default 1mm).
     PlaceHole,
+    /// v0.18.15 — silk-layer text placeholder. 1-click drop appends
+    /// an `FpGraphic { kind: Text { position, content: "TEXT", size:
+    /// 1.0 } }` to `footprint.silk_f`. The user can later edit the
+    /// content via the Properties panel (queued).
+    PlaceString,
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point

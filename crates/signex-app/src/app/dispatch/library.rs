@@ -3943,6 +3943,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintAddNewSibling
         | PrimitiveEditorMsg::FootprintAddPad { .. }
         | PrimitiveEditorMsg::FootprintAddHole { .. }
+        | PrimitiveEditorMsg::FootprintAddText { .. }
         | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
@@ -4165,6 +4166,26 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind) => {
             editor.state.selection_filter.toggle(kind);
             editor.canvas_cache.clear();
+        }
+        // v0.18.15 — Place String tool. Appends a silk-layer text
+        // label `FpGraphic { kind: Text { position, content: "TEXT",
+        // size: 1.0 }, stroke_width: 0.0 }` to the active footprint's
+        // `silk_f`. The user edits the content via the Properties
+        // panel later (Properties wiring is queued).
+        PrimitiveEditorMsg::FootprintAddText { x_mm, y_mm } => {
+            let primitive = editor.primitive_mut();
+            primitive
+                .silk_f
+                .push(signex_library::primitive::footprint::FpGraphic {
+                    kind: signex_library::primitive::footprint::FpGraphicKind::Text {
+                        position: [x_mm, y_mm],
+                        content: "TEXT".to_string(),
+                        size: 1.0,
+                    },
+                    stroke_width: 0.0,
+                });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
         }
         // v0.18.12 — Place Hole tool. Drops a non-plated through
         // hole at the cursor (no copper, drill from `next_pad_defaults`).
@@ -5589,6 +5610,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SaveSymbol(_, _)
         | EditorMsg::FootprintAddPad { .. }
         | EditorMsg::FootprintAddHole { .. }
+        | EditorMsg::FootprintAddText { .. }
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape

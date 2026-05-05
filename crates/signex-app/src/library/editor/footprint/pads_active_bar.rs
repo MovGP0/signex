@@ -339,7 +339,20 @@ pub fn items(
             ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),
         ),
         stub("Place Fill", "\u{25A0}"),  // ■
-        stub("Place String", "T"),
+        // v0.18.15 — Place String wired (silk-layer text). 1-click
+        // drop appends a Text FpGraphic to `silk_f` with content
+        // "TEXT" + 1mm size. Right-click / Esc cancels back to Select.
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Glyph("T"),
+            tooltip: "Place String — click empty canvas to drop silk-layer text".into(),
+            enabled: true,
+            selected: pads_tool == PadsTool::PlaceString,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
+            }),
+            ..ActiveBarButton::default()
+        }),
         // v0.18.12 — Place Hole wired. Click empty canvas → drops
         // a Pad with `kind = NptHole` at the cursor (1-click drop,
         // no drag). Right-click / Esc cancels back to Select.

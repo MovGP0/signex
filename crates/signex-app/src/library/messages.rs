@@ -694,6 +694,11 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.18.15 — click-to-place a silk-layer text label.
+    FootprintAddText {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad {
         idx: usize,
@@ -1242,6 +1247,11 @@ pub enum PrimitiveEditorMsg {
     /// `next_pad_defaults.size_x_mm`. The active bar's "Place Hole"
     /// tool fires this on empty-canvas click.
     FootprintAddHole { x_mm: f64, y_mm: f64 },
+    /// v0.18.15 — Click-to-place a silk-layer text label. Appends an
+    /// `FpGraphic { kind: Text { ... } }` to `footprint.silk_f`
+    /// with placeholder content "TEXT" + 1mm size. The user edits
+    /// the content via the Properties panel later.
+    FootprintAddText { x_mm: f64, y_mm: f64 },
     /// v0.18.14 — Selection Filter pill toggle from the unified
     /// active bar. Mirrors the panel-side
     /// `PanelMsg::FpEditorToggleSelectionFilter` but flows through
