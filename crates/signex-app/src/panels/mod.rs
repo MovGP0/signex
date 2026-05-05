@@ -282,6 +282,13 @@ pub struct LibraryNodeInfo {
     /// F29 — same as `symbols` but for `.snxfpt` footprints. Used to
     /// build the `Footprints` subbranch under the library node.
     pub footprints: Vec<String>,
+    /// v0.13 — `true` when this `.snxlib` is currently open as a tab
+    /// (Library Browser). Drives the white open-dot indicator in the
+    /// project tree, matching schematic / pcb sheet open status.
+    pub is_open: bool,
+    /// v0.13 — `true` when the `.snxlib` has unsaved changes. Drives
+    /// the red dirty-dot indicator in the project tree.
+    pub is_dirty: bool,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -1312,6 +1319,9 @@ pub enum PanelMsg {
     FpEditorSetSnapDistance(String),
     /// v0.13 — Altium "Axis Snap Range" numeric input.
     FpEditorSetAxisSnapRange(String),
+    /// v0.13 — Properties panel rename for the active internal
+    /// footprint. Routes to `editor.primitive_mut().name`.
+    FpEditorSetFootprintName(String),
     /// v0.18.13 — Altium Selection Filter pill toggle. The pills
     /// live on the v0.18.14 unified active bar; the Properties
     /// panel surfaces the toggle through this same message.
@@ -2349,7 +2359,12 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
                 filename.clone()
             };
             let icon = TreeIcon::for_path(&filename);
+            // v0.13 — surface the white open-dot / red dirty-dot
+            // indicators on `.snxlib` leaves so library files match
+            // the visual rhythm of `.snxsch` / `.snxpcb` sheets.
             TreeNode::leaf(display, icon)
+                .with_open(lib.is_open)
+                .with_dirty(lib.is_dirty)
         })
         .collect();
 

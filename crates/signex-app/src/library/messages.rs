@@ -1413,6 +1413,10 @@ pub enum PrimitiveEditorMsg {
     FootprintActiveBarSetSketchTool(
         crate::library::editor::footprint::state::SketchTool,
     ),
+    /// Properties panel — rename the active internal footprint. Writes
+    /// `editor.primitive_mut().name` so the rename mirrors into the
+    /// .snxfpt envelope on next save.
+    FootprintSetName(String),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate

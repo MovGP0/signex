@@ -292,7 +292,18 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 ));
                 col = col.push(props_section_header("Footprint", "fp_footprint", collapsed_sections, primary, border_c));
                 if !fp_is_collapsed("fp_footprint", collapsed_sections) {
-                    col = props_kv_row(col, muted, input_bg, input_bdr, "Name", fp.footprint_name.clone());
+                    // Editable Name — text_input bound to the active
+                    // internal footprint's `name` field via
+                    // PanelMsg::FpEditorSetFootprintName.
+                    let name_val = fp.footprint_name.clone();
+                    col = col.push(super::form_edit_row(
+                        "Name",
+                        &name_val,
+                        muted,
+                        PanelMsg::FpEditorSetFootprintName,
+                    ));
+                    let _ = (input_bg, input_bdr); // form_edit_row uses iced default text_input chrome
+
                     col = props_kv_row(col, muted, input_bg, input_bdr, "Version", fp.version.clone());
                     col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
                     col = props_kv_row(col, muted, input_bg, input_bdr, "Pads", fp.pad_count.to_string());

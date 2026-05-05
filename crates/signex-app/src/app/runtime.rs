@@ -344,6 +344,9 @@ impl Signex {
                         } else {
                             (Vec::new(), Vec::new())
                         };
+                        let resolved_clone = resolved.clone();
+                        let is_open = open_paths.contains(&resolved_clone);
+                        let is_dirty = dirty_paths.contains(&resolved_clone);
                         crate::panels::LibraryNodeInfo {
                             display_name,
                             root: resolved,
@@ -351,6 +354,8 @@ impl Signex {
                             missing,
                             symbols,
                             footprints,
+                            is_open,
+                            is_dirty,
                         }
                     })
                     .collect();
@@ -371,6 +376,8 @@ impl Signex {
                         missing: false,
                         symbols: Vec::new(),
                         footprints: Vec::new(),
+                        is_open: false,
+                        is_dirty: false,
                     });
                 }
                 crate::panels::ProjectPanelInfo {
@@ -1221,8 +1228,12 @@ fn build_footprint_editor_panel_ctx(
     // are active; TAB pause adds a pause hint but does not gate the
     // form itself.
     use crate::library::editor::footprint::state::PadsTool;
-    let placement_active = matches!(editor.state.pads_tool, PadsTool::PlacePad)
-        && mode_kind == FootprintModeKind::Pads;
+    // v0.13 — placement_active true for any primitive-placement tool
+    // (Pad / Via / String). TAB pause works uniformly across them.
+    let placement_active = matches!(
+        editor.state.pads_tool,
+        PadsTool::PlacePad | PadsTool::PlaceVia | PadsTool::PlaceString,
+    ) && mode_kind == FootprintModeKind::Pads;
     let placement_paused = editor.state.placement_paused;
     let next_pad_designator_override = editor.state.next_pad_defaults.designator_override.clone();
     let next_pad_size_x_mm = editor.state.next_pad_defaults.size_x_mm;

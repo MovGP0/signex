@@ -251,6 +251,15 @@ impl Signex {
                 self.handle_fp_set_axis_snap_range(value.clone());
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetFootprintName(name) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().name = name.clone();
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSelectionFilter(kind) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     editor.state.selection_filter.toggle(*kind);

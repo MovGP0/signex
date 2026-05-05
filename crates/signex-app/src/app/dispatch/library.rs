@@ -3995,6 +3995,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintActiveBarSelectAll
         | PrimitiveEditorMsg::FootprintActiveBarClearSelection
         | PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(_)
+        | PrimitiveEditorMsg::FootprintSetName(_)
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
@@ -4784,6 +4785,15 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.active_tool = tool;
             editor.state.tool_pending = ToolPending::Idle;
             editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSetName(new_name) => {
+            // Rename the ACTIVE internal footprint. The .snxfpt
+            // envelope holds N footprints; only the user-selected one
+            // mutates. Empty names are accepted but treated as
+            // "unnamed" for breadcrumb / file display purposes.
+            editor.primitive_mut().name = new_name;
+            editor.dirty = true;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {

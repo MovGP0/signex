@@ -3847,6 +3847,14 @@ impl Signex {
             || interaction.tab_context_menu.is_some()
             || interaction.active_bar_menu.is_some()
             || interaction.canvas.placement_paused
+            || self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .and_then(|tab| tab.kind.as_footprint_editor())
+                .and_then(|path| self.document_state.footprint_editors.get(path))
+                .map(|ed| ed.state.placement_paused || ed.state.active_bar_menu.is_some())
+                .unwrap_or(false)
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
@@ -4633,7 +4641,17 @@ impl Signex {
         // with a Resume button. Clicking Resume clears `pre_placement`,
         // un-pauses the canvas, and drops back to the active placement tool
         // so the user can keep dropping objects with the edited properties.
-        if interaction.canvas.placement_paused {
+        // v0.13 — Also fires when a footprint editor's placement is paused
+        // so TAB during pad/via/string placement surfaces the same overlay.
+        let footprint_paused = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|tab| tab.kind.as_footprint_editor())
+            .and_then(|path| self.document_state.footprint_editors.get(path))
+            .map(|ed| ed.state.placement_paused)
+            .unwrap_or(false);
+        if interaction.canvas.placement_paused || footprint_paused {
             let tokens = &document.panel_ctx.tokens;
             let panel_bg = crate::styles::ti(tokens.panel_bg);
             let text_c = crate::styles::ti(tokens.text);
