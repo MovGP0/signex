@@ -4768,6 +4768,10 @@ impl Signex {
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
             let custom_presets = &interaction.custom_filter_presets;
+            // `unified_active_bar::view` already wraps the bar in a
+            // `container().width(Fill).align_x(Center)` via
+            // `view_with_overlay`. Don't double-wrap — that's the
+            // 2 px offset source.
             let bar = crate::library::editor::footprint::unified_active_bar::view(
                 editor,
                 theme_id,
@@ -4778,9 +4782,7 @@ impl Signex {
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
-                    container(bar)
-                        .width(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Center),
+                    bar,
                 ]
                 .into(),
             );
@@ -4797,6 +4799,8 @@ impl Signex {
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 };
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
+            // Symbol active bar's view also wraps via
+            // `view_with_overlay` — don't double-wrap.
             let bar = crate::library::editor::symbol::active_bar::view(
                 editor, theme_id, tokens,
             )
@@ -4804,9 +4808,7 @@ impl Signex {
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
-                    container(bar)
-                        .width(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Center),
+                    bar,
                 ]
                 .into(),
             );
