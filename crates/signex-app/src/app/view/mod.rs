@@ -4768,20 +4768,17 @@ impl Signex {
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
             let custom_presets = &interaction.custom_filter_presets;
-            // Match the schematic's exact chain at this layer site:
-            // `column![Space, container(map_wrapped_bar).width(Fill)
-            // .align_x(Center)]`. `unified_active_bar::view` returns
-            // the raw bar widget (no container) so the .map and the
-            // centring container compose in the same order as the
-            // schematic — keeping `Element::map` INSIDE the container
-            // rather than wrapping it.
-            let bar = crate::library::editor::footprint::unified_active_bar::view(
-                editor,
-                theme_id,
-                tokens,
-                custom_presets,
-            )
-            .map(Message::Library);
+            // Mount BYTE-FOR-BYTE same as the schematic: build items,
+            // call `signex_widgets::active_bar::view` directly, then
+            // `.map(...)` then wrap in container().width(Fill).align_x(
+            // Center). Dropdown overlay is a separate layer pushed
+            // after the bar.
+            let bar_items =
+                crate::library::editor::footprint::unified_active_bar::bar_items(
+                    editor, theme_id, tokens,
+                );
+            let bar = signex_widgets::active_bar::view(bar_items, tokens)
+                .map(Message::Library);
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
@@ -4791,6 +4788,16 @@ impl Signex {
                 ]
                 .into(),
             );
+            if let Some(overlay) =
+                crate::library::editor::footprint::unified_active_bar::dropdown_overlay(
+                    editor,
+                    theme_id,
+                    tokens,
+                    custom_presets,
+                )
+            {
+                layers.push(overlay.map(Message::Library));
+            }
         }
 
         // v0.13 — symbol library editor active bar mounted at the
@@ -4805,11 +4812,13 @@ impl Signex {
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
             // Same byte-for-byte structure as the footprint + schematic
-            // mounts.
-            let bar = crate::library::editor::symbol::active_bar::view(
-                editor, theme_id, tokens,
-            )
-            .map(Message::Library);
+            // mounts. Direct call to `signex_widgets::active_bar::view`
+            // — the unified widget's view_with_overlay path is
+            // bypassed at this site so the chain matches schematic.
+            let bar_items =
+                crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+            let bar = signex_widgets::active_bar::view(bar_items, tokens)
+                .map(Message::Library);
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
@@ -4819,6 +4828,13 @@ impl Signex {
                 ]
                 .into(),
             );
+            if let Some(overlay) =
+                crate::library::editor::symbol::active_bar::dropdown_overlay(
+                    editor, theme_id, tokens,
+                )
+            {
+                layers.push(overlay.map(Message::Library));
+            }
         }
 
         if self.has_active_schematic()
