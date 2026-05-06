@@ -1,13 +1,18 @@
-//! Clean-room schematic runtime used by `signex-app` during Milestone F.
+//! Local schematic runtime used by `signex-app`.
 //!
-//! This module intentionally keeps schematic runtime implementation local.
-//! It provides a local rendering, hit-test, and overlay surface that matches
-//! the app's runtime contract while the full `signex-renderer` cutover lands.
+//! This module keeps schematic rendering, hit-test, and overlay behavior
+//! self-contained inside the app runtime contract.
 
 use iced::advanced::text as advanced_text;
 use iced::alignment;
 use iced::widget::canvas;
 use iced::{Color, Rectangle, Vector};
+use signex_gfx::scene::{DirtyFlags, Scene};
+use signex_renderer::schematic::{
+    JunctionInput, OverlayInputs, SchematicRenderer, SchematicSnapshot as RendererSnapshot,
+    ViewRenderer, WireInput,
+};
+use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, TextProp, TextNote, VAlign,
@@ -165,7 +170,12 @@ pub fn draw_power_port_preview(
     frame.fill(&body, Color { a: color.a * 0.24, ..color });
     frame.stroke(
         &body,
-        canvas::Stroke::default().with_width(1.2).with_color(color),
+        canvas::Stroke::default()
+            .with_width(stroke_px_at_zoom(
+                signex_types::schematic::SCHEMATIC_RENDER_POWER_PORT_STROKE_PX,
+                transform.scale,
+            ))
+            .with_color(color),
     );
 
     if !symbol.reference.is_empty() {
@@ -189,7 +199,7 @@ pub fn render_schematic(
     focus_set: Option<&HashSet<uuid::Uuid>>,
     wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
 ) {
-    draw_wires(
+    render_core_net_geometry_with_renderer(
         frame,
         snapshot,
         transform,
@@ -198,14 +208,142 @@ pub fn render_schematic(
         focus_set,
         wire_color_overrides,
     );
-    draw_buses(frame, snapshot, transform, colors, bounds, focus_set);
-    draw_junctions(frame, snapshot, transform, colors, bounds, focus_set);
     draw_no_connects(frame, snapshot, transform, colors, bounds, focus_set);
     draw_symbols(frame, snapshot, transform, colors, bounds, focus_set);
     draw_child_sheets(frame, snapshot, transform, colors, bounds, focus_set);
     draw_drawings(frame, snapshot, transform, colors, bounds, focus_set);
     draw_labels(frame, snapshot, transform, colors, bounds, focus_set);
     draw_text_notes(frame, snapshot, transform, colors, bounds, focus_set);
+}
+
+fn render_core_net_geometry_with_renderer(
+    frame: &mut canvas::Frame,
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+) {
+    let renderer_snapshot = build_renderer_core_geometry_snapshot(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        wire_color_overrides,
+    );
+    if renderer_snapshot.wires.is_empty() && renderer_snapshot.junctions.is_empty() {
+        return;
+    }
+
+    let mut scene = Scene::default();
+    SchematicRenderer::build_scene(
+        &renderer_snapshot,
+        &ResolvedTheme::from_canvas_colors(*colors),
+        DirtyFlags::LINES | DirtyFlags::CIRCLES,
+        &mut scene,
+    );
+
+    crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+        frame,
+        &scene,
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            scale_px_per_mm: transform.scale,
+            min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+        },
+    );
+}
+
+fn build_renderer_core_geometry_snapshot(
+    snapshot: &SchematicRenderSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    bounds: Rectangle,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    wire_color_overrides: Option<&HashMap<uuid::Uuid, ThemeColor>>,
+) -> RendererSnapshot {
+    let mut wires =
+        Vec::with_capacity(snapshot.wires.len() + snapshot.buses.len() + snapshot.drawings.len());
+    let mut junctions = Vec::with_capacity(snapshot.junctions.len());
+
+    for wire in &snapshot.wires {
+        let p0 = transform.world_to_screen((wire.start.x, wire.start.y));
+        let p1 = transform.world_to_screen((wire.end.x, wire.end.y));
+        if !line_visible(p0, p1, bounds) {
+            continue;
+        }
+
+        let base_color = wire_color_overrides
+            .and_then(|map| map.get(&wire.uuid))
+            .map(to_iced)
+            .unwrap_or_else(|| to_iced(&colors.wire));
+        let color = focus_color(base_color, focus_set, wire.uuid);
+        wires.push(WireInput {
+            id: renderer_id(wire.uuid),
+            p0: [wire.start.x as f32, wire.start.y as f32],
+            p1: [wire.end.x as f32, wire.end.y as f32],
+            width_mm: wire
+                .stroke_width
+                .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
+                as f32,
+            explicit_color: Some(to_rgba(color)),
+        });
+    }
+
+    for bus in &snapshot.buses {
+        let p0 = transform.world_to_screen((bus.start.x, bus.start.y));
+        let p1 = transform.world_to_screen((bus.end.x, bus.end.y));
+        if !line_visible(p0, p1, bounds) {
+            continue;
+        }
+
+        wires.push(WireInput {
+            id: renderer_id(bus.uuid),
+            p0: [bus.start.x as f32, bus.start.y as f32],
+            p1: [bus.end.x as f32, bus.end.y as f32],
+            width_mm: signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM as f32,
+            explicit_color: Some(to_rgba(focus_color(to_iced(&colors.bus), focus_set, bus.uuid))),
+        });
+    }
+
+    for junction in &snapshot.junctions {
+        let center = transform.world_to_screen((junction.position.x, junction.position.y));
+        if !point_visible(center, bounds, 6.0) {
+            continue;
+        }
+
+        junctions.push(JunctionInput {
+            center: [junction.position.x as f32, junction.position.y as f32],
+            radius_mm: (junction.diameter * 0.5)
+                .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
+                as f32,
+            color: to_rgba(focus_color(to_iced(&colors.junction), focus_set, junction.uuid)),
+        });
+    }
+
+    RendererSnapshot {
+        wires,
+        junctions,
+        arcs: Vec::new(),
+        polygons: Vec::new(),
+        labels: Vec::new(),
+        pin_texts: Vec::new(),
+        reference_value_texts: Vec::new(),
+        parameter_texts: Vec::new(),
+        overlays: OverlayInputs::default(),
+        erc_markers: Vec::new(),
+        wire_color_overrides: HashMap::new(),
+    }
+}
+
+fn renderer_id(uuid: uuid::Uuid) -> u64 {
+    uuid.as_u128() as u64
+}
+
+fn to_rgba(color: Color) -> [f32; 4] {
+    [color.r, color.g, color.b, color.a]
 }
 
 pub mod text {
@@ -273,19 +411,35 @@ pub mod selection {
                 let rect_min = iced::Point::new(min.x.min(max.x), min.y.min(max.y));
                 let size = iced::Size::new((max.x - min.x).abs(), (max.y - min.y).abs());
 
-                if size.width <= 2.0 && size.height <= 2.0 {
-                    let marker = canvas::Path::circle(rect_min, 5.5);
+                if size.width <= signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX
+                    && size.height
+                        <= signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX
+                {
+                    let marker = canvas::Path::circle(
+                        rect_min,
+                        signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_RADIUS_PX,
+                    );
                     frame.fill(&marker, fill);
                     frame.stroke(
                         &marker,
-                        canvas::Stroke::default().with_width(1.4).with_color(stroke),
+                        canvas::Stroke::default()
+                            .with_width(stroke_px_at_zoom(
+                                signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_STROKE_PX,
+                                transform.scale,
+                            ))
+                            .with_color(stroke),
                     );
                 } else {
                     let path = canvas::Path::rectangle(rect_min, size);
                     frame.fill(&path, fill);
                     frame.stroke(
                         &path,
-                        canvas::Stroke::default().with_width(1.2).with_color(stroke),
+                        canvas::Stroke::default()
+                            .with_width(stroke_px_at_zoom(
+                                signex_types::schematic::SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX,
+                                transform.scale,
+                            ))
+                            .with_color(stroke),
                     );
                 }
             }
@@ -380,7 +534,10 @@ pub mod hit_test {
             .iter()
             .find(|wire| wire.uuid == uuid)
             .is_some_and(|wire| {
-                let tolerance = wire.stroke_width.max(0.15).max(0.25);
+                let tolerance = wire
+                    .stroke_width
+                    .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
+                    .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
                 point_to_segment_distance(point, wire.start, wire.end) <= tolerance
             })
     }
@@ -390,7 +547,10 @@ pub mod hit_test {
             .buses
             .iter()
             .find(|bus| bus.uuid == uuid)
-            .is_some_and(|bus| point_to_segment_distance(point, bus.start, bus.end) <= 0.55)
+            .is_some_and(|bus| {
+                point_to_segment_distance(point, bus.start, bus.end)
+                    <= signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM
+            })
     }
 }
 
@@ -432,7 +592,10 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         out.push(ItemBound {
             item: SelectedItem::new(wire.uuid, SelectedKind::Wire),
             bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y)
-                .expand(wire.stroke_width.max(0.15)),
+                .expand(
+                    wire.stroke_width
+                        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                ),
             anchor: Point::new((wire.start.x + wire.end.x) * 0.5, (wire.start.y + wire.end.y) * 0.5),
         });
     }
@@ -440,7 +603,8 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for bus in &snapshot.buses {
         out.push(ItemBound {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
-            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y).expand(0.45),
+            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
+                .expand(signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM),
             anchor: Point::new((bus.start.x + bus.end.x) * 0.5, (bus.start.y + bus.end.y) * 0.5),
         });
     }
@@ -578,7 +742,11 @@ fn draw_wires(
             .map(to_iced)
             .unwrap_or_else(|| to_iced(&colors.wire));
         let color = focus_color(base_color, focus_set, wire.uuid);
-        let width = mm_to_px(wire.stroke_width.max(0.15), transform.scale);
+        let width = mm_to_px(
+            wire.stroke_width
+                .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+            transform.scale,
+        );
         let path = canvas::Path::line(p0, p1);
         frame.stroke(
             &path,
@@ -606,7 +774,10 @@ fn draw_buses(
         frame.stroke(
             &path,
             canvas::Stroke::default()
-                .with_width(mm_to_px(0.45, transform.scale))
+                .with_width(mm_to_px(
+                    signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM,
+                    transform.scale,
+                ))
                 .with_color(color),
         );
     }
@@ -626,7 +797,8 @@ fn draw_junctions(
             continue;
         }
         let color = focus_color(to_iced(&colors.junction), focus_set, junction.uuid);
-        let radius_mm = (junction.diameter * 0.5).max(0.35);
+        let radius_mm = (junction.diameter * 0.5)
+            .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM);
         let circle = canvas::Path::circle(center, mm_to_px(radius_mm, transform.scale));
         frame.fill(&circle, color);
     }
@@ -646,7 +818,11 @@ fn draw_no_connects(
             continue;
         }
         let color = focus_color(to_iced(&colors.body), focus_set, item.uuid);
-        let len = mm_to_px(0.7, transform.scale).max(3.0);
+        let len = mm_to_px(
+            signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM,
+            transform.scale,
+        )
+        .max(signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_MIN_HALF_LEN_PX);
         let a = canvas::Path::line(
             iced::Point::new(center.x - len, center.y - len),
             iced::Point::new(center.x + len, center.y + len),
@@ -655,7 +831,12 @@ fn draw_no_connects(
             iced::Point::new(center.x - len, center.y + len),
             iced::Point::new(center.x + len, center.y - len),
         );
-        let stroke = canvas::Stroke::default().with_width(1.2).with_color(color);
+        let stroke = canvas::Stroke::default()
+            .with_width(stroke_px_at_zoom(
+                signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_STROKE_PX,
+                transform.scale,
+            ))
+            .with_color(color);
         frame.stroke(&a, stroke);
         frame.stroke(&b, stroke);
     }
@@ -685,7 +866,12 @@ fn draw_symbols(
         frame.fill(&rect, fill_color);
         frame.stroke(
             &rect,
-            canvas::Stroke::default().with_width(1.1).with_color(stroke_color),
+            canvas::Stroke::default()
+                .with_width(stroke_px_at_zoom(
+                    signex_types::schematic::SCHEMATIC_RENDER_SYMBOL_BODY_STROKE_PX,
+                    transform.scale,
+                ))
+                .with_color(stroke_color),
         );
 
         if !symbol.reference.is_empty() {
@@ -737,7 +923,12 @@ fn draw_child_sheets(
         let rect = canvas::Path::rectangle(rect_min, size);
         frame.stroke(
             &rect,
-            canvas::Stroke::default().with_width(1.0).with_color(color),
+            canvas::Stroke::default()
+                .with_width(stroke_px_at_zoom(
+                    signex_types::schematic::SCHEMATIC_RENDER_CHILD_SHEET_STROKE_PX,
+                    transform.scale,
+                ))
+                .with_color(color),
         );
         draw_rotated_text(
             frame,
@@ -752,7 +943,10 @@ fn draw_child_sheets(
 
         for pin in &sheet.pins {
             let center = transform.world_to_screen((pin.position.x, pin.position.y));
-            let mark = canvas::Path::circle(center, 3.0);
+            let mark = canvas::Path::circle(
+                center,
+                signex_types::schematic::SCHEMATIC_RENDER_CHILD_SHEET_PIN_RADIUS_PX,
+            );
             frame.fill(&mark, Color { a: 0.3, ..color });
         }
     }
@@ -801,7 +995,10 @@ fn draw_drawings(
                 frame.stroke(
                     &path,
                     canvas::Stroke::default()
-                        .with_width(mm_to_px(width.max(0.15), transform.scale))
+                        .with_width(mm_to_px(
+                            width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                            transform.scale,
+                        ))
                         .with_color(stroke),
                 );
             }
@@ -824,7 +1021,10 @@ fn draw_drawings(
                 frame.stroke(
                     &path,
                     canvas::Stroke::default()
-                        .with_width(mm_to_px(width.max(0.15), transform.scale))
+                        .with_width(mm_to_px(
+                            width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                            transform.scale,
+                        ))
                         .with_color(resolve_stroke_color(stroke_color, base_color)),
                 );
             }
@@ -837,14 +1037,21 @@ fn draw_drawings(
                 ..
             } => {
                 let c = transform.world_to_screen((center.x, center.y));
-                let path = canvas::Path::circle(c, mm_to_px(*radius, transform.scale).max(0.7));
+                let path = canvas::Path::circle(
+                    c,
+                    mm_to_px(*radius, transform.scale)
+                        .max(signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_CIRCLE_RADIUS_PX),
+                );
                 if let Some(fill_color) = fill_color_for(*fill, stroke_color, colors) {
                     frame.fill(&path, fill_color);
                 }
                 frame.stroke(
                     &path,
                     canvas::Stroke::default()
-                        .with_width(mm_to_px(width.max(0.15), transform.scale))
+                        .with_width(mm_to_px(
+                            width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                            transform.scale,
+                        ))
                         .with_color(resolve_stroke_color(stroke_color, base_color)),
                 );
             }
@@ -873,7 +1080,8 @@ fn draw_drawings(
                     let path = canvas::Path::new(|builder| {
                         builder.arc(canvas::path::Arc {
                             center,
-                            radius: mm_to_px(r, transform.scale).max(0.8),
+                            radius: mm_to_px(r, transform.scale)
+                                .max(signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX),
                             start_angle: iced::Radians(start_angle as f32),
                             end_angle: iced::Radians(end_angle as f32),
                         });
@@ -881,7 +1089,10 @@ fn draw_drawings(
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_width(mm_to_px(width.max(0.15), transform.scale))
+                            .with_width(mm_to_px(
+                                width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                                transform.scale,
+                            ))
                             .with_color(resolve_stroke_color(stroke_color, base_color)),
                     );
                 } else {
@@ -896,7 +1107,10 @@ fn draw_drawings(
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_width(mm_to_px(width.max(0.15), transform.scale))
+                            .with_width(mm_to_px(
+                                width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                                transform.scale,
+                            ))
                             .with_color(resolve_stroke_color(stroke_color, base_color)),
                     );
                 }
@@ -929,7 +1143,10 @@ fn draw_drawings(
                 frame.stroke(
                     &path,
                     canvas::Stroke::default()
-                        .with_width(mm_to_px(width.max(0.15), transform.scale))
+                        .with_width(mm_to_px(
+                            width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+                            transform.scale,
+                        ))
                         .with_color(resolve_stroke_color(stroke_color, base_color)),
                 );
             }
@@ -1027,7 +1244,10 @@ fn draw_label_impl(
         frame.stroke(
             &path,
             canvas::Stroke::default()
-                .with_width(1.0)
+                .with_width(stroke_px_at_zoom(
+                    signex_types::schematic::SCHEMATIC_RENDER_LABEL_GLYPH_STROKE_PX,
+                    transform.scale,
+                ))
                 .with_color(stroke_color),
         );
 
@@ -1177,7 +1397,15 @@ fn text_size_px(font_size_mm: f64, zoom: f32) -> f32 {
 }
 
 fn mm_to_px(mm: f64, scale: f32) -> f32 {
-    (mm.max(0.0) as f32 * scale).max(0.6)
+    (mm.max(0.0) as f32 * scale).max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX)
+}
+
+fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
+    let zoom_factor = (scale / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE).max(0.0);
+    let scaled = base_width_px_at_100 * zoom_factor;
+    let max_stroke =
+        base_width_px_at_100 * signex_types::schematic::SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER;
+    scaled.clamp(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX, max_stroke)
 }
 
 fn to_iced(color: &ThemeColor) -> Color {

@@ -27,6 +27,7 @@ pub mod panels;
 pub mod pcb_canvas;
 pub mod preferences;
 pub mod render_config;
+pub mod renderer_scene_canvas;
 pub mod schematic_runtime;
 pub mod shortcuts;
 pub mod status_bar;

@@ -30,7 +30,14 @@ use iced::Theme;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
+use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_library::{Symbol, SymbolGraphicKind, SymbolPin};
+use signex_renderer::schematic::{
+    ArcInput, OverlayInputs, PolygonInput, SchematicRenderer,
+    SchematicSnapshot as RendererSnapshot, ViewRenderer, WireInput,
+};
+use signex_renderer::theme::ResolvedTheme;
+use std::collections::HashMap;
 
 use super::state::{self, GraphicHandle, SymbolSelection};
 
@@ -246,59 +253,90 @@ impl<'a> SymbolCanvas<'a> {
         pin.part_number == 0 || pin.part_number == self.active_part
     }
 
-    /// Body rectangle: derived from the first `SymbolGraphicKind::Rectangle`
-    /// in `symbol.graphics`, or a sensible default.
-    fn body_rect(&self) -> (f64, f64, f64, f64) {
+    /// Body rectangle, when present, derived from the first
+    /// `SymbolGraphicKind::Rectangle` in `symbol.graphics`.
+    fn body_rect(&self) -> Option<(f64, f64, f64, f64)> {
         for g in &self.symbol.graphics {
             if let SymbolGraphicKind::Rectangle { from, to } = &g.kind {
-                return (from[0], from[1], to[0], to[1]);
+                return Some((from[0], from[1], to[0], to[1]));
             }
         }
-        (-5.08, -2.54, 5.08, 2.54)
+        None
     }
 
-    /// Bounding box around the body + every pin + every graphic,
-    /// with a generous pad. Used by `Fit` (Home key) to centre the
-    /// camera on the symbol's content.
+    /// Bounding box around every visible symbol entity.
+    ///
+    /// If the symbol has no pins and no graphics, return a tiny box
+    /// around world origin so Fit keeps the origin marker centered.
     pub(crate) fn bbox(&self) -> (f64, f64, f64, f64) {
-        let (bx0, by0, bx1, by1) = self.body_rect();
-        let mut min_x = bx0.min(bx1) - 5.08;
-        let mut min_y = by0.min(by1) - 5.08;
-        let mut max_x = bx0.max(bx1) + 5.08;
-        let mut max_y = by0.max(by1) + 5.08;
-        for pin in &self.symbol.pins {
-            min_x = min_x.min(pin.position[0] - 1.27);
-            min_y = min_y.min(pin.position[1] - 1.27);
-            max_x = max_x.max(pin.position[0] + pin.length + 1.27);
-            max_y = max_y.max(pin.position[1] + 1.27);
+        let mut bounds: Option<(f64, f64, f64, f64)> = None;
+        let include_rect =
+            |bounds: &mut Option<(f64, f64, f64, f64)>, x0: f64, y0: f64, x1: f64, y1: f64| {
+                let rx0 = x0.min(x1);
+                let ry0 = y0.min(y1);
+                let rx1 = x0.max(x1);
+                let ry1 = y0.max(y1);
+                if let Some((min_x, min_y, max_x, max_y)) = bounds.as_mut() {
+                    *min_x = (*min_x).min(rx0);
+                    *min_y = (*min_y).min(ry0);
+                    *max_x = (*max_x).max(rx1);
+                    *max_y = (*max_y).max(ry1);
+                } else {
+                    *bounds = Some((rx0, ry0, rx1, ry1));
+                }
+            };
+
+        if let Some((bx0, by0, bx1, by1)) = self.body_rect() {
+            include_rect(
+                &mut bounds,
+                bx0.min(bx1) - 5.08,
+                by0.min(by1) - 5.08,
+                bx0.max(bx1) + 5.08,
+                by0.max(by1) + 5.08,
+            );
         }
+
+        for pin in &self.symbol.pins {
+            include_rect(
+                &mut bounds,
+                pin.position[0] - 1.27,
+                pin.position[1] - 1.27,
+                pin.position[0] + pin.length + 1.27,
+                pin.position[1] + 1.27,
+            );
+        }
+
         // Include every graphic's extent so Fit doesn't leave shapes
         // off-screen.
         for g in &self.symbol.graphics {
             match &g.kind {
                 SymbolGraphicKind::Rectangle { from, to }
                 | SymbolGraphicKind::Line { from, to } => {
-                    min_x = min_x.min(from[0]).min(to[0]);
-                    min_y = min_y.min(from[1]).min(to[1]);
-                    max_x = max_x.max(from[0]).max(to[0]);
-                    max_y = max_y.max(from[1]).max(to[1]);
+                    include_rect(&mut bounds, from[0], from[1], to[0], to[1]);
                 }
                 SymbolGraphicKind::Circle { center, radius }
                 | SymbolGraphicKind::Arc { center, radius, .. } => {
-                    min_x = min_x.min(center[0] - radius);
-                    min_y = min_y.min(center[1] - radius);
-                    max_x = max_x.max(center[0] + radius);
-                    max_y = max_y.max(center[1] + radius);
+                    include_rect(
+                        &mut bounds,
+                        center[0] - radius,
+                        center[1] - radius,
+                        center[0] + radius,
+                        center[1] + radius,
+                    );
                 }
                 SymbolGraphicKind::Text { position, size, .. } => {
-                    min_x = min_x.min(position[0] - size);
-                    min_y = min_y.min(position[1] - size);
-                    max_x = max_x.max(position[0] + size);
-                    max_y = max_y.max(position[1] + size);
+                    include_rect(
+                        &mut bounds,
+                        position[0] - size,
+                        position[1] - size,
+                        position[0] + size,
+                        position[1] + size,
+                    );
                 }
             }
         }
-        (min_x, min_y, max_x, max_y)
+
+        bounds.unwrap_or((-1.27, -1.27, 1.27, 1.27))
     }
 }
 
@@ -348,6 +386,78 @@ impl SymbolPalette {
 /// for visual precision, larger for commit". Future toolbar work
 /// could expose a separate snap-grid picker.
 const SNAP_GRID_MM: f64 = 1.27;
+const ORIGIN_MARKER_MM: f32 = 1.27;
+const MM_PER_EM: f32 = 0.72;
+const SYMBOL_AXIS_STROKE_PX_AT_100: f32 = 1.0;
+const SYMBOL_GRAPHIC_STROKE_PX_AT_100: f32 = 1.5;
+const SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
+const SYMBOL_RECT_STROKE_PX_AT_100: f32 = 2.0;
+const SYMBOL_RECT_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
+const SYMBOL_HANDLE_STROKE_PX_AT_100: f32 = 1.0;
+const SYMBOL_PIN_SELECTION_HALO_STROKE_PX_AT_100: f32 = 1.0;
+
+#[derive(Debug, Clone, Copy)]
+struct PinTextLayout {
+    // Pin number (physical number) on/above the pin line.
+    number_size_mm: f32,
+    pin_pitch_mm: f32,
+    number_offset_ratio_of_pitch: f32,
+    number_along_ratio: f32,
+    // Pin name label near the symbol body edge.
+    name_size_mm: f32,
+    name_offset_x_mm: f32,
+    name_offset_y_mm: f32,
+}
+
+const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
+    number_size_mm: 1.27,
+    pin_pitch_mm: 2.54,
+    number_offset_ratio_of_pitch: 0.10,
+    number_along_ratio: 0.50,
+    name_size_mm: 1.27,
+    name_offset_x_mm: 0.50,
+    name_offset_y_mm: 0.00,
+};
+
+fn text_size_px_from_mm(size_mm: f32, scale: f32) -> f32 {
+    let em_mm = size_mm.max(0.1) / MM_PER_EM;
+    (em_mm * scale).clamp(2.0, 96.0)
+}
+
+fn mm_to_px(mm: f32, scale: f32) -> f32 {
+    (mm.max(0.0) * scale).clamp(0.0, 256.0)
+}
+
+fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
+    let zoom_factor = (scale / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE).max(0.0);
+    let scaled = base_width_px_at_100 * zoom_factor;
+    let max_stroke =
+        base_width_px_at_100 * signex_types::schematic::SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER;
+    scaled.clamp(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX, max_stroke)
+}
+
+fn px_at_100_to_mm(width_px: f32) -> f32 {
+    (width_px / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE)
+        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32)
+}
+
+fn to_rgba(color: Color) -> [f32; 4] {
+    [color.r, color.g, color.b, color.a]
+}
+
+fn circle_vertices(center: [f64; 2], radius: f32, segments: usize) -> Vec<[f32; 2]> {
+    let segment_count = segments.max(12);
+    let cx = center[0] as f32;
+    let cy = center[1] as f32;
+    let r = radius.max(0.01);
+
+    (0..segment_count)
+        .map(|step| {
+            let theta = (step as f32 / segment_count as f32) * std::f32::consts::TAU;
+            [cx + theta.cos() * r, cy + theta.sin() * r]
+        })
+        .collect()
+}
 
 /// Convert screen coords → world-mm via the camera, then snap to
 /// the symbol-canvas grid. The canvas's Standard y-flip happens at
@@ -598,33 +708,38 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
         }
 
-        // Axis lines through world (0, 0) — Altium-style centre
-        // crosshair so the symbol's anchor is always visible. Drawn
-        // edge-to-edge across the visible viewport in a low-alpha
-        // sheet-aware colour.
+        // Origin marker at world (0, 0) — no default box/pin when a
+        // symbol is created, so this gives a stable visual anchor.
         let origin = w2s(0.0, 0.0);
-        if origin.x >= -1.0 && origin.x <= bounds.width + 1.0 {
-            let path = canvas::Path::line(
-                iced::Point::new(origin.x, 0.0),
-                iced::Point::new(origin.x, bounds.height),
+        let marker_half = text_size_px_from_mm(ORIGIN_MARKER_MM, scale).clamp(4.0, 18.0);
+        if origin.x >= -marker_half
+            && origin.x <= bounds.width + marker_half
+            && origin.y >= -marker_half
+            && origin.y <= bounds.height + marker_half
+        {
+            let h = canvas::Path::line(
+                iced::Point::new(origin.x - marker_half, origin.y),
+                iced::Point::new(origin.x + marker_half, origin.y),
+            );
+            let v = canvas::Path::line(
+                iced::Point::new(origin.x, origin.y - marker_half),
+                iced::Point::new(origin.x, origin.y + marker_half),
             );
             frame.stroke(
-                &path,
+                &h,
                 canvas::Stroke::default()
                     .with_color(self.axis_color)
-                    .with_width(1.0),
-            );
-        }
-        if origin.y >= -1.0 && origin.y <= bounds.height + 1.0 {
-            let path = canvas::Path::line(
-                iced::Point::new(0.0, origin.y),
-                iced::Point::new(bounds.width, origin.y),
+                    .with_width(stroke_px_at_zoom(SYMBOL_AXIS_STROKE_PX_AT_100, scale)),
             );
             frame.stroke(
-                &path,
+                &v,
                 canvas::Stroke::default()
                     .with_color(self.axis_color)
-                    .with_width(1.0),
+                    .with_width(stroke_px_at_zoom(SYMBOL_AXIS_STROKE_PX_AT_100, scale)),
+            );
+            frame.fill(
+                &canvas::Path::circle(origin, (marker_half * 0.14).clamp(1.0, 2.5)),
+                self.axis_color,
             );
         }
 
@@ -638,139 +753,33 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             Some(SymbolSelection::Graphic(i)) => Some(i),
             _ => None,
         };
-        let mut body_drawn = false;
+        self.draw_graphics_with_renderer(&mut frame, selected_graphic_idx, scale);
+
+        // Keep text graphics in the existing path for now so placement
+        // and typography behavior remain unchanged while geometry
+        // cutover is in progress.
         for (i, g) in self.symbol.graphics.iter().enumerate() {
             let is_selected = selected_graphic_idx == Some(i);
-            let stroke_color = if is_selected {
-                self.selected_color
-            } else {
-                self.body_color
-            };
-            let stroke_w = if is_selected { 2.5 } else { 1.5 };
-            // Rectangle defaults to a thicker stroke than other
-            // outline graphics so the "body" reads cleanly; selection
-            // overrides both with the accent stroke width.
-            let rect_w = if is_selected { 2.5 } else { 2.0 };
-            // Text colour follows the same selection rule; body uses
-            // the regular text colour, selected uses the accent.
             let text_c = if is_selected {
                 self.selected_color
             } else {
                 self.text_color
             };
-            match &g.kind {
-                SymbolGraphicKind::Rectangle { from, to } => {
-                    let p1 = w2s(from[0], from[1]);
-                    let p2 = w2s(to[0], to[1]);
-                    let top_left = iced::Point::new(p1.x.min(p2.x), p1.y.min(p2.y));
-                    let size = Size::new((p2.x - p1.x).abs(), (p2.y - p1.y).abs());
-                    let path = canvas::Path::rectangle(top_left, size);
-                    if !body_drawn {
-                        frame.fill(
-                            &path,
-                            Color {
-                                a: 0.16,
-                                ..self.body_color
-                            },
-                        );
-                        body_drawn = true;
-                    }
-                    frame.stroke(
-                        &path,
-                        canvas::Stroke::default()
-                            .with_color(stroke_color)
-                            .with_width(rect_w),
-                    );
-                }
-                SymbolGraphicKind::Line { from, to } => {
-                    let mut builder = canvas::path::Builder::new();
-                    builder.move_to(w2s(from[0], from[1]));
-                    builder.line_to(w2s(to[0], to[1]));
-                    let path = builder.build();
-                    frame.stroke(
-                        &path,
-                        canvas::Stroke::default()
-                            .with_color(stroke_color)
-                            .with_width(stroke_w),
-                    );
-                }
-                SymbolGraphicKind::Circle { center, radius } => {
-                    let p = w2s(center[0], center[1]);
-                    let path = canvas::Path::circle(p, (*radius as f32) * scale);
-                    frame.stroke(
-                        &path,
-                        canvas::Stroke::default()
-                            .with_color(stroke_color)
-                            .with_width(stroke_w),
-                    );
-                }
-                SymbolGraphicKind::Arc {
-                    center,
-                    radius,
-                    start_deg,
-                    end_deg,
-                } => {
-                    let p = w2s(center[0], center[1]);
-                    let r = (*radius as f32) * scale;
-                    let s = (*start_deg as f32).to_radians();
-                    let e = (*end_deg as f32).to_radians();
-                    let mut builder = canvas::path::Builder::new();
-                    builder.arc(canvas::path::Arc {
-                        center: p,
-                        radius: r,
-                        start_angle: iced::Radians(s),
-                        end_angle: iced::Radians(e),
-                    });
-                    let path = builder.build();
-                    frame.stroke(
-                        &path,
-                        canvas::Stroke::default()
-                            .with_color(stroke_color)
-                            .with_width(stroke_w),
-                    );
-                }
-                SymbolGraphicKind::Text {
-                    position,
-                    content,
-                    size: text_size,
-                } => {
-                    frame.fill_text(canvas::Text {
-                        content: content.clone(),
-                        position: w2s(position[0], position[1]),
-                        size: ((*text_size as f32) * scale * 0.5).into(),
-                        color: text_c,
-                        ..canvas::Text::default()
-                    });
-                }
+            if let SymbolGraphicKind::Text {
+                position,
+                content,
+                size: text_size,
+            } = &g.kind
+            {
+                frame.fill_text(canvas::Text {
+                    content: content.clone(),
+                    position: w2s(position[0], position[1]),
+                    size: text_size_px_from_mm(*text_size as f32, scale).into(),
+                    color: text_c,
+                    font: crate::render_config::IOSEVKA,
+                    ..canvas::Text::default()
+                });
             }
-        }
-
-        // No graphics → fall back to a default body rectangle so the
-        // user sees the symbol bounds while the body geometry is still
-        // empty.
-        if !body_drawn {
-            let (bx0, by0, bx1, by1) = self.body_rect();
-            let p1 = w2s(bx0, by0);
-            let p2 = w2s(bx1, by1);
-            let top_left = iced::Point::new(p1.x.min(p2.x), p1.y.min(p2.y));
-            let size = Size::new((p2.x - p1.x).abs(), (p2.y - p1.y).abs());
-            let path = canvas::Path::rectangle(top_left, size);
-            frame.fill(
-                &path,
-                Color {
-                    a: 0.10,
-                    ..self.body_color
-                },
-            );
-            frame.stroke(
-                &path,
-                canvas::Stroke::default()
-                    .with_color(Color {
-                        a: 0.4,
-                        ..self.body_color
-                    })
-                    .with_width(1.0),
-            );
         }
 
         // Pins — filtered by active_part. Pins with part_number == 0
@@ -799,7 +808,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         &path,
                         canvas::Stroke::default()
                             .with_color(self.selected_color)
-                            .with_width(1.0),
+                            .with_width(stroke_px_at_zoom(SYMBOL_HANDLE_STROKE_PX_AT_100, scale)),
                     );
                 }
             }
@@ -823,6 +832,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 a: 0.55,
                 ..self.text_color
             },
+            font: crate::render_config::IOSEVKA,
             ..canvas::Text::default()
         });
 
@@ -831,11 +841,146 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 }
 
 impl<'a> SymbolCanvas<'a> {
+    fn draw_graphics_with_renderer(
+        &self,
+        frame: &mut canvas::Frame,
+        selected_graphic_idx: Option<usize>,
+        scale: f32,
+    ) {
+        let snapshot = self.build_graphics_renderer_snapshot(selected_graphic_idx);
+        if snapshot.wires.is_empty() && snapshot.arcs.is_empty() && snapshot.polygons.is_empty() {
+            return;
+        }
+
+        let mut scene = Scene::default();
+        SchematicRenderer::build_scene(
+            &snapshot,
+            &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
+                signex_types::theme::ThemeId::Signex,
+            )),
+            DirtyFlags::LINES | DirtyFlags::ARCS | DirtyFlags::POLYGONS,
+            &mut scene,
+        );
+
+        let ox = self.camera.offset.x;
+        let oy = self.camera.offset.y;
+        crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+            frame,
+            &scene,
+            |point| iced::Point::new(ox + point[0] * scale, oy - point[1] * scale),
+            crate::renderer_scene_canvas::SceneDrawOptions {
+                scale_px_per_mm: scale,
+                min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+            },
+        );
+    }
+
+    fn build_graphics_renderer_snapshot(
+        &self,
+        selected_graphic_idx: Option<usize>,
+    ) -> RendererSnapshot {
+        let mut wires = Vec::new();
+        let mut arcs = Vec::new();
+        let mut polygons = Vec::new();
+
+        let mut body_drawn = false;
+        for (i, g) in self.symbol.graphics.iter().enumerate() {
+            let is_selected = selected_graphic_idx == Some(i);
+            let stroke_color = if is_selected {
+                self.selected_color
+            } else {
+                self.body_color
+            };
+            let stroke_w = if is_selected {
+                SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100
+            } else {
+                SYMBOL_GRAPHIC_STROKE_PX_AT_100
+            };
+            let rect_w = if is_selected {
+                SYMBOL_RECT_SELECTED_STROKE_PX_AT_100
+            } else {
+                SYMBOL_RECT_STROKE_PX_AT_100
+            };
+
+            match &g.kind {
+                SymbolGraphicKind::Rectangle { from, to } => {
+                    let x0 = from[0] as f32;
+                    let y0 = from[1] as f32;
+                    let x1 = to[0] as f32;
+                    let y1 = to[1] as f32;
+                    let fill = if !body_drawn {
+                        body_drawn = true;
+                        to_rgba(Color {
+                            a: 0.16,
+                            ..self.body_color
+                        })
+                    } else {
+                        [0.0, 0.0, 0.0, 0.0]
+                    };
+
+                    polygons.push(PolygonInput {
+                        vertices: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
+                        fill_color: fill,
+                        stroke_color: Some(to_rgba(stroke_color)),
+                        stroke_width_mm: px_at_100_to_mm(rect_w),
+                    });
+                }
+                SymbolGraphicKind::Line { from, to } => {
+                    wires.push(WireInput {
+                        id: i as u64,
+                        p0: [from[0] as f32, from[1] as f32],
+                        p1: [to[0] as f32, to[1] as f32],
+                        width_mm: px_at_100_to_mm(stroke_w),
+                        explicit_color: Some(to_rgba(stroke_color)),
+                    });
+                }
+                SymbolGraphicKind::Circle { center, radius } => {
+                    polygons.push(PolygonInput {
+                        vertices: circle_vertices(*center, *radius as f32, 40),
+                        fill_color: [0.0, 0.0, 0.0, 0.0],
+                        stroke_color: Some(to_rgba(stroke_color)),
+                        stroke_width_mm: px_at_100_to_mm(stroke_w),
+                    });
+                }
+                SymbolGraphicKind::Arc {
+                    center,
+                    radius,
+                    start_deg,
+                    end_deg,
+                } => {
+                    arcs.push(ArcInput {
+                        center: [center[0] as f32, center[1] as f32],
+                        radius_mm: *radius as f32,
+                        start_angle_rad: (*start_deg as f32).to_radians(),
+                        end_angle_rad: (*end_deg as f32).to_radians(),
+                        width_mm: px_at_100_to_mm(stroke_w),
+                        color: to_rgba(stroke_color),
+                    });
+                }
+                SymbolGraphicKind::Text { .. } => {}
+            }
+        }
+
+        RendererSnapshot {
+            wires,
+            junctions: Vec::new(),
+            arcs,
+            polygons,
+            labels: Vec::new(),
+            pin_texts: Vec::new(),
+            reference_value_texts: Vec::new(),
+            parameter_texts: Vec::new(),
+            overlays: OverlayInputs::default(),
+            erc_markers: Vec::new(),
+            wire_color_overrides: HashMap::new(),
+        }
+    }
+
     fn draw_pin<F>(
         &self,
         frame: &mut canvas::Frame,
         w2s: &F,
-        _scale: f32,
+        scale: f32,
         pin: &SymbolPin,
         idx: usize,
     ) where
@@ -859,12 +1004,38 @@ impl<'a> SymbolCanvas<'a> {
         } else {
             self.pin_color
         };
+        let number_size = text_size_px_from_mm(PIN_TEXT_LAYOUT.number_size_mm, scale);
+        let name_size = text_size_px_from_mm(PIN_TEXT_LAYOUT.name_size_mm, scale);
+        let name_x_offset = mm_to_px(PIN_TEXT_LAYOUT.name_offset_x_mm, scale);
+        let name_y_offset = mm_to_px(PIN_TEXT_LAYOUT.name_offset_y_mm, scale);
+
+        // Pin number placement is parametrized to stay just above
+        // the pin segment without touching the row above.
+        let seg_dx = body_end.x - tip.x;
+        let seg_dy = body_end.y - tip.y;
+        let seg_len = (seg_dx * seg_dx + seg_dy * seg_dy).sqrt().max(1e-6);
+        let tx = seg_dx / seg_len;
+        let ty = seg_dy / seg_len;
+        let (n1x, n1y) = (-ty, tx);
+        let (n2x, n2y) = (ty, -tx);
+        let (nx, ny) = if n1y <= n2y { (n1x, n1y) } else { (n2x, n2y) };
+        let along_px = seg_len * PIN_TEXT_LAYOUT.number_along_ratio.clamp(0.0, 1.0);
+        let number_offset_mm =
+            PIN_TEXT_LAYOUT.pin_pitch_mm * PIN_TEXT_LAYOUT.number_offset_ratio_of_pitch;
+        let number_offset_px = mm_to_px(number_offset_mm, scale);
 
         frame.stroke(
             &canvas::Path::line(tip, body_end),
             canvas::Stroke::default()
                 .with_color(stroke_color)
-                .with_width(if selected { 2.5 } else { 1.5 }),
+                .with_width(stroke_px_at_zoom(
+                    if selected {
+                        signex_types::schematic::PIN_STROKE_SELECTED_PX
+                    } else {
+                        signex_types::schematic::PIN_STROKE_PX
+                    },
+                    scale,
+                )),
         );
         // Selection halo.
         if selected {
@@ -872,33 +1043,44 @@ impl<'a> SymbolCanvas<'a> {
                 &canvas::Path::circle(tip, 5.0),
                 canvas::Stroke::default()
                     .with_color(self.selected_color)
-                    .with_width(1.0),
+                    .with_width(stroke_px_at_zoom(
+                        SYMBOL_PIN_SELECTION_HALO_STROKE_PX_AT_100,
+                        scale,
+                    )),
             );
         }
         // Marker dot at the electrical end.
         frame.fill(&canvas::Path::circle(tip, 2.5), stroke_color);
 
-        // Pin number — between body_end and tip.
-        let num_pos =
-            iced::Point::new((tip.x + body_end.x) * 0.5, (tip.y + body_end.y) * 0.5 - 8.0);
+        // Pin number — on the pin line but lifted upwards (screen-space)
+        // via the normal vector, with configurable along-line anchor.
+        let num_pos = iced::Point::new(
+            tip.x + tx * along_px + nx * number_offset_px,
+            tip.y + ty * along_px + ny * number_offset_px,
+        );
         frame.fill_text(canvas::Text {
             content: pin.number.clone(),
             position: num_pos,
-            size: 10.0.into(),
+            size: number_size.into(),
             color: self.text_color,
+            font: crate::render_config::IOSEVKA,
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Bottom,
             ..canvas::Text::default()
         });
 
         // Pin name — past the body_end so the body looks tidy.
-        let name_pos = iced::Point::new(body_end.x + 4.0, body_end.y - 6.0);
+        let name_pos = iced::Point::new(body_end.x + name_x_offset, body_end.y - name_y_offset);
         frame.fill_text(canvas::Text {
             content: pin.name.clone(),
             position: name_pos,
-            size: 10.0.into(),
+            size: name_size.into(),
             color: Color {
                 a: 0.85,
                 ..self.text_color
             },
+            font: crate::render_config::IOSEVKA,
+            align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()
         });
     }
