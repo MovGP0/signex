@@ -169,18 +169,17 @@ where
     M: 'static + Clone,
     K: 'static + Copy,
 {
-    // The bar centred at the top of its parent (a canvas Stack).
-    // Matches the schematic / footprint mount pattern: 5 px Space
-    // pushes the bar down to the canvas's effective top + 5 px,
-    // staying pixel-aligned with the schematic active bar.
+    // The bar centred horizontally at the top of its parent layer.
+    // The CALLER owns the vertical offset — when this widget mounts
+    // at the app-view layers Stack alongside the schematic active
+    // bar, the caller wraps the result in a `column![Space::height(
+    // y_offset + 4.0), result]` so all editors share identical
+    // window-absolute coordinates.
     let bar = view(items, tokens);
-    let bar_layer = iced::widget::column![
-        iced::widget::Space::new().height(Length::Fixed(5.0)),
-        container(bar)
-            .width(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center),
-    ]
-    .width(Length::Fill);
+    let bar_layer: Element<'a, M> = container(bar)
+        .width(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Center)
+        .into();
 
     let Some(menu) = open_menu else {
         return bar_layer.into();

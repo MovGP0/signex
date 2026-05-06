@@ -4732,6 +4732,67 @@ impl Signex {
             );
         }
 
+        // v0.13 — footprint editor active bar mounted at the SAME
+        // app-view layer as the schematic's. Earlier the bar lived
+        // inside the standalone editor body's canvas Stack, which
+        // gave it canvas-relative coordinates that drifted from the
+        // schematic's window-absolute coordinates. Mounting both at
+        // the layers Stack with identical `Space::height(y_offset +
+        // 4.0)` math guarantees pixel-identical screen y.
+        if let Some(active_tab) =
+            self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+            && let Some(editor) = self.document_state.footprint_editors.get(path)
+        {
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let theme_id = self.ui_state.theme_id;
+            let tokens = &document.panel_ctx.tokens;
+            let custom_presets = &interaction.custom_filter_presets;
+            let bar = crate::library::editor::footprint::unified_active_bar::view(
+                editor,
+                theme_id,
+                tokens,
+                custom_presets,
+            )
+            .map(Message::Library);
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
+            );
+        }
+
+        // v0.13 — symbol library editor active bar mounted at the
+        // SAME app-view layer as the schematic / footprint bars.
+        if let Some(active_tab) =
+            self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor()
+            && let Some(editor) = self.document_state.symbol_editors.get(path)
+        {
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let theme_id = self.ui_state.theme_id;
+            let tokens = &document.panel_ctx.tokens;
+            let bar = crate::library::editor::symbol::active_bar::view(
+                editor, theme_id, tokens,
+            )
+            .map(Message::Library);
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
+            );
+        }
+
         if self.has_active_schematic()
             && let Some(ref edit_state) = interaction.editing_text
         {
