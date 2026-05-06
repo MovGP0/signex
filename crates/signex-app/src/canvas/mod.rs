@@ -1026,59 +1026,26 @@ impl canvas::Program<Message> for SchematicCanvas {
                     &self.selected,
                     &transform,
                 );
-                // Altium-style ERC markers: filled circle + concentric
-                // stroke at each violation's world position, colored by
-                // severity. Drawn in the overlay layer so they sit on
-                // top of wires and symbols but under the selection
-                // highlight.
-                for m in &self.erc_markers {
-                    let _wp = transform.world_to_screen((m.x as f64, m.y as f64));
-                    let (sx, sy) = (_wp.x, _wp.y);
-                    let (fill, stroke) = match m.severity {
-                        ErcMarkerSeverity::Error => (
-                            Color::from_rgba(0.95, 0.25, 0.25, 0.6),
-                            Color::from_rgb(0.95, 0.25, 0.25),
-                        ),
-                        ErcMarkerSeverity::Warning => (
-                            Color::from_rgba(0.98, 0.72, 0.20, 0.6),
-                            Color::from_rgb(0.98, 0.72, 0.20),
-                        ),
-                        ErcMarkerSeverity::Info => (
-                            Color::from_rgba(0.30, 0.55, 0.85, 0.55),
-                            Color::from_rgb(0.30, 0.55, 0.85),
-                        ),
-                    };
-                    // Outer soft halo so the marker is visible at low zoom.
-                    let halo = canvas::Path::circle(iced::Point::new(sx, sy), 16.0);
-                    frame.fill(&halo, Color::from_rgba(fill.r, fill.g, fill.b, 0.18));
-                    // Core dot — filled bright + hard stroke so it stays
-                    // legible over wires and text.
-                    let dot = canvas::Path::circle(iced::Point::new(sx, sy), 7.0);
-                    frame.fill(&dot, fill);
-                    frame.stroke(
-                        &dot,
-                        canvas::Stroke::default().with_color(stroke).with_width(2.0),
-                    );
-                    // Cross-hair inside the dot (Altium's "X" marker).
-                    let cross_len = 4.0_f32;
-                    let v1 = canvas::Path::line(
-                        iced::Point::new(sx - cross_len, sy - cross_len),
-                        iced::Point::new(sx + cross_len, sy + cross_len),
-                    );
-                    let v2 = canvas::Path::line(
-                        iced::Point::new(sx - cross_len, sy + cross_len),
-                        iced::Point::new(sx + cross_len, sy - cross_len),
-                    );
-                    let white = Color::WHITE;
-                    frame.stroke(
-                        &v1,
-                        canvas::Stroke::default().with_color(white).with_width(1.5),
-                    );
-                    frame.stroke(
-                        &v2,
-                        canvas::Stroke::default().with_color(white).with_width(1.5),
-                    );
-                }
+                let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
+                    .erc_markers
+                    .iter()
+                    .map(|marker| crate::schematic_runtime::overlay::ErcMarker {
+                        x_mm: marker.x,
+                        y_mm: marker.y,
+                        severity: match marker.severity {
+                            ErcMarkerSeverity::Error => {
+                                crate::schematic_runtime::overlay::ErcSeverity::Error
+                            }
+                            ErcMarkerSeverity::Warning => {
+                                crate::schematic_runtime::overlay::ErcSeverity::Warning
+                            }
+                            ErcMarkerSeverity::Info => {
+                                crate::schematic_runtime::overlay::ErcSeverity::Info
+                            }
+                        },
+                    })
+                    .collect();
+                crate::schematic_runtime::overlay::draw_erc_markers(frame, &erc_overlay, &transform);
             };
             if drag_offset.is_some() {
                 let mut frame = canvas::Frame::new(renderer, bounds.size());

@@ -1,15 +1,21 @@
+use iced::advanced::text as advanced_text;
+use iced::alignment;
 use iced::widget::canvas;
 use iced::{Color, Point};
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::polygon::GpuPolygon;
+use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::Scene;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SceneDrawOptions {
     pub scale_px_per_mm: f32,
     pub min_stroke_px: f32,
+    pub text_mm_per_em: f32,
+    pub text_min_px: f32,
+    pub text_max_px: f32,
 }
 
 impl SceneDrawOptions {
@@ -19,6 +25,11 @@ impl SceneDrawOptions {
 
     fn radius_px(self, radius_mm: f32) -> f32 {
         (radius_mm * self.scale_px_per_mm).max(0.5)
+    }
+
+    fn text_px(self, size_mm: f32) -> f32 {
+        let em_mm = size_mm.max(0.1) / self.text_mm_per_em.max(0.01);
+        (em_mm * self.scale_px_per_mm).clamp(self.text_min_px, self.text_max_px)
     }
 }
 
@@ -178,6 +189,62 @@ fn draw_polygon_bucket<F>(
     }
 }
 
+fn to_text_h_align(align: TextHAlign) -> advanced_text::Alignment {
+    match align {
+        TextHAlign::Left => advanced_text::Alignment::Left,
+        TextHAlign::Center => advanced_text::Alignment::Center,
+        TextHAlign::Right => advanced_text::Alignment::Right,
+    }
+}
+
+fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
+    match align {
+        TextVAlign::Top => alignment::Vertical::Top,
+        TextVAlign::Center => alignment::Vertical::Center,
+        TextVAlign::Bottom => alignment::Vertical::Bottom,
+    }
+}
+
+fn draw_text_bucket<F>(
+    frame: &mut canvas::Frame,
+    texts: &[TextItem],
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    for text in texts {
+        if text.content.is_empty() {
+            continue;
+        }
+
+        let position = world_to_screen(text.position);
+        let draw_text = canvas::Text {
+            content: text.content.clone(),
+            position: Point::ORIGIN,
+            color: color_from_rgba(text.color),
+            size: iced::Pixels(options.text_px(text.size_mm)),
+            font: crate::render_config::IOSEVKA,
+            align_x: to_text_h_align(text.h_align),
+            align_y: to_text_v_align(text.v_align),
+            ..canvas::Text::default()
+        };
+
+        if text.rotation.abs() < f32::EPSILON {
+            let mut placed = draw_text;
+            placed.position = position;
+            frame.fill_text(placed);
+            continue;
+        }
+
+        frame.with_save(|inner| {
+            inner.translate(iced::Vector::new(position.x, position.y));
+            inner.rotate(iced::Radians(text.rotation));
+            inner.fill_text(draw_text);
+        });
+    }
+}
+
 pub fn draw_scene_with_world_to_screen<F>(
     frame: &mut canvas::Frame,
     scene: &Scene,
@@ -190,6 +257,7 @@ pub fn draw_scene_with_world_to_screen<F>(
     draw_circle_bucket(frame, &scene.circles, world_to_screen, options);
     draw_arc_bucket(frame, &scene.arcs, world_to_screen, options);
     draw_polygon_bucket(frame, &scene.polygons, world_to_screen, options);
+    draw_text_bucket(frame, &scene.texts, world_to_screen, options);
 
     draw_line_bucket(frame, &scene.overlay_lines, world_to_screen, options);
     draw_circle_bucket(frame, &scene.overlay_circles, world_to_screen, options);
