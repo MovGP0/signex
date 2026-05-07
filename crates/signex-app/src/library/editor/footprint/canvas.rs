@@ -339,7 +339,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     // pad bit. When `pads` is off, pads stay
                     // unselectable and clicks fall through to the
                     // silk-hit / empty-canvas branches below.
-                    if self.state.selection_filter.pads {
+                    //
+                    // v0.23 — also gate on Pads-mode (Normal). In
+                    // Sketch mode the pad's bbox is just construction
+                    // chrome; clicks inside it must fall through to
+                    // the sketch-tool click handler so Line / Circle /
+                    // etc. can snap to the pad's corner Points. The
+                    // Select tool's pad-grab path (v0.16) lived
+                    // strictly in Pads mode and that contract is
+                    // preserved.
+                    if matches!(self.state.mode, _EM::Normal) && self.state.selection_filter.pads {
                         if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
                             let pad = &self.state.pads[pad_idx];
                             cstate.drag = Some(DragState {
@@ -2763,6 +2772,46 @@ fn draw_pad(
             .with_width(if is_selected { 1.6 } else { 0.8 })
             .with_color(outline_color),
     );
+
+    // v0.23 — Pad hole. Through-hole / NPT pads carry a positive
+    // `drill_diameter_mm`; render it as a black "punched" disc on
+    // top of the copper. Slot drills aren't yet propagated through
+    // EditorPad (the field only lives on `NextPadDefaults` today);
+    // when EditorPad gains its own slot field, swap in a stadium
+    // rendering rotated by `hole_rotation_deg`. A diameter of zero
+    // (or `None`) renders nothing so SMD pads and the "Size = 0"
+    // placeholder state stay clean.
+    if let Some(d_mm) = pad.drill_diameter_mm.filter(|d| *d > 1e-6) {
+        let drill_r = (d_mm * 0.5) as f32 * cstate.scale;
+        let hole_path = Path::new(|b| {
+            let segments = 24;
+            for i in 0..=segments {
+                let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                let x = centre.x + drill_r * t.cos();
+                let y = centre.y + drill_r * t.sin();
+                if i == 0 {
+                    b.move_to(Point::new(x, y));
+                } else {
+                    b.line_to(Point::new(x, y));
+                }
+            }
+            b.close();
+        });
+        // Black fill = "punched" through copper. White outline when
+        // selected so the hole's edge stays visible against the
+        // pad's selection ring.
+        frame.fill(&hole_path, Color::BLACK);
+        frame.stroke(
+            &hole_path,
+            Stroke::default()
+                .with_width(0.8)
+                .with_color(if is_selected {
+                    Color::WHITE
+                } else {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.85)
+                }),
+        );
+    }
 
     // Pad number — only when zoomed in enough to read.
     if cstate.scale >= 25.0 && !pad.number.is_empty() {

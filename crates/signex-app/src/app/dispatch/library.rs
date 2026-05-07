@@ -4837,6 +4837,12 @@ pub(crate) fn apply_footprint_primitive_edit(
                 {
                     let (x, y) = pad.position_mm;
                     pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                    // v0.23 — mirror the snap into the sketch so the
+                    // construction outline + centre Point follow the
+                    // pad. Skipping this left the sketch primitive
+                    // stranded at the pre-snap position.
+                    let pad_snapshot = pad.clone();
+                    pad_to_sketch::mirror_move_pad_in_sketch(&pad_snapshot, primitive);
                     CanvasState::sync_pads_to_primitive(state, primitive);
                 }
             });
@@ -4847,9 +4853,17 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid => {
             editor.with_parts(|state, primitive| {
                 let step = state.snap_options.grid_step_mm.max(0.001);
+                let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                    Vec::with_capacity(state.pads.len());
                 for pad in state.pads.iter_mut() {
                     let (x, y) = pad.position_mm;
                     pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                    snapshots.push(pad.clone());
+                }
+                // v0.23 — mirror every pad's new position into the
+                // sketch. Same fix as the single-pad align path.
+                for snapshot in &snapshots {
+                    pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
