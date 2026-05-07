@@ -317,6 +317,66 @@ impl Signex {
         };
         match try_init_project_repo(&state.project_dir, state.use_lfs, gitignore_arg) {
             Ok(()) => {
+                // v0.22 Phase 8.6 — for project scope, overwrite the
+                // `.gitattributes` with the richer spec
+                // (`text eol=lf` for every `.snx*`, `binary` for
+                // step/wrl/png/pdf, optional LFS for 3D models). The
+                // library helper above wrote LFS-only rules; this
+                // adds the cross-platform line-ending discipline +
+                // binary markers, then captures the updated file in
+                // a follow-up commit so the working tree stays
+                // clean.
+                //
+                // Project-scope only — `.snxlib` libraries already
+                // ship their own `.gitattributes` via the original
+                // LocalGitAdapter init path.
+                if matches!(state.scope, crate::app::VersionControlScope::Project) {
+                    if let Ok(adapter) = signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+                        state.project_dir.clone(),
+                    ) {
+                        if let Err(e) = adapter.write_gitattributes(state.use_lfs) {
+                            crate::diagnostics::log_warning(format!(
+                                "[git] write_gitattributes failed: {e}"
+                            ));
+                        } else {
+                            // Best-effort follow-up commit. Failure
+                            // logged + ignored — the file is on disk
+                            // and the next save will pick it up via
+                            // the 8.4 auto-commit hook.
+                            if let Err(e) = adapter.commit_path(
+                                std::path::Path::new(".gitattributes"),
+                                "Sync .gitattributes to Signex v0.22 spec",
+                            ) {
+                                crate::diagnostics::log_warning(format!(
+                                    "[git] commit .gitattributes failed: {e}"
+                                ));
+                            }
+                        }
+                    }
+
+                    // Flip `enable_git = true` on the matching
+                    // project + mark it dirty so the .snxprj save
+                    // captures the flag. Match by `data.dir` since
+                    // the modal targets a specific project, which
+                    // may not be the active one if the user opened
+                    // it from a non-active project's right-click
+                    // menu.
+                    let target_dir = state.project_dir.clone();
+                    let mut snxprj_path: Option<std::path::PathBuf> = None;
+                    if let Some(loaded) = self
+                        .document_state
+                        .projects
+                        .iter_mut()
+                        .find(|p| std::path::Path::new(&p.data.dir) == target_dir)
+                    {
+                        loaded.data.enable_git = true;
+                        snxprj_path = Some(loaded.path.clone());
+                    }
+                    if let Some(p) = snxprj_path {
+                        self.document_state.dirty_paths.insert(p);
+                    }
+                }
+
                 self.ui_state.enable_version_control = None;
                 self.refresh_panel_ctx();
                 let scope_label = match state.scope {
