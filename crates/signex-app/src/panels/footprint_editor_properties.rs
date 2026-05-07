@@ -2579,7 +2579,15 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             let mask_h = pad_h + 2.0 * mask_outset_mm;
             // Visual thickness — exaggerated vs. real (~0.05mm copper)
             // so the side wall reads at panel scale.
-            let copper_thickness_mm = pad_w.max(pad_h) * 0.10;
+            //
+            // v0.25 — bumped from 0.10 to 0.22 for Altium-parity. The
+            // user''s reference shows visibly extruded copper + mask
+            // layers (and a deep inner wall down the hole); 0.10
+            // rendered the layers as flat rings with barely any
+            // visible depth. 0.22 keeps the geometry well within the
+            // 75% frame-fit envelope while giving the iso projection
+            // enough Z to show real layer thickness.
+            let copper_thickness_mm = pad_w.max(pad_h) * 0.22;
             let mask_thickness_mm = copper_thickness_mm;
 
             // 30° isometric projection — matches `preview3d.rs`. Both
