@@ -5877,18 +5877,27 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                 },
                 SketchTool::Mirror => {
-                    // v0.22 Phase B1 — Mirror tool. Pre-condition: a
-                    // Line entity must already be selected via the
-                    // Select tool; clicks while no Line is selected
-                    // are silent no-ops. The active click resolves a
-                    // Point (`resolved_id`) which we mirror across
-                    // the selected Line by minting a fresh Point at
-                    // the reflected position and adding a
-                    // SymmetricAboutLine constraint linking the pair.
+                    // v0.22 Phase B1 + extension — Mirror tool.
+                    // Pre-condition: a Line entity must already be
+                    // selected via the Select tool; clicks while no
+                    // Line is selected are silent no-ops with a
+                    // warning surfaced via `solve_warnings`.
                     //
-                    // Scope: Points only. Mirroring Lines / Arcs /
-                    // Circles requires per-endpoint reflection +
-                    // chained constraints, deferred to v0.22.x.
+                    // The picked entity's geometry is reflected
+                    // across the selected Line and a fresh entity is
+                    // minted referencing mirrored copies of every
+                    // Point it touches. Each mirrored Point pair
+                    // gets a `SymmetricAboutLine` constraint so the
+                    // solver maintains symmetry through subsequent
+                    // edits (drag the source and the mirror tracks
+                    // it parametrically).
+                    //
+                    // Scope: Points / Lines / Arcs / Circles.
+                    // Mirrored Arcs flip `sweep_ccw` because
+                    // reflection inverts winding. Mirrored Circles
+                    // re-use the source radius (Circle's `radius` is
+                    // a literal, not a referenced Point, so it
+                    // round-trips unchanged).
                     use signex_sketch::constraint::{Constraint, ConstraintKind};
                     use signex_sketch::id::ConstraintId;
 
@@ -5905,9 +5914,6 @@ pub(crate) fn apply_footprint_primitive_edit(
                         }
                     };
 
-                    // Verify selection is actually a Line; resolve
-                    // both endpoints' positions and the picked
-                    // Point's position from the sketch.
                     let sketch_ref = match editor.primitive().sketch.as_ref() {
                         Some(s) => s,
                         None => {
@@ -5946,20 +5952,19 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 _ => None,
                             })
                     };
-                    let picked_kind = sketch_ref
+                    let kind_of = sketch_ref
                         .entities
                         .iter()
                         .find(|e| e.id == resolved_id)
-                        .map(|e| matches!(e.kind, EntityKind::Point { .. }));
-                    if picked_kind != Some(true) {
-                        editor.state.solve_warnings.push(
-                            "Mirror: pick a Point to mirror (Lines / Arcs / Circles deferred to v0.22.x)"
-                                .into(),
-                        );
-                        editor.state.tool_pending = ToolPending::Idle;
-                        editor.canvas_cache.clear();
-                        return;
-                    }
+                        .map(|e| e.kind.clone());
+                    let kind_of = match kind_of {
+                        Some(k) => k,
+                        None => {
+                            editor.state.tool_pending = ToolPending::Idle;
+                            return;
+                        }
+                    };
+
                     let (ax, ay) = match pos_of(a_id) {
                         Some(p) => p,
                         None => return,
@@ -5968,15 +5973,6 @@ pub(crate) fn apply_footprint_primitive_edit(
                         Some(p) => p,
                         None => return,
                     };
-                    let (px, py) = match pos_of(resolved_id) {
-                        Some(p) => p,
-                        None => return,
-                    };
-
-                    // Reflect (px, py) across the line through
-                    // (ax, ay) → (bx, by). Standard reflection:
-                    //   v = b - a; t = ((p - a) · v) / (v · v)
-                    //   foot = a + t·v; reflected = 2·foot - p
                     let vx = bx - ax;
                     let vy = by - ay;
                     let v_dot_v = vx * vx + vy * vy;
@@ -5988,40 +5984,155 @@ pub(crate) fn apply_footprint_primitive_edit(
                         editor.canvas_cache.clear();
                         return;
                     }
-                    let t = ((px - ax) * vx + (py - ay) * vy) / v_dot_v;
-                    let foot_x = ax + t * vx;
-                    let foot_y = ay + t * vy;
-                    let rx = 2.0 * foot_x - px;
-                    let ry = 2.0 * foot_y - py;
-
-                    let new_id = SketchEntityId::new();
-                    let new_entity = flag(Entity::new(
-                        new_id,
-                        plane_id,
-                        EntityKind::Point { x: rx, y: ry },
-                    ));
-                    editor.with_parts(|state, primitive| {
-                        apply_sketch_edit_with_warnings(
-                            state,
-                            primitive,
-                            SketchEdit::AddEntity(new_entity),
-                        );
-                    });
-                    let constraint = Constraint {
-                        id: ConstraintId::new(),
-                        kind: ConstraintKind::SymmetricAboutLine {
-                            p1: resolved_id,
-                            p2: new_id,
-                            line: line_id,
-                        },
+                    let reflect = |px: f64, py: f64| -> (f64, f64) {
+                        let t = ((px - ax) * vx + (py - ay) * vy) / v_dot_v;
+                        let foot_x = ax + t * vx;
+                        let foot_y = ay + t * vy;
+                        (2.0 * foot_x - px, 2.0 * foot_y - py)
                     };
-                    editor.with_parts(|state, primitive| {
-                        apply_sketch_edit_with_warnings(
-                            state,
-                            primitive,
-                            SketchEdit::AddConstraint(constraint),
-                        );
-                    });
+
+                    // Mirror a Point entity by ID: emits a new Point
+                    // at the reflected position and a
+                    // SymmetricAboutLine constraint linking source
+                    // and mirror. Returns the new Point's ID.
+                    // Captured by reference so the closure can be
+                    // called repeatedly for chained-Point entities.
+                    let mut mint_mirror_point =
+                        |editor: &mut crate::app::FootprintEditorState,
+                         pt_id: SketchEntityId,
+                         pos: (f64, f64)|
+                         -> SketchEntityId {
+                            let (rx, ry) = reflect(pos.0, pos.1);
+                            let new_id = SketchEntityId::new();
+                            let new_entity = flag(Entity::new(
+                                new_id,
+                                plane_id,
+                                EntityKind::Point { x: rx, y: ry },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_entity),
+                                );
+                            });
+                            let constraint = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::SymmetricAboutLine {
+                                    p1: pt_id,
+                                    p2: new_id,
+                                    line: line_id,
+                                },
+                            };
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(constraint),
+                                );
+                            });
+                            new_id
+                        };
+
+                    match kind_of {
+                        EntityKind::Point { x, y } => {
+                            mint_mirror_point(editor, resolved_id, (x, y));
+                        }
+                        EntityKind::Line { start, end } => {
+                            let s_pos = match pos_of(start) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let e_pos = match pos_of(end) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let new_start = mint_mirror_point(editor, start, s_pos);
+                            let new_end = mint_mirror_point(editor, end, e_pos);
+                            let new_line_id = SketchEntityId::new();
+                            let new_line = flag(Entity::new(
+                                new_line_id,
+                                plane_id,
+                                EntityKind::Line {
+                                    start: new_start,
+                                    end: new_end,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_line),
+                                );
+                            });
+                        }
+                        EntityKind::Arc {
+                            center,
+                            start,
+                            end,
+                            sweep_ccw,
+                        } => {
+                            let c_pos = match pos_of(center) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let s_pos = match pos_of(start) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let e_pos = match pos_of(end) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let new_center = mint_mirror_point(editor, center, c_pos);
+                            let new_start = mint_mirror_point(editor, start, s_pos);
+                            let new_end = mint_mirror_point(editor, end, e_pos);
+                            // Reflection inverts winding — flip
+                            // sweep_ccw so the mirrored arc traces
+                            // the same arc on the other side.
+                            let new_arc_id = SketchEntityId::new();
+                            let new_arc = flag(Entity::new(
+                                new_arc_id,
+                                plane_id,
+                                EntityKind::Arc {
+                                    center: new_center,
+                                    start: new_start,
+                                    end: new_end,
+                                    sweep_ccw: !sweep_ccw,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_arc),
+                                );
+                            });
+                        }
+                        EntityKind::Circle { center, radius } => {
+                            let c_pos = match pos_of(center) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let new_center = mint_mirror_point(editor, center, c_pos);
+                            let new_circle_id = SketchEntityId::new();
+                            let new_circle = flag(Entity::new(
+                                new_circle_id,
+                                plane_id,
+                                EntityKind::Circle {
+                                    center: new_center,
+                                    radius,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_circle),
+                                );
+                            });
+                        }
+                    }
                     editor.state.tool_pending = ToolPending::Idle;
                 }
             }
