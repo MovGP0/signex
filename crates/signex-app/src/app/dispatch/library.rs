@@ -4109,6 +4109,10 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintTogglePlacementPause
         | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
         | PrimitiveEditorMsg::FootprintSketchToolEscape
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputChar(_)
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
         | PrimitiveEditorMsg::FootprintSketchSelect { .. }
         | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
@@ -4938,7 +4942,96 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
             editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
+            // v0.24 Track D — leaving the gesture also drops any
+            // numeric buffer the user had been typing. Otherwise a
+            // half-typed length would leak across to a freshly-started
+            // tool gesture.
+            editor.state.placement_input = None;
             editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch) => {
+            // v0.24 Track D — append `ch` to `placement_input.buffer`,
+            // minting a fresh entry against the active tool's matching
+            // `PlacementInputKind` if one isn't already pinned. Drops
+            // the keypress silently when the active tool / pending
+            // state doesn't accept numeric input.
+            use crate::library::editor::footprint::state::{PlacementInput, PlacementInputKind};
+            let tool = editor.state.active_tool;
+            let pending = editor.state.tool_pending.clone();
+            let kind_for_active = PlacementInputKind::from_active_tool(tool, &pending);
+            // Resolve the kind: if a buffer already exists, keep its
+            // kind so the user can finish typing across a second
+            // keypress; otherwise mint one matched to the tool.
+            let kind = match editor.state.placement_input.as_ref() {
+                Some(existing) => existing.kind,
+                None => match kind_for_active {
+                    Some(k) => k,
+                    None => return, // tool doesn't accept numeric input
+                },
+            };
+            // Validation:
+            // - digits always allowed,
+            // - one decimal point per buffer,
+            // - leading minus only for `ArcSweep` and only at position 0,
+            // - everything else dropped.
+            let buf_ref = editor
+                .state
+                .placement_input
+                .as_ref()
+                .map(|p| p.buffer.as_str())
+                .unwrap_or("");
+            let accept = if ch.is_ascii_digit() {
+                true
+            } else if ch == '.' {
+                !buf_ref.contains('.')
+            } else if ch == '-' {
+                kind.allows_negative() && buf_ref.is_empty()
+            } else {
+                false
+            };
+            if !accept {
+                return;
+            }
+            // Mint or append.
+            let entry = editor
+                .state
+                .placement_input
+                .get_or_insert_with(|| PlacementInput {
+                    buffer: String::new(),
+                    kind,
+                });
+            entry.buffer.push(ch);
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace => {
+            // v0.24 Track D — pop one character; clear `placement_input`
+            // entirely once the buffer empties so the next typed digit
+            // mints a fresh entry against the (possibly different)
+            // active tool.
+            if let Some(entry) = editor.state.placement_input.as_mut() {
+                entry.buffer.pop();
+                if entry.buffer.is_empty() {
+                    editor.state.placement_input = None;
+                }
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacementInputEnter => {
+            // v0.24 Track D — Enter is a no-op on state. The buffer
+            // stays alive so the next click consumes it. The message
+            // is captured at the canvas layer purely so the keypress
+            // doesn't fall through to a global shortcut.
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacementInputEscape => {
+            // v0.24 Track D — Esc throws away the buffer immediately;
+            // the next click commits at the cursor position with no
+            // override. Tool pending state is left intact so the
+            // gesture itself isn't cancelled (use right-click / tool
+            // Esc for that).
+            if editor.state.placement_input.is_some() {
+                editor.state.placement_input = None;
+                editor.canvas_cache.clear();
+            }
         }
         PrimitiveEditorMsg::FootprintSketchSelect { id, shift } => {
             // None clears both selection slots. Some(id) without
@@ -5544,7 +5637,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+            use crate::library::editor::footprint::state::{
+                PlacementInputKind, SketchTool, ToolPending,
+            };
             use signex_sketch::entity::{Entity, EntityKind};
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -5599,7 +5694,161 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
             };
 
-            let resolved_id: SketchEntityId = match snap_id {
+            // v0.24 Track D — consume `state.placement_input` if it
+            // matches the active tool's pending state. The buffer is
+            // parsed as `f64` mm (length / radius) or degrees
+            // (sweep), translated into an effective click position
+            // overriding `x_mm` / `y_mm`, and the snap target is
+            // dropped so the typed-length wins over a coincidence
+            // hit. Returns the effective `(x, y)` and a flag whose
+            // `true` value means the click was geometry-pinned by a
+            // numeric input — used to (1) ignore `snap_id` and (2)
+            // clear `state.placement_input` after the gesture
+            // commits.
+            let placement_input_kind = editor.state.placement_input.as_ref().map(|p| p.kind);
+            let placement_input_value = editor
+                .state
+                .placement_input
+                .as_ref()
+                .and_then(|p| p.buffer.parse::<f64>().ok());
+            let resolve_point_xy =
+                |id: SketchEntityId, primitive: &signex_library::primitive::footprint::Footprint| -> Option<(f64, f64)> {
+                    primitive
+                        .sketch
+                        .as_ref()
+                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                        .and_then(|e| match e.kind {
+                            EntityKind::Point { x, y } => Some((x, y)),
+                            _ => None,
+                        })
+                };
+            let (eff_x_mm, eff_y_mm, used_placement_input): (f64, f64, bool) = match (
+                placement_input_kind,
+                placement_input_value,
+                editor.state.active_tool,
+                editor.state.tool_pending.clone(),
+            ) {
+                // Line second click — pin distance from `first` along
+                // the cursor azimuth.
+                (
+                    Some(PlacementInputKind::LineLength),
+                    Some(len),
+                    SketchTool::Line,
+                    ToolPending::LineFirst { first },
+                ) if len > 0.0 => {
+                    let primitive = editor.primitive();
+                    if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
+                        let dx = x_mm - fx;
+                        let dy = y_mm - fy;
+                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        if cursor_len > 1e-9 {
+                            let ux = dx / cursor_len;
+                            let uy = dy / cursor_len;
+                            (fx + len * ux, fy + len * uy, true)
+                        } else {
+                            // Cursor coincides with the first
+                            // endpoint — no azimuth to pin to. Fall
+                            // back to the raw click so the user gets
+                            // visible feedback that nothing happened.
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Circle second click — radius from centre, along
+                // the cursor azimuth.
+                (
+                    Some(PlacementInputKind::CircleRadius),
+                    Some(r),
+                    SketchTool::Circle,
+                    ToolPending::CircleCenter { center },
+                ) if r > 0.0 => {
+                    let primitive = editor.primitive();
+                    if let Some((cx, cy)) = resolve_point_xy(center, primitive) {
+                        let dx = x_mm - cx;
+                        let dy = y_mm - cy;
+                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        if cursor_len > 1e-9 {
+                            let ux = dx / cursor_len;
+                            let uy = dy / cursor_len;
+                            (cx + r * ux, cy + r * uy, true)
+                        } else {
+                            // Cursor at centre → fall back; the user
+                            // can re-position before clicking.
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Arc second click — start endpoint at exact radius
+                // from centre, along cursor azimuth.
+                (
+                    Some(PlacementInputKind::ArcRadius),
+                    Some(r),
+                    SketchTool::Arc,
+                    ToolPending::ArcCenter { center },
+                ) if r > 0.0 => {
+                    let primitive = editor.primitive();
+                    if let Some((cx, cy)) = resolve_point_xy(center, primitive) {
+                        let dx = x_mm - cx;
+                        let dy = y_mm - cy;
+                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        if cursor_len > 1e-9 {
+                            let ux = dx / cursor_len;
+                            let uy = dy / cursor_len;
+                            (cx + r * ux, cy + r * uy, true)
+                        } else {
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Arc third click — sweep from `start` by typed
+                // degrees CCW around `center`. Radius is the
+                // committed |centre, start| distance.
+                (
+                    Some(PlacementInputKind::ArcSweep),
+                    Some(deg),
+                    SketchTool::Arc,
+                    ToolPending::ArcStart { center, start },
+                ) => {
+                    let primitive = editor.primitive();
+                    let parts = (
+                        resolve_point_xy(center, primitive),
+                        resolve_point_xy(start, primitive),
+                    );
+                    if let (Some((cx, cy)), Some((sx, sy))) = parts {
+                        let r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                        if r > 1e-9 {
+                            let start_ang = (sy - cy).atan2(sx - cx);
+                            let end_ang = start_ang + deg.to_radians();
+                            (
+                                cx + r * end_ang.cos(),
+                                cy + r * end_ang.sin(),
+                                true,
+                            )
+                        } else {
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                _ => (x_mm, y_mm, false),
+            };
+            // When numeric input pinned the click, ignore the snap
+            // hit (the user explicitly asked for a different
+            // distance / angle).
+            let effective_snap_id = if used_placement_input {
+                None
+            } else {
+                snap_id
+            };
+
+            let resolved_id: SketchEntityId = match effective_snap_id {
                 Some(target) if matches!(editor.state.active_tool, SketchTool::Point) => {
                     use signex_sketch::constraint::{Constraint, ConstraintKind};
                     use signex_sketch::id::ConstraintId;
@@ -5608,7 +5857,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     let entity = flag(Entity::new(
                         new_id,
                         plane_id,
-                        EntityKind::Point { x: x_mm, y: y_mm },
+                        EntityKind::Point {
+                            x: eff_x_mm,
+                            y: eff_y_mm,
+                        },
                     ));
                     editor.with_parts(|state, primitive| {
                         apply_sketch_edit_with_warnings(
@@ -5639,7 +5891,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     let entity = flag(Entity::new(
                         id,
                         plane_id,
-                        EntityKind::Point { x: x_mm, y: y_mm },
+                        EntityKind::Point {
+                            x: eff_x_mm,
+                            y: eff_y_mm,
+                        },
                     ));
                     editor.with_parts(|state, primitive| {
                         apply_sketch_edit_with_warnings(
@@ -7103,6 +7358,15 @@ pub(crate) fn apply_footprint_primitive_edit(
                     editor.state.tool_pending = ToolPending::Idle;
                 }
             }
+            // v0.24 Track D — buffer is consumed once per click. The
+            // user has to type again before the next gesture step,
+            // mirroring Fusion. Always clear when the resolve step
+            // honoured the buffer; leave alone otherwise so a stray
+            // pre-tool-pending keystroke survives until the user
+            // either commits or Esc-clears.
+            if used_placement_input {
+                editor.state.placement_input = None;
+            }
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
@@ -7179,6 +7443,13 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         | FootprintSketchToggleCenterline
         | FootprintTogglePlacementPause
         | FootprintSketchToolEscape
+        // v0.24 Track D — placement-input keypress messages mutate
+        // only the transient `placement_input` overlay buffer; they
+        // don't touch persisted geometry, so undo doesn't need them.
+        | FootprintSketchPlacementInputChar(_)
+        | FootprintSketchPlacementInputBackspace
+        | FootprintSketchPlacementInputEnter
+        | FootprintSketchPlacementInputEscape
         | FootprintSketchSelect { .. }
         | FootprintSketchDimensionInput(_)
         | FootprintToggleSelectionFilter(_)
@@ -7588,6 +7859,10 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape
+        | EditorMsg::FootprintSketchPlacementInputChar(_)
+        | EditorMsg::FootprintSketchPlacementInputBackspace
+        | EditorMsg::FootprintSketchPlacementInputEnter
+        | EditorMsg::FootprintSketchPlacementInputEscape
         | EditorMsg::FootprintSketchSelect { .. }
         | EditorMsg::FootprintSketchMovePoint { .. }
         | EditorMsg::FootprintMovePad { .. }

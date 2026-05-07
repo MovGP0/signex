@@ -11,6 +11,7 @@
 //! since Canvas doesn't surface keyboard events.
 
 use iced::event::Event;
+use iced::keyboard;
 use iced::mouse;
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme};
@@ -786,6 +787,99 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         y_mm: world.1,
                     },
                 }));
+            }
+            // v0.24 Track D — keyboard intercept for the live numeric
+            // placement input. Active only while a multi-click sketch
+            // tool (Line / Circle / Arc) has its first click pending,
+            // so digit keys outside Sketch mode never get swallowed.
+            // Modifiers must be empty so global shortcuts (Ctrl+Z,
+            // Ctrl+S, …) still reach the app dispatcher.
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                text,
+                ..
+            }) => {
+                use crate::library::editor::footprint::state::{
+                    EditorMode, PlacementInputKind, ToolPending,
+                };
+                if !matches!(self.state.mode, EditorMode::Sketch) {
+                    return None;
+                }
+                // Only intercept when there's either an open buffer or
+                // an in-progress gesture that could accept one — both
+                // are required so a stray digit press at idle (no
+                // first click yet) doesn't open an overlay against an
+                // empty tool state.
+                let has_open_buffer = self.state.placement_input.is_some();
+                let kind_for_active = PlacementInputKind::from_active_tool(
+                    self.state.active_tool,
+                    &self.state.tool_pending,
+                );
+                if !has_open_buffer && kind_for_active.is_none() {
+                    return None;
+                }
+                if matches!(self.state.tool_pending, ToolPending::Idle) && !has_open_buffer {
+                    return None;
+                }
+                if modifiers.command() || modifiers.alt() || modifiers.logo() {
+                    return None;
+                }
+                let publish = |msg: EditorMsg| -> Option<canvas::Action<LibraryMessage>> {
+                    Some(
+                        canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg,
+                        })
+                        .and_capture(),
+                    )
+                };
+                match key {
+                    keyboard::Key::Named(keyboard::key::Named::Backspace) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputBackspace);
+                        }
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Enter) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputEnter);
+                        }
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputEscape);
+                        }
+                    }
+                    _ => {
+                        // Use the platform-supplied `text` so we get
+                        // exactly the codepoint the user typed
+                        // (handles Numpad digits, decimal-point
+                        // localisation pre-conversion, etc.). Only
+                        // forward digits / `.` / `-`; everything else
+                        // falls through to the generic catch-all.
+                        if let Some(s) = text.as_ref() {
+                            if let Some(ch) = s.chars().next() {
+                                let useful = ch.is_ascii_digit()
+                                    || ch == '.'
+                                    || (ch == '-'
+                                        && kind_for_active
+                                            .or_else(|| {
+                                                self.state.placement_input.as_ref().map(|p| p.kind)
+                                            })
+                                            .map(|k| k.allows_negative())
+                                            .unwrap_or(false));
+                                if useful {
+                                    return publish(EditorMsg::FootprintSketchPlacementInputChar(
+                                        ch,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                return None;
             }
             _ => {}
         }
@@ -2731,6 +2825,55 @@ fn draw_sketch_tool_preview(
                 }
             }
         }
+    }
+
+    // v0.24 Track D — modeless live numeric placement-input overlay.
+    // Renders the user-typed buffer at the cursor whenever
+    // `placement_input` is `Some`, regardless of which `ToolPending`
+    // is current (the kind picker decided which tool's gesture mints
+    // it; the dispatcher tolerates unrelated tool changes by clearing
+    // on commit + on Esc). Position: 4 px right and 8 px below the
+    // cursor, with a translucent rounded background so the buffer
+    // reads against any canvas content.
+    if let Some(input) = state.placement_input.as_ref() {
+        let label = input.kind.label();
+        let body = if input.buffer.is_empty() {
+            format!("{label}: _")
+        } else {
+            format!("{label}: {}", input.buffer)
+        };
+        let origin = Point::new(cursor_screen.x + 4.0, cursor_screen.y + 8.0);
+        // Approximate a one-line text bbox so the background plate
+        // sits behind the glyphs. Iosevka 11px averages ~6 px per
+        // character at the canvas's default rendering; a 4 px pad
+        // around the label keeps the chrome readable.
+        let glyph_w = 6.5_f32;
+        let pad_x = 5.0_f32;
+        let pad_y = 3.0_f32;
+        let body_w = glyph_w * (body.chars().count() as f32) + pad_x * 2.0;
+        let body_h = 16.0_f32 + pad_y * 2.0;
+        let plate_origin = Point::new(origin.x - pad_x, origin.y - pad_y);
+        // Background plate.
+        frame.fill_rectangle(
+            plate_origin,
+            iced::Size::new(body_w, body_h),
+            Color::from_rgba(0.05, 0.07, 0.10, 0.85),
+        );
+        // Accent border.
+        frame.stroke(
+            &Path::rectangle(plate_origin, iced::Size::new(body_w, body_h)),
+            Stroke::default()
+                .with_width(1.0)
+                .with_color(Color::from_rgba(0.40, 0.70, 1.00, 0.95)),
+        );
+        // Buffer text.
+        frame.fill_text(canvas::Text {
+            content: body,
+            position: origin,
+            color: Color::from_rgba(0.95, 0.95, 0.97, 1.00),
+            size: iced::Pixels(13.0),
+            ..canvas::Text::default()
+        });
     }
 }
 
