@@ -86,6 +86,18 @@ pub fn auto_mint_for_literal_pads(pads: &mut [EditorPad], footprint: &mut Footpr
 /// mirror the new pad into the sketch as a `Point` + `PadAttr`.
 /// Stores the minted sketch entity ID back on the editor pad so
 /// later moves / deletes can mirror through.
+///
+/// v0.24 Track A — branches on `pad.shape`:
+///   - `Round`: mints 1 Circle + a `diameter_<slug>` parameter.
+///   - `RoundRect`: mints 4 bbox corner Points + 8 anchor Points +
+///     4 inset corner Points (arc centres) + 4 shorter Lines + 4
+///     corner Arcs. All four arcs share a single `corner_r_<slug>`
+///     parameter so editing it moves every corner in lockstep
+///     (Fusion-parity).
+///   - Other shapes: existing v0.16 4-Line bbox outline.
+///
+/// In every case `pad.shape_params` records the parameter name so
+/// the Phase 3 Properties row can find the bound parameter.
 pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) {
     // No-op when the sketch already has a backing entity for this
     // pad (e.g. caller already wired it up).
@@ -106,9 +118,27 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     entity.pad = Some(pad_attr_from_editor_pad(pad));
     sketch.entities.push(entity);
     pad.sketch_entity_id = Some(entity_id);
-    // v0.16 — outline-corner Points + Lines, construction-only.
-    let corners = mint_pad_corner_outline(sketch, plane_id, pad);
-    pad.corner_entity_ids = Some(corners);
+
+    // v0.24 Track A — branch on pad shape.
+    match &pad.shape {
+        LibPadShape::Round => {
+            mint_round_pad_geometry(sketch, plane_id, pad, entity_id);
+            // Round pads have no rectangular outline — leave
+            // corner_entity_ids unset so move/delete mirrors skip
+            // bbox-corner repositioning.
+            pad.corner_entity_ids = None;
+        }
+        LibPadShape::RoundRect { radius_ratio } => {
+            let corners =
+                mint_round_rect_pad_geometry(sketch, plane_id, pad, entity_id, *radius_ratio);
+            pad.corner_entity_ids = Some(corners);
+        }
+        _ => {
+            // v0.16 — outline-corner Points + Lines, construction-only.
+            let corners = mint_pad_corner_outline(sketch, plane_id, pad);
+            pad.corner_entity_ids = Some(corners);
+        }
+    }
 }
 
 /// v0.15 — when a pad moves in Pads mode (drag), update its backing
@@ -151,6 +181,14 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
 /// v0.15 — when a pad is deleted in Pads mode, also drop its
 /// backing sketch entity (and any constraints that referenced it).
 /// No-op when the pad has no backing sketch entity yet.
+///
+/// v0.24 Track A — also drop linked Circle / Arc entities and any
+/// sketch parameters keyed by the centre-Point UUID slug
+/// (`diameter_<slug>`, `corner_r_<slug>`, etc.). RoundRect's
+/// anchor / inset-corner Points are pulled into the drop set via a
+/// secondary sweep — they're referenced indirectly by Arcs whose
+/// `center` is the inset corner; once those Arcs and their adjacent
+/// Lines are dropped, the orphan Points get cleaned up too.
 pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(entity_id) = pad.sketch_entity_id else {
         return;
@@ -166,15 +204,75 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     if let Some(corners) = pad.corner_entity_ids {
         to_drop.extend_from_slice(&corners);
     }
-    let drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
+    let mut drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
+
+    // v0.24 Track A — secondary sweep. RoundRect's 8 anchor Points
+    // + 4 inset corner Points are referenced only by the 4 corner
+    // Arcs and the 4 shorter Lines. Walk the entity list once to
+    // collect every Line / Arc / Circle that touches a dropped ID,
+    // and pull their referenced Points into the drop set so the
+    // sweep fully cleans up the graveyard. One pass is enough
+    // because anchor/inset Points are leaves in the reference
+    // graph (no Arc/Line references another Arc/Line).
+    let mut secondary_drops: std::collections::HashSet<SketchEntityId> =
+        std::collections::HashSet::new();
+    for entity in &sketch.entities {
+        if drop_set.contains(&entity.id) {
+            continue;
+        }
+        match &entity.kind {
+            EntityKind::Line { start, end } => {
+                if drop_set.contains(start) || drop_set.contains(end) {
+                    secondary_drops.insert(entity.id);
+                    secondary_drops.insert(*start);
+                    secondary_drops.insert(*end);
+                }
+            }
+            EntityKind::Arc {
+                center, start, end, ..
+            } => {
+                if drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end)
+                {
+                    secondary_drops.insert(entity.id);
+                    secondary_drops.insert(*center);
+                    secondary_drops.insert(*start);
+                    secondary_drops.insert(*end);
+                }
+            }
+            EntityKind::Circle { center, .. } => {
+                if drop_set.contains(center) {
+                    secondary_drops.insert(entity.id);
+                }
+            }
+            EntityKind::Point { .. } => {}
+        }
+    }
+    drop_set.extend(secondary_drops);
+
     sketch.entities.retain(|e| {
         if drop_set.contains(&e.id) {
             return false;
         }
-        if let EntityKind::Line { start, end } = e.kind {
-            if drop_set.contains(&start) || drop_set.contains(&end) {
-                return false;
+        match &e.kind {
+            EntityKind::Line { start, end } => {
+                if drop_set.contains(start) || drop_set.contains(end) {
+                    return false;
+                }
             }
+            EntityKind::Arc {
+                center, start, end, ..
+            } => {
+                if drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end)
+                {
+                    return false;
+                }
+            }
+            EntityKind::Circle { center, .. } => {
+                if drop_set.contains(center) {
+                    return false;
+                }
+            }
+            EntityKind::Point { .. } => {}
         }
         true
     });
@@ -185,6 +283,11 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     sketch
         .constraints
         .retain(|c| !format!("{:?}", c.kind).contains(&id_str));
+
+    // v0.24 Track A — drop shape parameters (`diameter_<slug>`,
+    // `corner_r_<slug>`, etc.) keyed by the centre-Point UUID slug.
+    let slug = id_slug(entity_id);
+    sketch.parameters.0.retain(|name, _| !name.ends_with(&slug));
 }
 
 /// v0.16 — mint 4 corner Points + 4 Lines outlining a pad's bbox.
@@ -234,6 +337,196 @@ fn mint_pad_corner_outline(
         sketch.entities.push(line);
     }
     ids
+}
+
+/// v0.24 Track A — mint a Round pad's geometry: 1 Circle entity
+/// referencing the centre `Point` (the pad's `sketch_entity_id`) +
+/// a `diameter_<slug>` sketch parameter recording the literal
+/// diameter for later parametric edits. The Properties row (A2)
+/// reads this parameter via `pad.shape_params["diameter"]`.
+fn mint_round_pad_geometry(
+    sketch: &mut SketchData,
+    plane_id: PlaneId,
+    pad: &mut EditorPad,
+    centre_id: SketchEntityId,
+) {
+    // Round pad's diameter equals its W (and H — it's a circle, so
+    // size_mm.0 == size_mm.1 by definition). The Circle entity stores
+    // the radius literal so the bake produces correct geometry; the
+    // parameter records the diameter for the Properties-row link.
+    let diameter = pad.size_mm.0;
+    let radius = diameter / 2.0;
+    let circle = Entity::new(
+        SketchEntityId::new(),
+        plane_id,
+        EntityKind::Circle {
+            center: centre_id,
+            radius,
+        },
+    );
+    sketch.entities.push(circle);
+
+    let slug = id_slug(centre_id);
+    let param_name = format!("diameter_{slug}");
+    sketch
+        .parameters
+        .insert(param_name.clone(), format!("{}mm", format_f64(diameter)));
+    pad.shape_params.insert("diameter".into(), param_name);
+}
+
+/// v0.24 Track A — mint a RoundRect pad's parametric geometry:
+///   - 4 bbox corner Points (returned for `corner_entity_ids` so
+///     move-mirror keeps the bbox tracking the pad).
+///   - 8 arc-anchor Points where each corner arc tangents touch the
+///     two adjacent edge lines (inset distance =
+///     `radius_ratio * min(W, H)`).
+///   - 4 inset corner Points (arc centres).
+///   - 4 shorter Lines connecting anchor → anchor (replacing the
+///     v0.16 corner-to-corner Lines).
+///   - 4 Arc entities; all four read radius from a single
+///     `corner_r_<slug>` sketch parameter so they stay linked
+///     implicitly. Phase 3 will attach the
+///     [`signex_sketch::LinkedRadius::Shared`] enum value to encode
+///     the link explicitly when A2 (Properties row) and A3 (Unlink)
+///     ship.
+///
+/// All entities are non-construction — they're the canonical pad
+/// geometry now (not a derived outline overlay). The bake reads
+/// `pad.shape` directly in v0.24 phase 2; this geometry is purely
+/// for editing UX until A4 (reverse mirror) lands.
+fn mint_round_rect_pad_geometry(
+    sketch: &mut SketchData,
+    plane_id: PlaneId,
+    pad: &mut EditorPad,
+    centre_id: SketchEntityId,
+    radius_ratio: f64,
+) -> [SketchEntityId; 4] {
+    let bbox = pad.bbox_mm();
+    let (xmin, ymin, xmax, ymax) = bbox;
+    let (w, h) = pad.size_mm;
+    // Inset distance = radius_ratio * min(W, H). Clamp to the bbox
+    // half-extent so a pathological radius_ratio (>0.5) cannot push
+    // anchors past each other.
+    let r = (radius_ratio.max(0.0) * w.min(h)).min(w.min(h) / 2.0);
+
+    if r <= f64::EPSILON {
+        tracing::warn!(
+            target: "signex::v024",
+            "RoundRect pad has zero / negative corner radius (ratio = {radius_ratio}); falling \
+             back to bbox 4-Line outline"
+        );
+        return mint_pad_corner_outline(sketch, plane_id, pad);
+    }
+
+    // ── 1. bbox corner Points (NE, SE, SW, NW). The same `[ne, se,
+    //    sw, nw]` order used everywhere in pad_to_sketch.rs.
+    let bbox_corner_positions: [(f64, f64); 4] = [
+        (xmax, ymin), // ne
+        (xmax, ymax), // se
+        (xmin, ymax), // sw
+        (xmin, ymin), // nw
+    ];
+    let bbox_corners: [SketchEntityId; 4] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in bbox_corners.iter().zip(bbox_corner_positions.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 2. 8 arc-anchor Points (per corner: edge-anchor + edge-anchor).
+    //    Order paired by corner: NE_top, NE_right, SE_right, SE_bottom,
+    //    SW_bottom, SW_left, NW_left, NW_top.
+    let anchor_positions: [(f64, f64); 8] = [
+        (xmax - r, ymin), // 0: NE top-edge anchor
+        (xmax, ymin + r), // 1: NE right-edge anchor
+        (xmax, ymax - r), // 2: SE right-edge anchor
+        (xmax - r, ymax), // 3: SE bottom-edge anchor
+        (xmin + r, ymax), // 4: SW bottom-edge anchor
+        (xmin, ymax - r), // 5: SW left-edge anchor
+        (xmin, ymin + r), // 6: NW left-edge anchor
+        (xmin + r, ymin), // 7: NW top-edge anchor
+    ];
+    let anchor_ids: [SketchEntityId; 8] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in anchor_ids.iter().zip(anchor_positions.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 3. 4 inset corner Points (arc centres).
+    let inset_positions: [(f64, f64); 4] = [
+        (xmax - r, ymin + r), // NE arc centre
+        (xmax - r, ymax - r), // SE arc centre
+        (xmin + r, ymax - r), // SW arc centre
+        (xmin + r, ymin + r), // NW arc centre
+    ];
+    let inset_ids: [SketchEntityId; 4] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in inset_ids.iter().zip(inset_positions.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 4. 4 shorter Lines connecting adjacent anchors.
+    //   Top:    NW_top   → NE_top    (anchor[7] → anchor[0])
+    //   Right:  NE_right → SE_right  (anchor[1] → anchor[2])
+    //   Bottom: SE_bot   → SW_bot    (anchor[3] → anchor[4])
+    //   Left:   SW_left  → NW_left   (anchor[5] → anchor[6])
+    for (start, end) in [
+        (anchor_ids[7], anchor_ids[0]),
+        (anchor_ids[1], anchor_ids[2]),
+        (anchor_ids[3], anchor_ids[4]),
+        (anchor_ids[5], anchor_ids[6]),
+    ] {
+        let line = Entity::new(
+            SketchEntityId::new(),
+            plane_id,
+            EntityKind::Line { start, end },
+        );
+        sketch.entities.push(line);
+    }
+
+    // ── 5. 4 corner Arcs.
+    //   NE: start = NE_top   (anchor[0]), end = NE_right (anchor[1])
+    //   SE: start = SE_right (anchor[2]), end = SE_bot   (anchor[3])
+    //   SW: start = SW_bot   (anchor[4]), end = SW_left  (anchor[5])
+    //   NW: start = NW_left  (anchor[6]), end = NW_top   (anchor[7])
+    for (centre_idx, start, end) in [
+        (0usize, anchor_ids[0], anchor_ids[1]),
+        (1, anchor_ids[2], anchor_ids[3]),
+        (2, anchor_ids[4], anchor_ids[5]),
+        (3, anchor_ids[6], anchor_ids[7]),
+    ] {
+        let arc = Entity::new(
+            SketchEntityId::new(),
+            plane_id,
+            EntityKind::Arc {
+                center: inset_ids[centre_idx],
+                start,
+                end,
+                sweep_ccw: true,
+            },
+        );
+        sketch.entities.push(arc);
+    }
+
+    // ── 6. Shared corner_r parameter. All four arcs read radius
+    //    implicitly from this parameter at bake time (Phase 3 ties
+    //    the link explicitly via LinkedRadius::Shared). The literal
+    //    radius is stored as the parameter expression so a fresh
+    //    sketch round-trips identity.
+    let slug = id_slug(centre_id);
+    let param_name = format!("corner_r_{slug}");
+    sketch
+        .parameters
+        .insert(param_name.clone(), format!("{}mm", format_f64(r)));
+    pad.shape_params.insert("corner_r".into(), param_name);
+
+    bbox_corners
+}
+
+/// v0.24 Track A — UUID slug for parameter-name namespacing. Strips
+/// dashes so the resulting parameter name is a valid identifier in
+/// the expression language.
+fn id_slug(id: SketchEntityId) -> String {
+    id.0.simple().to_string()
 }
 
 fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
@@ -547,15 +840,22 @@ mod tests {
     #[test]
     fn shape_change_preserves_corner_positions() {
         // v0.22 Phase D3 — verifying that flipping a pad's shape
-        // (Round → RoundRect, etc.) leaves the corner-outline Points
+        // (Rect → Oval, etc.) leaves the corner-outline Points
         // untouched. The corners track the pad's bbox, which is
         // derived from position + size only — shape isn't an input,
         // so no re-mint or re-position is needed on shape change.
+        //
+        // v0.24 Track A note: Round / RoundRect now mint
+        // shape-specific geometry (Circle / Arcs) instead of the
+        // v0.16 bbox outline, so this test exercises Rect → Oval —
+        // both of which still mint the 4-Point bbox outline. Round /
+        // RoundRect get their own dedicated regression coverage in
+        // `crates/signex-app/tests/regression.rs`.
         use crate::library::editor::footprint::state::FootprintEditorState;
 
         let mut fp = Footprint::empty("test");
         let mut pad = editor_pad("1", 0.0, 0.0);
-        pad.shape = LibPadShape::Round;
+        pad.shape = LibPadShape::Rect;
         mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
         let corner_ids = pad.corner_entity_ids.expect("corners minted");
@@ -585,7 +885,7 @@ mod tests {
         // Pads-mode dispatch paths call `with_selected_pad` which
         // ultimately calls `sync_pads_to_primitive`; that path does
         // NOT touch corner positions because shape is bbox-orthogonal.
-        pad.shape = LibPadShape::RoundRect { radius_ratio: 0.25 };
+        pad.shape = LibPadShape::Oval;
         let mut s = FootprintEditorState::empty();
         s.pads = vec![pad.clone()];
         FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);

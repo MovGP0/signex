@@ -591,3 +591,36 @@ pub enum VScoreSide {
     Top,
     Bottom,
 }
+
+/// v0.24 Track A — Linked-radius semantics for parametric pad corners.
+///
+/// When a RoundRect pad is minted into a sketch, all four corner Arcs
+/// share a single `corner_r_<pad_id>` parameter so changing it updates
+/// every corner in lockstep — Fusion-parity behaviour. The user can
+/// later right-click an individual corner and "Unlink" to override one
+/// or more corners independently; that flips the variant from
+/// `Shared` to `PerCorner`.
+///
+/// Phase 2 (Agent A) attaches this enum to `EntityKind::Arc` (or a
+/// sibling attribute) when A2 (Properties row) and A3 (Unlink) ship.
+/// This A1 phase introduces the type only — the geometry generator
+/// reads radius implicitly through the shared parameter and does not
+/// store a `LinkedRadius` value yet.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "PascalCase")]
+pub enum LinkedRadius {
+    /// All four corners read from the same sketch parameter. Default
+    /// state when a RoundRect pad is first minted into the sketch.
+    Shared { param: String },
+    /// Each corner reads from its own sketch parameter — the user has
+    /// "Unlinked" one or more corners and can override them
+    /// independently. Names follow the bbox-corner convention used
+    /// throughout the editor: `ne` (top-right), `se` (bottom-right),
+    /// `sw` (bottom-left), `nw` (top-left).
+    PerCorner {
+        ne: String,
+        se: String,
+        sw: String,
+        nw: String,
+    },
+}
