@@ -2582,18 +2582,23 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             let mask_outset_mm: f64 = 0.0;
             let mask_w = pad_w + 2.0 * mask_outset_mm;
             let mask_h = pad_h + 2.0 * mask_outset_mm;
-            // Visual thickness — exaggerated vs. real (~0.05mm copper)
-            // so the side wall reads at panel scale.
-            //
-            // v0.25 — bumped from 0.10 to 0.22 for Altium-parity. The
-            // user''s reference shows visibly extruded copper + mask
-            // layers (and a deep inner wall down the hole); 0.10
-            // rendered the layers as flat rings with barely any
-            // visible depth. 0.22 keeps the geometry well within the
-            // 75% frame-fit envelope while giving the iso projection
-            // enough Z to show real layer thickness.
-            let copper_thickness_mm = pad_w.max(pad_h) * 0.22;
+            // v0.25 — Altium-parity layer thicknesses. Their preview
+            // shows thin layers + a clear gap between mask and copper
+            // so the user reads "two distinct layers separated by
+            // substrate". Tuning summary (per user side-by-side):
+            //   - 0.10 was too thin (flat rings, no inner-wall depth).
+            //   - 0.22 was too thick (chunky cake, layers touching).
+            //   - 0.08 + 0.05 substrate gap reads as a real PCB pad.
+            // The inner-wall depth equals
+            // copper_z_top - mask_z_bot = 2*0.08 + 0.05 = 0.21 of pad
+            // long axis, which gives the silver wall a visible
+            // height inside the hole.
+            let copper_thickness_mm = pad_w.max(pad_h) * 0.08;
             let mask_thickness_mm = copper_thickness_mm;
+            // Vertical gap between mask top and copper bottom — the
+            // bare substrate showing through. Altium renders this as
+            // dark background visible BETWEEN the two coloured rings.
+            let substrate_gap_mm = pad_w.max(pad_h) * 0.05;
 
             // 30° isometric projection — matches `preview3d.rs`. Both
             // X+ and Y+ rotate to screen-up directions, Z+ is screen-up.
@@ -2610,7 +2615,7 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             // = (mask_w + mask_h) * sin30 + total_thickness.
             let proj_w = ((mask_w + mask_h) as f32) * cos30;
             let proj_h = ((mask_w + mask_h) as f32) * sin30
-                + (copper_thickness_mm + mask_thickness_mm) as f32;
+                + (copper_thickness_mm + mask_thickness_mm + substrate_gap_mm) as f32;
             let scale = ((bounds.width * 0.75 / proj_w).min(bounds.height * 0.75 / proj_h))
                 .max(2.0);
             let cx = bounds.width / 2.0;
@@ -2750,10 +2755,17 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                 };
 
             let segments = 40;
-            let copper_z_top = (copper_thickness_mm + mask_thickness_mm) as f32;
-            let copper_z_bot = mask_thickness_mm as f32;
-            let mask_z_top = mask_thickness_mm as f32;
+            // v0.25 — copper sits ABOVE the mask with a substrate gap
+            // between. Stacking from bottom to top:
+            //   z = 0 .................. mask_z_bot
+            //   z = mask_thickness ..... mask_z_top
+            //   z = mask_thickness + substrate_gap ... copper_z_bot
+            //   z = mask_thickness + substrate_gap + copper_thickness . copper_z_top
             let mask_z_bot = 0.0_f32;
+            let mask_z_top = mask_thickness_mm as f32;
+            let copper_z_bot = (mask_thickness_mm + substrate_gap_mm) as f32;
+            let copper_z_top =
+                (mask_thickness_mm + substrate_gap_mm + copper_thickness_mm) as f32;
 
             let pad_hw = (pad_w / 2.0) as f32;
             let pad_hh = (pad_h / 2.0) as f32;
