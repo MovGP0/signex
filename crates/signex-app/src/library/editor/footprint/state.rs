@@ -1191,6 +1191,13 @@ pub enum ToolPending {
         center: signex_sketch::id::SketchEntityId,
         start: signex_sketch::id::SketchEntityId,
     },
+    /// v0.23 — "Re-pick centre" affordance from the Pattern
+    /// Properties sub-form. The next sketch click on a Point
+    /// overwrites `array.center` for the array identified by
+    /// `array_id`. Cancels with Esc.
+    RepickPolarCenter {
+        array_id: signex_sketch::array::ArrayId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

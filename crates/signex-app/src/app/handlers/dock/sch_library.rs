@@ -843,6 +843,35 @@ impl Signex {
                 self.fp_editor_set_cutout_through(*id, *value);
                 true
             }
+            crate::panels::PanelMsg::FpEditorEditArrayParam {
+                array_id,
+                field,
+                value,
+            } => {
+                self.fp_editor_edit_array_param(*array_id, *field, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme } => {
+                self.fp_editor_set_array_numbering_scheme(*array_id, *scheme);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorDeleteArray { array_id } => {
+                self.fp_editor_delete_array(*array_id);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorBeginRepickPolarCenter { array_id } => {
+                self.fp_editor_begin_repick_polar_center(*array_id);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleArrayInstance {
+                array_id,
+                i,
+                j,
+                value,
+            } => {
+                self.fp_editor_toggle_array_instance(*array_id, *i, *j, *value);
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSnapOption(flag) => {
                 self.fp_editor_toggle_snap_option(*flag);
                 true
@@ -2463,6 +2492,180 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Pattern sub-form text-input edit. Walks `sketch.arrays`
+    /// to find the array, mutates the field identified by
+    /// `ArrayParamField`, then runs `SketchEdit::ForceRebuild` so the
+    /// bake re-expands. `MaskExpr` with an empty value clears the
+    /// depopulation entirely (to avoid leaving a `mask_expr=""` orphan
+    /// that blocks re-enabling instances later).
+    pub(crate) fn fp_editor_edit_array_param(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        field: crate::panels::ArrayParamField,
+        value: String,
+    ) {
+        use crate::panels::ArrayParamField;
+        use signex_sketch::array::{ArrayKind, GridDepopulation};
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    let trimmed = value.trim();
+                    match (&mut array.kind, field) {
+                        (ArrayKind::Linear { count_expr, .. }, ArrayParamField::LinearCountExpr) => {
+                            *count_expr = value;
+                        }
+                        (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
+                            *dx_expr = value;
+                        }
+                        (ArrayKind::Linear { dy_expr, .. }, ArrayParamField::LinearDyExpr) => {
+                            *dy_expr = value;
+                        }
+                        (ArrayKind::Grid { nx_expr, .. }, ArrayParamField::GridNxExpr) => {
+                            *nx_expr = value;
+                        }
+                        (ArrayKind::Grid { ny_expr, .. }, ArrayParamField::GridNyExpr) => {
+                            *ny_expr = value;
+                        }
+                        (ArrayKind::Grid { dx_expr, .. }, ArrayParamField::GridDxExpr) => {
+                            *dx_expr = value;
+                        }
+                        (ArrayKind::Grid { dy_expr, .. }, ArrayParamField::GridDyExpr) => {
+                            *dy_expr = value;
+                        }
+                        (ArrayKind::Polar { count_expr, .. }, ArrayParamField::PolarCountExpr) => {
+                            *count_expr = value;
+                        }
+                        (
+                            ArrayKind::Polar {
+                                sweep_angle_expr, ..
+                            },
+                            ArrayParamField::PolarSweepAngleExpr,
+                        ) => {
+                            *sweep_angle_expr = value;
+                        }
+                        (
+                            ArrayKind::Grid { depopulation, .. }
+                            | ArrayKind::Polar { depopulation, .. },
+                            ArrayParamField::MaskExpr,
+                        ) => {
+                            if trimmed.is_empty() {
+                                *depopulation = None;
+                            } else {
+                                *depopulation = Some(GridDepopulation {
+                                    mask_expr: value,
+                                });
+                            }
+                        }
+                        // Mismatched (kind, field) pairs no-op so a
+                        // stale panel can't corrupt the array.
+                        _ => {}
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Switch numbering scheme. Maps the panel's enum onto
+    /// [`signex_sketch::array::NumberingScheme`] using sensible
+    /// defaults (1-step LinearIncrement, BGA `A1`-rooted, empty
+    /// Explicit list). Existing inner state isn't preserved across
+    /// kind flips — switching numbering schemes is a discrete edit.
+    pub(crate) fn fp_editor_set_array_numbering_scheme(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        scheme: crate::panels::NumberingSchemeKindUi,
+    ) {
+        use crate::panels::NumberingSchemeKindUi;
+        use signex_sketch::array::NumberingScheme;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    array.numbering = match scheme {
+                        NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
+                            start_expr: "1".into(),
+                            step_expr: "1".into(),
+                        },
+                        NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
+                            skip_letters: true,
+                            start_row: 'A',
+                            start_col: 1,
+                        },
+                        NumberingSchemeKindUi::Explicit => NumberingScheme::Explicit {
+                            names: Vec::new(),
+                        },
+                    };
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Delete an array. The source entity stays in the sketch
+    /// — only the array record is removed, so existing constraints on
+    /// the source survive intact.
+    pub(crate) fn fp_editor_delete_array(&mut self, array_id: signex_sketch::array::ArrayId) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                sketch.arrays.retain(|a| a.id != array_id);
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Begin re-picking a polar centre. Sets
+    /// `ToolPending::RepickPolarCenter` so the next sketch click on a
+    /// Point overwrites the array's `center`. The dispatcher in
+    /// [`crate::app::dispatch::library`] consumes the pending state and
+    /// resets to `Idle`.
+    pub(crate) fn fp_editor_begin_repick_polar_center(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            use crate::library::editor::footprint::state::ToolPending;
+            editor.state.tool_pending = ToolPending::RepickPolarCenter { array_id };
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Toggle a single (i, j) instance in a Grid array's
+    /// per-instance suppression list. Deferred to task 2 — the
+    /// `suppressed_instances` field on `GridDepopulation` lands then.
+    /// Stub no-ops until the schema field exists.
+    pub(crate) fn fp_editor_toggle_array_instance(
+        &mut self,
+        _array_id: signex_sketch::array::ArrayId,
+        _i: u32,
+        _j: u32,
+        _value: bool,
+    ) {
+        // Implemented in task 2 once `GridDepopulation.suppressed_instances`
+        // lands.
     }
 }
 

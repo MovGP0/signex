@@ -716,6 +716,10 @@ pub struct FootprintEditorPanelContext {
     /// no silk graphic is selected; the Properties panel only renders
     /// the silk-selection branch when this is `Some`.
     pub selected_silk_summary: Option<FootprintSelectedSilkSummary>,
+    /// v0.23 — Array (Pattern) summary surfaced when the selected
+    /// sketch entity is the `source` of an array. Drives the
+    /// Properties panel "Pattern" sub-section.
+    pub selected_array: Option<ArraySummary>,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -742,6 +746,112 @@ pub struct KeepoutSummary {
 pub struct CutoutSummary {
     pub edge_radius_expr: Option<String>,
     pub through: bool,
+}
+
+/// v0.23 — Array (Pattern) properties surfaced on the Properties panel
+/// when the selected sketch entity is the source of an
+/// [`signex_sketch::array::Array`]. The handler resolves the array by
+/// `array_id`, mutates the matching field, then runs solve+bake.
+#[derive(Debug, Clone)]
+pub struct ArraySummary {
+    pub array_id: signex_sketch::array::ArrayId,
+    pub kind: ArrayKindSummary,
+    pub numbering: NumberingSchemeKindUi,
+    /// `true` when the polar centre re-pick is active — the next
+    /// sketch click on a Point sets `array.center`.
+    pub repicking_polar_center: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum ArrayKindSummary {
+    Linear {
+        count_expr: String,
+        dx_expr: String,
+        dy_expr: String,
+    },
+    Grid {
+        nx_expr: String,
+        ny_expr: String,
+        dx_expr: String,
+        dy_expr: String,
+        /// Empty string when the array has no `GridDepopulation`.
+        mask_expr: String,
+        /// Per-instance suppression carried alongside `mask_expr`. The
+        /// bake honours both — a (i, j) pair in this list skips the
+        /// instance regardless of the mask predicate. Stored as
+        /// `(i, j)` 0-based row/column indices. Drives the v0.23 B5
+        /// per-instance checkbox grid in the Properties panel.
+        suppressed_instances: Vec<(u32, u32)>,
+        /// Snapshot of `nx` after evaluation — drives the checkbox
+        /// grid's column count. `None` when the expression isn't
+        /// numeric (e.g. references a parameter that isn't bound).
+        nx_value: Option<u32>,
+        /// Snapshot of `ny` — checkbox grid's row count.
+        ny_value: Option<u32>,
+    },
+    Polar {
+        count_expr: String,
+        sweep_angle_expr: String,
+        center_position_mm: Option<[f64; 2]>,
+        mask_expr: String,
+        /// Per-instance suppression for Polar; the j coordinate is
+        /// always 0 (Polar arrays are 1-D).
+        suppressed_instances: Vec<u32>,
+        /// Snapshot of the evaluated `count` — drives the checkbox row
+        /// length. `None` when the expression isn't numeric.
+        count_value: Option<u32>,
+    },
+}
+
+/// v0.23 — Numbering scheme kind for the Properties panel pick_list.
+/// Mirrors [`signex_sketch::array::NumberingScheme`]'s tag. The handler
+/// preserves the inner expression fields when flipping kinds where
+/// possible (e.g. switching to LinearIncrement keeps any prior
+/// start/step expressions; switching to Explicit clears them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumberingSchemeKindUi {
+    LinearIncrement,
+    BgaRowCol,
+    Explicit,
+}
+
+impl NumberingSchemeKindUi {
+    pub const ALL: [Self; 3] = [
+        Self::LinearIncrement,
+        Self::BgaRowCol,
+        Self::Explicit,
+    ];
+}
+
+impl std::fmt::Display for NumberingSchemeKindUi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::LinearIncrement => "Linear (1, 2, 3, …)",
+            Self::BgaRowCol => "BGA (A1, A2, …)",
+            Self::Explicit => "Explicit list",
+        })
+    }
+}
+
+/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`].
+/// Each variant maps to a single text-input on one [`ArrayKindSummary`]
+/// branch; the handler uses the variant to disambiguate the target
+/// field when mutating the array in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrayParamField {
+    LinearCountExpr,
+    LinearDxExpr,
+    LinearDyExpr,
+    GridNxExpr,
+    GridNyExpr,
+    GridDxExpr,
+    GridDyExpr,
+    PolarCountExpr,
+    PolarSweepAngleExpr,
+    /// Maps to `GridDepopulation.mask_expr` for both Grid and Polar
+    /// arrays. Empty string clears the depopulation entirely (set
+    /// `Option::None` on the array).
+    MaskExpr,
 }
 
 /// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
@@ -1716,6 +1826,42 @@ pub enum PanelMsg {
     /// v0.16.4 — BoardCutout-role through-vs-partial-depth toggle.
     FpEditorSetCutoutThrough {
         id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    /// v0.23 — Pattern Properties sub-form text-input edit. The
+    /// handler walks `sketch.arrays`, finds the array with `array_id`,
+    /// mutates the field identified by `field`, then runs
+    /// `SketchEdit::ForceRebuild` so the bake re-expands.
+    FpEditorEditArrayParam {
+        array_id: signex_sketch::array::ArrayId,
+        field: ArrayParamField,
+        value: String,
+    },
+    /// v0.23 — Switch the numbering scheme on an array. The handler
+    /// preserves the existing inner fields when possible (LinearIncrement
+    /// keeps prior start/step exprs; flipping to Explicit clears the
+    /// names list).
+    FpEditorSetArrayNumberingScheme {
+        array_id: signex_sketch::array::ArrayId,
+        scheme: NumberingSchemeKindUi,
+    },
+    /// v0.23 — Delete the array entirely. The source entity stays put.
+    FpEditorDeleteArray {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.23 — Begin re-picking the polar centre. Sets
+    /// `ToolPending::RepickPolarCenter { array_id }` so the next sketch
+    /// click on a Point overwrites `array.center`. Cancels with Esc.
+    FpEditorBeginRepickPolarCenter {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.23 — Toggle a single (i, j) instance in a Grid array's
+    /// `GridDepopulation.suppressed_instances`. `value=true` re-enables
+    /// the instance; `value=false` suppresses it.
+    FpEditorToggleArrayInstance {
+        array_id: signex_sketch::array::ArrayId,
+        i: u32,
+        j: u32,
         value: bool,
     },
     /// v0.17.0 — empty-canvas Snap Options toggles. The handler

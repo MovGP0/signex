@@ -2593,6 +2593,9 @@ fn draw_sketch_tool_preview(
             dashed(frame, c_screen, s_screen);
             dashed(frame, c_screen, cursor_screen);
         }
+        // v0.23 — Polar centre re-pick has no preview shape; the
+        // cursor PIP at the top of this match is the only visual cue.
+        ToolPending::RepickPolarCenter { .. } => {}
     }
 }
 

@@ -160,6 +160,9 @@ fn view_tool_palette<'a>(
         ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
         ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
         ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),
+        ToolPending::RepickPolarCenter { .. } => {
+            "click a Point to set polar centre (Esc to cancel)".into()
+        }
     };
 
     row![

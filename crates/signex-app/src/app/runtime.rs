@@ -1366,6 +1366,102 @@ fn build_footprint_editor_panel_ctx(
     // editable geometry. Line + Text get dedicated forms; Arc /
     // Rectangle / Circle / Polygon collapse to `Other` and the
     // panel surfaces a sketch-mode hint instead of a custom form.
+    // v0.23 — Pattern Properties sub-form. When the selected sketch
+    // entity is the source of an array, surface its parameters so the
+    // Properties panel can render the Pattern sub-section. Walks
+    // `sketch.arrays` for a match — first hit wins (a single entity
+    // can be the source of at most one array in v0.23).
+    let selected_array = selected_sketch_entity_id.and_then(|sel_id| {
+        let sketch = editor.primitive().sketch.as_ref()?;
+        use crate::library::editor::footprint::state::ToolPending;
+        use signex_sketch::array::{ArrayKind, NumberingScheme};
+        let array = sketch.arrays.iter().find(|a| match &a.kind {
+            ArrayKind::Linear { source, .. }
+            | ArrayKind::Grid { source, .. }
+            | ArrayKind::Polar { source, .. } => *source == sel_id,
+        })?;
+        let kind = match &array.kind {
+            ArrayKind::Linear {
+                count_expr,
+                dx_expr,
+                dy_expr,
+                ..
+            } => crate::panels::ArrayKindSummary::Linear {
+                count_expr: count_expr.clone(),
+                dx_expr: dx_expr.clone(),
+                dy_expr: dy_expr.clone(),
+            },
+            ArrayKind::Grid {
+                nx_expr,
+                ny_expr,
+                dx_expr,
+                dy_expr,
+                depopulation,
+                ..
+            } => {
+                let mask_expr = depopulation
+                    .as_ref()
+                    .map(|d| d.mask_expr.clone())
+                    .unwrap_or_default();
+                crate::panels::ArrayKindSummary::Grid {
+                    nx_expr: nx_expr.clone(),
+                    ny_expr: ny_expr.clone(),
+                    dx_expr: dx_expr.clone(),
+                    dy_expr: dy_expr.clone(),
+                    mask_expr,
+                    suppressed_instances: Vec::new(),
+                    nx_value: nx_expr.trim().parse::<u32>().ok(),
+                    ny_value: ny_expr.trim().parse::<u32>().ok(),
+                }
+            }
+            ArrayKind::Polar {
+                count_expr,
+                sweep_angle_expr,
+                center,
+                depopulation,
+                ..
+            } => {
+                let center_position_mm = sketch.entities.iter().find(|e| e.id == *center).and_then(
+                    |e| match e.kind {
+                        signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
+                        _ => None,
+                    },
+                );
+                let mask_expr = depopulation
+                    .as_ref()
+                    .map(|d| d.mask_expr.clone())
+                    .unwrap_or_default();
+                crate::panels::ArrayKindSummary::Polar {
+                    count_expr: count_expr.clone(),
+                    sweep_angle_expr: sweep_angle_expr.clone(),
+                    center_position_mm,
+                    mask_expr,
+                    suppressed_instances: Vec::new(),
+                    count_value: count_expr.trim().parse::<u32>().ok(),
+                }
+            }
+        };
+        let numbering = match &array.numbering {
+            NumberingScheme::LinearIncrement { .. } => {
+                crate::panels::NumberingSchemeKindUi::LinearIncrement
+            }
+            NumberingScheme::BgaRowCol { .. } => {
+                crate::panels::NumberingSchemeKindUi::BgaRowCol
+            }
+            NumberingScheme::Explicit { .. } => crate::panels::NumberingSchemeKindUi::Explicit,
+        };
+        let repicking_polar_center = matches!(
+            editor.state.tool_pending,
+            ToolPending::RepickPolarCenter { array_id } if array_id == array.id
+        );
+        Some(crate::panels::ArraySummary {
+            array_id: array.id,
+            kind,
+            numbering,
+            repicking_polar_center,
+        })
+    });
+
     let selected_silk_summary = editor.state.selected_silk_f.and_then(|idx| {
         let g = editor.primitive().silk_f.get(idx)?;
         use crate::panels::SilkKindGeometry;
@@ -1464,6 +1560,7 @@ fn build_footprint_editor_panel_ctx(
         grids: editor.state.grids.clone(),
         active_grid_idx: editor.state.active_grid_idx,
         selected_silk_summary,
+        selected_array,
     })
 }
 

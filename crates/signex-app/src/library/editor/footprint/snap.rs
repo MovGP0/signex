@@ -108,6 +108,9 @@ pub fn anchor_for_tool(
         // For ArcStart we anchor to the START point — that's the one
         // the cursor's sweeping around to define `end`.
         ToolPending::ArcStart { start, .. } => start,
+        // v0.23 — Polar centre re-pick has no anchor; the click sets
+        // the centre directly without a tethered preview.
+        ToolPending::RepickPolarCenter { .. } => return None,
     };
     point_pos(id, sketch, state)
 }

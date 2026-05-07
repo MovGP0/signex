@@ -5626,6 +5626,37 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
             };
 
+            // v0.23 — RepickPolarCenter intercept. Triggered by the
+            // Pattern sub-form's "Re-pick centre" button. The next
+            // click on a Point overwrites the array's `center`,
+            // independent of the active tool. `resolved_id` is either
+            // an existing Point (when snap hit) or a freshly-minted
+            // Point at the click location. Skip the tool match below
+            // by handling cleanup inline.
+            let mut consumed_by_repick = false;
+            if let ToolPending::RepickPolarCenter { array_id } = editor.state.tool_pending {
+                if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                    if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                        if let signex_sketch::array::ArrayKind::Polar { center, .. } =
+                            &mut array.kind
+                        {
+                            *center = resolved_id;
+                        }
+                    }
+                }
+                editor.with_parts(|state, primitive| {
+                    apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+                });
+                editor.state.tool_pending = ToolPending::Idle;
+                consumed_by_repick = true;
+            }
+
+            if consumed_by_repick {
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+                return;
+            }
+
             // Per-tool state machine — advance `tool_pending` and emit
             // the gesture-completing AddEntity when ready.
             match editor.state.active_tool {
