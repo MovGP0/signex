@@ -1892,9 +1892,17 @@ impl Signex {
     }
 
     pub(crate) fn fp_editor_set_next_pad_size_x(&mut self, value: String) {
+        // v0.25 polish — accept empty / zero so the user can clear
+        // the field while editing. The render side flips `0.0` to
+        // an empty buffer (size fields render empty when ≈ 0) so the
+        // round-trip works: clear → 0.0 → empty render. A new
+        // positive value committed before mint replaces the zero.
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if parsed > 0.0 {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                editor.state.next_pad_defaults.size_x_mm = 0.0;
+            } else if let Ok(parsed) = trimmed.parse::<f64>() {
+                if parsed >= 0.0 {
                     editor.state.next_pad_defaults.size_x_mm = parsed;
                 }
             }
@@ -1903,9 +1911,16 @@ impl Signex {
     }
 
     pub(crate) fn fp_editor_set_next_pad_size_y(&mut self, value: String) {
+        // v0.25 polish — see _size_x for the empty-clear contract.
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if parsed > 0.0 {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                editor.state.next_pad_defaults.size_y_mm = 0.0;
+                self.refresh_panel_ctx();
+                return;
+            }
+            if let Ok(parsed) = trimmed.parse::<f64>() {
+                if parsed >= 0.0 {
                     editor.state.next_pad_defaults.size_y_mm = parsed;
                 }
             }
@@ -2222,15 +2237,29 @@ impl Signex {
         self.with_selected_pad(idx, |pad| pad.kind = kind);
     }
     pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) {
-        if let Ok(parsed) = value.trim().parse::<f64>() {
-            if parsed > 0.0 {
+        // v0.25 polish — see _set_next_pad_size_x for the empty-clear
+        // contract. Setting size to 0 makes the pad invisible until
+        // the user types a positive value; the render side renders
+        // empty when size ≈ 0 so the round-trip works.
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            self.with_selected_pad(idx, |pad| pad.size_mm.0 = 0.0);
+            return;
+        }
+        if let Ok(parsed) = trimmed.parse::<f64>() {
+            if parsed >= 0.0 {
                 self.with_selected_pad(idx, |pad| pad.size_mm.0 = parsed);
             }
         }
     }
     pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) {
-        if let Ok(parsed) = value.trim().parse::<f64>() {
-            if parsed > 0.0 {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            self.with_selected_pad(idx, |pad| pad.size_mm.1 = 0.0);
+            return;
+        }
+        if let Ok(parsed) = trimmed.parse::<f64>() {
+            if parsed >= 0.0 {
                 self.with_selected_pad(idx, |pad| pad.size_mm.1 = parsed);
             }
         }

@@ -2348,8 +2348,24 @@ fn pad_copper_row<'a>(
     border_c: Color,
     is_authoritative: bool,
 ) -> iced::Element<'a, PanelMsg> {
-    let x_buf = format!("{:.3}", values.size_x_mm);
-    let y_buf = format!("{:.3}", values.size_y_mm);
+    // v0.25 polish — render empty when the value is effectively
+    // zero so the user can clear the input by deleting all
+    // characters. With format!("{:.3}", 0.0) the field rebuilds to
+    // "0.000" on every render, which fights the user's typing as
+    // soon as they backspace past the first character. The fp_parse
+    // handler turns an empty string into 0.0 so the round-trip
+    // works: empty → 0.0 → empty. A nonzero size renders the value
+    // verbatim. The longer-term per-field buffer pattern (see
+    // reference_erasable_numeric_input.md) is queued for v0.26.
+    let buf_or_empty = |v: f64| -> String {
+        if v.abs() < 1e-9 {
+            String::new()
+        } else {
+            format!("{v:.3}")
+        }
+    };
+    let x_buf = buf_or_empty(values.size_x_mm);
+    let y_buf = buf_or_empty(values.size_y_mm);
     let cells = if is_authoritative {
         vec![
             pad_table_input_cell(
@@ -2756,10 +2772,23 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             }
             fill_poly(&mut frame, &cu_top_pts, copper_color);
 
-            // ── Hole (THT only): cylinder through the stack. The
-            //    visible inner wall is the FAR side from the camera,
-            //    which by the same predicate is the SW arc — i.e.,
-            //    `cos t + sin t < 0`. Draw it then the hole disc.
+            // ── Hole (THT only): cylinder VOID through the stack.
+            //    The visible inner wall is the FAR side from the
+            //    camera (CCW samples whose normal points toward the
+            //    camera in iso projection). Render the inner wall +
+            //    a flat black disc at the copper-top z so the hole
+            //    reads as a void punched through the pad, not a
+            //    plug sticking out above it.
+            //
+            //    v0.25 polish — was rendering the top disc at
+            //    `copper_z_top + 0.01` which put it ABOVE the
+            //    copper face, making the hole look like a black
+            //    cylinder protruding above the pad. Move it to
+            //    EXACTLY `copper_z_top` so it sits flush with
+            //    the copper top, plus a tiny epsilon to avoid
+            //    z-fighting. The `hole_color` is also darkened
+            //    toward black so it visually reads as "punched
+            //    through" rather than "filled with grey plastic".
             if let Some(d) = self.drill_diameter_mm {
                 let hr = (d / 2.0) as f32;
                 // Hole is always round — sample as round even for
@@ -2773,11 +2802,11 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                     .collect();
                 let hole_top_pts: Vec<iced::Point> = hole_world
                     .iter()
-                    .map(|(x, y)| project(*x, *y, copper_z_top + 0.01))
+                    .map(|(x, y)| project(*x, *y, copper_z_top))
                     .collect();
                 let hole_bot_pts: Vec<iced::Point> = hole_world
                     .iter()
-                    .map(|(x, y)| project(*x, *y, mask_z_bot - 0.01))
+                    .map(|(x, y)| project(*x, *y, mask_z_bot))
                     .collect();
                 for i in 0..hole_top_pts.len() {
                     if !strip_visible_world(&hole_world, i) {
@@ -2792,7 +2821,11 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                     ];
                     fill_poly(&mut frame, &quad, hole_dark);
                 }
-                fill_poly(&mut frame, &hole_top_pts, hole_color);
+                // Top disc — flush with copper top, dark to read as
+                // void rather than fill.
+                let void_top = iced::Color::from_rgba8(0x10, 0x10, 0x10, 1.0);
+                fill_poly(&mut frame, &hole_top_pts, void_top);
+                let _ = hole_color; // hole_color unused after flush-fix
             }
             let _ = (is_round, perimeter_pts); // tidied below; suppress unused warnings
 
