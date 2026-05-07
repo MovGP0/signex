@@ -336,7 +336,11 @@ fn bake_grid(
     let ny_ast = parse(strip_eq_prefix(ny_expr)).map_err(SketchError::Expr)?;
     let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
     let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
+    // v0.23 — empty mask_expr is the "no predicate, suppression list
+    // only" path. The parser rejects empty input, so skip the parse
+    // when the trimmed text is empty rather than surfacing an error.
     let mask_ast = depopulation
+        .filter(|d| !d.mask_expr.trim().is_empty())
         .map(|d| parse(strip_eq_prefix(&d.mask_expr)))
         .transpose()
         .map_err(SketchError::Expr)?;
@@ -368,6 +372,21 @@ fn bake_grid(
                 params: params_ast.clone(),
                 array_index: Some((i, j)),
             };
+
+            // v0.23 — Per-instance suppression list. Skipped
+            // independent of the mask predicate so the Properties
+            // panel checkbox grid can toggle individual cells without
+            // mutating the expression.
+            if let Some(d) = depopulation {
+                let i_u32 = i as u32;
+                let j_u32 = j as u32;
+                if d.suppressed_instances
+                    .iter()
+                    .any(|(si, sj)| *si == i_u32 && *sj == j_u32)
+                {
+                    continue;
+                }
+            }
 
             // Depopulation predicate — non-zero / true keeps the
             // cell, zero / false skips. Defaults to keep on parse
@@ -515,12 +534,29 @@ fn bake_polar(
     let dy_src = sy - cy;
 
     // v0.22 Phase B5 — pre-parse the depopulation mask, if any.
+    // v0.23 — empty mask_expr is the "suppression list only" path
+    // (the parser rejects empty input).
     let mask_ast = depopulation
+        .filter(|d| !d.mask_expr.trim().is_empty())
         .map(|d| parse(strip_eq_prefix(&d.mask_expr)))
         .transpose()
         .map_err(SketchError::Expr)?;
 
     for i in 0..count {
+        // v0.23 — Per-instance suppression list (`j` is always 0 for
+        // Polar). Skipped independent of the mask predicate so the
+        // Properties panel checkbox row can toggle individual
+        // instances without rewriting the expression.
+        if let Some(d) = depopulation {
+            let i_u32 = i as u32;
+            if d.suppressed_instances
+                .iter()
+                .any(|(si, sj)| *si == i_u32 && *sj == 0)
+            {
+                continue;
+            }
+        }
+
         // Depopulation predicate — non-zero / true keeps the
         // instance, zero / false skips. `j` is bound to 0 (Grid's
         // second axis isn't meaningful for Polar). Defaults to keep

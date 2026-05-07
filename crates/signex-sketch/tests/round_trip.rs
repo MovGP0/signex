@@ -537,6 +537,7 @@ fn polar_array_with_depopulation_round_trip() {
             sweep_angle_expr: "360deg".into(),
             depopulation: Some(GridDepopulation {
                 mask_expr: "i != 3".into(),
+                suppressed_instances: Vec::new(),
             }),
         },
         numbering: NumberingScheme::LinearIncrement {
@@ -563,6 +564,7 @@ fn grid_array_with_corner_depopulation_round_trip() {
                 mask_expr: "!(i == 0 && j == 0) && !(i == nx-1 && j == 0) \
                             && !(i == 0 && j == ny-1) && !(i == nx-1 && j == ny-1)"
                     .into(),
+                suppressed_instances: Vec::new(),
             }),
         },
         numbering: NumberingScheme::BgaRowCol {
@@ -574,6 +576,86 @@ fn grid_array_with_corner_depopulation_round_trip() {
     let s = toml::to_string(&a).unwrap();
     let back: Array = toml::from_str(&s).unwrap();
     assert_eq!(a, back);
+}
+
+#[test]
+fn grid_array_with_suppressed_instances_round_trip() {
+    // v0.23 — explicit per-instance suppression list survives the
+    // round trip alongside any mask expression. Empty mask + non-empty
+    // suppression list is a valid combination (Properties-panel
+    // checkbox-only authoring path).
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "4".into(),
+            ny_expr: "4".into(),
+            dx_expr: "5mm".into(),
+            dy_expr: "5mm".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(0, 0), (3, 3), (1, 2)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn polar_array_with_suppressed_instances_round_trip() {
+    // v0.23 — Polar mirrors Grid's suppression list; entries use
+    // `j = 0` since Polar is a 1-D array.
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Polar {
+            source: SketchEntityId::new(),
+            center: SketchEntityId::new(),
+            count_expr: "8".into(),
+            sweep_angle_expr: "360deg".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(2, 0), (5, 0)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn grid_depopulation_default_suppressed_instances_back_compat() {
+    // v0.23 — round-trip an old-format depopulation TOML (mask_expr
+    // only) to ensure `#[serde(default)]` keeps existing on-disk
+    // arrays loadable.
+    let toml_str = r#"
+        [[entries]]
+        kind = "Grid"
+        source = "00000000-0000-0000-0000-000000000001"
+        nx_expr = "2"
+        ny_expr = "2"
+        dx_expr = "1mm"
+        dy_expr = "1mm"
+        [entries.depopulation]
+        mask_expr = "i != 0"
+    "#;
+    #[derive(serde::Deserialize)]
+    struct Wrapper {
+        entries: Vec<ArrayKind>,
+    }
+    let w: Wrapper = toml::from_str(toml_str).unwrap();
+    let kind = &w.entries[0];
+    if let ArrayKind::Grid { depopulation, .. } = kind {
+        let d = depopulation.as_ref().expect("depop present");
+        assert_eq!(d.mask_expr, "i != 0");
+        assert!(d.suppressed_instances.is_empty());
+    } else {
+        panic!("expected Grid kind");
+    }
 }
 
 #[test]

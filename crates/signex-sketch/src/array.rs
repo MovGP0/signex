@@ -75,9 +75,19 @@ pub enum ArrayKind {
 /// Predicate evaluated per `(i, j)` index in a Grid array.
 /// `true` keeps the instance; `false` skips it. `i`, `j`, `nx`, `ny`
 /// are bound in scope.
+///
+/// v0.23 — `suppressed_instances` is an explicit list of `(i, j)`
+/// indices to skip *in addition to* whatever `mask_expr` evaluates to.
+/// The bake skips an instance when EITHER predicate fires (mask returns
+/// false OR the index is in the list). This lets the Properties
+/// panel's per-instance checkbox grid (Phase B5 UI) toggle individual
+/// pads without needing to round-trip through an expression parser.
+/// Polar arrays use `j = 0` for every entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GridDepopulation {
     pub mask_expr: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suppressed_instances: Vec<(u32, u32)>,
 }
 
 /// Pad-numbering scheme for an array's expanded primitives.

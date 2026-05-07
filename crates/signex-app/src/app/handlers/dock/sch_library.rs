@@ -2550,11 +2550,20 @@ impl Signex {
                             | ArrayKind::Polar { depopulation, .. },
                             ArrayParamField::MaskExpr,
                         ) => {
-                            if trimmed.is_empty() {
+                            // Preserve any existing per-instance
+                            // suppression list when editing the mask
+                            // expression — the user might be tweaking
+                            // both at once via the Properties panel.
+                            let prior = depopulation
+                                .as_ref()
+                                .map(|d| d.suppressed_instances.clone())
+                                .unwrap_or_default();
+                            if trimmed.is_empty() && prior.is_empty() {
                                 *depopulation = None;
                             } else {
                                 *depopulation = Some(GridDepopulation {
                                     mask_expr: value,
+                                    suppressed_instances: prior,
                                 });
                             }
                         }
@@ -2653,19 +2662,64 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// v0.23 — Toggle a single (i, j) instance in a Grid array's
-    /// per-instance suppression list. Deferred to task 2 — the
-    /// `suppressed_instances` field on `GridDepopulation` lands then.
-    /// Stub no-ops until the schema field exists.
+    /// v0.23 — Toggle a single `(i, j)` instance in an array's
+    /// per-instance suppression list. `value=true` enables the
+    /// instance (removes the entry); `value=false` suppresses it
+    /// (adds the entry, deduplicated). Polar arrays set `j = 0`.
+    ///
+    /// When the suppression list grows from empty, the array gains a
+    /// fresh `GridDepopulation { mask_expr: "", suppressed_instances }`.
+    /// When the list returns to empty AND the existing `mask_expr` is
+    /// blank, the depopulation is removed entirely so the array
+    /// returns to its parametric-only state.
     pub(crate) fn fp_editor_toggle_array_instance(
         &mut self,
-        _array_id: signex_sketch::array::ArrayId,
-        _i: u32,
-        _j: u32,
-        _value: bool,
+        array_id: signex_sketch::array::ArrayId,
+        i: u32,
+        j: u32,
+        value: bool,
     ) {
-        // Implemented in task 2 once `GridDepopulation.suppressed_instances`
-        // lands.
+        use signex_sketch::array::{ArrayKind, GridDepopulation};
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
+                        ArrayKind::Grid { depopulation, .. } => depopulation,
+                        ArrayKind::Polar { depopulation, .. } => depopulation,
+                        ArrayKind::Linear { .. } => return,
+                    };
+                    if value {
+                        // Re-enable the instance — drop matching entries.
+                        if let Some(d) = depop_slot.as_mut() {
+                            d.suppressed_instances
+                                .retain(|(si, sj)| !(*si == i && *sj == j));
+                            if d.mask_expr.trim().is_empty()
+                                && d.suppressed_instances.is_empty()
+                            {
+                                *depop_slot = None;
+                            }
+                        }
+                    } else {
+                        // Suppress the instance — append if absent.
+                        let d = depop_slot.get_or_insert_with(|| GridDepopulation {
+                            mask_expr: String::new(),
+                            suppressed_instances: Vec::new(),
+                        });
+                        if !d.suppressed_instances.iter().any(|(si, sj)| *si == i && *sj == j) {
+                            d.suppressed_instances.push((i, j));
+                        }
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
     }
 }
 

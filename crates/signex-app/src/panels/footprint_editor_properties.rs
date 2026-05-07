@@ -3988,7 +3988,9 @@ fn render_pattern_subform<'a>(
             dx_expr,
             dy_expr,
             mask_expr,
-            ..
+            suppressed_instances,
+            nx_value,
+            ny_value,
         } => {
             col = col.push(pad_input_row(
                 "nx",
@@ -4055,13 +4057,49 @@ fn render_pattern_subform<'a>(
                 primary,
                 border_c,
             ));
+            // v0.23 — Per-instance checkbox grid. Renders only when
+            // both nx and ny resolve to a concrete integer; parameter-
+            // driven counts (e.g. "= row_count") fall back to the mask
+            // expression input.
+            if let (Some(nx), Some(ny)) = (nx_value, ny_value) {
+                let nx = (*nx).min(32) as u32;
+                let ny = (*ny).min(32) as u32;
+                col = col.push(
+                    container(text("Instances").size(10).color(muted))
+                        .padding([6, 8])
+                        .width(Length::Fill),
+                );
+                let mut grid_col = Column::new().spacing(2).padding([0, 8]);
+                for j in 0..ny {
+                    let mut grid_row = iced::widget::Row::new().spacing(2);
+                    for i in 0..nx {
+                        let suppressed = suppressed_instances
+                            .iter()
+                            .any(|(si, sj)| *si == i && *sj == j);
+                        let on = !suppressed;
+                        let cb = iced::widget::checkbox(on)
+                            .size(12)
+                            .spacing(0)
+                            .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
+                                array_id,
+                                i,
+                                j,
+                                value: checked,
+                            });
+                        grid_row = grid_row.push(cb);
+                    }
+                    grid_col = grid_col.push(grid_row);
+                }
+                col = col.push(grid_col);
+            }
         }
         ArrayKindSummary::Polar {
             count_expr,
             sweep_angle_expr,
             center_position_mm,
             mask_expr,
-            ..
+            suppressed_instances,
+            count_value,
         } => {
             col = col.push(pad_input_row(
                 "Count",
@@ -4144,6 +4182,32 @@ fn render_pattern_subform<'a>(
                 primary,
                 border_c,
             ));
+            // v0.23 — Per-instance checkbox row for Polar arrays.
+            // Renders only when count resolves to a concrete integer.
+            if let Some(count) = count_value {
+                let count = (*count).min(64) as u32;
+                col = col.push(
+                    container(text("Instances").size(10).color(muted))
+                        .padding([6, 8])
+                        .width(Length::Fill),
+                );
+                let mut grid_row = iced::widget::Row::new().spacing(2).padding([0, 8]);
+                for i in 0..count {
+                    let suppressed = suppressed_instances.iter().any(|si| *si == i);
+                    let on = !suppressed;
+                    let cb = iced::widget::checkbox(on)
+                        .size(12)
+                        .spacing(0)
+                        .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
+                            array_id,
+                            i,
+                            j: 0,
+                            value: checked,
+                        });
+                    grid_row = grid_row.push(cb);
+                }
+                col = col.push(grid_row);
+            }
         }
     }
 

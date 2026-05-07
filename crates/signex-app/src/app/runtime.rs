@@ -1399,9 +1399,9 @@ fn build_footprint_editor_panel_ctx(
                 depopulation,
                 ..
             } => {
-                let mask_expr = depopulation
+                let (mask_expr, suppressed_instances) = depopulation
                     .as_ref()
-                    .map(|d| d.mask_expr.clone())
+                    .map(|d| (d.mask_expr.clone(), d.suppressed_instances.clone()))
                     .unwrap_or_default();
                 crate::panels::ArrayKindSummary::Grid {
                     nx_expr: nx_expr.clone(),
@@ -1409,7 +1409,7 @@ fn build_footprint_editor_panel_ctx(
                     dx_expr: dx_expr.clone(),
                     dy_expr: dy_expr.clone(),
                     mask_expr,
-                    suppressed_instances: Vec::new(),
+                    suppressed_instances,
                     nx_value: nx_expr.trim().parse::<u32>().ok(),
                     ny_value: ny_expr.trim().parse::<u32>().ok(),
                 }
@@ -1427,16 +1427,25 @@ fn build_footprint_editor_panel_ctx(
                         _ => None,
                     },
                 );
-                let mask_expr = depopulation
+                let (mask_expr, suppressed_instances): (String, Vec<u32>) = depopulation
                     .as_ref()
-                    .map(|d| d.mask_expr.clone())
+                    .map(|d| {
+                        // Polar entries are (i, 0); flatten to a single
+                        // index per row.
+                        let suppressed = d
+                            .suppressed_instances
+                            .iter()
+                            .filter_map(|(si, sj)| if *sj == 0 { Some(*si) } else { None })
+                            .collect();
+                        (d.mask_expr.clone(), suppressed)
+                    })
                     .unwrap_or_default();
                 crate::panels::ArrayKindSummary::Polar {
                     count_expr: count_expr.clone(),
                     sweep_angle_expr: sweep_angle_expr.clone(),
                     center_position_mm,
                     mask_expr,
-                    suppressed_instances: Vec::new(),
+                    suppressed_instances,
                     count_value: count_expr.trim().parse::<u32>().ok(),
                 }
             }
