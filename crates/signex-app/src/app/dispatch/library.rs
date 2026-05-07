@@ -5348,10 +5348,25 @@ pub(crate) fn apply_footprint_primitive_edit(
             };
 
             // Resolve the click into either an existing snap Point or a
-            // freshly-minted Point. For a snap, the dispatcher reuses the
-            // existing entity ID. Otherwise it appends a Point at the
-            // click position and uses that new ID for the active tool's
-            // gesture state.
+            // freshly-minted Point. For multi-click tools (Line / Rect /
+            // Circle / Arc), the dispatcher reuses the snap target's ID
+            // so closed-loop detection (canvas.rs::draw_filled_closed_
+            // loops) continues to recognise cycles by shared endpoint
+            // ID. Otherwise it appends a Point at the click position
+            // and uses that new ID for the active tool's gesture state.
+            //
+            // v0.22 Phase A1 — Auto-Coincident inference for the
+            // Place-Point tool. A Place-Point click on an existing
+            // Point used to be a silent no-op (snap_id was returned
+            // but never acted upon). It now mints a fresh Point at
+            // the snap target and pins it to the target with a
+            // Coincident constraint, so the user gets a Fusion-style
+            // "place a point coincident with this one" gesture
+            // without having to switch to the Constraint sub-tool.
+            // Multi-click tools deliberately keep shared-ID
+            // semantics — their endpoint ID is the bake's vertex
+            // identity and switching to constraint-merged points
+            // would silently break the closed-loop walker.
             let plane_id = match editor.primitive().sketch.as_ref() {
                 Some(s) if !s.planes.is_empty() => s.planes[0].id,
                 _ => {
@@ -5369,6 +5384,39 @@ pub(crate) fn apply_footprint_primitive_edit(
             };
 
             let resolved_id: SketchEntityId = match snap_id {
+                Some(target) if matches!(editor.state.active_tool, SketchTool::Point) => {
+                    use signex_sketch::constraint::{Constraint, ConstraintKind};
+                    use signex_sketch::id::ConstraintId;
+
+                    let new_id = SketchEntityId::new();
+                    let entity = flag(Entity::new(
+                        new_id,
+                        plane_id,
+                        EntityKind::Point { x: x_mm, y: y_mm },
+                    ));
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::AddEntity(entity),
+                        );
+                    });
+                    let constraint = Constraint {
+                        id: ConstraintId::new(),
+                        kind: ConstraintKind::Coincident {
+                            p1: new_id,
+                            p2: target,
+                        },
+                    };
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::AddConstraint(constraint),
+                        );
+                    });
+                    new_id
+                }
                 Some(id) => id,
                 None => {
                     let id = SketchEntityId::new();
