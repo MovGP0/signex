@@ -2717,6 +2717,55 @@ fn draw_sketch_tool_preview(
         // cursor PIP at the top of this match is the only visual cue.
         ToolPending::RepickPolarCenter { .. } => {}
     }
+
+    // v0.24 Track D — modeless live numeric placement-input overlay.
+    // Renders the user-typed buffer at the cursor whenever
+    // `placement_input` is `Some`, regardless of which `ToolPending`
+    // is current (the kind picker decided which tool's gesture mints
+    // it; the dispatcher tolerates unrelated tool changes by clearing
+    // on commit + on Esc). Position: 4 px right and 8 px below the
+    // cursor, with a translucent rounded background so the buffer
+    // reads against any canvas content.
+    if let Some(input) = state.placement_input.as_ref() {
+        let label = input.kind.label();
+        let body = if input.buffer.is_empty() {
+            format!("{label}: _")
+        } else {
+            format!("{label}: {}", input.buffer)
+        };
+        let origin = Point::new(cursor_screen.x + 4.0, cursor_screen.y + 8.0);
+        // Approximate a one-line text bbox so the background plate
+        // sits behind the glyphs. Iosevka 11px averages ~6 px per
+        // character at the canvas's default rendering; a 4 px pad
+        // around the label keeps the chrome readable.
+        let glyph_w = 6.5_f32;
+        let pad_x = 5.0_f32;
+        let pad_y = 3.0_f32;
+        let body_w = glyph_w * (body.chars().count() as f32) + pad_x * 2.0;
+        let body_h = 16.0_f32 + pad_y * 2.0;
+        let plate_origin = Point::new(origin.x - pad_x, origin.y - pad_y);
+        // Background plate.
+        frame.fill_rectangle(
+            plate_origin,
+            iced::Size::new(body_w, body_h),
+            Color::from_rgba(0.05, 0.07, 0.10, 0.85),
+        );
+        // Accent border.
+        frame.stroke(
+            &Path::rectangle(plate_origin, iced::Size::new(body_w, body_h)),
+            Stroke::default()
+                .with_width(1.0)
+                .with_color(Color::from_rgba(0.40, 0.70, 1.00, 0.95)),
+        );
+        // Buffer text.
+        frame.fill_text(canvas::Text {
+            content: body,
+            position: origin,
+            color: Color::from_rgba(0.95, 0.95, 0.97, 1.00),
+            size: iced::Pixels(13.0),
+            ..canvas::Text::default()
+        });
+    }
 }
 
 fn draw_pad(
