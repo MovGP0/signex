@@ -1165,6 +1165,65 @@ fn build_footprint_editor_panel_ctx(
         None
     };
 
+    // v0.24 Phase 3 (Track A2) — surface the selected pad's
+    // `shape_params` bindings so the Properties panel can render a
+    // "Corner radius" / "Diameter" row reading the live sketch
+    // parameter expression. Empty when the selected pad has no
+    // bindings (e.g. Rect/Oval shapes whose geometry is bbox-only) or
+    // when no pad is selected.
+    let selected_pad_shape_params: Vec<crate::panels::PadShapeParamSummary> =
+        if mode_kind == FootprintModeKind::Pads {
+            editor
+                .state
+                .selected_pad
+                .and_then(|idx| editor.state.pads.get(idx))
+                .map(|pad| {
+                    let parameters = editor
+                        .primitive()
+                        .sketch
+                        .as_ref()
+                        .map(|s| &s.parameters);
+                    let mut entries: Vec<crate::panels::PadShapeParamSummary> = pad
+                        .shape_params
+                        .iter()
+                        .map(|(key, parameter_name)| {
+                            let label = match key.as_str() {
+                                "corner_r" => "Corner radius".to_string(),
+                                "diameter" => "Diameter".to_string(),
+                                "width" => "Width".to_string(),
+                                "height" => "Height".to_string(),
+                                "corner_r_ne" => "Corner radius (NE)".to_string(),
+                                "corner_r_se" => "Corner radius (SE)".to_string(),
+                                "corner_r_sw" => "Corner radius (SW)".to_string(),
+                                "corner_r_nw" => "Corner radius (NW)".to_string(),
+                                _ => key.clone(),
+                            };
+                            let current_expr = parameters
+                                .and_then(|p| p.get_raw(parameter_name))
+                                .unwrap_or("")
+                                .to_string();
+                            crate::panels::PadShapeParamSummary {
+                                key: key.clone(),
+                                label,
+                                parameter_name: parameter_name.clone(),
+                                current_expr,
+                            }
+                        })
+                        .collect();
+                    // Sort by label so the Properties panel renders the
+                    // rows in a stable order across rebuilds (HashMap
+                    // iteration is unstable). "Corner radius" before
+                    // "Corner radius (NE)" before "(NW)" etc — the
+                    // alphabetic order of the labels gives the right
+                    // grouping for the Fusion-parity layout.
+                    entries.sort_by(|a, b| a.label.cmp(&b.label));
+                    entries
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
     // v0.14.2 — discover every `.snxfpt` sibling inside the
     // containing `.snxlib`'s `footprints/` directory. Walks the
     // active footprint's path ancestors looking for a `.snxlib`
@@ -1576,6 +1635,7 @@ fn build_footprint_editor_panel_ctx(
         active_grid_idx: editor.state.active_grid_idx,
         selected_silk_summary,
         selected_array,
+        selected_pad_shape_params,
     })
 }
 

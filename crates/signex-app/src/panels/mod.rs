@@ -720,6 +720,36 @@ pub struct FootprintEditorPanelContext {
     /// sketch entity is the `source` of an array. Drives the
     /// Properties panel "Pattern" sub-section.
     pub selected_array: Option<ArraySummary>,
+    /// v0.24 Phase 3 (Track A2) — parametric handle summary for the
+    /// selected pad. Empty when the pad has no `shape_params` bindings
+    /// (e.g. legacy pads minted before v0.24, or pads whose shape has
+    /// no parametric handles like Rect / Oval). One entry per
+    /// (feature_key → parameter) binding; the Properties panel
+    /// renders one editable row per entry so the user can edit the
+    /// shared sketch parameter without entering Sketch mode.
+    pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
+}
+
+/// v0.24 Phase 3 (Track A2) — surface entry for one parametric pad
+/// handle. Carries the feature key (e.g. `"corner_r"`, `"diameter"`),
+/// the resolved sketch parameter name, the current expression string
+/// (read out of `sketch.parameters`), and a UI label so the
+/// Properties panel can render a localised row label without each
+/// editor having to repeat the mapping.
+#[derive(Debug, Clone)]
+pub struct PadShapeParamSummary {
+    /// Feature key as stored on `EditorPad.shape_params`
+    /// (e.g. `"corner_r"`, `"diameter"`).
+    pub key: String,
+    /// Display label for the Properties panel row.
+    pub label: String,
+    /// Resolved parameter name in `sketch.parameters` (the value
+    /// stored under `key` in `pad.shape_params`).
+    pub parameter_name: String,
+    /// Current expression string (e.g. `"0.25mm"`). Empty when the
+    /// parameter is missing from `sketch.parameters` (defensive — the
+    /// row still renders so the user can re-bind via direct edit).
+    pub current_expr: String,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -1765,6 +1795,27 @@ pub enum PanelMsg {
     /// selects the entity. No-op when the pad has no
     /// `sketch_entity_id` (placed before sketch-mode auto-mint).
     FpEditorEditPadInSketch { pad_idx: usize },
+    /// v0.24 Phase 3 (Track A2) — Properties-panel parametric handle
+    /// row edit. The handler looks up `pad.shape_params[key]` to
+    /// resolve the bound parameter name, writes `value` into
+    /// `sketch.parameters[parameter_name]`, then dispatches a sketch
+    /// `ForceRebuild` so the solver re-runs and every entity bound to
+    /// that parameter (e.g. all 4 corner Arcs of a RoundRect) updates
+    /// in lockstep.
+    FpEditorEditPadShapeParam {
+        pad_idx: usize,
+        key: String,
+        value: String,
+    },
+    /// v0.24 Phase 3 (Track A3) — sketch-canvas right-click action.
+    /// "Unlink corner radius" mints a fresh per-corner parameter and
+    /// rebinds the clicked Arc to it so the user can override that
+    /// one corner independently. The other three corners stay on the
+    /// shared `corner_r` parameter. No-op when the Arc isn't part of
+    /// any pad's `shape_params` graph.
+    FpEditorUnlinkCornerRadius {
+        arc_entity_id: signex_sketch::id::SketchEntityId,
+    },
     /// v0.22 Phase D6 — Mirror of `FpEditorEditPadInSketch` going the
     /// other direction. From a sketch entity carrying a `PadAttr`,
     /// switch to Pads mode and select the EditorPad whose

@@ -108,6 +108,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 );
                 col = render_pad_form_pad_stack(
                     col, &values, target, muted, primary, border_c, collapsed_sections,
+                    &fp.selected_pad_shape_params,
                 );
                 col = render_pad_form_pad_features(
                     col, &values, target, muted, primary, border_c, collapsed_sections,
@@ -149,6 +150,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
             );
             col = render_pad_form_pad_stack(
                 col, &values, target, muted, primary, border_c, collapsed_sections,
+                &[],
             );
             col = render_pad_form_pad_features(
                 col, &values, target, muted, primary, border_c, collapsed_sections,
@@ -186,7 +188,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 "Position",
                 format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
             );
-            col = render_pad_form_pad_stack(col, &values, target, muted, primary, border_c, collapsed_sections);
+            col = render_pad_form_pad_stack(col, &values, target, muted, primary, border_c, collapsed_sections, &fp.selected_pad_shape_params);
             col = render_pad_form_pad_features(col, &values, target, muted, primary, border_c, collapsed_sections);
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
@@ -1696,6 +1698,15 @@ fn render_pad_form_properties<'a>(
 /// Bottom/Full Stack tab strip, then the field rows. The tabs are
 /// UI-only structure today; per-layer overrides require a v0.21
 /// schema follow-up so all three tabs render the same content.
+///
+/// v0.24 Phase 3 (Track A2) — `shape_params` carries the linked
+/// sketch-parameter handles (e.g. `"corner_r"` / `"diameter"`) for
+/// the selected pad. Each entry renders an editable text-input row
+/// reading / writing the live sketch parameter expression so the
+/// user can drive parametric pad geometry from the Properties panel
+/// without entering Sketch mode. Empty for pads with no parametric
+/// handles (Rect / Oval) and during pad placement (no minted
+/// entities yet).
 fn render_pad_form_pad_stack<'a>(
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
@@ -1704,6 +1715,7 @@ fn render_pad_form_pad_stack<'a>(
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
+    shape_params: &'a [crate::panels::PadShapeParamSummary],
 ) -> Column<'a, PanelMsg> {
     col = col.push(props_section_header(
         "Pad Stack",
@@ -1781,6 +1793,33 @@ fn render_pad_form_pad_stack<'a>(
             primary,
             border_c,
         ));
+    }
+
+    // v0.24 Phase 3 (Track A2) — parametric-handle rows surface the
+    // sketch-bound shape parameters for the selected pad. Each entry
+    // is a label + expression input writing back through
+    // `FpEditorEditPadShapeParam` so the dispatcher can rewrite
+    // `sketch.parameters[parameter_name]` and trigger a solve+rebake.
+    // Only renders for `PadEditTarget::Selected` (placement-mode pads
+    // have no minted entities, so no params to surface).
+    if let PadEditTarget::Selected(pad_idx) = target {
+        for entry in shape_params.iter() {
+            let key = entry.key.clone();
+            let value_string = entry.current_expr.clone();
+            col = col.push(pad_input_row(
+                entry.label.as_str(),
+                "0.25mm",
+                value_string,
+                move |v| PanelMsg::FpEditorEditPadShapeParam {
+                    pad_idx,
+                    key: key.clone(),
+                    value: v,
+                },
+                muted,
+                primary,
+                border_c,
+            ));
+        }
     }
 
     // ── HOLE table ── Multi-Layer pads only.
