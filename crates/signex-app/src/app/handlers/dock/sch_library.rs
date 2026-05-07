@@ -747,6 +747,81 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorEditPadShapeParam {
+                pad_idx,
+                key,
+                value,
+            } => {
+                // v0.24 Phase 3 (Track A2) — Properties-panel
+                // parametric-handle edit. Resolve the bound sketch
+                // parameter via `pad.shape_params[key]`, then forward
+                // to `FootprintSketchEditParameter` which upserts the
+                // expression and triggers a solve+rebake. Undo
+                // snapshot is captured at the dispatcher level via
+                // `mutates_footprint_state` (defaults to true for any
+                // unrecognised PrimitiveEditorMsg variant — verified
+                // for `FootprintSketchEditParameter` already).
+                let parameter_name = self
+                    .active_footprint_editor_mut()
+                    .and_then(|editor| {
+                        editor
+                            .state
+                            .pads
+                            .get(*pad_idx)
+                            .and_then(|pad| pad.shape_params.get(key).cloned())
+                    });
+                if let Some(name) = parameter_name {
+                    if let Some(active_tab) =
+                        self.document_state.tabs.get(self.document_state.active_tab)
+                    {
+                        if let Some(path) = active_tab.kind.as_footprint_editor() {
+                            let path = path.clone();
+                            let _ = self.update(Message::Library(
+                                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                    path,
+                                    msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchEditParameter {
+                                        name,
+                                        expr: value.clone(),
+                                    },
+                                },
+                            ));
+                            self.refresh_panel_ctx();
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        target: "signex::v024",
+                        "FpEditorEditPadShapeParam: pad {pad_idx} has no shape_params[{key}] \
+                         binding; ignoring edit"
+                    );
+                }
+                true
+            }
+            crate::panels::PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id } => {
+                // v0.24 Phase 3 (Track A3) — forward to the
+                // `FootprintSketchUnlinkCornerRadius` PrimitiveEditorMsg.
+                // The dispatcher walks pads for the matching arc,
+                // mints the per-corner parameter, and triggers a
+                // solve+rebake. Undo snapshot captured at dispatcher
+                // level via mutates_footprint_state.
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius {
+                                    arc_entity_id: *arc_entity_id,
+                                },
+                            },
+                        ));
+                        self.refresh_panel_ctx();
+                    }
+                }
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditSketchPadInPads { id } => {
                 // v0.22 Phase D6 — mirror of FpEditorEditPadInSketch:
                 // resolve the EditorPad whose `sketch_entity_id` ==

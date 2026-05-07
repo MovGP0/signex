@@ -488,14 +488,28 @@ fn mint_round_rect_pad_geometry(
     //   SE: start = SE_right (anchor[2]), end = SE_bot   (anchor[3])
     //   SW: start = SW_bot   (anchor[4]), end = SW_left  (anchor[5])
     //   NW: start = NW_left  (anchor[6]), end = NW_top   (anchor[7])
-    for (centre_idx, start, end) in [
+    //
+    // v0.24 Phase 3 (Track A3) — also record per-corner Arc IDs on
+    // `pad.shape_params` via sidecar keys (`corner_r_ne_arc` ..
+    // `corner_r_nw_arc`). The Unlink action looks up which corner an
+    // Arc represents by reverse-lookup against this map; without the
+    // sidecar we'd have to infer corner from arc-centre position vs
+    // pad bbox centre, which gets brittle when the pad is rotated or
+    // an array instance applies a flip.
+    let arc_keys: [&str; 4] = ["corner_r_ne_arc", "corner_r_se_arc",
+                                "corner_r_sw_arc", "corner_r_nw_arc"];
+    for (corner_idx, (centre_idx, start, end)) in [
         (0usize, anchor_ids[0], anchor_ids[1]),
         (1, anchor_ids[2], anchor_ids[3]),
         (2, anchor_ids[4], anchor_ids[5]),
         (3, anchor_ids[6], anchor_ids[7]),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let arc_id = SketchEntityId::new();
         let arc = Entity::new(
-            SketchEntityId::new(),
+            arc_id,
             plane_id,
             EntityKind::Arc {
                 center: inset_ids[centre_idx],
@@ -505,6 +519,8 @@ fn mint_round_rect_pad_geometry(
             },
         );
         sketch.entities.push(arc);
+        pad.shape_params
+            .insert(arc_keys[corner_idx].into(), arc_id.0.simple().to_string());
     }
 
     // ── 6. Shared corner_r parameter. All four arcs read radius
@@ -644,6 +660,57 @@ fn format_f64(v: f64) -> String {
         "0".to_string()
     } else {
         trimmed.to_string()
+    }
+}
+
+/// v0.24 Phase 3 (Track A4) — reverse mirror. After every successful
+/// solve, walk each pad's `shape_params` and re-derive the
+/// `EditorPad.stack.corner_radius_pct` value from the live
+/// `sketch.parameters[corner_r_<slug>]` expression. Keeps the
+/// Pads-mode "Corner radius %" input in sync when the user edits the
+/// sketch parameter from the Sketch-mode Properties row, drags a
+/// corner handle, or uses the parameter table.
+///
+/// Uses the resolved-parameter map (canonical-mm) computed by the
+/// solver so dependent expressions like `"corner_r_<slug> = w/4"`
+/// are reflected correctly. Silently skips pads whose `shape_params`
+/// has no `"corner_r"` binding (Round / Rect / Oval / Chamfered) or
+/// whose bound parameter isn't in the resolved map (defensive — a
+/// missing parameter shouldn't desync the mirror).
+pub fn mirror_solve_to_pad_stack(
+    state: &mut super::state::FootprintEditorState,
+    resolved: &std::collections::HashMap<String, f64>,
+) {
+    for pad in state.pads.iter_mut() {
+        let Some(parameter_name) = pad.shape_params.get("corner_r") else {
+            continue;
+        };
+        let Some(corner_r_mm) = resolved.get(parameter_name).copied() else {
+            tracing::warn!(
+                target: "signex::v024",
+                "mirror_solve_to_pad_stack: parameter {parameter_name} missing from resolved \
+                 map; skipping pad {}",
+                pad.number
+            );
+            continue;
+        };
+        let min_dim = pad.size_mm.0.min(pad.size_mm.1);
+        if min_dim <= f64::EPSILON {
+            tracing::warn!(
+                target: "signex::v024",
+                "mirror_solve_to_pad_stack: pad {} has zero/negative min dimension; skipping",
+                pad.number
+            );
+            continue;
+        }
+        // ratio = corner_r / min(W,H) ∈ [0..0.5]; pct = ratio * 100.
+        let pct = (corner_r_mm / min_dim) * 100.0;
+        // Clamp to valid range (0..50). A radius_ratio > 0.5 is
+        // geometrically degenerate (corners would overlap) so the
+        // mirror caps the surfaced value rather than letting the UI
+        // show a bad number.
+        let clamped = pct.clamp(0.0, 50.0);
+        pad.stack.corner_radius_pct = Some(clamped);
     }
 }
 
