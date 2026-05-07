@@ -791,6 +791,21 @@ impl Signex {
                 self.handle_history_restore_clicked(sha);
                 true
             }
+            crate::panels::PanelMsg::FpEditorHoverOverConstraint { active } => {
+                // v0.22 Phase E3+E4 polish — flip the canvas's
+                // "isolate over-constraints" mode while the user
+                // hovers a row in the Properties-panel Conflicts
+                // list. `draw_constraint_icons` reads
+                // `editor.state.conflicts_row_hovered` and dims
+                // every non-over-constrained icon when true.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if editor.state.conflicts_row_hovered != *active {
+                        editor.state.conflicts_row_hovered = *active;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {

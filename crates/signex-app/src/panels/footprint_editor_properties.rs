@@ -804,7 +804,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                         "{} — residual {:.3e}",
                         oc.kind_label, oc.residual_magnitude
                     );
-                    let oc_row: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
+                    let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
                         button(
                             text(label)
                                 .size(10)
@@ -830,6 +830,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
                         .width(Length::Fill)
                         .into()
                     };
+                    // v0.22 Phase E3+E4 polish — wrap in mouse_area so
+                    // hovering the row isolates the over-constraint
+                    // set in the canvas (dims everything else).
+                    let oc_row: Element<'_, _> = iced::widget::mouse_area(inner)
+                        .on_enter(PanelMsg::FpEditorHoverOverConstraint { active: true })
+                        .on_exit(PanelMsg::FpEditorHoverOverConstraint { active: false })
+                        .into();
                     col = col.push(oc_row);
                 }
                 if s.over_constraints.len() > 8 {

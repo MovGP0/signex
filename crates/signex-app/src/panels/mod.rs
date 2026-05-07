@@ -1675,6 +1675,18 @@ pub enum PanelMsg {
     HistoryRestoreClicked {
         sha: String,
     },
+    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
+    /// panel's "Conflicts (worst first)" list. `true` on row
+    /// `on_enter`, `false` on `on_exit`. The handler flips
+    /// `editor.state.hovered_over_constraint` between
+    /// `Some(sentinel)` and `None`; the canvas's
+    /// `draw_constraint_icons` reads it as a boolean to decide
+    /// whether to dim non-over-constrained icons. The sentinel
+    /// ConstraintId is forward-compat — when per-row highlighting
+    /// lands later, the panel will pass each row's specific id.
+    FpEditorHoverOverConstraint {
+        active: bool,
+    },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {

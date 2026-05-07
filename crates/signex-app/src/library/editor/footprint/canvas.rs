@@ -1441,8 +1441,20 @@ fn draw_constraint_icons(
         }
         let centroid = (sum_x / n as f64, sum_y / n as f64);
         let p = cstate.world_to_screen(centroid);
-        let colour = if over_set.contains(&c.id) {
+        // v0.22 Phase E3+E4 polish — when the user hovers a row in
+        // the Properties-panel "Conflicts" list, dim every
+        // non-over-constrained icon to ~15% alpha so the redundant
+        // set stands out visually. The hovered row's
+        // `ConstraintId` itself isn't strictly required — any hover
+        // active flips into "isolate over-constraints" mode because
+        // the user is studying the conflict set as a group. Drop
+        // back to the default rendering when no row is hovered.
+        let isolating = state.conflicts_row_hovered;
+        let is_over = over_set.contains(&c.id);
+        let colour = if is_over {
             Color::from_rgba(1.0, 0.20, 0.20, 1.00)
+        } else if isolating {
+            Color::from_rgba(0.85, 0.85, 0.85, 0.15)
         } else {
             Color::from_rgba(0.85, 0.85, 0.85, 0.85)
         };

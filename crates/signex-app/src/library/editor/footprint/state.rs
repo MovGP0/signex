@@ -358,6 +358,14 @@ pub struct FootprintEditorState {
     /// timeouts are also surfaced here as a hard warning instead of
     /// being silently swallowed by the old auto-pause hysteresis.
     pub solve_warnings: Vec<String>,
+    /// v0.22 Phase E3+E4 polish — `true` while the cursor is over
+    /// any row in the Properties-panel "Conflicts (worst first)"
+    /// list. The canvas's `draw_constraint_icons` reads this and
+    /// dims every constraint icon EXCEPT the over-constrained ones,
+    /// visually isolating the redundant set so the user can see at
+    /// a glance which glyphs are conflicting. `false` = default
+    /// rendering (over-constrained red, others muted at 0.85).
+    pub conflicts_row_hovered: bool,
     /// v0.13.2 — currently-active sketch tool. The inspector tool
     /// palette emits `FootprintSketchSetTool(...)`; the canvas
     /// Program reads this to interpret pointer events. `Select`
@@ -1208,6 +1216,7 @@ impl FootprintEditorState {
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
             solve_warnings: Vec::new(),
+            conflicts_row_hovered: false,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
             selected_sketch: None,
@@ -1252,6 +1261,7 @@ impl FootprintEditorState {
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
             solve_warnings: Vec::new(),
+            conflicts_row_hovered: false,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
             selected_sketch: None,
