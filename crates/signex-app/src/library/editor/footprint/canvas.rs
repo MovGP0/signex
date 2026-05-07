@@ -516,7 +516,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::Mirror
                                 | SketchTool::Offset
                                 | SketchTool::RectPattern
-                                | SketchTool::CircularPattern => EditorMsg::FootprintSketchToolClick {
+                                | SketchTool::CircularPattern
+                                | SketchTool::TangentArc => EditorMsg::FootprintSketchToolClick {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
                                     snap_id,
@@ -2622,6 +2623,10 @@ fn draw_sketch_tool_preview(
         // v0.23 — Polar centre re-pick has no preview shape; the
         // cursor PIP at the top of this match is the only visual cue.
         ToolPending::RepickPolarCenter { .. } => {}
+        // v0.24 Track C — Tangent Arc preview wired in C3. Stub here
+        // so Commit 1 compiles before the proper dashed-ghost-arc
+        // renderer lands.
+        ToolPending::TangentArcFirst { .. } => {}
     }
 }
 

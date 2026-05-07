@@ -6794,6 +6794,13 @@ pub(crate) fn apply_footprint_primitive_edit(
                     });
                     editor.state.tool_pending = ToolPending::Idle;
                 }
+                SketchTool::TangentArc => {
+                    // v0.24 Track C — Tangent Arc. Two-click chained
+                    // arc tangent to the previously committed Line.
+                    // Stub in C1; full Arc-mint + TangentLineArc
+                    // constraint flow lands in C2.
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
                 SketchTool::CircularPattern => {
                     // v0.22 Phase B4 — Circular Pattern. Click 1
                     // picks the source entity. The polar array
