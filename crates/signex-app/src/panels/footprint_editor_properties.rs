@@ -2582,23 +2582,25 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             let mask_outset_mm: f64 = 0.0;
             let mask_w = pad_w + 2.0 * mask_outset_mm;
             let mask_h = pad_h + 2.0 * mask_outset_mm;
-            // v0.25 — Altium-parity layer thicknesses. Their preview
-            // shows thin layers + a clear gap between mask and copper
-            // so the user reads "two distinct layers separated by
-            // substrate". Tuning summary (per user side-by-side):
-            //   - 0.10 was too thin (flat rings, no inner-wall depth).
-            //   - 0.22 was too thick (chunky cake, layers touching).
-            //   - 0.08 + 0.05 substrate gap reads as a real PCB pad.
-            // The inner-wall depth equals
-            // copper_z_top - mask_z_bot = 2*0.08 + 0.05 = 0.21 of pad
-            // long axis, which gives the silver wall a visible
-            // height inside the hole.
-            let copper_thickness_mm = pad_w.max(pad_h) * 0.08;
+            // v0.25 — Altium-parity layer thicknesses. Real PCB:
+            // copper foil ≈ 35µm, mask ≈ 25µm, substrate (FR4) ≈
+            // 1.6mm. So the substrate dominates by 30-50× the
+            // foils. Mirroring that ratio at panel scale:
+            //   copper_thickness = 0.05 of pad long-axis
+            //   mask_thickness   = 0.05
+            //   substrate_gap    = 0.25 (5× the foils)
+            // gives a tall silver cylinder visible through the
+            // hole rather than a shallow disc-dominated view —
+            // matches the reference''s "drilled-through PCB"
+            // proportions.
+            let copper_thickness_mm = pad_w.max(pad_h) * 0.05;
             let mask_thickness_mm = copper_thickness_mm;
-            // Vertical gap between mask top and copper bottom — the
-            // bare substrate showing through. Altium renders this as
-            // dark background visible BETWEEN the two coloured rings.
-            let substrate_gap_mm = pad_w.max(pad_h) * 0.05;
+            // Vertical gap = bare substrate. Renders as dark canvas
+            // background visible between the copper and mask rings.
+            // Drives the inner-wall (silver) visible depth: depth =
+            // mask + gap + copper = 0.05 + 0.25 + 0.05 = 0.35 of
+            // pad long-axis.
+            let substrate_gap_mm = pad_w.max(pad_h) * 0.25;
 
             // 30° isometric projection — matches `preview3d.rs`. Both
             // X+ and Y+ rotate to screen-up directions, Z+ is screen-up.
@@ -2911,73 +2913,67 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                 fill_poly(&mut frame, &cu_top_pts, copper_color);
             }
 
-            // ── Hole (THT only): silver inner wall (visible looking
-            //    DOWN into the hole) + black void disc at the
-            //    BOTTOM of the through-hole.
+            // ── Hole (THT only): textbook iso through-hole construction.
             //
-            //    Geometry: the disc sits at z = mask_z_bot (very
-            //    bottom of the stack) so the camera looking down
-            //    past the copper top edge sees the silver inner
-            //    walls rising up from the bottom void to the top
-            //    rim of the hole — matches Altium''s Pad Stack
-            //    preview convention.
+            // Per the engineering-drawing convention (sample sources:
+            // technologystudent.com/designpro/isomet2.htm,
+            // educale.com/3d isometric cylinder lessons), a cylindrical
+            // hole through a solid is rendered as:
+            //   1. Top rim ellipse (full — visible looking down at the rim).
+            //   2. Bottom rim ellipse OFFSET DOWN by the hole depth.
+            //   3. Two vertical tangent lines connecting the leftmost +
+            //      rightmost extents of the two ellipses.
+            //   4. The visible INNER WALL surface is the closed region
+            //      bounded by:
+            //        - top: BACK arc of the top ellipse
+            //          (θ ∈ [-π/4, 3π/4], where cos θ + sin θ ≥ 0)
+            //        - left + right: vertical tangents at sx = ±√2·hr·cos30
+            //        - bottom: BACK arc of the bottom ellipse, reversed
+            //      Fill SILVER.
+            //   5. The visible BOTTOM (front-half of the bottom disc) is
+            //      the FRONT arc of the bottom ellipse + reverse back arc;
+            //      filled DARK to read as the through-void.
             //
-            //    Visibility predicate is INVERTED for the hole vs.
-            //    the outer-perimeter walls: the hole''s outward
-            //    normal (right of CCW walk) points away from the
-            //    void centre, so the camera-facing wall is the
-            //    one whose outward goes AWAY from camera (i.e.
-            //    `outward_x + outward_y > 0` → `dy > dx` —
-            //    opposite of `strip_visible_world`).
-            //
-            //    Order: walls first, disc last on top so any
-            //    leftover near-wall fragments above the bottom
-            //    plane get covered by the void disc.
-            if let Some(d) = self.drill_diameter_mm {
+            // Strategy here: paint full bottom disc DARK first, then
+            // paint silver racetrack on top. The racetrack covers the
+            // back half of the disc, leaving only the front half
+            // visible as dark — matches Altium''s pad-stack preview
+            // (silver-dominated cylinder, dark crescent at the bottom).
+            if let Some(d) = self.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64) {
                 let hr = (d / 2.0) as f32;
-                let hole_world: Vec<(f32, f32)> = (0..segments)
+                let void_color = iced::Color::from_rgba8(0x14, 0x14, 0x14, 1.0);
+                let wall_silver = iced::Color::from_rgba8(0xC8, 0xC8, 0xC8, 1.0);
+
+                // (1) Full bottom ellipse → DARK.
+                let hole_bot_pts: Vec<iced::Point> = (0..segments)
                     .map(|i| {
                         let t = i as f32 / segments as f32 * std::f32::consts::TAU;
-                        (hr * t.cos(), hr * t.sin())
+                        project(hr * t.cos(), hr * t.sin(), mask_z_bot)
                     })
                     .collect();
-                let hole_top_pts: Vec<iced::Point> = hole_world
-                    .iter()
-                    .map(|(x, y)| project(*x, *y, copper_z_top))
-                    .collect();
-                let hole_bot_pts: Vec<iced::Point> = hole_world
-                    .iter()
-                    .map(|(x, y)| project(*x, *y, mask_z_bot))
-                    .collect();
-                let wall_silver = iced::Color::from_rgba8(0xC0, 0xC0, 0xC0, 1.0);
-                for i in 0..hole_top_pts.len() {
-                    // Inverted predicate for hole walls: visible
-                    // when outward_x + outward_y > 0 (i.e. the
-                    // wall faces away from the camera, but since
-                    // we''re INSIDE the cylinder void, the
-                    // camera-visible face is the back-side wall
-                    // which is what this predicate selects).
-                    let j = (i + 1) % hole_world.len();
-                    let dx = hole_world[j].0 - hole_world[i].0;
-                    let dy = hole_world[j].1 - hole_world[i].1;
-                    if dy <= dx {
-                        continue;
-                    }
-                    let quad = [
-                        hole_bot_pts[i],
-                        hole_bot_pts[j],
-                        hole_top_pts[j],
-                        hole_top_pts[i],
-                    ];
-                    fill_poly(&mut frame, &quad, wall_silver);
+                fill_poly(&mut frame, &hole_bot_pts, void_color);
+
+                // (2) Silver racetrack: top BACK arc → bottom BACK arc reversed.
+                // θ from -π/4 to 3π/4 spans the back half of the cylinder
+                // (positive cos θ + sin θ — the camera-facing inner wall).
+                let arc_segments = 30;
+                let mut wall_poly: Vec<iced::Point> = Vec::with_capacity(2 * (arc_segments + 1));
+                // Top BACK arc (z = copper_z_top), forward order:
+                for i in 0..=arc_segments {
+                    let t = -std::f32::consts::FRAC_PI_4
+                        + (i as f32 / arc_segments as f32) * std::f32::consts::PI;
+                    wall_poly.push(project(hr * t.cos(), hr * t.sin(), copper_z_top));
                 }
-                // Void disc at the BOTTOM of the through-hole.
-                // Camera looks down past the silver walls to land
-                // on this dark disc — the actual punched-through
-                // open air. Black `#080808` so it reads as open
-                // air rather than a silver plug.
-                let void_bot = iced::Color::from_rgba8(0x08, 0x08, 0x08, 1.0);
-                fill_poly(&mut frame, &hole_bot_pts, void_bot);
+                // Bottom BACK arc (z = mask_z_bot), REVERSE order so the
+                // polygon closes as a racetrack with implicit vertical
+                // tangents at the left + right extents.
+                for i in 0..=arc_segments {
+                    let t = 3.0 * std::f32::consts::FRAC_PI_4
+                        - (i as f32 / arc_segments as f32) * std::f32::consts::PI;
+                    wall_poly.push(project(hr * t.cos(), hr * t.sin(), mask_z_bot));
+                }
+                fill_poly(&mut frame, &wall_poly, wall_silver);
+
                 let _ = hole_color;
                 let _ = hole_dark;
             }
