@@ -1695,6 +1695,7 @@ fn build_over_constraint_summaries(
                 Err(_) => 0.0,
             };
             OverConstraintSummary {
+                constraint_id: c.id,
                 kind_label: kind_label(&c.kind),
                 residual_magnitude: mag,
                 focus_entity_id: first_focus(&c.kind),

@@ -365,7 +365,12 @@ pub struct FootprintEditorState {
     /// visually isolating the redundant set so the user can see at
     /// a glance which glyphs are conflicting. `false` = default
     /// rendering (over-constrained red, others muted at 0.85).
-    pub conflicts_row_hovered: bool,
+    /// v0.22 Phase E3+E4 → v0.23 per-row precision: `Some(id)` when
+    /// the user is hovering a specific row in the Conflicts list;
+    /// the canvas renders that row's constraint at full red and dims
+    /// every other constraint glyph. `None` = no hover; default
+    /// rendering applies.
+    pub conflicts_row_hovered: Option<signex_sketch::id::ConstraintId>,
     /// v0.13.2 — currently-active sketch tool. The inspector tool
     /// palette emits `FootprintSketchSetTool(...)`; the canvas
     /// Program reads this to interpret pointer events. `Select`
@@ -1223,7 +1228,7 @@ impl FootprintEditorState {
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
             solve_warnings: Vec::new(),
-            conflicts_row_hovered: false,
+            conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
             selected_sketch: None,
@@ -1268,7 +1273,7 @@ impl FootprintEditorState {
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
             solve_warnings: Vec::new(),
-            conflicts_row_hovered: false,
+            conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
             selected_sketch: None,

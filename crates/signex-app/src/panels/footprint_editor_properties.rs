@@ -834,12 +834,16 @@ pub(super) fn view_footprint_editor_properties<'a>(
                         .width(Length::Fill)
                         .into()
                     };
-                    // v0.22 Phase E3+E4 polish — wrap in mouse_area so
-                    // hovering the row isolates the over-constraint
-                    // set in the canvas (dims everything else).
+                    // v0.23 — per-row precision. Each row passes its
+                    // own ConstraintId so the canvas isolates that
+                    // single constraint at full red and dims the
+                    // rest (including other over-constraints).
+                    let cid = oc.constraint_id;
                     let oc_row: Element<'_, _> = iced::widget::mouse_area(inner)
-                        .on_enter(PanelMsg::FpEditorHoverOverConstraint { active: true })
-                        .on_exit(PanelMsg::FpEditorHoverOverConstraint { active: false })
+                        .on_enter(PanelMsg::FpEditorHoverOverConstraint {
+                            constraint: Some(cid),
+                        })
+                        .on_exit(PanelMsg::FpEditorHoverOverConstraint { constraint: None })
                         .into();
                     col = col.push(oc_row);
                 }

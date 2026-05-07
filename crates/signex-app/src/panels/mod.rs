@@ -951,6 +951,11 @@ pub struct FootprintSolveSummary {
 
 #[derive(Debug, Clone)]
 pub struct OverConstraintSummary {
+    /// v0.23 — Constraint ID used by the canvas to render the
+    /// specific row at full red while everything else (including
+    /// other over-constraints) dims. Drives per-row hover precision
+    /// in the Properties panel "Conflicts" list.
+    pub constraint_id: signex_sketch::id::ConstraintId,
     /// Kind label — "Coincident", "DistancePtPt", "Horizontal", etc.
     /// Static string avoids allocating per-row.
     pub kind_label: &'static str,
@@ -1789,13 +1794,14 @@ pub enum PanelMsg {
     /// panel's "Conflicts (worst first)" list. `true` on row
     /// `on_enter`, `false` on `on_exit`. The handler flips
     /// `editor.state.hovered_over_constraint` between
-    /// `Some(sentinel)` and `None`; the canvas's
-    /// `draw_constraint_icons` reads it as a boolean to decide
-    /// whether to dim non-over-constrained icons. The sentinel
-    /// ConstraintId is forward-compat — when per-row highlighting
-    /// lands later, the panel will pass each row's specific id.
+    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// panel "Conflicts" list row. `Some(constraint_id)` highlights
+    /// the specific constraint at full red and dims everything else
+    /// (including other over-constraints) so the user can isolate a
+    /// single offender. `None` clears the isolation back to the
+    /// default rendering.
     FpEditorHoverOverConstraint {
-        active: bool,
+        constraint: Option<signex_sketch::id::ConstraintId>,
     },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.

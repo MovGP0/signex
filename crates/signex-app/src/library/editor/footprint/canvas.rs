@@ -1441,22 +1441,25 @@ fn draw_constraint_icons(
         }
         let centroid = (sum_x / n as f64, sum_y / n as f64);
         let p = cstate.world_to_screen(centroid);
-        // v0.22 Phase E3+E4 polish — when the user hovers a row in
-        // the Properties-panel "Conflicts" list, dim every
-        // non-over-constrained icon to ~15% alpha so the redundant
-        // set stands out visually. The hovered row's
-        // `ConstraintId` itself isn't strictly required — any hover
-        // active flips into "isolate over-constraints" mode because
-        // the user is studying the conflict set as a group. Drop
-        // back to the default rendering when no row is hovered.
-        let isolating = state.conflicts_row_hovered;
+        // v0.23 — per-row precision in the Conflicts list. When the
+        // user hovers a specific row, only that constraint renders
+        // at full red; every other glyph (including other
+        // over-constraints) dims so the offender stands out alone.
+        // When no row is hovered, fall back to the v0.22 set-wide
+        // isolation (the whole over-constraint set lights up).
+        let hover = state.conflicts_row_hovered;
         let is_over = over_set.contains(&c.id);
-        let colour = if is_over {
-            Color::from_rgba(1.0, 0.20, 0.20, 1.00)
-        } else if isolating {
-            Color::from_rgba(0.85, 0.85, 0.85, 0.15)
-        } else {
-            Color::from_rgba(0.85, 0.85, 0.85, 0.85)
+        let colour = match (hover, is_over) {
+            // Specific row hovered + this is the row → full red.
+            (Some(h), _) if h == c.id => Color::from_rgba(1.0, 0.20, 0.20, 1.00),
+            // Specific row hovered + this is NOT the row → dimmed
+            // (other over-constraints get the same dim as
+            // non-over-constraints so the focus stays singular).
+            (Some(_), _) => Color::from_rgba(0.85, 0.85, 0.85, 0.15),
+            // No row hover + over-constrained → red (set-wide focus).
+            (None, true) => Color::from_rgba(1.0, 0.20, 0.20, 1.00),
+            // Default — non-over-constrained, no hover.
+            (None, false) => Color::from_rgba(0.85, 0.85, 0.85, 0.85),
         };
         frame.fill_text(canvas::Text {
             content: glyph.to_string(),
