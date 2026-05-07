@@ -1360,6 +1360,15 @@ pub enum PrimitiveEditorMsg {
         id: signex_sketch::id::SketchEntityId,
         role: RoleTag,
     },
+    /// v0.22 Phase D4 — convert the closed-loop profile that includes
+    /// the currently-selected Line into a `PadShape::Custom(SketchProfile)`
+    /// pad. Mints a centre `Point` at the loop's centroid + a
+    /// `PadAttr` with a `SketchProfile` shape pointing at the seed
+    /// Line. Bake re-walks the loop on the next solve. No-op (with a
+    /// warning surfaced via `solve_warnings`) when the selection is
+    /// not a Line, the line is not part of a closed loop, or no
+    /// solve has run yet.
+    FootprintSketchMakePadFromProfile,
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
     FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),

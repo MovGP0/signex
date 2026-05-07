@@ -134,6 +134,41 @@ pub fn items<'a>(
         ..ActiveBarButton::default()
     });
 
+    // v0.22 Phase D4 — Make Pad from Profile button. One-shot action
+    // (not a tool mode): converts the closed-loop profile that
+    // includes the currently-selected Line into a Custom-shape pad.
+    // Enabled only when a Line is selected; the dispatcher itself
+    // verifies the loop closes and pushes a warning otherwise.
+    let make_pad_path = path.clone();
+    let make_pad_enabled = matches!(
+        editor
+            .state
+            .selected_sketch
+            .and_then(|id| editor.primitive().sketch.as_ref()?.entities.iter().find(|e| e.id == id))
+            .map(|e| &e.kind),
+        Some(signex_sketch::entity::EntityKind::Line { .. })
+    );
+    let make_pad_button = ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Glyph("\u{2B22}"), // ⬢ black hexagon (custom polygon → pad)
+        tooltip: if make_pad_enabled {
+            "Make Pad from Profile — walk the closed loop containing the selected Line and convert it into a Custom-shape pad"
+                .into()
+        } else {
+            "Make Pad from Profile (select a Line that's part of a closed loop)".into()
+        },
+        enabled: make_pad_enabled,
+        selected: false,
+        on_press: if make_pad_enabled {
+            Some(LibraryMessage::PrimitiveEditorEvent {
+                path: make_pad_path,
+                msg: PrimitiveEditorMsg::FootprintSketchMakePadFromProfile,
+            })
+        } else {
+            None
+        },
+        ..ActiveBarButton::default()
+    });
+
     // Section 4 — Dimension input as a Custom slot. Sized to fit
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
     let dim_input = build_dimension_input(editor, tokens);
@@ -190,6 +225,7 @@ pub fn items<'a>(
             SketchTool::Offset,
             ActiveBarIcon::Glyph("\u{29C8}"), // ⧈
         ),
+        make_pad_button,
         ActiveBarItem::Separator,
         // Section 3: Constrain (selection-aware)
         mk_constraint(

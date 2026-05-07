@@ -4101,6 +4101,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
+        | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -5206,6 +5207,178 @@ pub(crate) fn apply_footprint_primitive_edit(
             }
             editor.canvas_cache.clear();
             editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchMakePadFromProfile => {
+            // v0.22 Phase D4 — convert the closed-loop profile that
+            // includes the currently-selected Line into a
+            // `PadShape::Custom(SketchProfile)` pad.
+            //
+            // Walk: start from the selected Line, use
+            // `signex_bake::profile::trace_closed_profile` to chase
+            // the unique-incident-edge cycle in the sketch. On
+            // success, compute the centroid of the traced vertices,
+            // mint a centre `Point` there, and attach a `PadAttr`
+            // whose `shape` is `Custom(SketchProfile{source: vec![
+            // seed_line_id]})`. The bake re-walks the loop on the
+            // next solve and emits a `LibPadShape::Custom` polygon.
+            //
+            // Designator: `next_pad_num` from existing `PadAttr`
+            // entities, identical pattern to
+            // `apply_sketch_role(.., RoleTag::Pad)` for ordering
+            // consistency.
+            //
+            // Fail modes (silent except for warning push):
+            // - No Line selected → "select a Line first".
+            // - Line is not part of a closed loop → "loop is open
+            //   or branches".
+            // - `last_solve` is None (no solve has run yet) → ask
+            //   user to interact briefly so a solve fires, then
+            //   retry. (Auto-mint paths on entry to Sketch mode
+            //   already trigger a solve, so this is rare.)
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use signex_sketch::attr::{
+                CustomPadShape, PadAttr, PadKind, PadShape, PadSide,
+                PasteAperturePattern,
+            };
+            use signex_sketch::entity::{Entity, EntityKind};
+            use signex_sketch::id::SketchEntityId;
+            use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+            let line_id = match editor.state.selected_sketch {
+                Some(id) => id,
+                None => {
+                    editor
+                        .state
+                        .solve_warnings
+                        .push("Make Pad from Profile: select a Line first".into());
+                    editor.canvas_cache.clear();
+                    return;
+                }
+            };
+
+            // Verify the selection is a Line.
+            let is_line = editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .and_then(|s| s.entities.iter().find(|e| e.id == line_id))
+                .map(|e| matches!(e.kind, EntityKind::Line { .. }))
+                .unwrap_or(false);
+            if !is_line {
+                editor.state.solve_warnings.push(
+                    "Make Pad from Profile: selection is not a Line — pick a Line entity first"
+                        .into(),
+                );
+                editor.canvas_cache.clear();
+                return;
+            }
+
+            // Walk the loop to compute the centroid; needs a fresh
+            // solve so vertex positions are accurate.
+            let solve = match editor.state.last_solve.as_ref() {
+                Some(s) => s,
+                None => {
+                    editor.state.solve_warnings.push(
+                        "Make Pad from Profile: no solve has run yet — interact briefly to trigger a solve, then retry"
+                            .into(),
+                    );
+                    editor.canvas_cache.clear();
+                    return;
+                }
+            };
+            let sketch_for_walk = match editor.primitive().sketch.as_ref() {
+                Some(s) => s,
+                None => return,
+            };
+
+            let trace =
+                signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id);
+            let vertices = match trace {
+                Ok(v) if v.len() >= 3 => v,
+                Ok(_) => {
+                    editor.state.solve_warnings.push(
+                        "Make Pad from Profile: traced loop has fewer than 3 vertices".into(),
+                    );
+                    editor.canvas_cache.clear();
+                    return;
+                }
+                Err(e) => {
+                    editor.state.solve_warnings.push(format!(
+                        "Make Pad from Profile: loop walk failed ({e:?}) — the loop must be closed and non-branching"
+                    ));
+                    editor.canvas_cache.clear();
+                    return;
+                }
+            };
+            let n = vertices.len() as f64;
+            let cx = vertices.iter().map(|p| p[0]).sum::<f64>() / n;
+            let cy = vertices.iter().map(|p| p[1]).sum::<f64>() / n;
+
+            // Plane: reuse the seed Line's plane so the new pad
+            // entity ends up on the same one.
+            let plane_id = sketch_for_walk
+                .entities
+                .iter()
+                .find(|e| e.id == line_id)
+                .map(|e| e.plane)
+                .unwrap_or_else(|| {
+                    sketch_for_walk
+                        .planes
+                        .first()
+                        .map(|p| p.id)
+                        .unwrap_or_else(PlaneId::new)
+                });
+            // Ensure plane exists (defensive — almost always already
+            // in `sketch.planes`).
+            let _ = Plane {
+                id: plane_id,
+                kind: PlaneKind::BoardTop,
+            };
+
+            // Next pad designator from existing pad attrs.
+            let next_pad_num = sketch_for_walk
+                .entities
+                .iter()
+                .filter_map(|e| e.pad.as_ref())
+                .filter_map(|attr| attr.number.parse::<u32>().ok())
+                .max()
+                .unwrap_or(0)
+                + 1;
+
+            let centre_id = SketchEntityId::new();
+            let mut centre = Entity::new(
+                centre_id,
+                plane_id,
+                EntityKind::Point { x: cx, y: cy },
+            );
+            centre.pad = Some(PadAttr {
+                number: next_pad_num.to_string(),
+                kind: PadKind::Smd,
+                side: PadSide::Top,
+                shape: PadShape::Custom(CustomPadShape::SketchProfile {
+                    source: vec![line_id],
+                }),
+                size_x_expr: "1mm".into(),
+                size_y_expr: "1mm".into(),
+                rotation_expr: None,
+                offset_x_expr: None,
+                offset_y_expr: None,
+                drill: None,
+                mask_margin_expr: None,
+                paste_margin_expr: None,
+                paste_apertures: PasteAperturePattern::Single,
+                ..PadAttr::default()
+            });
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(
+                    state,
+                    primitive,
+                    SketchEdit::AddEntity(centre),
+                );
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag) => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
