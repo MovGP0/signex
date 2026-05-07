@@ -3989,3 +3989,396 @@ fn oval_width_edit_propagates_to_arc_centre_via_solve() {
         editor.state.solve_warnings
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Cross-track: TangentArc + placement_input + chamfered (mixed)
+// ─────────────────────────────────────────────────────────────────
+
+/// Phase-5 #2 — `placement_input` of "5" pinned with `LineLength`
+/// kind, on a Line tool's second click — even though the cursor is
+/// at (10, 0), the line's end Point must land at exactly (5, 0).
+/// Drives the dispatcher end-to-end via `Message::Library(...)`.
+///
+/// This pins the cross-track interaction: typing a digit during a
+/// Line gesture (Track D) must override the cursor distance for the
+/// commit click, irrespective of what auto-Horizontal / auto-snap
+/// machinery is wired in upstream phases.
+#[test]
+fn type_5_during_line_draw_commits_at_5mm() {
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_sketch::entity::EntityKind;
+
+    let (mut app, path, _tmp) = fixture_empty_footprint_editor("phase5-type-5-line");
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present");
+        editor.state.mode = EditorMode::Sketch;
+        editor.state.active_tool = SketchTool::Line;
+    }
+
+    // First click — anchor at (0, 0).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Pin placement_input: buffer = "5", kind = LineLength.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present");
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "5".into(),
+            kind: PlacementInputKind::LineLength,
+        });
+    }
+
+    // Second click at (10, 0) — cursor 10 mm away, but pinned length
+    // is 5. Line end must land at (5, 0).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 10.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present");
+    let line = sketch
+        .entities
+        .iter()
+        .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .expect("line minted by second click");
+    let end_id = match line.kind {
+        EntityKind::Line { end, .. } => end,
+        _ => unreachable!(),
+    };
+    let end_pt = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == end_id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("Line.end resolves to a Point");
+    assert!(
+        (end_pt.0 - 5.0).abs() < 1e-9,
+        "Line.end.x = pinned length 5mm (NOT cursor's 10mm); got {}",
+        end_pt.0
+    );
+    assert!(
+        (end_pt.1 - 0.0).abs() < 1e-9,
+        "Line.end.y = 0 (cursor azimuth); got {}",
+        end_pt.1
+    );
+}
+
+/// Phase-5 #3 — Drive a Line gesture to completion, then switch to
+/// the TangentArc tool and chain off the line's end. The dispatcher's
+/// TangentArc handler must auto-emit a `TangentLineArc` constraint
+/// linking the freshly minted Arc to the trailing Line.
+///
+/// Pure dispatcher routing — no `tool_pending` seeding. Mirrors the
+/// real user flow (draw line, switch tool, click endpoint, click off
+/// to commit).
+#[test]
+fn tangent_arc_after_line_creates_tangent_constraint() {
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, SketchTool, ToolPending,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_sketch::constraint::ConstraintKind;
+    use signex_sketch::entity::EntityKind;
+
+    let (mut app, path, _tmp) = fixture_empty_footprint_editor("phase5-tangent-after-line");
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present");
+        editor.state.mode = EditorMode::Sketch;
+        editor.state.active_tool = SketchTool::Line;
+    }
+
+    // Line click 1 — anchor at (0, 0).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+    // Line click 2 — commit at (5, 0). Mints Line + 2 endpoint Points.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 5.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Capture the IDs of the Line + its end Point so we can verify
+    // the tangent constraint later.
+    let (line_id, line_end_id) = {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        let sketch = editor.file.footprints[0].sketch.as_ref().unwrap();
+        let line = sketch
+            .entities
+            .iter()
+            .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+            .expect("line minted by Line tool");
+        let end_id = match line.kind {
+            EntityKind::Line { end, .. } => end,
+            _ => unreachable!(),
+        };
+        (line.id, end_id)
+    };
+
+    // Switch to TangentArc tool. Setting the active tool resets
+    // tool_pending to Idle so the next click is treated as click 1
+    // of a fresh TangentArc gesture.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present");
+        editor.state.active_tool = SketchTool::TangentArc;
+        editor.state.tool_pending = ToolPending::Idle;
+    }
+
+    // TangentArc click 1 — at (5, 0), the line's end. The dispatcher
+    // snaps to / re-uses the existing Point and stashes
+    // ToolPending::TangentArcFirst { first = line_end_id }.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 5.0,
+            y_mm: 0.0,
+            snap_id: Some(line_end_id),
+        },
+    }));
+
+    // TangentArc click 2 — commit at (8, 4). 5 mm from line_end_id,
+    // 4 mm off the line's azimuth → non-degenerate tangent arc.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 8.0,
+            y_mm: 4.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present");
+
+    // Sanity — exactly 1 Arc minted.
+    let arcs: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .collect();
+    assert_eq!(arcs.len(), 1, "exactly one Arc minted by the TangentArc gesture");
+    let arc_id = arcs[0].id;
+
+    // The TangentLineArc constraint must reference (line_id, arc_id).
+    assert!(
+        sketch.constraints.iter().any(|c| matches!(
+            c.kind,
+            ConstraintKind::TangentLineArc { line, arc } if line == line_id && arc == arc_id
+        )),
+        "TangentLineArc {{ line, arc }} constraint links the seed Line to the new Arc; \
+         got {} constraints: {:?}",
+        sketch.constraints.len(),
+        sketch.constraints.iter().map(|c| &c.kind).collect::<Vec<_>>()
+    );
+}
+
+/// Phase-5 #7 — Place a Chamfered pad with exactly two corners
+/// enabled (top_left + top_right). The mint should produce exactly
+/// 2 chamfer-cut Lines (one per enabled corner) plus 4 outline edge
+/// Lines = 6 total. Each disabled corner should NOT contribute a
+/// chamfer-cut; the bbox corner Points stay as 90° angles in the
+/// outline.
+///
+/// Cross-track: drives the FootprintAddPad dispatcher (Track A6
+/// mint) end-to-end with a non-default ChamferedCorners flagset, so
+/// the placement flow's path-keyed state lookup + Pads-mode-aware
+/// mirror branch + per-corner sidecar bookkeeping all run together.
+#[test]
+fn chamfered_pad_with_2_enabled_corners_has_2_chamfer_cuts() {
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::primitive::footprint::ChamferedCorners;
+    use signex_library::PadShape;
+    use signex_sketch::entity::EntityKind;
+
+    let (mut app, path, _tmp) = fixture_empty_footprint_editor("phase5-chamfered-2-corners");
+
+    // Set defaults to Chamfered with exactly top_left + top_right
+    // enabled. add_pad_at applies these to the new pad.
+    set_pad_defaults(
+        &mut app,
+        &path,
+        PadShape::Chamfered {
+            chamfer_ratio: 0.25,
+            corners: ChamferedCorners {
+                top_left: true,
+                top_right: true,
+                bottom_left: false,
+                bottom_right: false,
+            },
+        },
+        (2.0, 1.0),
+    );
+
+    // Place via the dispatcher so the full mutates_footprint_state →
+    // push_history → mirror chain runs.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintAddPad { x_mm: 0.0, y_mm: 0.0 },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present");
+
+    // 2 chamfer cuts + 4 edge lines = 6 Lines total.
+    let lines: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .collect();
+    assert_eq!(
+        lines.len(),
+        6,
+        "Chamfered pad with 2 enabled corners has 2 chamfer-cuts + 4 edges = 6 Lines; got {}",
+        lines.len()
+    );
+
+    // The pad's shape_params must record the chamfer-anchor sidecars
+    // for the two ENABLED corners only. NE = top_right, NW = top_left.
+    let pad = &editor.state.pads[0];
+    assert!(
+        pad.shape_params.contains_key("chamfer_ne_anchor1"),
+        "NE anchor1 sidecar present (top_right enabled)"
+    );
+    assert!(
+        pad.shape_params.contains_key("chamfer_ne_anchor2"),
+        "NE anchor2 sidecar present (top_right enabled)"
+    );
+    assert!(
+        pad.shape_params.contains_key("chamfer_nw_anchor1"),
+        "NW anchor1 sidecar present (top_left enabled)"
+    );
+    assert!(
+        pad.shape_params.contains_key("chamfer_nw_anchor2"),
+        "NW anchor2 sidecar present (top_left enabled)"
+    );
+    assert!(
+        !pad.shape_params.contains_key("chamfer_se_anchor1"),
+        "SE anchor1 absent (bottom_right disabled — bbox corner stays as 90°)"
+    );
+    assert!(
+        !pad.shape_params.contains_key("chamfer_sw_anchor1"),
+        "SW anchor1 absent (bottom_left disabled — bbox corner stays as 90°)"
+    );
+
+    // Geometric verification — for each disabled corner, find the
+    // bbox corner Point at that position and verify it sits in the
+    // outline (i.e. is referenced by at least 2 Lines so it's a
+    // real 90° vertex, not an orphan).
+    //
+    // Pad centred at (0, 0) with size (2, 1) → bbox corners:
+    //   NE = (1, -0.5)  ne (top_right)   ENABLED  → no Line through bbox corner
+    //   SE = (1,  0.5)  se (bottom_right) DISABLED → bbox corner is a 90° vertex
+    //   SW = (-1, 0.5)  sw (bottom_left)  DISABLED → bbox corner is a 90° vertex
+    //   NW = (-1,-0.5)  nw (top_left)    ENABLED  → no Line through bbox corner
+    let count_lines_through = |x: f64, y: f64| -> usize {
+        lines
+            .iter()
+            .filter(|line| {
+                let (start, end) = match line.kind {
+                    EntityKind::Line { start, end } => (start, end),
+                    _ => unreachable!(),
+                };
+                let pt_at = |id| {
+                    sketch
+                        .entities
+                        .iter()
+                        .find(|e| e.id == id)
+                        .and_then(|e| match e.kind {
+                            EntityKind::Point { x, y } => Some((x, y)),
+                            _ => None,
+                        })
+                };
+                pt_at(start).is_some_and(|(sx, sy)| (sx - x).abs() < 1e-9 && (sy - y).abs() < 1e-9)
+                    || pt_at(end)
+                        .is_some_and(|(ex, ey)| (ex - x).abs() < 1e-9 && (ey - y).abs() < 1e-9)
+            })
+            .count()
+    };
+
+    let se_count = count_lines_through(1.0, 0.5);
+    let sw_count = count_lines_through(-1.0, 0.5);
+    assert!(
+        se_count >= 2,
+        "SE bbox corner (disabled) is touched by ≥2 Lines (real 90° vertex); got {se_count}"
+    );
+    assert!(
+        sw_count >= 2,
+        "SW bbox corner (disabled) is touched by ≥2 Lines (real 90° vertex); got {sw_count}"
+    );
+
+    // The NE / NW bbox corners should NOT be on the outline path —
+    // they're CUT by the chamfer. Each enabled corner replaces the
+    // bbox corner with anchor1/anchor2 in the outline traversal.
+    let ne_count = count_lines_through(1.0, -0.5);
+    let nw_count = count_lines_through(-1.0, -0.5);
+    assert_eq!(
+        ne_count, 0,
+        "NE bbox corner (enabled) is not on the outline path (replaced by chamfer anchors); got {ne_count}"
+    );
+    assert_eq!(
+        nw_count, 0,
+        "NW bbox corner (enabled) is not on the outline path (replaced by chamfer anchors); got {nw_count}"
+    );
+}
