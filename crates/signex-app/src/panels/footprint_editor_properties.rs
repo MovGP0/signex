@@ -101,6 +101,25 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 col = render_pad_form_pad_features(
                     col, &values, target, muted, primary, border_c, collapsed_sections,
                 );
+                // v0.21 — "Edit in Sketch" jump button. Visible only
+                // when the pad has a backing sketch entity (auto-
+                // minted on first Sketch-mode entry or placed via
+                // sketch). The handler switches editor.state.mode to
+                // Sketch + selects entity_id; if the pad has no
+                // sketch entity yet, this is a no-op.
+                let pad_idx = pad.idx;
+                col = col.push(
+                    container(
+                        iced::widget::button(
+                            text("Edit in Sketch ▸").size(10).color(primary),
+                        )
+                        .padding([4, 10])
+                        .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
+                        .style(iced::widget::button::primary),
+                    )
+                    .padding([6, 8])
+                    .width(Length::Fill),
+                );
                 return scrollable(col).width(Length::Fill).into();
             }
         }

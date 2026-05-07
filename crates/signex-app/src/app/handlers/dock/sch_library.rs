@@ -731,6 +731,22 @@ impl Signex {
                 self.with_selected_sketch_pad(*id, |attr| attr.stack.corner_radius_pct = v);
                 true
             }
+            crate::panels::PanelMsg::FpEditorEditPadInSketch { pad_idx } => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let entity_id = editor
+                        .state
+                        .pads
+                        .get(*pad_idx)
+                        .and_then(|p| p.sketch_entity_id);
+                    editor.state.mode =
+                        crate::library::editor::footprint::state::EditorMode::Sketch;
+                    editor.state.selected_pad = None;
+                    editor.state.selected_sketch = entity_id;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {

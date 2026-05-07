@@ -1618,6 +1618,11 @@ pub enum PanelMsg {
         id: signex_sketch::id::SketchEntityId,
         value: String,
     },
+    /// v0.21 — "Edit in Sketch" jump from a selected pad to its
+    /// backing sketch entity. Switches editor mode to Sketch and
+    /// selects the entity. No-op when the pad has no
+    /// `sketch_entity_id` (placed before sketch-mode auto-mint).
+    FpEditorEditPadInSketch { pad_idx: usize },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {
