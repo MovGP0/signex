@@ -518,6 +518,24 @@ pub struct FootprintEditorState {
     /// instead of the cursor position. `None` (default) preserves the
     /// v0.22 click-only flow.
     pub placement_input: Option<PlacementInput>,
+    /// v0.25 polish — per-input verbatim buffers for Properties-panel
+    /// numeric fields. text_input bound directly to a formatted f64
+    /// fights typing because the next render reformats the value
+    /// (e.g. "0" → "0.000") and any unparseable transient state
+    /// (e.g. "0." or "0.1.") clobbers the user''s in-flight buffer.
+    /// The renderer reads from this map FIRST; if the key is
+    /// present, the literal buffer is shown as-is. The handler
+    /// writes the user''s on_input string here on every keypress
+    /// AND tries to parse it; on successful parse the canonical
+    /// f64 also updates so the rest of the system sees the new
+    /// value. Buffer keys are stable per-input strings like
+    /// `"next.drill_diameter"`, `"selected.3.size_x"`, etc.
+    ///
+    /// Cleared by callers on selection change / file load via
+    /// `numeric_buffers.clear()`. Extension to all numeric inputs
+    /// is incremental — fields not yet on this map continue to
+    /// behave as before.
+    pub numeric_buffers: std::collections::HashMap<String, String>,
 }
 
 /// v0.24 Phase 1 (Track D stub) — numeric-input overlay state for
@@ -1380,6 +1398,7 @@ impl FootprintEditorState {
             active_bar_menu: None,
             pad_stack_tab: PadStackTab::default(),
             placement_input: None,
+            numeric_buffers: std::collections::HashMap::new(),
         };
         s.recompute_courtyard();
         s
@@ -1426,6 +1445,7 @@ impl FootprintEditorState {
             active_bar_menu: None,
             pad_stack_tab: PadStackTab::default(),
             placement_input: None,
+            numeric_buffers: std::collections::HashMap::new(),
         };
         s.recompute_courtyard();
         s

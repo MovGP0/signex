@@ -2003,8 +2003,25 @@ impl Signex {
         self.refresh_panel_ctx();
     }
     pub(crate) fn fp_editor_set_next_pad_drill_diameter(&mut self, value: String) {
+        // v0.25 polish — buffer-pattern: store the verbatim user
+        // input so transient unparseable states ("0.", "0.1.") don''t
+        // get clobbered on the next render. Only update the canonical
+        // f64 when the buffer parses cleanly.
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.drill_diameter_mm = fp_parse_optional_mm(&value);
+            let key = "next.drill_diameter".to_string();
+            if value.trim().is_empty() {
+                editor.state.numeric_buffers.remove(&key);
+                editor.state.next_pad_defaults.drill_diameter_mm = None;
+            } else {
+                editor.state.numeric_buffers.insert(key, value.clone());
+                if let Ok(parsed) = value.trim().parse::<f64>() {
+                    if parsed >= 0.0 {
+                        editor.state.next_pad_defaults.drill_diameter_mm = Some(parsed);
+                    }
+                }
+                // Unparseable transient — keep the previous f64 but
+                // surface the buffer so the user sees what they typed.
+            }
         }
         self.refresh_panel_ctx();
     }
@@ -2277,8 +2294,26 @@ impl Signex {
         }
     }
     pub(crate) fn fp_editor_set_selected_pad_drill_diameter(&mut self, idx: usize, value: String) {
-        let parsed = fp_parse_optional_mm(&value);
-        self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = parsed);
+        // v0.25 polish — verbatim buffer + only-on-parse-success f64
+        // update. See fp_editor_set_next_pad_drill_diameter for the
+        // contract.
+        let key = format!("selected.{idx}.drill_diameter");
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if value.trim().is_empty() {
+                editor.state.numeric_buffers.remove(&key);
+            } else {
+                editor.state.numeric_buffers.insert(key.clone(), value.clone());
+            }
+        }
+        if value.trim().is_empty() {
+            self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = None);
+        } else if let Ok(parsed) = value.trim().parse::<f64>() {
+            if parsed >= 0.0 {
+                self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = Some(parsed));
+            }
+        }
+        // Unparseable transient — keep previous f64; buffer carries
+        // the literal user text for the next render.
     }
     pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(&mut self, idx: usize, _value: String) {
         // v0.20 placeholder — slot length not yet on EditorPad. Wired

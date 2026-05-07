@@ -169,7 +169,14 @@ pub(super) fn view_footprint_editor_properties<'a>(
             col = render_pad_form_pad_features(
                 col, &values, target, muted, primary, border_c, collapsed_sections,
             );
-            return scrollable(col).width(Length::Fill).into();
+            return scrollable(container(col).padding(iced::Padding {
+                top: 0.0,
+                right: 12.0,
+                bottom: 0.0,
+                left: 0.0,
+            }))
+            .width(Length::Fill)
+            .into();
         }
         // Empty canvas + idle → fall through to the original chrome.
     }
@@ -1222,6 +1229,14 @@ struct PadFormValues {
     hole_rotation_deg: Option<f64>,
     copper_offset_x_mm: Option<f64>,
     copper_offset_y_mm: Option<f64>,
+    /// v0.25 polish — verbatim per-input buffers shared across the
+    /// pad-properties form. Renderer reads `numeric_buffers.get(key)`
+    /// to display the user''s in-flight typed text rather than
+    /// reformatting the canonical f64 every keystroke. Carrying
+    /// the whole map (rather than per-field Option<String>) keeps
+    /// the call sites tight as more fields adopt the buffer
+    /// pattern.
+    numeric_buffers: std::collections::HashMap<String, String>,
 }
 
 impl PadFormValues {
@@ -1251,6 +1266,7 @@ impl PadFormValues {
             hole_rotation_deg: fp.next_pad_hole_rotation_deg,
             copper_offset_x_mm: fp.next_pad_copper_offset_x_mm,
             copper_offset_y_mm: fp.next_pad_copper_offset_y_mm,
+            numeric_buffers: fp.numeric_buffers.clone(),
         }
     }
     fn from_selected_pad(pad: &FootprintPadSummary, fp: &FootprintEditorPanelContext) -> Self {
@@ -1284,6 +1300,7 @@ impl PadFormValues {
             hole_rotation_deg: pad.hole_rotation_deg,
             copper_offset_x_mm: pad.copper_offset_x_mm,
             copper_offset_y_mm: pad.copper_offset_y_mm,
+            numeric_buffers: fp.numeric_buffers.clone(),
         }
     }
 }
@@ -1890,10 +1907,26 @@ fn render_pad_form_pad_stack<'a>(
             .drill_diameter_mm
             .map(|d| d * 1.5)
             .unwrap_or(1.0);
+        // v0.25 polish — prefer the verbatim user buffer if one is
+        // registered for this input; only fall back to formatting
+        // the canonical f64 when no buffer exists. Without this
+        // override the renderer reformats every keystroke (e.g.
+        // "0" → "0.000" or "0.1." → "" on parse failure) and
+        // fights the user''s in-flight typing.
+        let drill_buffer_key = match target {
+            PadEditTarget::Next => "next.drill_diameter".to_string(),
+            PadEditTarget::Selected(idx) => format!("selected.{idx}.drill_diameter"),
+        };
         let drill_buf = values
-            .drill_diameter_mm
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_default();
+            .numeric_buffers
+            .get(&drill_buffer_key)
+            .cloned()
+            .unwrap_or_else(|| {
+                values
+                    .drill_diameter_mm
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_default()
+            });
         let slot_buf = values
             .drill_slot_length_mm
             .map(|v| format!("{v:.3}"))
@@ -2795,28 +2828,21 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             }
             fill_poly(&mut frame, &cu_top_pts, copper_color);
 
-            // ── Hole (THT only): cylinder VOID through the stack.
-            //    The visible inner wall is the FAR side from the
-            //    camera (CCW samples whose normal points toward the
-            //    camera in iso projection). Render the inner wall +
-            //    a flat black disc at the copper-top z so the hole
-            //    reads as a void punched through the pad, not a
-            //    plug sticking out above it.
+            // ── Hole (THT only): silver inner wall + black void disc.
+            //    Matches Altium''s Pad Stack preview convention: the
+            //    plated-through wall reads as a reflective silver
+            //    ring (the FAR side of the cylinder is visible above
+            //    the disc edge in the iso view) and the hole''s top
+            //    surface is the actual punched void rendered black
+            //    so the eye distinguishes "wall" from "open air".
             //
-            //    v0.25 polish — was rendering the top disc at
-            //    `copper_z_top + 0.01` which put it ABOVE the
-            //    copper face, making the hole look like a black
-            //    cylinder protruding above the pad. Move it to
-            //    EXACTLY `copper_z_top` so it sits flush with
-            //    the copper top, plus a tiny epsilon to avoid
-            //    z-fighting. The `hole_color` is also darkened
-            //    toward black so it visually reads as "punched
-            //    through" rather than "filled with grey plastic".
+            //    Order matters: render side walls first, disc on top
+            //    so the disc covers the NEAR walls (which would
+            //    otherwise stick up in front of the hole and look
+            //    like a plug). The strip_visible_world predicate
+            //    drops near-side strips during the loop.
             if let Some(d) = self.drill_diameter_mm {
                 let hr = (d / 2.0) as f32;
-                // Hole is always round — sample as round even for
-                // rectangular pads. Build CCW world points then use
-                // the same generic strip_visible_world predicate.
                 let hole_world: Vec<(f32, f32)> = (0..segments)
                     .map(|i| {
                         let t = i as f32 / segments as f32 * std::f32::consts::TAU;
@@ -2831,6 +2857,10 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                     .iter()
                     .map(|(x, y)| project(*x, *y, mask_z_bot))
                     .collect();
+                // Reflective silver wall — light enough to pop
+                // against both the copper red and the panel''s dark
+                // background.
+                let wall_silver = iced::Color::from_rgba8(0xC0, 0xC0, 0xC0, 1.0);
                 for i in 0..hole_top_pts.len() {
                     if !strip_visible_world(&hole_world, i) {
                         continue;
@@ -2842,13 +2872,16 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                         hole_top_pts[j],
                         hole_top_pts[i],
                     ];
-                    fill_poly(&mut frame, &quad, hole_dark);
+                    fill_poly(&mut frame, &quad, wall_silver);
                 }
-                // Top disc — flush with copper top, dark to read as
-                // void rather than fill.
-                let void_top = iced::Color::from_rgba8(0x10, 0x10, 0x10, 1.0);
+                // Void disc — flush with the copper top, dark fill so
+                // the hole reads as open air rather than a silver
+                // plug. Renders LAST so it covers the near-side wall
+                // strips that would otherwise look like a protrusion.
+                let void_top = iced::Color::from_rgba8(0x08, 0x08, 0x08, 1.0);
                 fill_poly(&mut frame, &hole_top_pts, void_top);
-                let _ = hole_color; // hole_color unused after flush-fix
+                let _ = hole_color;
+                let _ = hole_dark;
             }
             let _ = (is_round, perimeter_pts); // tidied below; suppress unused warnings
 

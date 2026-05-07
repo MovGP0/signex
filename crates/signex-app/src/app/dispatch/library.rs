@@ -4514,6 +4514,10 @@ pub(crate) fn apply_footprint_primitive_edit(
             if sel.is_some() {
                 editor.state.selected_silk_f = None;
             }
+            // v0.25 polish — clear verbatim numeric buffers on
+            // selection change so a stale "0.1." buffer from one
+            // pad doesn't follow the user to the next pad's input.
+            editor.state.numeric_buffers.clear();
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintDeleteSelected => {

@@ -716,6 +716,13 @@ pub struct FootprintEditorPanelContext {
     /// no silk graphic is selected; the Properties panel only renders
     /// the silk-selection branch when this is `Some`.
     pub selected_silk_summary: Option<FootprintSelectedSilkSummary>,
+    /// v0.25 polish — verbatim per-input buffers for Properties-panel
+    /// numeric fields. Renderer reads `numeric_buffers.get(key)` and
+    /// uses the literal buffer if present; falls back to formatting
+    /// the canonical f64 otherwise. See
+    /// [`crate::library::editor::footprint::state::FootprintEditorState::numeric_buffers`]
+    /// for the buffer contract.
+    pub numeric_buffers: std::collections::HashMap<String, String>,
     /// v0.23 — Array (Pattern) summary surfaced when the selected
     /// sketch entity is the `source` of an array. Drives the
     /// Properties panel "Pattern" sub-section.

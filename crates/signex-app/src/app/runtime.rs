@@ -1684,6 +1684,7 @@ fn build_footprint_editor_panel_ctx(
         selected_silk_summary,
         selected_array,
         selected_pad_shape_params,
+        numeric_buffers: editor.state.numeric_buffers.clone(),
     })
 }
 
