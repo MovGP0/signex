@@ -1666,6 +1666,15 @@ pub enum PanelMsg {
     FpEditorSelectSketchEntity {
         id: signex_sketch::id::SketchEntityId,
     },
+    /// v0.22 Phase 8.5 — Right-dock History panel "Restore this
+    /// version" button. The handler resolves the active tab's
+    /// owning project, opens `LocalGitProjectAdapter`, and runs
+    /// `restore_at(rel_path, oid)` to overwrite the working-tree
+    /// file with the historical blob. Marks the file dirty so the
+    /// next save commits the restored content.
+    HistoryRestoreClicked {
+        sha: String,
+    },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {

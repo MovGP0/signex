@@ -285,6 +285,21 @@ impl LocalGitProjectAdapter {
         &self.project_root
     }
 
+    /// String-SHA-keyed alternative to [`restore_at`]. Parses the
+    /// argument as a hex commit OID, then forwards. Convenient for
+    /// callers (notably `signex-app`) that don't depend on `git2`
+    /// directly and just have the short/full SHA string from the
+    /// History panel widget.
+    pub fn restore_at_from_sha(
+        &self,
+        rel_path: &Path,
+        sha: &str,
+    ) -> Result<(), LibraryError> {
+        let oid = git2::Oid::from_str(sha)
+            .map_err(|e| LibraryError::Backend(format!("invalid sha `{sha}`: {e}")))?;
+        self.restore_at(rel_path, oid)
+    }
+
     /// Write the project's `.gitattributes` file with the v0.22 spec:
     /// - `text eol=lf` for every `.snx*` extension so git stays
     ///   line-ending stable across Windows / macOS / Linux

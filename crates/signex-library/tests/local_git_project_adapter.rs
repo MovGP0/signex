@@ -225,6 +225,38 @@ fn write_gitattributes_includes_lfs_filter_when_use_lfs_is_on() {
 }
 
 #[test]
+fn restore_at_from_sha_round_trips_via_string_oid() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    write_file(&root, "x.snxsch", "v1");
+    let oid_a = adapter
+        .commit_path(Path::new("x.snxsch"), "v1")
+        .unwrap();
+    write_file(&root, "x.snxsch", "v2");
+    adapter.commit_path(Path::new("x.snxsch"), "v2").unwrap();
+
+    // Restore by string SHA — what the History panel hands us.
+    adapter
+        .restore_at_from_sha(Path::new("x.snxsch"), &oid_a.to_string())
+        .unwrap();
+    assert_eq!(read_file(&root, "x.snxsch"), "v1");
+}
+
+#[test]
+fn restore_at_from_sha_rejects_invalid_sha() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    let err = adapter
+        .restore_at_from_sha(Path::new("x.snxsch"), "not-a-sha")
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("invalid sha"));
+}
+
+#[test]
 fn write_gitattributes_overwrites_existing_file() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();

@@ -315,6 +315,86 @@ impl Signex {
         }
     }
 
+    /// v0.22 Phase 8.5 — Resolve the active tab's path and project,
+    /// then call `LocalGitProjectAdapter::restore_at` with the user-
+    /// picked SHA. Marks the file dirty so the next Ctrl+S captures
+    /// the restored content.
+    ///
+    /// Best-effort: failures log a warning and surface as a status
+    /// message; nothing destructive runs (the working tree changes
+    /// only on a successful blob read + atomic write).
+    pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
+        let active = match self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+        {
+            Some(t) => t,
+            None => return,
+        };
+        let full_path = active.path.clone();
+        if full_path.as_os_str().is_empty() {
+            return;
+        }
+
+        // Find the owning project by directory prefix.
+        let owning = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| {
+                let dir = std::path::Path::new(&p.data.dir);
+                full_path.starts_with(dir)
+            });
+        let Some(project) = owning else {
+            crate::diagnostics::log_warning(format!(
+                "[git] restore: no owning project for {}",
+                full_path.display()
+            ));
+            return;
+        };
+        let project_root = std::path::PathBuf::from(&project.data.dir);
+        let rel_path = match full_path.strip_prefix(&project_root) {
+            Ok(p) => p.to_path_buf(),
+            Err(_) => return,
+        };
+
+        let adapter = match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+            project_root.clone(),
+        ) {
+            Ok(a) => a,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] restore: open_or_init({}) failed: {e}",
+                    project_root.display()
+                ));
+                return;
+            }
+        };
+        match adapter.restore_at_from_sha(&rel_path, sha) {
+            Ok(()) => {
+                self.document_state.dirty_paths.insert(full_path.clone());
+                crate::diagnostics::log_info(format!(
+                    "[git] restored {} to {}",
+                    rel_path.display(),
+                    sha
+                ));
+                // Clear cached engine state so the on-disk reload
+                // picks up the restored bytes the next time the user
+                // opens the file. The active tab won't auto-refresh
+                // — the user re-opens or saves to commit.
+                self.refresh_panel_ctx();
+            }
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] restore_at({}, {}) failed: {e}",
+                    rel_path.display(),
+                    sha
+                ));
+            }
+        }
+    }
+
     fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens

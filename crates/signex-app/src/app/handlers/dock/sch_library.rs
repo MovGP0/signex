@@ -780,6 +780,17 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::HistoryRestoreClicked { sha } => {
+                // v0.22 Phase 8.5 — History panel "Restore this
+                // version" button. Resolve the active tab's owning
+                // project, open `LocalGitProjectAdapter`, and run
+                // `restore_at(rel_path, oid)` to overwrite the
+                // working-tree file with the historical blob. Mark
+                // the file dirty so the next save commits the
+                // restored content.
+                self.handle_history_restore_clicked(sha);
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {
