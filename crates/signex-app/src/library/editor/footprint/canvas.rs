@@ -1699,13 +1699,18 @@ fn draw_sketch_overlay(
                     None => continue,
                 };
                 let p = cstate.world_to_screen(world);
-                let r = if entity.bake_skipped() { 2.5 } else { 4.0 };
+                // v0.23 — Bumped Point handle sizes so corner/edge
+                // grab targets read from a normal viewing distance.
+                // Construction (bake-skipped) Points stay smaller
+                // than authored Points so they read as secondary
+                // chrome, but both are now grab-friendly.
+                let r = if entity.bake_skipped() { 4.0 } else { 5.5 };
                 let path = Path::circle(Point::new(p.x, p.y), r);
                 let col = dof_colour(entity.id);
                 frame.fill(&path, col);
                 frame.stroke(
                     &path,
-                    Stroke::default().with_width(1.0).with_color(Color {
+                    Stroke::default().with_width(1.5).with_color(Color {
                         a: 1.0,
                         r: col.r * 0.6,
                         g: col.g * 0.6,
