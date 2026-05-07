@@ -627,10 +627,67 @@ impl Signex {
                     }
                 }
             }
-            crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
-                crate::diagnostics::log_warning(
-                    "[reload] reload-after-restore not supported for Library Browser / Component Editor tabs yet",
-                );
+            crate::app::TabKind::LibraryBrowser(_)
+            | crate::app::TabKind::ComponentEditor(_) => {
+                let lib_path = match &kind {
+                    crate::app::TabKind::LibraryBrowser(p) => p.clone(),
+                    crate::app::TabKind::ComponentEditor(c) => c.library_path.clone(),
+                    _ => unreachable!(),
+                };
+                // v0.23 — reload-after-restore for `.snxlib` tabs.
+                // Walks `library.open_libraries` for the matching
+                // root, looks the adapter up by `library_id`, and
+                // re-runs `reload_tables` so the table view picks up
+                // the restored TSVs without the user having to close
+                // and re-open the library. Failures (adapter dropped,
+                // disk read error) log + drop into an empty cache —
+                // the user can still explicitly reload from the
+                // Library panel as a fallback.
+                let library_id = self
+                    .library
+                    .library_at(&lib_path)
+                    .map(|lib| lib.library_id);
+                let Some(library_id) = library_id else {
+                    crate::diagnostics::log_warning(format!(
+                        "[reload] LibraryBrowser tab {} has no open library to refresh",
+                        lib_path.display()
+                    ));
+                    return;
+                };
+                // Split the borrows: hold the adapter immutably from
+                // `set.get`, then mutate the OpenLibrary entry.
+                use signex_library::LibraryAdapter as _;
+                let _ = library_id;
+                if let Some(open_lib) = self.library.library_at_mut(&lib_path) {
+                    // Re-open the on-disk adapter rather than reusing
+                    // the mounted one — `restore_at` rewrote the
+                    // working tree, and the adapter's internal
+                    // caches (e.g. git2 index) are stale.
+                    match signex_library::LocalGitAdapter::open(&lib_path) {
+                        Ok(fresh_adapter) => {
+                            if let Err(e) = open_lib.reload_tables(&fresh_adapter) {
+                                crate::diagnostics::log_warning(format!(
+                                    "[reload] reload_tables({}) failed: {e}",
+                                    lib_path.display()
+                                ));
+                            } else {
+                                crate::diagnostics::log_info(format!(
+                                    "[reload] LibraryBrowser tab {} refreshed",
+                                    lib_path.display()
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            crate::diagnostics::log_warning(format!(
+                                "[reload] LocalGitAdapter::open({}) failed: {e}",
+                                lib_path.display()
+                            ));
+                        }
+                    }
+                }
+                // Refresh the panel so the Library Browser tab picks
+                // up the new table set on the next render.
+                self.refresh_panel_ctx();
             }
         }
     }
