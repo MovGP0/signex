@@ -542,6 +542,14 @@ pub struct FootprintEditorState {
     /// motion); cleared by `FootprintCloseContextMenu` (Esc, click
     /// outside, action selection, or pan-drag start).
     pub context_menu: Option<FootprintContextMenuState>,
+    /// v0.26-C — one-shot "fit canvas to content" request. Set true
+    /// by the context-menu View ▸ Fit to Window action; consumed by
+    /// the canvas Program''s next `update` tick (which has &mut
+    /// access to `FootprintCanvasState.scale/offset/did_initial_fit`).
+    /// On consume the canvas publishes
+    /// `EditorMsg::FootprintFitConsumed` to clear the flag. Default
+    /// `false` keeps the existing first-draw fit untouched.
+    pub fit_pending: bool,
 }
 
 /// v0.26 — right-click canvas context menu state. `(x, y)` are
@@ -1449,6 +1457,7 @@ impl FootprintEditorState {
             placement_input: None,
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
+            fit_pending: false,
         };
         s.recompute_courtyard();
         s
@@ -1497,6 +1506,7 @@ impl FootprintEditorState {
             placement_input: None,
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
+            fit_pending: false,
         };
         s.recompute_courtyard();
         s

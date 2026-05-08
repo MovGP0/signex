@@ -4124,6 +4124,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintCloseContextMenu
         | PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(_)
         | PrimitiveEditorMsg::FootprintContextMenuAction(_)
+        | PrimitiveEditorMsg::FootprintFitConsumed
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4711,6 +4712,9 @@ pub(crate) fn apply_footprint_primitive_edit(
                 menu.submenu = sm;
             }
         }
+        PrimitiveEditorMsg::FootprintFitConsumed => {
+            editor.state.fit_pending = false;
+        }
         PrimitiveEditorMsg::FootprintContextMenuAction(action) => {
             use crate::library::editor::footprint::state::FootprintContextAction as Act;
             match action {
@@ -4737,13 +4741,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                     editor.canvas_cache.clear();
                 }
                 Act::FitToWindow => {
-                    // v0.26 MVP — Fit-to-window has to plumb through
-                    // `FootprintCanvasState.did_initial_fit` which
-                    // lives inside the canvas Program, so the menu
-                    // closes here and a follow-up commit wires the
-                    // re-fit signal. Leaving the menu close here so
-                    // the click is at least dismissed.
+                    // v0.26-C — arm the one-shot fit signal. The
+                    // canvas Program''s next `update` tick has &mut
+                    // access to its own State (where `scale` /
+                    // `offset` / `did_initial_fit` live) and can
+                    // consume the flag; it publishes
+                    // `EditorMsg::FootprintFitConsumed` to clear the
+                    // request so it doesn''t re-trigger every event.
+                    editor.state.fit_pending = true;
                     editor.state.context_menu = None;
+                    editor.canvas_cache.clear();
                 }
             }
         }
@@ -7691,6 +7698,7 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         | FootprintCloseContextMenu
         | FootprintContextMenuOpenSubmenu(_)
         | FootprintContextMenuAction(_)
+        | FootprintFitConsumed
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
@@ -8116,6 +8124,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintCloseContextMenu
         | EditorMsg::FootprintContextMenuOpenSubmenu(_)
         | EditorMsg::FootprintContextMenuAction(_)
+        | EditorMsg::FootprintFitConsumed
         | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)

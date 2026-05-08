@@ -1069,6 +1069,7 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintContextMenuAction(act) => {
             PrimitiveEditorMsg::FootprintContextMenuAction(act)
         }
+        EditorMsg::FootprintFitConsumed => PrimitiveEditorMsg::FootprintFitConsumed,
         EditorMsg::FootprintSketchSetRole { id, role } => {
             PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
         }

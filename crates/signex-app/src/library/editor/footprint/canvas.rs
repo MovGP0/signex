@@ -199,6 +199,27 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             cstate.did_initial_fit = true;
         }
 
+        // v0.26-C — one-shot Fit-to-Window from the right-click menu.
+        // The dispatcher set `state.fit_pending = true`; we honour it
+        // on the very next event tick (any mouse motion / scroll /
+        // press over the canvas) and publish `FitConsumed` so the
+        // flag clears. Bounds-guard mirrors the first-draw branch.
+        if self.state.fit_pending && bounds.width > 0.0 && bounds.height > 0.0 {
+            if let Some(bbox) = self.state.content_bbox_mm() {
+                cstate.fit_to_bounds(bbox, bounds);
+            } else {
+                cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
+            }
+            cstate.did_initial_fit = true;
+            self.cache.clear();
+            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                library_path: self.address.library_path.clone(),
+                table: self.address.table.clone(),
+                row_id: self.address.row_id,
+                msg: EditorMsg::FootprintFitConsumed,
+            }));
+        }
+
         cstate.last_known_selected = self.state.selected_pad;
 
         match event {

@@ -854,6 +854,10 @@ pub enum EditorMsg {
     FootprintContextMenuAction(
         crate::library::editor::footprint::state::FootprintContextAction,
     ),
+    /// v0.26-C — canvas Program signals that the pending Fit-to-Window
+    /// request has been honoured. Dispatcher clears
+    /// `editor.state.fit_pending` so the next event tick sees false.
+    FootprintFitConsumed,
     /// v0.16.2 — assign / clear a role attr (PadAttr / SilkAttr /
     /// CourtyardAttr / etc.) on the entity at `id`. The dispatcher
     /// clears every `*Attr` slot first, then writes the matching one
@@ -1415,6 +1419,9 @@ pub enum PrimitiveEditorMsg {
     FootprintContextMenuAction(
         crate::library::editor::footprint::state::FootprintContextAction,
     ),
+    /// v0.26-C — canvas signals that the pending Fit-to-Window
+    /// request has been honoured. See EditorMsg::FootprintFitConsumed.
+    FootprintFitConsumed,
     /// v0.16.2 — set the role attr on a sketch entity. Inspector
     /// emits this when the user picks a value from the Role dropdown;
     /// dispatcher routes through
