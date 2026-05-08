@@ -326,8 +326,17 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
 fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     use crate::library::editor::footprint::state::FpSelectionMode;
     vec![
-        DropdownEntry::Item(stub("Select overlapped", path.clone())),
-        DropdownEntry::Item(stub("Select next", path.clone())),
+        DropdownEntry::Item(DropdownItem::new(
+            "Select overlapped",
+            fp(path.clone(), PrimitiveEditorMsg::FootprintSelectOverlapped),
+        )),
+        DropdownEntry::Item(DropdownItem::new(
+            "Select next",
+            fp(
+                path.clone(),
+                PrimitiveEditorMsg::FootprintSelectNextOverlapped,
+            ),
+        )),
         DropdownEntry::Item(
             DropdownItem::new(
                 "Lasso Select",
@@ -363,7 +372,10 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
                 PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Touching),
             ),
         )),
-        DropdownEntry::Item(stub("Touching Line", path.clone())),
+        DropdownEntry::Item(DropdownItem::new(
+            "Touching Line",
+            fp(path.clone(), PrimitiveEditorMsg::FootprintTouchingLineArm),
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Item(DropdownItem::new(
             "All on Layer",

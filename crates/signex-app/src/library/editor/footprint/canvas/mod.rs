@@ -345,6 +345,18 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 .and_capture(),
                             );
                         }
+                        // v0.27 — Touching Line right-click cancels.
+                        if self.state.touching_line_active {
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintTouchingLineCancel,
+                                })
+                                .and_capture(),
+                            );
+                        }
                         let cancel_msg: Option<EditorMsg> = match self.state.mode {
                             EditorMode::Normal => {
                                 if self.state.pads_tool != PadsTool::Select {
@@ -406,6 +418,34 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     x_mm: world.0,
                                     y_mm: world.1,
                                 },
+                            })
+                            .and_capture(),
+                        );
+                    }
+                    // v0.27 — Touching Line intercept. First click
+                    // stashes the start point; second click commits
+                    // by publishing FootprintTouchingLineCommit, the
+                    // dispatcher walks pads + selects everything the
+                    // segment intersects.
+                    if self.state.touching_line_active {
+                        let world = cstate.screen_to_world(cursor_pos);
+                        let msg = if self.state.touching_line_first.is_none() {
+                            EditorMsg::FootprintTouchingLineFirst {
+                                x_mm: world.0,
+                                y_mm: world.1,
+                            }
+                        } else {
+                            EditorMsg::FootprintTouchingLineCommit {
+                                x_mm: world.0,
+                                y_mm: world.1,
+                            }
+                        };
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg,
                             })
                             .and_capture(),
                         );
@@ -1233,7 +1273,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // so the open polygon edge tracks live to the cursor.
                 let in_lasso = self.state.lasso_mode_active
                     && !self.state.lasso_vertices.is_empty();
-                if in_sketch_with_anchor || in_pads_place || in_lasso {
+                let in_touching_line =
+                    self.state.touching_line_active && self.state.touching_line_first.is_some();
+                if in_sketch_with_anchor || in_pads_place || in_lasso || in_touching_line {
                     self.cache.clear();
                 }
 
@@ -1396,6 +1438,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // armed it from the active bar).
                         if self.state.lasso_mode_active {
                             return publish(EditorMsg::FootprintLassoCancel);
+                        }
+                        // v0.27 — Touching Line cancel via Esc.
+                        if self.state.touching_line_active {
+                            return publish(EditorMsg::FootprintTouchingLineCancel);
                         }
                         if has_open_buffer {
                             return publish(EditorMsg::FootprintSketchPlacementInputEscape);
@@ -1882,6 +1928,27 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // gesture (Select / PlacePad / PlaceHole / PlaceString).
             if matches!(self.state.mode, super::state::EditorMode::Normal) {
                 draw_pads_tool_preview(frame, cstate, self.state);
+            }
+
+            // v0.27 — Touching Line ghost. After the first click
+            // armed the line, the second-endpoint preview tracks
+            // the cursor live. Same cyan accent as Lasso so the
+            // selection-tool ghosts read as one family.
+            if self.state.touching_line_active {
+                if let Some((sx, sy)) = self.state.touching_line_first {
+                    let p0 = cstate.world_to_screen((sx, sy));
+                    let p1 = match self.state.cursor_mm {
+                        Some(c) => cstate.world_to_screen(c),
+                        None => p0,
+                    };
+                    let line_col = Color::from_rgba(0.30, 0.85, 1.00, 0.95);
+                    frame.stroke(
+                        &Path::line(p0, p1),
+                        Stroke::default().with_width(1.5).with_color(line_col),
+                    );
+                    frame.fill(&Path::circle(p0, 3.5), line_col);
+                    frame.fill(&Path::circle(p1, 3.5), line_col);
+                }
             }
 
             // v0.27 — Lasso Select polygon ghost. Renders the

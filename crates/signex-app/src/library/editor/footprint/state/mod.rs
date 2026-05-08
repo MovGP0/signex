@@ -81,6 +81,20 @@ pub struct FootprintEditorState {
     pub lasso_mode_active: bool,
     /// v0.27 — vertex stash for the Lasso Select tool. World mm.
     pub lasso_vertices: Vec<(f64, f64)>,
+    /// v0.27 — `true` while the Touching Line tool is armed. Each
+    /// click is one of two endpoints; after the second click, the
+    /// line segment is intersected against every pad bbox and all
+    /// hits are multi-selected.
+    pub touching_line_active: bool,
+    /// v0.27 — first endpoint of the in-flight touching line, in
+    /// world mm. `None` before the first click; reset after commit
+    /// / cancel.
+    pub touching_line_first: Option<(f64, f64)>,
+    /// v0.27 — most recent left-click world position on a pad.
+    /// Drives Select overlapped / Select next dropdown items so
+    /// they can find the stack of pads at that location and cycle
+    /// through them.
+    pub last_click_world_mm: Option<(f64, f64)>,
     /// `true` when the courtyard polygon should track the pad bbox.
     pub auto_fit_courtyard: bool,
     pub courtyard_mm: Option<CourtyardRect>,
@@ -192,6 +206,9 @@ impl FootprintEditorState {
             selected_pads_extra: Vec::new(),
             lasso_mode_active: false,
             lasso_vertices: Vec::new(),
+            touching_line_active: false,
+            touching_line_first: None,
+            last_click_world_mm: None,
             // v0.26-I — auto-courtyard mode removed; courtyard is
             // authored explicitly via silk graphic / sketch entity.
             auto_fit_courtyard: false,

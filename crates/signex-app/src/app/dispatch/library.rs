@@ -4146,6 +4146,12 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintLassoAddVertex { .. }
         | PrimitiveEditorMsg::FootprintLassoCommit
         | PrimitiveEditorMsg::FootprintLassoCancel
+        | PrimitiveEditorMsg::FootprintTouchingLineArm
+        | PrimitiveEditorMsg::FootprintTouchingLineFirst { .. }
+        | PrimitiveEditorMsg::FootprintTouchingLineCommit { .. }
+        | PrimitiveEditorMsg::FootprintTouchingLineCancel
+        | PrimitiveEditorMsg::FootprintSelectOverlapped
+        | PrimitiveEditorMsg::FootprintSelectNextOverlapped
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
@@ -4685,6 +4691,12 @@ pub(crate) fn apply_footprint_primitive_edit(
             // v0.27 — single-pad select replaces the multi-select
             // extras too. Multi-select uses FootprintSelectPads.
             editor.state.selected_pads_extra.clear();
+            // v0.27 — record the click position for Select
+            // overlapped / Select next so the dropdown can find
+            // the stack at the last-clicked location.
+            if sel.is_some() {
+                editor.state.last_click_world_mm = editor.state.cursor_mm;
+            }
             // v0.18.18 — pad and silk selection are mutually
             // exclusive in the Properties panel; clear the silk
             // selection when a pad is picked.
@@ -4712,6 +4724,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.selected_pad = Some(pads[0]);
                 editor.state.selected_pads_extra = pads[1..].to_vec();
                 editor.state.selected_silk_f = None;
+                editor.state.last_click_world_mm = editor.state.cursor_mm;
             }
             editor.state.numeric_buffers.clear();
             editor.canvas_cache.clear();
@@ -5709,6 +5722,141 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.selected_pad = Some(hits.remove(0));
                 editor.state.selected_pads_extra = hits;
             }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineArm => {
+            editor.state.touching_line_active = true;
+            editor.state.touching_line_first = None;
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
+            if editor.state.touching_line_active {
+                editor.state.touching_line_first = Some((x_mm, y_mm));
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineCancel => {
+            editor.state.touching_line_active = false;
+            editor.state.touching_line_first = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
+            // v0.27 — Touching Line: every pad whose bbox is
+            // intersected by the segment from `touching_line_first`
+            // → (x_mm, y_mm) becomes selected. Liang-Barsky-style
+            // segment-vs-AABB clip.
+            let Some((sx, sy)) = editor.state.touching_line_first.take() else {
+                editor.state.touching_line_active = false;
+                editor.canvas_cache.clear();
+                return;
+            };
+            editor.state.touching_line_active = false;
+            let dx = x_mm - sx;
+            let dy = y_mm - sy;
+            let segment_hits_aabb = |xmin: f64, ymin: f64, xmax: f64, ymax: f64| -> bool {
+                // Both endpoints inside?
+                let inside = |x: f64, y: f64| -> bool {
+                    x >= xmin && x <= xmax && y >= ymin && y <= ymax
+                };
+                if inside(sx, sy) || inside(x_mm, y_mm) {
+                    return true;
+                }
+                // Liang-Barsky parametric clip in [0, 1].
+                let mut t_enter = 0.0_f64;
+                let mut t_exit = 1.0_f64;
+                let p = [-dx, dx, -dy, dy];
+                let q = [sx - xmin, xmax - sx, sy - ymin, ymax - sy];
+                for i in 0..4 {
+                    if p[i].abs() < 1e-12 {
+                        if q[i] < 0.0 {
+                            return false;
+                        }
+                    } else {
+                        let t = q[i] / p[i];
+                        if p[i] < 0.0 {
+                            if t > t_exit {
+                                return false;
+                            }
+                            if t > t_enter {
+                                t_enter = t;
+                            }
+                        } else {
+                            if t < t_enter {
+                                return false;
+                            }
+                            if t < t_exit {
+                                t_exit = t;
+                            }
+                        }
+                    }
+                }
+                t_enter <= t_exit
+            };
+            let mut hits: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    let (x0, y0, x1, y1) = p.bbox_mm();
+                    if segment_hits_aabb(x0, y0, x1, y1) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if hits.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(hits.remove(0));
+                editor.state.selected_pads_extra = hits;
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSelectOverlapped
+        | PrimitiveEditorMsg::FootprintSelectNextOverlapped => {
+            // v0.27 — Cycle through pads stacked at the most recent
+            // click world position. SelectOverlapped goes to the
+            // previous pad in z-order; SelectNextOverlapped advances.
+            // Without a recorded click position there's no stack to
+            // cycle, so the action is a silent no-op.
+            let forward = matches!(msg, PrimitiveEditorMsg::FootprintSelectNextOverlapped);
+            let Some((wx, wy)) = editor.state.last_click_world_mm else {
+                editor.state.active_bar_menu = None;
+                return;
+            };
+            let stack: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| if p.contains_mm(wx, wy) { Some(idx) } else { None })
+                .collect();
+            if stack.is_empty() {
+                editor.state.active_bar_menu = None;
+                return;
+            }
+            // Pick next/prev relative to the current primary selection.
+            let cur_pos = editor
+                .state
+                .selected_pad
+                .and_then(|s| stack.iter().position(|&i| i == s));
+            let next_idx = match cur_pos {
+                Some(p) => {
+                    if forward {
+                        (p + 1) % stack.len()
+                    } else {
+                        (p + stack.len() - 1) % stack.len()
+                    }
+                }
+                None => 0,
+            };
+            editor.state.selected_pad = Some(stack[next_idx]);
+            editor.state.selected_pads_extra.clear();
+            editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSelectOffGridPads => {
@@ -8524,6 +8672,12 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintLassoAddVertex { .. }
         | EditorMsg::FootprintLassoCommit
         | EditorMsg::FootprintLassoCancel
+        | EditorMsg::FootprintTouchingLineArm
+        | EditorMsg::FootprintTouchingLineFirst { .. }
+        | EditorMsg::FootprintTouchingLineCommit { .. }
+        | EditorMsg::FootprintTouchingLineCancel
+        | EditorMsg::FootprintSelectOverlapped
+        | EditorMsg::FootprintSelectNextOverlapped
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)

@@ -840,6 +840,21 @@ pub enum EditorMsg {
     /// v0.27 — drop the lasso vertex list and disarm without
     /// touching the existing selection.
     FootprintLassoCancel,
+    /// v0.27 — arm the Touching Line tool (2-click line gesture).
+    FootprintTouchingLineArm,
+    /// v0.27 — first endpoint click for the Touching Line tool.
+    FootprintTouchingLineFirst { x_mm: f64, y_mm: f64 },
+    /// v0.27 — second endpoint click; runs line-vs-pad-bbox
+    /// intersection and multi-selects every hit.
+    FootprintTouchingLineCommit { x_mm: f64, y_mm: f64 },
+    /// v0.27 — disarm the Touching Line tool without selecting.
+    FootprintTouchingLineCancel,
+    /// v0.27 — Select overlapped: cycle to the previous pad in
+    /// z-order at the most recent click location.
+    FootprintSelectOverlapped,
+    /// v0.27 — Select next: cycle to the next pad in z-order at
+    /// the most recent click location.
+    FootprintSelectNextOverlapped,
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// v0.27 — Multi-select replacement. Replaces the entire
@@ -1671,6 +1686,14 @@ pub enum PrimitiveEditorMsg {
     FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
     FootprintLassoCommit,
     FootprintLassoCancel,
+    /// v0.27 — Touching Line tool lifecycle.
+    FootprintTouchingLineArm,
+    FootprintTouchingLineFirst { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineCommit { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineCancel,
+    /// v0.27 — Z-order cycle on the last-clicked stacked pads.
+    FootprintSelectOverlapped,
+    FootprintSelectNextOverlapped,
     /// v0.13.3 — Add a constraint based on the current selection.
     /// The inspector's selection-aware submenu emits a `Tag` that
     /// the dispatcher maps into the appropriate `ConstraintKind`

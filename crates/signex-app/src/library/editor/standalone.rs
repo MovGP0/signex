@@ -1053,6 +1053,20 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         }
         EditorMsg::FootprintLassoCommit => PrimitiveEditorMsg::FootprintLassoCommit,
         EditorMsg::FootprintLassoCancel => PrimitiveEditorMsg::FootprintLassoCancel,
+        EditorMsg::FootprintTouchingLineArm => PrimitiveEditorMsg::FootprintTouchingLineArm,
+        EditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintTouchingLineFirst { x_mm, y_mm }
+        }
+        EditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm }
+        }
+        EditorMsg::FootprintTouchingLineCancel => {
+            PrimitiveEditorMsg::FootprintTouchingLineCancel
+        }
+        EditorMsg::FootprintSelectOverlapped => PrimitiveEditorMsg::FootprintSelectOverlapped,
+        EditorMsg::FootprintSelectNextOverlapped => {
+            PrimitiveEditorMsg::FootprintSelectNextOverlapped
+        }
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
         }
