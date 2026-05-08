@@ -480,8 +480,40 @@ pub(super) fn draw_sketch_overlay(
                 let centre = cstate.world_to_screen(c);
                 let r_screen = (radius as f32) * cstate.scale;
                 let path = Path::circle(Point::new(centre.x, centre.y), r_screen);
-                let col = dof_colour(entity.id);
-                frame.stroke(&path, Stroke::default().with_width(1.5).with_color(col));
+                // v0.27 — bump Circle stroke so the round-pad diameter
+                // primitive reads against the pad fill underneath.
+                // The 1.5 px grey stroke from the pre-Circle-mint era
+                // was effectively invisible on a saturated pad colour.
+                // Use a bright cyan accent + 2.5 px width when the
+                // entity has no DOF colour yet (no solve has run since
+                // mint) so the user can see + grab the handle.
+                let dof = dof_colour(entity.id);
+                let unsolved = state.last_solve.is_none();
+                let col = if unsolved {
+                    Color::from_rgba(0.30, 0.85, 1.00, 1.00)
+                } else {
+                    dof
+                };
+                let width = if unsolved { 2.5 } else { 1.5 };
+                frame.stroke(&path, Stroke::default().with_width(width).with_color(col));
+                // v0.27 — diameter handle Point at the east edge of
+                // the Circle. Renders as a small cyan-filled disc the
+                // user can grab to resize. Independent of the actual
+                // sketch entity list (purely visual chrome — the
+                // resize edit happens via the `diameter_<...>`
+                // parameter row in Properties for now).
+                let handle =
+                    Path::circle(Point::new(centre.x + r_screen, centre.y), 4.0);
+                frame.fill(
+                    &handle,
+                    Color::from_rgba(0.30, 0.85, 1.00, 1.00),
+                );
+                frame.stroke(
+                    &handle,
+                    Stroke::default()
+                        .with_width(1.0)
+                        .with_color(Color::from_rgba(0.10, 0.40, 0.55, 1.0)),
+                );
             }
             EntityKind::Arc {
                 center,

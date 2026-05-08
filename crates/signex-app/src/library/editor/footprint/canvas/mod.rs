@@ -613,9 +613,61 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     }
                     if drag.pad_idx == usize::MAX {
                         if drag.moved {
-                            // Cancelled click-add — drag in empty
-                            // space without crossing a pad doesn't
-                            // place anything.
+                            // v0.26-I — empty-canvas drag with motion.
+                            // If the press armed a rubber-band (Select
+                            // tool + Pads mode), commit it now: walk
+                            // the pad list and pick the first pad
+                            // whose bbox lies fully inside the
+                            // dragged rectangle. Multi-select is
+                            // queued. Without box-select armed (other
+                            // tool / Sketch mode), the empty drag is
+                            // a cancelled click-add — return None.
+                            //
+                            // v0.27 — the rubber-band logic used to
+                            // live below in an `if drag.moved` block
+                            // that this early-return prevented from
+                            // executing. Box-select would arm on
+                            // press but never fire on release. Moved
+                            // up here so the empty-drag-moved path
+                            // actually reaches the picker.
+                            if let (Some(a), Some(c)) = (
+                                cstate.box_select_anchor_screen.take(),
+                                cstate.box_select_current_screen.take(),
+                            ) {
+                                let world_a = cstate.screen_to_world(a);
+                                let world_c = cstate.screen_to_world(c);
+                                let (x0, x1) = if world_a.0 <= world_c.0 {
+                                    (world_a.0, world_c.0)
+                                } else {
+                                    (world_c.0, world_a.0)
+                                };
+                                let (y0, y1) = if world_a.1 <= world_c.1 {
+                                    (world_a.1, world_c.1)
+                                } else {
+                                    (world_c.1, world_a.1)
+                                };
+                                let mut hit: Option<usize> = None;
+                                for (idx, pad) in self.state.pads.iter().enumerate() {
+                                    let (px0, py0, px1, py1) = pad.bbox_mm();
+                                    if px0 >= x0
+                                        && px1 <= x1
+                                        && py0 >= y0
+                                        && py1 <= y1
+                                    {
+                                        hit = Some(idx);
+                                        break;
+                                    }
+                                }
+                                self.cache.clear();
+                                return Some(canvas::Action::publish(
+                                    LibraryMessage::EditorEvent {
+                                        library_path: self.address.library_path.clone(),
+                                        table: self.address.table.clone(),
+                                        row_id: self.address.row_id,
+                                        msg: EditorMsg::FootprintSelectPad(hit),
+                                    },
+                                ));
+                            }
                             return None;
                         }
                         // v0.13.1 Phase 6.3 — Sketch mode redirects
@@ -819,58 +871,13 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         return None;
                     }
                     if drag.moved {
-                        // v0.26-I — rubber-band release. If the press
-                        // armed a box-select (Select tool, empty
-                        // canvas) AND the drag actually moved, walk
-                        // the pad list and pick the first pad whose
-                        // bbox lies inside the rectangle. Multi-
-                        // select is queued; for now the rubber band
-                        // is a single-pad picker that lets the user
-                        // grab a pad without an exact left-click.
-                        if let (Some(a), Some(c)) = (
-                            cstate.box_select_anchor_screen.take(),
-                            cstate.box_select_current_screen.take(),
-                        ) {
-                            let world_a = cstate.screen_to_world(a);
-                            let world_c = cstate.screen_to_world(c);
-                            let (x0, x1) = if world_a.0 <= world_c.0 {
-                                (world_a.0, world_c.0)
-                            } else {
-                                (world_c.0, world_a.0)
-                            };
-                            let (y0, y1) = if world_a.1 <= world_c.1 {
-                                (world_a.1, world_c.1)
-                            } else {
-                                (world_c.1, world_a.1)
-                            };
-                            let mut hit: Option<usize> = None;
-                            for (idx, pad) in self.state.pads.iter().enumerate() {
-                                let (px0, py0, px1, py1) = pad.bbox_mm();
-                                if px0 >= x0 && px1 <= x1 && py0 >= y0 && py1 <= y1 {
-                                    hit = Some(idx);
-                                    break;
-                                }
-                            }
-                            self.cache.clear();
-                            if let Some(idx) = hit {
-                                return Some(canvas::Action::publish(
-                                    LibraryMessage::EditorEvent {
-                                        library_path: self.address.library_path.clone(),
-                                        table: self.address.table.clone(),
-                                        row_id: self.address.row_id,
-                                        msg: EditorMsg::FootprintSelectPad(Some(idx)),
-                                    },
-                                ));
-                            }
-                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
-                                library_path: self.address.library_path.clone(),
-                                table: self.address.table.clone(),
-                                row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintSelectPad(None),
-                            }));
-                        }
-                        // Final move position is already published per
-                        // CursorMoved tick — nothing to do on release.
+                        // Final pad-drag move position is already
+                        // published per CursorMoved tick — release
+                        // just clears the cache so the next frame
+                        // settles. v0.27 — the empty-canvas rubber-
+                        // band branch lives in the `pad_idx == MAX`
+                        // block above; only the pad-drag fall-through
+                        // remains here.
                         self.cache.clear();
                     }
                 }
