@@ -475,12 +475,19 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // relative to bounds.
                         let screen_x = bounds.x + cursor_pos.x;
                         let screen_y = bounds.y + cursor_pos.y;
-                        // v0.26 MVP — always Empty target; per-pad
-                        // hit-test routing comes in v0.26-B. Publishes
-                        // an `EditorEvent` so the standalone .snxfpt
-                        // path picks it up via `editor_msg_to_primitive_msg`.
+                        // v0.26-B — hit-test the pad list at the
+                        // right-click world position so the menu
+                        // renders the on-pad variant (Cut / Copy /
+                        // Pad Actions stub) when the cursor lands on
+                        // a pad. Falls through to Empty when the
+                        // hit-test misses.
                         use crate::library::editor::footprint::state
                             ::FootprintContextTarget;
+                        let world = cstate.screen_to_world(cursor_pos);
+                        let target = match self.state.pad_at(world.0, world.1) {
+                            Some(idx) => FootprintContextTarget::Pad(idx),
+                            None => FootprintContextTarget::Empty,
+                        };
                         return Some(
                             canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
@@ -489,7 +496,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 msg: EditorMsg::FootprintShowContextMenu {
                                     x: screen_x,
                                     y: screen_y,
-                                    target: FootprintContextTarget::Empty,
+                                    target,
                                 },
                             })
                             .and_capture(),

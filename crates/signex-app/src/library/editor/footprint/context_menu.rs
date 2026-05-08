@@ -50,19 +50,14 @@ pub fn view_context_menu<'a>(
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
 
-    // Top entries vary by hit target. The MVP routes both Empty and
-    // on-pad to the same set; per-target divergence is queued for
-    // v0.26-B (Pad Actions / Track Actions submenus).
     match menu_state.target {
-        FootprintContextTarget::Empty
-        | FootprintContextTarget::Pad(_)
-        | FootprintContextTarget::SilkF(_) => {
+        FootprintContextTarget::Empty => {
             items.push(item_disabled(tokens, "Find Similar Objects...", ""));
             items.push(separator(tokens));
 
-            // Place ▸ — switches the Pads-mode tool. v0.26 MVP only
-            // surfaces the four most-used Place targets; the rest of
-            // the Pads palette is still reachable via the active bar.
+            // Place ▸ — switches the Pads-mode tool. The five most-
+            // used Place targets; rest of the Pads palette is still
+            // reachable via the active bar.
             let place_open =
                 menu_state.submenu == Some(FootprintContextSubmenu::Place);
             items.push(item_submenu_header(
@@ -79,45 +74,34 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Pad",
                     "P",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlacePad,
-                    )),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePad)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Track",
                     "T",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlaceTrack,
-                    )),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTrack)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Arc",
                     "A",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlaceArc,
-                    )),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceArc)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Polygon (Region)",
                     "R",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlacePolygon,
-                    )),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePolygon)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "String (Text)",
                     "S",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlaceString,
-                    )),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString)),
                 ));
             }
 
-            // Selection ▸ — Select All / Deselect All.
             let sel_open =
                 menu_state.submenu == Some(FootprintContextSubmenu::Selection);
             items.push(item_submenu_header(
@@ -147,7 +131,6 @@ pub fn view_context_menu<'a>(
                 ));
             }
 
-            // View ▸ — Fit Document only for now.
             let view_open =
                 menu_state.submenu == Some(FootprintContextSubmenu::View);
             items.push(item_submenu_header(
@@ -170,23 +153,64 @@ pub fn view_context_menu<'a>(
             }
 
             items.push(separator(tokens));
+            items.push(item_disabled(tokens, "Properties...", ""));
+        }
 
-            // Delete-when-something-selected mirrors the Altium Edit
-            // group at the bottom.
-            if editor.state.selected_pad.is_some()
-                || editor.state.selected_silk_f.is_some()
-                || editor.state.selected_sketch.is_some()
-            {
-                items.push(item_msg(
-                    tokens,
-                    "Delete",
-                    "Del",
-                    make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
-                ));
-                items.push(separator(tokens));
-            }
+        FootprintContextTarget::Pad(idx) => {
+            // Header row showing which pad the menu acts on. Greyed
+            // and unclickable so it reads as a label, not an action.
+            let header = editor
+                .state
+                .pads
+                .get(idx)
+                .map(|p| format!("Pad {}", p.number))
+                .unwrap_or_else(|| format!("Pad {idx}"));
+            items.push(item_disabled(tokens, &header, ""));
+            items.push(separator(tokens));
 
             items.push(item_disabled(tokens, "Properties...", ""));
+
+            // Pad Actions ▸ — Altium has a rich submenu (Add Region,
+            // Custom Pad ops, Thermal Connection points). For v0.26-B
+            // we surface the header as a disabled stub so users can
+            // see where it''s coming; full content lands when the
+            // custom-pad / thermal subsystem ships.
+            items.push(item_disabled(tokens, "Pad Actions ▸", ""));
+
+            items.push(separator(tokens));
+
+            items.push(item_disabled(tokens, "Cut", "Ctrl+X"));
+            items.push(item_disabled(tokens, "Copy", "Ctrl+C"));
+            items.push(item_msg(
+                tokens,
+                "Delete",
+                "Del",
+                make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
+            ));
+
+            items.push(separator(tokens));
+
+            items.push(item_disabled(tokens, "Find Similar Objects...", ""));
+        }
+
+        FootprintContextTarget::SilkF(idx) => {
+            // Reserved for the silk-front graphic right-click pass.
+            // Wired by canvas hit-test in a follow-up; here so that
+            // the variant compiles + renders something useful when
+            // it does land.
+            let header = format!("Silk graphic {idx}");
+            items.push(item_disabled(tokens, &header, ""));
+            items.push(separator(tokens));
+
+            items.push(item_disabled(tokens, "Properties...", ""));
+            items.push(item_msg(
+                tokens,
+                "Delete",
+                "Del",
+                make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
+            ));
+            items.push(separator(tokens));
+            items.push(item_disabled(tokens, "Find Similar Objects...", ""));
         }
     }
 

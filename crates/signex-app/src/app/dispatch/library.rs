@@ -4666,12 +4666,34 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         // v0.26 — right-click context menu plumbing. State-only
-        // mutations; canvas cache is left untouched because the menu
-        // overlay lives outside the canvas geometry layer.
+        // mutations; canvas cache is cleared when target adjusts the
+        // selection (right-click on a pad selects it Altium-style).
         PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target } => {
+            use crate::library::editor::footprint::state::FootprintContextTarget;
             // Close any active dropdown before opening the context
             // menu so two popups never coexist (Altium parity).
             editor.state.active_bar_menu = None;
+            // v0.26-B Altium parity — right-click on a pad selects
+            // it (so subsequent menu actions like Delete / Properties
+            // act on the right-clicked pad) without losing prior
+            // selection on bare-canvas right-click.
+            match target {
+                FootprintContextTarget::Pad(idx) => {
+                    if editor.state.selected_pad != Some(idx) {
+                        editor.state.selected_pad = Some(idx);
+                        editor.state.selected_silk_f = None;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                FootprintContextTarget::SilkF(idx) => {
+                    if editor.state.selected_silk_f != Some(idx) {
+                        editor.state.selected_silk_f = Some(idx);
+                        editor.state.selected_pad = None;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                FootprintContextTarget::Empty => {}
+            }
             editor.state.context_menu = Some(
                 crate::library::editor::footprint::state::FootprintContextMenuState {
                     x,
