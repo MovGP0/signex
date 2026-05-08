@@ -210,12 +210,47 @@ pub fn view_context_menu<'a>(
                 make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
             ));
 
-            // Pad Actions ▸ — Altium has a rich submenu (Add Region,
-            // Custom Pad ops, Thermal Connection points). For v0.26-B
-            // we surface the header as a disabled stub so users can
-            // see where it''s coming; full content lands when the
-            // custom-pad / thermal subsystem ships.
-            items.push(item_disabled(tokens, "Pad Actions ▸", ""));
+            // v0.26-G — Pad Actions ▸ now expands to the items we
+            // can wire today (Rotate 90°, Flip Layer). Altium''s
+            // Custom Pad / Thermal Connection ops remain stubs until
+            // those subsystems land.
+            let pad_actions_open =
+                menu_state.submenu == Some(FootprintContextSubmenu::PadActions);
+            items.push(item_submenu_header(
+                tokens,
+                "Pad Actions",
+                pad_actions_open,
+                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                    FootprintContextSubmenu::PadActions,
+                ))),
+            ));
+            if pad_actions_open {
+                items.push(item_indented(
+                    tokens,
+                    "Rotate 90°",
+                    "Space",
+                    make_msg(PrimitiveEditorMsg::FootprintActiveBarRotateSelection),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "Flip Layer",
+                    "X",
+                    make_msg(PrimitiveEditorMsg::FootprintActiveBarFlipSelection),
+                ));
+                // Stubs — Custom Pad + Thermal subsystems pending.
+                items.push(item_indented(
+                    tokens,
+                    "Custom Pad from Outline...",
+                    "",
+                    make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "Thermal Connection Points...",
+                    "",
+                    make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                ));
+            }
 
             items.push(separator(tokens));
 

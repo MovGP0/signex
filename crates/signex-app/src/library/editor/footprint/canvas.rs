@@ -940,6 +940,43 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     }
                 }
 
+                // v0.26-G — Space (rotate 90°) / X (flip layer) on
+                // the selected pad. Altium parity. Mode-agnostic; only
+                // fires when there''s a pad to act on so the canvas
+                // doesn''t swallow Space / X away from sketch tools
+                // that need them. Captures so the global subscription
+                // doesn''t double-fire (Space → schematic
+                // RotateSelected, X → schematic MirrorSelectedY).
+                if !modifiers.command() && !modifiers.alt() {
+                    if matches!(key, keyboard::Key::Named(keyboard::key::Named::Space))
+                        && self.state.selected_pad.is_some()
+                    {
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintActiveBarRotateSelection,
+                            })
+                            .and_capture(),
+                        );
+                    }
+                    if let keyboard::Key::Character(c) = key.as_ref()
+                        && (c == "x" || c == "X")
+                        && self.state.selected_pad.is_some()
+                    {
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintActiveBarFlipSelection,
+                            })
+                            .and_capture(),
+                        );
+                    }
+                }
+
                 if !matches!(self.state.mode, EditorMode::Sketch) {
                     return None;
                 }

@@ -870,6 +870,10 @@ pub enum EditorMsg {
     /// Picks a free designator. Selects the new pad post-paste so the
     /// user can immediately drag / nudge.
     FootprintPastePad,
+    /// v0.26-G — Space (rotate 90° CCW) on the selected pad.
+    FootprintActiveBarRotateSelection,
+    /// v0.26-G — X (flip Top ↔ Bottom layers) on the selected pad.
+    FootprintActiveBarFlipSelection,
     /// v0.16.2 — assign / clear a role attr (PadAttr / SilkAttr /
     /// CourtyardAttr / etc.) on the entity at `id`. The dispatcher
     /// clears every `*Attr` slot first, then writes the matching one

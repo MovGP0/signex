@@ -8263,6 +8263,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintCopyPad
         | EditorMsg::FootprintCutPad
         | EditorMsg::FootprintPastePad
+        | EditorMsg::FootprintActiveBarRotateSelection
+        | EditorMsg::FootprintActiveBarFlipSelection
         | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)

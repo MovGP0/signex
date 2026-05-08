@@ -1073,6 +1073,12 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintCopyPad => PrimitiveEditorMsg::FootprintCopyPad,
         EditorMsg::FootprintCutPad => PrimitiveEditorMsg::FootprintCutPad,
         EditorMsg::FootprintPastePad => PrimitiveEditorMsg::FootprintPastePad,
+        EditorMsg::FootprintActiveBarRotateSelection => {
+            PrimitiveEditorMsg::FootprintActiveBarRotateSelection
+        }
+        EditorMsg::FootprintActiveBarFlipSelection => {
+            PrimitiveEditorMsg::FootprintActiveBarFlipSelection
+        }
         EditorMsg::FootprintSketchSetRole { id, role } => {
             PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
         }

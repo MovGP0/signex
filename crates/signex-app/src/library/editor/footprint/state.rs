@@ -581,6 +581,11 @@ pub enum FootprintContextSubmenu {
     Place,
     View,
     Selection,
+    /// v0.26-G — Altium-parity Pad Actions submenu. Currently expands
+    /// to Rotate 90° + Flip Layer (both already wired via the active
+    /// bar dispatchers); Custom Pad / Thermal Connection items
+    /// remain stubs until those subsystems ship.
+    PadActions,
 }
 
 /// v0.26 — actions issued from the context menu that don''t already
