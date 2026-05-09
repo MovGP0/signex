@@ -1275,7 +1275,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     && !self.state.lasso_vertices.is_empty();
                 let in_touching_line =
                     self.state.touching_line_active && self.state.touching_line_first.is_some();
-                if in_sketch_with_anchor || in_pads_place || in_lasso || in_touching_line {
+                // v0.27 — Sketch mode also redraws every cursor tick
+                // so the custom black crosshair tracks the cursor
+                // smoothly. Without this the crosshair stays at the
+                // last cached position until some other event fires.
+                let in_sketch_mode_for_cursor = matches!(self.state.mode, EditorMode::Sketch);
+                if in_sketch_with_anchor
+                    || in_pads_place
+                    || in_lasso
+                    || in_touching_line
+                    || in_sketch_mode_for_cursor
+                {
                     self.cache.clear();
                 }
 
@@ -1972,6 +1982,43 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // gesture (Select / PlacePad / PlaceHole / PlaceString).
             if matches!(self.state.mode, super::state::EditorMode::Normal) {
                 draw_pads_tool_preview(frame, cstate, self.state);
+            }
+
+            // v0.27 — Sketch-mode custom cursor crosshair. The OS
+            // cursor on a white background can wash out under
+            // certain themes (Windows "white cursor" mode in
+            // particular), so we paint a fixed-contrast black
+            // crosshair with a white halo at the cursor world
+            // position whenever Sketch mode is active and the
+            // cursor is over the canvas. Keeps the cursor visible
+            // independent of the OS theme.
+            if in_sketch
+                && let Some((cx, cy)) = self.state.cursor_mm
+            {
+                let p = cstate.world_to_screen((cx, cy));
+                let arm = 8.0_f32;
+                let halo = Color::WHITE;
+                let core = Color::from_rgba(0.05, 0.05, 0.05, 1.0);
+                // Halo first (3 px), then core (1 px) on top — gives
+                // the crosshair a "stroke-on-shadow" look readable
+                // against any backdrop.
+                for (col, w) in [(halo, 3.0_f32), (core, 1.0)] {
+                    let stroke = Stroke::default().with_width(w).with_color(col);
+                    frame.stroke(
+                        &Path::line(
+                            Point::new(p.x - arm, p.y),
+                            Point::new(p.x + arm, p.y),
+                        ),
+                        stroke,
+                    );
+                    frame.stroke(
+                        &Path::line(
+                            Point::new(p.x, p.y - arm),
+                            Point::new(p.x, p.y + arm),
+                        ),
+                        stroke,
+                    );
+                }
             }
 
             // v0.27 — Touching Line ghost. After the first click
