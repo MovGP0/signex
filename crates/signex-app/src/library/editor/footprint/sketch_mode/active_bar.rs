@@ -147,14 +147,49 @@ pub fn items<'a>(
     // Enabled only when a Line is selected; the dispatcher itself
     // verifies the loop closes and pushes a warning otherwise.
     let make_pad_path = path.clone();
-    let make_pad_enabled = matches!(
-        editor
+    // v0.27 — accept any selection (primary, secondary, or extras)
+    // that touches a Line directly OR a Point that's incident to a
+    // Line. The dispatcher itself walks the closed loop and warns
+    // if the seed isn't on one. Always-enabled when the sketch has
+    // ≥1 Line so a "no selection — just convert the only loop"
+    // workflow also works.
+    let make_pad_enabled = {
+        let sketch_ref = editor.primitive().sketch.as_ref();
+        let any_line_in_sketch = sketch_ref
+            .map(|s| {
+                s.entities
+                    .iter()
+                    .any(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
+            })
+            .unwrap_or(false);
+        let mut selection_iter = editor
             .state
             .selected_sketch
-            .and_then(|id| editor.primitive().sketch.as_ref()?.entities.iter().find(|e| e.id == id))
-            .map(|e| &e.kind),
-        Some(signex_sketch::entity::EntityKind::Line { .. })
-    );
+            .into_iter()
+            .chain(editor.state.selected_sketch_secondary)
+            .chain(editor.state.selected_sketch_extra.iter().copied());
+        let selection_has_line_or_pointed_line = selection_iter.any(|id| {
+            let Some(s) = sketch_ref else { return false };
+            let Some(ent) = s.entities.iter().find(|e| e.id == id) else {
+                return false;
+            };
+            match ent.kind {
+                signex_sketch::entity::EntityKind::Line { .. } => true,
+                signex_sketch::entity::EntityKind::Point { .. } => s.entities.iter().any(|other| {
+                    matches!(
+                        other.kind,
+                        signex_sketch::entity::EntityKind::Line { start, end }
+                            if start == id || end == id
+                    )
+                }),
+                _ => false,
+            }
+        });
+        any_line_in_sketch && (selection_has_line_or_pointed_line
+            || editor.state.selected_sketch.is_none()
+                && editor.state.selected_sketch_secondary.is_none()
+                && editor.state.selected_sketch_extra.is_empty())
+    };
     let make_pad_button = ActiveBarItem::Button(ActiveBarButton {
         icon: ActiveBarIcon::Glyph("\u{2B22}"), // ⬢ black hexagon (custom polygon → pad)
         tooltip: if make_pad_enabled {
@@ -262,7 +297,13 @@ pub fn items<'a>(
     // nothing selected they would all be silent no-ops with warnings,
     // so hiding them removes 5 buttons of width from the most-common
     // bar state and surfaces them right when they're useful.
-    let any_selection = editor.state.selected_sketch.is_some();
+    // v0.27 — also count rubber-band extras / secondary as a
+    // selection. The Modify section was hiding when the user
+    // rubber-banded a closed shape because the primary
+    // `selected_sketch` could be empty even with 4 extras present.
+    let any_selection = editor.state.selected_sketch.is_some()
+        || editor.state.selected_sketch_secondary.is_some()
+        || !editor.state.selected_sketch_extra.is_empty();
     if any_selection {
         items.push(ActiveBarItem::Separator);
         items.push(mk_tool(
