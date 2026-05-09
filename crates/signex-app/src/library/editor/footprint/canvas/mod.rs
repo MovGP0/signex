@@ -1581,8 +1581,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
+        let cursor_screen = cursor.position_in(bounds);
         let geom = self.cache.draw(renderer, bounds.size(), |frame| {
             // v0.27 — Sketch mode flips to a Fusion-style white
             // canvas so the geometric primitives (Points / Lines /
@@ -2072,20 +2073,26 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // cursor on a white background can wash out under
             // certain themes (Windows "white cursor" mode in
             // particular), so we paint a fixed-contrast black
-            // crosshair with a white halo at the cursor world
-            // position whenever Sketch mode is active and the
-            // cursor is over the canvas. Keeps the cursor visible
-            // independent of the OS theme.
+            // crosshair with a white halo at the RAW cursor screen
+            // position. Tracking raw (not the snapped `cursor_mm`)
+            // keeps the crosshair coincident with the OS cursor so
+            // the user sees a single visual indicator; the snap
+            // glyph is drawn separately at the snapped position.
+            //
+            // Suppressed when:
+            //  - The right-click context menu is mounted (Altium-
+            //    parity: stop painting interaction chrome while a
+            //    menu is open).
+            //  - The cursor is OUTSIDE the canvas bounds (no point
+            //    in painting a phantom crosshair on a panel border).
+            let context_menu_open = self.state.context_menu.is_some();
             if in_sketch
-                && let Some((cx, cy)) = self.state.cursor_mm
+                && !context_menu_open
+                && let Some(p) = cursor_screen
             {
-                let p = cstate.world_to_screen((cx, cy));
                 let arm = 8.0_f32;
                 let halo = Color::WHITE;
                 let core = Color::from_rgba(0.05, 0.05, 0.05, 1.0);
-                // Halo first (3 px), then core (1 px) on top — gives
-                // the crosshair a "stroke-on-shadow" look readable
-                // against any backdrop.
                 for (col, w) in [(halo, 3.0_f32), (core, 1.0)] {
                     let stroke = Stroke::default().with_width(w).with_color(col);
                     frame.stroke(
