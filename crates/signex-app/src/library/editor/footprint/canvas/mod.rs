@@ -472,9 +472,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     // click can target a specific entity without
                     // jumping to the grid. Placement tools still go
                     // through `snap::snap_cursor` so Line / Circle /
-                    // Arc etc. land on snap targets.
-                    let select_mode = matches!(self.state.mode, _EM::Sketch)
-                        && self.state.active_tool == _ST::Select;
+                    // Arc etc. land on snap targets. Applies to both
+                    // Sketch + Select AND Pads-mode + PadsTool::Select
+                    // so a click on a pad doesn't get pulled off the
+                    // pad bbox by grid-snap and fall through to the
+                    // rubber-band branch.
+                    let select_mode = (matches!(self.state.mode, _EM::Sketch)
+                        && self.state.active_tool == _ST::Select)
+                        || (matches!(self.state.mode, _EM::Normal)
+                            && self.state.pads_tool
+                                == super::state::PadsTool::Select);
                     let world = if select_mode {
                         cstate.last_snap = None;
                         raw_world
@@ -1408,12 +1415,19 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 use crate::library::editor::footprint::state::{
                     EditorMode as _EMt, SketchTool as _STt,
                 };
-                let select_mode_tick = matches!(self.state.mode, _EMt::Sketch)
-                    && self.state.active_tool == _STt::Select;
+                let select_mode_tick = (matches!(self.state.mode, _EMt::Sketch)
+                    && self.state.active_tool == _STt::Select)
+                    || (matches!(self.state.mode, _EMt::Normal)
+                        && self.state.pads_tool
+                            == super::state::PadsTool::Select);
                 let drag_active_for_snap = cstate
                     .drag
                     .as_ref()
-                    .map(|d| d.sketch_line.is_some() || d.sketch_point.is_some())
+                    .map(|d| {
+                        d.sketch_line.is_some()
+                            || d.sketch_point.is_some()
+                            || d.pad_idx != usize::MAX
+                    })
                     .unwrap_or(false);
                 let world = if select_mode_tick && !drag_active_for_snap {
                     cstate.last_snap = None;

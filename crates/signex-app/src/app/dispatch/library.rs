@@ -5688,7 +5688,50 @@ pub(crate) fn apply_footprint_primitive_edit(
             let Some((start, end)) = endpoints else {
                 return;
             };
-            for pid in [start, end] {
+            // v0.27 — gather the full set of Points to translate
+            // BEFORE running any moves so adjacency lookups read
+            // pre-drag positions. The set always includes the line
+            // endpoints; for each Arc tangent to one of those
+            // endpoints we add the arc CENTRE and the arc's OTHER
+            // tangent point as well. This keeps rounded-rectangle
+            // corners rigid (constant radius) while letting the
+            // perpendicular edges extend/shrink with the dragged
+            // edge — the user's mental model.
+            let mut victims: std::collections::HashSet<signex_sketch::id::SketchEntityId> =
+                std::collections::HashSet::new();
+            victims.insert(start);
+            victims.insert(end);
+            if let Some(s) = editor.primitive().sketch.as_ref() {
+                for e in &s.entities {
+                    if let EntityKind::Arc {
+                        start: a_s,
+                        end: a_e,
+                        center: a_c,
+                        ..
+                    } = e.kind
+                    {
+                        let touches = a_s == start
+                            || a_s == end
+                            || a_e == start
+                            || a_e == end;
+                        if touches {
+                            victims.insert(a_c);
+                            // Other tangent: the arc endpoint that
+                            // is NOT also the moving line endpoint.
+                            // Both arc endpoints can match (rare —
+                            // a closed-arc loop), in which case
+                            // both translate.
+                            if a_s != start && a_s != end {
+                                victims.insert(a_s);
+                            }
+                            if a_e != start && a_e != end {
+                                victims.insert(a_e);
+                            }
+                        }
+                    }
+                }
+            }
+            for pid in victims {
                 editor.with_parts(|state, primitive| {
                     apply_sketch_edit_with_warnings(
                         state,
