@@ -1,4 +1,7 @@
-use signex_types::schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::{
+    rotation2d::normalize_angle_rad,
+    schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind},
+};
 
 use crate::command::MirrorAxis;
 
@@ -316,7 +319,7 @@ impl Engine {
                     .iter_mut()
                     .find(|symbol| symbol.uuid == item.uuid)
                     .map(|symbol| {
-                        symbol.rotation = (symbol.rotation + angle_degrees).rem_euclid(360.0);
+                        symbol.rotation = normalize_degrees(symbol.rotation + angle_degrees);
                         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
                             autoplace_fields(symbol, lib, &document_snapshot);
                         }
@@ -331,7 +334,8 @@ impl Engine {
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
                     if let Some(ref mut ref_text) = symbol.ref_text {
-                        ref_text.rotation = (ref_text.rotation + angle_degrees).rem_euclid(360.0);
+                        ref_text.rotation =
+                            normalize_degrees(ref_text.rotation + angle_degrees);
                         // Manual field rotation marks the symbol as
                         // user-placed so future rotate / mirror operations
                         // never silently re-run the autoplacer over it.
@@ -350,7 +354,8 @@ impl Engine {
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
                     if let Some(ref mut val_text) = symbol.val_text {
-                        val_text.rotation = (val_text.rotation + angle_degrees).rem_euclid(360.0);
+                        val_text.rotation =
+                            normalize_degrees(val_text.rotation + angle_degrees);
                         symbol.fields_autoplaced = false;
                         symbol.fields_user_placed = true;
                         true
@@ -387,6 +392,12 @@ impl Engine {
             _ => false,
         }
     }
+}
+
+fn normalize_degrees(angle_degrees: f64) -> f64 {
+    normalize_angle_rad(angle_degrees.to_radians())
+        .to_degrees()
+        .rem_euclid(360.0)
 }
 
 // ---------------------------------------------------------------------------

@@ -328,14 +328,14 @@ fn default_comment() -> String {
 }
 
 impl Symbol {
-    /// Empty symbol with one default pin — what the New Component flow seeds.
+    /// Empty symbol scaffold used by New Symbol flows.
     pub fn empty(name: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
             uuid: Uuid::now_v7(),
             name: name.into(),
             anchor: [0.0, 0.0],
-            pins: vec![SymbolPin::new("1", "1")],
+            pins: Vec::new(),
             graphics: Vec::new(),
             schematic_params: ParamMap::new(),
             designator: default_designator(),
@@ -1022,15 +1022,15 @@ mod tests {
 
     #[test]
     fn symbol_file_toml_round_trip_empty_symbol() {
-        // `Symbol::empty` carries one default pin — exercises the
-        // header-plus-one-row TSV path.
+        // `Symbol::empty` is fully empty — this exercises the
+        // header-only TSV path.
         let s = Symbol::empty("Test");
         let original = SymbolFile::from_symbol(s.clone());
         let toml_text = original.to_toml_string().expect("serialise");
         let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
         assert_eq!(back.symbols.len(), 1);
         assert_eq!(back.symbols[0].name, "Test");
-        assert_eq!(back.symbols[0].pins.len(), 1);
+        assert_eq!(back.symbols[0].pins.len(), 0);
         assert_eq!(back.format, "snxsym/v1");
         assert_eq!(back.file_uuid, original.file_uuid);
     }
@@ -1335,10 +1335,9 @@ symbols = []
     }
 
     #[test]
-    fn empty_symbol_carries_one_default_pin() {
+    fn empty_symbol_starts_without_default_pins() {
         let s = Symbol::empty("test");
         assert_eq!(s.name, "test");
-        assert_eq!(s.pins.len(), 1);
-        assert_eq!(s.pins[0].number, "1");
+        assert_eq!(s.pins.len(), 0);
     }
 }

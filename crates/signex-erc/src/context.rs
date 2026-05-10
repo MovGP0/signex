@@ -1,6 +1,6 @@
 //! Parser-independent ERC context. Built by projecting a
 //! [`SchematicSheet`] once; all rule functions read from here so
-//! they stay independent from any legacy renderer crate.
+//! they stay independent from renderer internals.
 
 use std::collections::HashMap;
 
