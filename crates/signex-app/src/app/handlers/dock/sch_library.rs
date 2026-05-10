@@ -1008,6 +1008,16 @@ impl Signex {
         }
     }
 
+    /// Reset per-symbol viewport state when the active symbol changes.
+    ///
+    /// Without this, a newly selected/created symbol can inherit stale
+    /// pan/zoom from the previous symbol and open at an unexpected scale.
+    fn reset_symbol_viewport(editor: &mut crate::app::SymbolEditorState) {
+        editor.reset_camera_origin_center();
+        editor.cursor_mm = None;
+        editor.canvas_cache.clear();
+    }
+
     fn sch_library_select_symbol(&mut self, idx: usize) {
         let Some(editor) = self.active_symbol_editor_mut() else {
             tracing::warn!(
@@ -1035,7 +1045,7 @@ impl Signex {
         // currently-active symbol; switching symbols resets to part 1
         // so the new symbol's pin filter starts in a sane state.
         editor.active_part = 1;
-        editor.canvas_cache.clear();
+        Self::reset_symbol_viewport(editor);
         self.refresh_panel_ctx();
     }
 
@@ -1069,8 +1079,9 @@ impl Signex {
         editor.file.symbols.push(sym);
         editor.file.updated = chrono::Utc::now();
         editor.active_idx = editor.file.symbols.len() - 1;
+        editor.active_part = 1;
         editor.selected = None;
-        editor.canvas_cache.clear();
+        Self::reset_symbol_viewport(editor);
         editor.dirty = true;
         let path = editor.path.clone();
         self.document_state.dirty_paths.insert(path.clone());
@@ -1114,8 +1125,9 @@ impl Signex {
         if editor.active_idx >= editor.file.symbols.len() {
             editor.active_idx = editor.file.symbols.len() - 1;
         }
+        editor.active_part = 1;
         editor.selected = None;
-        editor.canvas_cache.clear();
+        Self::reset_symbol_viewport(editor);
         editor.dirty = true;
         let path = editor.path.clone();
         self.document_state.dirty_paths.insert(path.clone());

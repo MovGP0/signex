@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use iced::Point;
 use signex_library::{Footprint, Symbol};
 use signex_types::pcb::PcbBoard;
 
@@ -224,10 +225,9 @@ pub struct SymbolEditorState {
     pub dirty: bool,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
-    /// within the same `.snxsym` tab. Reset to `fit` on first frame
-    /// (`fit_pending = true`) and on every active-symbol switch so a
-    /// new symbol opens centred regardless of the previous symbol's
-    /// pan offset.
+    /// within the same `.snxsym` tab. New tabs and active-symbol
+    /// switches reset this to a centered-origin home view so the
+    /// symbol anchor opens in a predictable place.
     pub camera: crate::canvas::Camera,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
@@ -246,11 +246,14 @@ pub struct SymbolEditorState {
 }
 
 impl SymbolEditorState {
+    const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
+    const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
+
     /// Build a fresh standalone editor state from a `SymbolFile`
     /// container loaded off disk. `path` is the `.snxsym` file the
     /// user opened. The editor opens on the first symbol in the file.
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
-        Self {
+        let mut state = Self {
             path,
             file,
             active_idx: 0,
@@ -265,7 +268,19 @@ impl SymbolEditorState {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
-        }
+        };
+        state.reset_camera_origin_center();
+        state
+    }
+
+    /// Reset pan/zoom and place world origin in the center of the
+    /// default symbol-canvas viewport.
+    pub(crate) fn reset_camera_origin_center(&mut self) {
+        self.camera = crate::canvas::Camera::default();
+        self.camera.offset = Point::new(
+            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
+            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
+        );
     }
 
     /// Borrow the symbol currently being edited. Falls back to the
