@@ -712,12 +712,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                                 return Some(canvas::Action::capture());
                             }
 
-                            // Graphic body click → promote to All so the body
-                            // rect acts as a move handle (Altium-style).
-                            let effective_sel = match sel {
-                                SymbolSelection::Graphic(_) => SymbolSelection::All,
-                                other => other,
-                            };
+                            let effective_sel = sel;
 
                             let is_delta = matches!(effective_sel, SymbolSelection::All);
                             state.dragging = true;
