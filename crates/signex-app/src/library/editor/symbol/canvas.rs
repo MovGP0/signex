@@ -681,8 +681,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 match self.tool {
                     SymbolTool::Select => {
                         // Resize handles win over everything else.
+                        // Use a screen-pixel-based tolerance so handles are
+                        // equally easy to hit at any zoom level.
+                        let tol_mm = (8.0_f32 / self.camera.scale.max(0.01))
+                            .clamp(0.5, 4.0) as f64;
                         if let Some((idx, handle)) =
-                            state::hit_test_graphic_handle(self.symbol, wx, wy)
+                            state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm)
                         {
                             state.dragging_handle = Some((idx, handle));
                             state.dragging = false;
@@ -976,6 +980,45 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         }
     }
 
+    fn mouse_interaction(
+        &self,
+        state: &Self::State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if state.panning {
+            return mouse::Interaction::Grabbing;
+        }
+        // While actively dragging a resize handle, keep the cursor that
+        // matches the handle so it doesn't flicker back to Crosshair.
+        if let Some((_, handle)) = state.dragging_handle {
+            return state::handle_interaction(handle);
+        }
+        if state.dragging {
+            return mouse::Interaction::Grab;
+        }
+        // Hover detection: change the cursor when the pointer is close
+        // to any graphic handle. Tolerance is expressed in screen pixels
+        // so it feels the same at all zoom levels.
+        if self.tool == SymbolTool::Select {
+            if let Some(pos) = cursor.position_in(bounds) {
+                let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01))
+                    .clamp(0.5, 4.0) as f64;
+                if let Some((_, handle)) =
+                    state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm)
+                {
+                    return state::handle_interaction(handle);
+                }
+            }
+        }
+        if cursor.is_over(bounds) {
+            mouse::Interaction::Crosshair
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+
     fn draw(
         &self,
         state: &Self::State,
@@ -1082,14 +1125,21 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // renderer scene bridge so stroke/zoom behavior is unified.
         self.draw_symbol_with_renderer(&mut frame, &self.selected, scale);
 
-        // Resize handles for every placed graphic — visible when the
-        // Select tool is active so the user can grab any corner /
-        // endpoint / radius / arc-angle / text-anchor at any time.
+        // Resize handles for placed graphics — visible in the Select tool
+        // only for the currently-selected graphic(s) so the canvas isn't
+        // cluttered when nothing is selected.
+        // Corner handles (squares, half=3 px) are visually larger than edge
+        // midpoint handles (squares, half=2 px) so the user can tell them
+        // apart at a glance.
         if self.tool == SymbolTool::Select {
             for idx in 0..self.symbol.graphics.len() {
-                for (_handle, pos) in state::graphic_handles(self.symbol, idx) {
+                if !is_graphic_selected(&self.selected, idx) {
+                    continue;
+                }
+                for (handle, pos) in state::graphic_handles(self.symbol, idx) {
                     let p = w2s(pos[0], pos[1]);
-                    let half = 3.0_f32;
+                    let is_corner = matches!(handle, state::GraphicHandle::RectCorner(_));
+                    let half = if is_corner { 3.0_f32 } else { 2.0_f32 };
                     let top_left = iced::Point::new(p.x - half, p.y - half);
                     let size = Size::new(half * 2.0, half * 2.0);
                     let path = canvas::Path::rectangle(top_left, size);

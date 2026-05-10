@@ -4232,6 +4232,7 @@ fn graphic_handle_msg_to_state(
     use crate::library::editor::symbol::state::GraphicHandle;
     match msg {
         GraphicHandleMsg::RectCorner(c) => GraphicHandle::RectCorner(c),
+        GraphicHandleMsg::RectEdge(e) => GraphicHandle::RectEdge(e),
         GraphicHandleMsg::LineEndpoint(e) => GraphicHandle::LineEndpoint(e),
         GraphicHandleMsg::CircleRadius => GraphicHandle::CircleRadius,
         GraphicHandleMsg::ArcStart => GraphicHandle::ArcStart,

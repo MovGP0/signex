@@ -317,6 +317,7 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
     use sym_state::GraphicHandle;
     match handle {
         GraphicHandle::RectCorner(c) => GraphicHandleMsg::RectCorner(c),
+        GraphicHandle::RectEdge(e) => GraphicHandleMsg::RectEdge(e),
         GraphicHandle::LineEndpoint(e) => GraphicHandleMsg::LineEndpoint(e),
         GraphicHandle::CircleRadius => GraphicHandleMsg::CircleRadius,
         GraphicHandle::ArcStart => GraphicHandleMsg::ArcStart,

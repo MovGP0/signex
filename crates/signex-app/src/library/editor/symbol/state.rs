@@ -8,6 +8,7 @@
 //! the canvas + AI-stub apply behaviour the pre-refactor `SymbolDoc`
 //! had.
 
+use iced::mouse;
 use signex_library::{PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
 use signex_types::anchor2d::rotate_vec;
 use signex_types::rotation2d::{
@@ -101,10 +102,15 @@ pub enum GraphicRotationPivotMode {
 ///
 /// Corner ordering for `RectCorner`: `0=TL, 1=TR, 2=BR, 3=BL` in the
 /// Standard y-up world (so TL has minx + maxy).
+/// Edge ordering for `RectEdge`: `0=Top, 1=Right, 2=Bottom, 3=Left`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GraphicHandle {
     /// Rectangle corner — `0=TL, 1=TR, 2=BR, 3=BL`.
     RectCorner(u8),
+    /// Rectangle edge midpoint — `0=Top, 1=Right, 2=Bottom, 3=Left`.
+    /// Dragging an edge handle constrains movement to a single axis:
+    /// top/bottom change the Y extent, left/right change the X extent.
+    RectEdge(u8),
     /// Line endpoint — `0=from, 1=to`.
     LineEndpoint(u8),
     /// Circle radius handle (drawn at `(center.x + radius, center.y)`).
@@ -115,6 +121,34 @@ pub enum GraphicHandle {
     ArcEnd,
     /// Text anchor / `position` field.
     TextAnchor,
+}
+
+/// Map a [`GraphicHandle`] to the mouse cursor that should be shown
+/// while the cursor hovers over or drags that handle.
+pub fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
+    match handle {
+        // TL and BR corners — resize along the \ diagonal.
+        GraphicHandle::RectCorner(0) | GraphicHandle::RectCorner(2) => {
+            mouse::Interaction::ResizingDiagonallyDown
+        }
+        // TR and BL corners — resize along the / diagonal.
+        GraphicHandle::RectCorner(1) | GraphicHandle::RectCorner(3) => {
+            mouse::Interaction::ResizingDiagonallyUp
+        }
+        // Top and bottom edge midpoints — resize vertically.
+        GraphicHandle::RectEdge(0) | GraphicHandle::RectEdge(2) => {
+            mouse::Interaction::ResizingVertically
+        }
+        // Left and right edge midpoints — resize horizontally.
+        GraphicHandle::RectEdge(1) | GraphicHandle::RectEdge(3) => {
+            mouse::Interaction::ResizingHorizontally
+        }
+        GraphicHandle::LineEndpoint(_) | GraphicHandle::TextAnchor => mouse::Interaction::Grab,
+        GraphicHandle::CircleRadius
+        | GraphicHandle::ArcStart
+        | GraphicHandle::ArcEnd => mouse::Interaction::Crosshair,
+        _ => mouse::Interaction::Grab,
+    }
 }
 
 /// Default new-pin layout: place new pins to the right of the body.
@@ -957,10 +991,6 @@ fn point_to_segment_dist_sq(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     ddx * ddx + ddy * ddy
 }
 
-/// Hit radius for graphic resize handles — same 1.5 mm budget as the
-/// pin click target so the gesture feels consistent across the canvas.
-const HANDLE_HIT_R_SQ: f64 = 1.5 * 1.5;
-
 /// Compute the world (mm) position of a graphic's resize handle.
 /// Returns `None` if the handle variant doesn't match the graphic
 /// kind — defensive against stale `GraphicHandle` values lingering
@@ -978,6 +1008,13 @@ pub fn graphic_handle_position(
             1 => [to[0], to[1]],     // TR
             2 => [to[0], from[1]],   // BR
             3 => [from[0], from[1]], // BL
+            _ => return None,
+        },
+        (SymbolGraphicKind::Rectangle { from, to }, GraphicHandle::RectEdge(e)) => match e {
+            0 => [(from[0] + to[0]) * 0.5, to[1]],   // Top midpoint
+            1 => [to[0], (from[1] + to[1]) * 0.5],   // Right midpoint
+            2 => [(from[0] + to[0]) * 0.5, from[1]], // Bottom midpoint
+            3 => [from[0], (from[1] + to[1]) * 0.5], // Left midpoint
             _ => return None,
         },
         (SymbolGraphicKind::Line { from, to }, GraphicHandle::LineEndpoint(e)) => match e {
@@ -1026,10 +1063,16 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
     };
     match &g.kind {
         SymbolGraphicKind::Rectangle { from, to } => vec![
+            // Four corners.
             (GraphicHandle::RectCorner(0), [from[0], to[1]]),
             (GraphicHandle::RectCorner(1), [to[0], to[1]]),
             (GraphicHandle::RectCorner(2), [to[0], from[1]]),
             (GraphicHandle::RectCorner(3), [from[0], from[1]]),
+            // Four edge midpoints.
+            (GraphicHandle::RectEdge(0), [(from[0] + to[0]) * 0.5, to[1]]),
+            (GraphicHandle::RectEdge(1), [to[0], (from[1] + to[1]) * 0.5]),
+            (GraphicHandle::RectEdge(2), [(from[0] + to[0]) * 0.5, from[1]]),
+            (GraphicHandle::RectEdge(3), [from[0], (from[1] + to[1]) * 0.5]),
         ],
         SymbolGraphicKind::Line { from, to } => vec![
             (GraphicHandle::LineEndpoint(0), *from),
@@ -1067,12 +1110,25 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// handles. Returns `(graphic_idx, handle)` for the first hit, scanning
 /// graphics in reverse so the most-recently-placed graphic wins when
 /// handles overlap.
-pub fn hit_test_graphic_handle(sym: &Symbol, x: f64, y: f64) -> Option<(usize, GraphicHandle)> {
+///
+/// `tol_mm` is the world-space hit-test radius in millimetres. The
+/// caller should derive it from screen pixels so the hit area stays
+/// consistent at all zoom levels, e.g.:
+/// ```text
+/// let tol_mm = (8.0_f32 / camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
+/// ```
+pub fn hit_test_graphic_handle(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    tol_mm: f64,
+) -> Option<(usize, GraphicHandle)> {
+    let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
         for (handle, pos) in graphic_handles(sym, idx) {
             let dx = pos[0] - x;
             let dy = pos[1] - y;
-            if dx * dx + dy * dy <= HANDLE_HIT_R_SQ {
+            if dx * dx + dy * dy <= r_sq {
                 return Some((idx, handle));
             }
         }
@@ -1109,6 +1165,20 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             }
             _ => {}
         },
+        // Edge midpoint drag — only the constrained axis is updated so
+        // the handle slides along its edge without skewing the rectangle.
+        (SymbolGraphicKind::Rectangle { to, .. }, GraphicHandle::RectEdge(0)) => {
+            to[1] = y; // Top edge: move top y
+        }
+        (SymbolGraphicKind::Rectangle { to, .. }, GraphicHandle::RectEdge(1)) => {
+            to[0] = x; // Right edge: move right x
+        }
+        (SymbolGraphicKind::Rectangle { from, .. }, GraphicHandle::RectEdge(2)) => {
+            from[1] = y; // Bottom edge: move bottom y
+        }
+        (SymbolGraphicKind::Rectangle { from, .. }, GraphicHandle::RectEdge(3)) => {
+            from[0] = x; // Left edge: move left x
+        }
         (SymbolGraphicKind::Line { from, .. }, GraphicHandle::LineEndpoint(0)) => {
             from[0] = x;
             from[1] = y;
@@ -1256,7 +1326,7 @@ mod tests {
             stroke_width: 0.15,
         });
         // BR corner is at (to.x, from.y) = (10.0, 0.0).
-        let hit = hit_test_graphic_handle(&s, 10.0, 0.0);
+        let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5);
         assert_eq!(hit, Some((0, GraphicHandle::RectCorner(2))));
     }
 

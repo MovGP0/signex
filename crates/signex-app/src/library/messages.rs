@@ -1152,6 +1152,8 @@ pub enum FieldKeyMsg {
 pub enum GraphicHandleMsg {
     /// Rectangle corner — `0=TL, 1=TR, 2=BR, 3=BL` (Standard y-up).
     RectCorner(u8),
+    /// Rectangle edge midpoint — `0=Top, 1=Right, 2=Bottom, 3=Left`.
+    RectEdge(u8),
     /// Line endpoint — `0=from, 1=to`.
     LineEndpoint(u8),
     /// Circle radius handle.
