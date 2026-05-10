@@ -186,7 +186,8 @@ fn draw_polygon_bucket<F>(
                 &path,
                 canvas::Stroke::default()
                     .with_width(options.stroke_px(polygon.stroke_width))
-                    .with_color(color_from_rgba(stroke_color)),
+                    .with_color(color_from_rgba(stroke_color))
+                    .with_line_join(canvas::LineJoin::Round),
             );
         }
     }
