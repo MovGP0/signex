@@ -840,9 +840,19 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     }));
                 }
                 // Update rubber-band box while the user drags on empty space.
+                // Publishing CursorAt forces iced to process the event as a
+                // state-changing message, which triggers draw() on the next
+                // frame so the rubber band animates in real time.
                 if state.box_select_origin.is_some() {
                     state.box_select_current = Some((wx, wy));
-                    return Some(canvas::Action::capture());
+                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                    return Some(
+                        canvas::Action::publish(CanvasAction::CursorAt {
+                            x_mm: Some(ux),
+                            y_mm: Some(uy),
+                        })
+                        .and_capture(),
+                    );
                 }
                 // Idle cursor — publish the unsnapped world position
                 // for the status footer X/Y readout.
