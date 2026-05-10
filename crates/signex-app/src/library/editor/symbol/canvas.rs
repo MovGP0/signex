@@ -60,11 +60,14 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
-    /// Stamp a 5 mm horizontal line starting at `(x, y)` going
-    /// right.
+    /// Place a line segment from `from` to `to` (both grid-snapped
+    /// mm world positions). Emitted on the second click of a
+    /// two-click draw flow.
     AddLine {
-        x: f64,
-        y: f64,
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
     },
     /// Stamp a circle of radius 2 mm centred on `(x, y)`.
     AddCircle {
@@ -201,6 +204,13 @@ pub struct CanvasState {
     /// `current.x > origin.x` → Window (blue),
     /// `current.x < origin.x` → Crossing (green).
     pub box_select_current: Option<(f64, f64)>,
+    /// First click world position while in the `PlaceLine` two-click
+    /// draw flow. `None` = waiting for the first click;
+    /// `Some((x, y))` = first point set, next click commits the line.
+    pub line_from: Option<(f64, f64)>,
+    /// Cursor position (snapped) updated every `CursorMoved` while
+    /// `line_from.is_some()`, used to paint the rubber-band preview.
+    pub line_cursor: Option<(f64, f64)>,
 }
 
 /// Builder for the per-render [`SymbolCanvas`] — all the inputs the
@@ -750,10 +760,26 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         canvas::Action::publish(CanvasAction::AddRectangle { x: wx, y: wy })
                             .and_capture(),
                     ),
-                    SymbolTool::PlaceLine => Some(
-                        canvas::Action::publish(CanvasAction::AddLine { x: wx, y: wy })
-                            .and_capture(),
-                    ),
+                    SymbolTool::PlaceLine => {
+                        if let Some((from_x, from_y)) = state.line_from.take() {
+                            // Second click — commit the line.
+                            state.line_cursor = None;
+                            Some(
+                                canvas::Action::publish(CanvasAction::AddLine {
+                                    from_x,
+                                    from_y,
+                                    to_x: wx,
+                                    to_y: wy,
+                                })
+                                .and_capture(),
+                            )
+                        } else {
+                            // First click — set the start point and wait.
+                            state.line_from = Some((wx, wy));
+                            state.line_cursor = Some((wx, wy));
+                            Some(canvas::Action::capture())
+                        }
+                    }
                     SymbolTool::PlaceCircle => Some(
                         canvas::Action::publish(CanvasAction::AddCircle { x: wx, y: wy })
                             .and_capture(),
@@ -770,8 +796,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
             | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                // Right- or middle-button starts a pan. Schematic
-                // canvas uses the same gesture (`canvas/mod.rs`).
+                // Right-click cancels an in-progress line draw;
+                // otherwise starts a pan (same as schematic canvas).
+                if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
+                    state.line_from = None;
+                    state.line_cursor = None;
+                    return Some(canvas::Action::capture());
+                }
                 let pos = cursor.position_in(bounds)?;
                 state.panning = true;
                 state.last_pan_pos = Some(pos);
@@ -844,6 +875,20 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 // frame so the rubber band animates in real time.
                 if state.box_select_origin.is_some() {
                     state.box_select_current = Some((wx, wy));
+                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                    return Some(
+                        canvas::Action::publish(CanvasAction::CursorAt {
+                            x_mm: Some(ux),
+                            y_mm: Some(uy),
+                        })
+                        .and_capture(),
+                    );
+                }
+                // While waiting for the second click in PlaceLine,
+                // update the rubber-band preview cursor and force a
+                // redraw so the preview line animates in real time.
+                if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
+                    state.line_cursor = Some((wx, wy));
                     let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
@@ -928,6 +973,15 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 modifiers,
                 ..
             }) => match key {
+                iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
+                    // Cancel an in-progress two-click line draw.
+                    if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
+                        state.line_from = None;
+                        state.line_cursor = None;
+                        return Some(canvas::Action::capture());
+                    }
+                    None
+                }
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
                 | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
                     Some(canvas::Action::publish(CanvasAction::DeleteSelected))
@@ -1153,7 +1207,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         let tool_label = match self.tool {            SymbolTool::Select => "Tool: Select  (Del to remove)",
             SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
             SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
-            SymbolTool::PlaceLine => "Tool: Place Line  (click)",
+            SymbolTool::PlaceLine => "Tool: Place Line  (click start, click end / Esc to cancel)",
             SymbolTool::PlaceCircle => "Tool: Place Ellipse  (click)",
             SymbolTool::PlaceArc => "Tool: Place Arc  (click)",
             SymbolTool::PlaceText => "Tool: Place Text  (click)",
@@ -1205,6 +1259,30 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 canvas::Stroke::default()
                     .with_color(stroke_color)
                     .with_width(1.5),
+            );
+        }
+
+        // Rubber-band line preview — drawn while the user has set the
+        // first point of a two-click line draw and is hovering toward
+        // the second point.
+        if let (Some((fx, fy)), Some((cx, cy))) = (state.line_from, state.line_cursor) {
+            let p0 = w2s(fx, fy);
+            let p1 = w2s(cx, cy);
+            let preview_color = Color {
+                a: 0.55,
+                ..self.selected_color
+            };
+            // Start-point dot so the user can see the anchor.
+            frame.fill(
+                &canvas::Path::circle(p0, 3.0),
+                preview_color,
+            );
+            frame.stroke(
+                &canvas::Path::line(p0, p1),
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale))
+                    .with_line_cap(canvas::LineCap::Round),
             );
         }
 

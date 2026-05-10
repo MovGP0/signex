@@ -57,7 +57,14 @@ pub fn view_symbol<'a>(
     );
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
-    let body = column![toolbar, active_bar, canvas_widget]
+    // Overlay the active_bar on top of the canvas so that when the
+    // active-bar dropdown opens (view_with_overlay returns a Fill Stack)
+    // it does not push the canvas widget out of the column layout.
+    let canvas_with_bar = iced::widget::Stack::new()
+        .push(canvas_widget)
+        .push(active_bar);
+
+    let body = column![toolbar, canvas_with_bar]
         .spacing(6)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -282,7 +289,9 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
     match action {
         CanvasAction::AddPin { x, y } => PrimitiveEditorMsg::SymbolAddPin { x, y },
         CanvasAction::AddRectangle { x, y } => PrimitiveEditorMsg::SymbolAddRectangle { x, y },
-        CanvasAction::AddLine { x, y } => PrimitiveEditorMsg::SymbolAddLine { x, y },
+        CanvasAction::AddLine { from_x, from_y, to_x, to_y } => {
+            PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y }
+        }
         CanvasAction::AddCircle { x, y } => PrimitiveEditorMsg::SymbolAddCircle { x, y },
         CanvasAction::AddArc { x, y } => PrimitiveEditorMsg::SymbolAddArc { x, y },
         CanvasAction::AddText { x, y } => PrimitiveEditorMsg::SymbolAddText { x, y },

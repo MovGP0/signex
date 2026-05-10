@@ -1193,8 +1193,13 @@ pub enum PrimitiveEditorMsg {
     SymbolAddPin { x: f64, y: f64 },
     /// Stamp a default-sized 10×5 mm rectangle centred on `(x, y)`.
     SymbolAddRectangle { x: f64, y: f64 },
-    /// Stamp a 5 mm horizontal line starting at `(x, y)`.
-    SymbolAddLine { x: f64, y: f64 },
+    /// Place a line segment from `from` to `to` (both grid-snapped mm world positions).
+    SymbolAddLine {
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    },
     /// Stamp a 2 mm-radius circle (Altium "Ellipse") centred on
     /// `(x, y)`.
     SymbolAddCircle { x: f64, y: f64 },

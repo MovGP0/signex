@@ -3806,16 +3806,14 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolAddLine { x, y } => {
-            // 5 mm horizontal line going right.
-            const L: f64 = 5.08;
+        PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y } => {
             editor
                 .primitive_mut()
                 .graphics
                 .push(signex_library::SymbolGraphic {
                     kind: signex_library::SymbolGraphicKind::Line {
-                        from: [x, y],
-                        to: [x + L, y],
+                        from: [from_x, from_y],
+                        to: [to_x, to_y],
                     },
                     stroke_width: 0.15,
                 });

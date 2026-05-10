@@ -84,7 +84,10 @@ fn draw_line_bucket<F>(
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
                 &path,
-                canvas::Stroke::default().with_width(width).with_color(color),
+                canvas::Stroke::default()
+                    .with_width(width)
+                    .with_color(color)
+                    .with_line_cap(canvas::LineCap::Round),
             );
         }
     }
