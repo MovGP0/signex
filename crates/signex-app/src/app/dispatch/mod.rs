@@ -305,9 +305,18 @@ impl Signex {
             }
             Message::DetachModal(modal) => self.handle_detach_modal(modal),
             Message::DetachedModalOpened { modal, id } => {
-                self.ui_state
-                    .windows
-                    .insert(id, super::state::WindowKind::DetachedModal(modal));
+                // handle_detach_modal already inserted the entry when the
+                // open was requested.  Re-inserting here is fine when the
+                // window is still tracked, but if close_detached_modal
+                // already removed it before this callback arrived (a race
+                // where the user closes the dialog before the OS confirms
+                // the window open), re-inserting would leave a stale entry
+                // that blocks every subsequent open attempt.
+                if self.ui_state.windows.contains_key(&id) {
+                    self.ui_state
+                        .windows
+                        .insert(id, super::state::WindowKind::DetachedModal(modal));
+                }
                 // Any lingering drag state belongs to the main window —
                 // once the modal is popped out, the OS handles window
                 // drags directly.

@@ -11,6 +11,7 @@ impl Signex {
         self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
         self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
+        self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
@@ -58,6 +59,7 @@ impl Signex {
                 self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
                 self.ui_state.preferences_draft_component_classes =
                     self.ui_state.component_classes.clone();
+                self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
@@ -74,9 +76,11 @@ impl Signex {
                 crate::render_config::set_power_port_style(self.ui_state.power_port_style);
                 crate::render_config::set_label_style(self.ui_state.label_style);
                 crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
+                crate::render_config::set_grid_style(self.ui_state.grid_style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 return self.close_detached_modal(super::super::state::ModalId::Preferences);
             }
             PrefMsg::Save => {
