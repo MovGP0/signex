@@ -243,6 +243,10 @@ impl Signex {
                         != self.ui_state.multisheet_style
                     || self.ui_state.preferences_draft_grid_style != self.ui_state.grid_style;
             }
+            PrefMsg::DraftSymbolGridSize(size) => {
+                self.ui_state.preferences_draft_symbol_grid_size_mm = size;
+                crate::fonts::write_symbol_grid_size_mm_pref(size);
+            }
             PrefMsg::ImportTheme => {
                 return Task::future(async {
                     let picked = rfd::AsyncFileDialog::new()

@@ -945,7 +945,7 @@ impl Default for LibraryDisplaySettings {
         // screenshot of an Altium .SchLib document.
         Self {
             unit: Unit::Mm,
-            grid_size_mm: 1.27,
+            grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
             grid_visible: true,
             sheet_color: SheetColor::Cream,
         }

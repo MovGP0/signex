@@ -91,6 +91,8 @@ pub enum PrefMsg {
     DraftMultisheetStyle(MultisheetStyle),
     /// Update draft visible-grid render style (applies as live preview).
     DraftGridStyle(GridStyle),
+    /// Update the default symbol-editor grid size. Persisted on Save.
+    DraftSymbolGridSize(f32),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -173,6 +175,7 @@ pub fn view<'a>(
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
+    draft_symbol_grid_size_mm: f32,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -190,6 +193,7 @@ pub fn view<'a>(
         draft_label_style,
         draft_multisheet_style,
         draft_grid_style,
+        draft_symbol_grid_size_mm,
         custom_name,
         dirty,
         erc_overrides,
@@ -237,6 +241,7 @@ pub(crate) fn view_body<'a>(
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
+    draft_symbol_grid_size_mm: f32,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -254,6 +259,7 @@ pub(crate) fn view_body<'a>(
         draft_label_style,
         draft_multisheet_style,
         draft_grid_style,
+        draft_symbol_grid_size_mm,
         custom_name,
         dirty,
         erc_overrides,
@@ -274,6 +280,7 @@ fn build_dialog<'a>(
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
+    draft_symbol_grid_size_mm: f32,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -330,6 +337,7 @@ fn build_dialog<'a>(
             draft_label_style,
             draft_multisheet_style,
             draft_grid_style,
+            draft_symbol_grid_size_mm,
             custom_name,
             erc_overrides,
             distributor_settings,
@@ -462,6 +470,7 @@ fn build_content<'a>(
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
+    draft_symbol_grid_size_mm: f32,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
@@ -476,6 +485,7 @@ fn build_content<'a>(
             draft_power_port_style,
             draft_label_style,
             draft_multisheet_style,
+            draft_symbol_grid_size_mm,
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
@@ -551,6 +561,7 @@ fn content_appearance<'a>(
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
+    draft_symbol_grid_size_mm: f32,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -746,6 +757,47 @@ fn content_appearance<'a>(
                 [MultisheetStyle::Standard, MultisheetStyle::Altium],
                 Some(draft_multisheet_style),
                 PrefMsg::DraftMultisheetStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: Symbol Editor ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16));
+    col = col.push(section_title("Symbol Editor"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Default Grid Size").size(12).color(TEXT_PRI),
+                text("Applied when a symbol library is first opened. \
+                      Can be changed per-library from the canvas status bar.")
+                    .size(10)
+                    .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                crate::canvas::grid::GRID_SIZE_LABELS,
+                crate::canvas::grid::GRID_SIZES_MM
+                    .iter()
+                    .zip(crate::canvas::grid::GRID_SIZE_LABELS.iter())
+                    .find(|(sz, _)| (**sz - draft_symbol_grid_size_mm).abs() < 0.001)
+                    .map(|(_, lbl)| *lbl),
+                |lbl: &'static str| {
+                    let mm = crate::canvas::grid::GRID_SIZES_MM
+                        .iter()
+                        .zip(crate::canvas::grid::GRID_SIZE_LABELS.iter())
+                        .find(|(_, l)| **l == lbl)
+                        .map(|(sz, _)| *sz)
+                        .unwrap_or(1.27);
+                    PrefMsg::DraftSymbolGridSize(mm)
+                },
             )
             .text_size(12)
             .width(200),

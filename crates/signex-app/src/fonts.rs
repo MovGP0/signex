@@ -636,6 +636,19 @@ pub fn write_grid_size_mm_pref_at(path: &Path, grid_size_mm: f32) {
     })
 }
 
+/// Read the default symbol-editor grid size (mm). Falls back to 1.27 mm.
+pub fn read_symbol_grid_size_mm_pref() -> f32 {
+    read_prefs_json(&prefs_path())
+        .and_then(|json| json["symbol_grid_size_mm"].as_f64().map(|v| v as f32))
+        .unwrap_or(1.27)
+}
+
+pub fn write_symbol_grid_size_mm_pref(grid_size_mm: f32) {
+    update_prefs_json(&prefs_path(), |json| {
+        json["symbol_grid_size_mm"] = serde_json::json!(grid_size_mm);
+    })
+}
+
 /// Read ERC severity overrides from preferences file. Returns an empty
 /// map if the file is absent or the key missing — callers treat "no
 /// entry" as "use the rule's default severity", matching the ui_state

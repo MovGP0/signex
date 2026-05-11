@@ -83,6 +83,9 @@ pub struct UiState {
     pub preferences_draft_multisheet_style: MultisheetStyle,
     pub grid_style: GridStyle,
     pub preferences_draft_grid_style: GridStyle,
+    /// Default symbol-editor grid size (mm) — used when a library is
+    /// first opened. Changed from Preferences ▸ Appearance ▸ Symbol Editor.
+    pub preferences_draft_symbol_grid_size_mm: f32,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree

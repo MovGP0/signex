@@ -577,14 +577,12 @@ impl PinRenderGeometry {
         let along_mm = pin.length * PIN_TEXT_LAYOUT.number_along_ratio as f64;
 
         let number_pos = Vec2d::new(
-            tip.x + unit.x * along_mm   + normal.x * number_offset_mm,
-            tip.y + unit.y * along_mm   + normal.y * number_offset_mm,
+            tip.x + unit.x * along_mm,
+            tip.y + unit.y * along_mm,
         );
         let name_pos = Vec2d::new(
-            tip.x + unit.x * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
-                  + normal.x * number_offset_mm,
-            tip.y + unit.y * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
-                  + normal.y * number_offset_mm,
+            tip.x + unit.x * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
+            tip.y + unit.y * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
         );
 
         Self { tip, body_end, number_pos, name_pos, text_rotation, name_h_align }
@@ -596,12 +594,8 @@ fn text_size_px_from_mm(size_mm: f32, scale: f32) -> f32 {
     (em_mm * scale).clamp(2.0, 96.0)
 }
 
-fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
-    let zoom_factor = (scale / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE).max(0.0);
-    let scaled = base_width_px_at_100 * zoom_factor;
-    let max_stroke =
-        base_width_px_at_100 * signex_types::schematic::SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER;
-    scaled.clamp(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX, max_stroke)
+fn stroke_px_at_zoom(base_width_px_at_100: f32, _scale: f32) -> f32 {
+    base_width_px_at_100
 }
 
 /// Unwrap a raw `atan2` angle (in degrees, range `[-180, 180]`) so that
@@ -618,7 +612,7 @@ fn unwrap_angle(prev: f64, raw: f64) -> f64 {
 }
 
 fn stroke_world_mm(base_width_px_at_100: f32, scale: f32) -> f32 {
-    (stroke_px_at_zoom(base_width_px_at_100, scale) / scale.max(0.001))
+    (base_width_px_at_100 / scale.max(0.001))
         .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32)
 }
 
@@ -1820,7 +1814,7 @@ impl<'a> SymbolCanvas<'a> {
                 italic: false,
                 rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
-                v_align: VAlign::Bottom,
+                v_align: VAlign::Center,
             });
 
             pin_texts.push(signex_renderer::schematic::TextInput {
