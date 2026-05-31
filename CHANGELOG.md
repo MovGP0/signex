@@ -6,6 +6,71 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-05-31
+
+The **v0.14 "Footprint Editor"** milestone. v0.13.0 shipped the
+footprint / sketch editor compiled but hidden behind a feature flag
+while it was finished; v0.14 completes the remaining active-bar tooling
+and **enables the editor** — opening a `.snxfpt` now opens an editable
+tab, and the New Footprint / PCB Library create flow is live again.
+
+### Added — sketch constraints
+
+- **Nine more sketch constraints exposed** in the sketch-mode active
+  bar: Tangent (line-arc + arc-arc), Angle, Equal-Radius, Point-on-Arc,
+  Distance-point-to-line, Distance-point-to-circle, and Symmetric
+  (about a line + about a point). The Newton-LM solver and serialization
+  already supported all 19 constraint kinds; this surfaces the 9 that
+  had no button. Selection-first UX: select the entities, the valid
+  constraint buttons light up. The two 3-entity Symmetric constraints
+  take their third entity from the multi-select extra slot.
+
+### Added — active-bar tools wired
+
+- **Align / Distribute / Spacing** (12 ops) — Align Left/Right/Top/
+  Bottom + center H/V, Distribute Horizontally/Vertically (equal centre
+  gaps, extremes fixed), and Increase/Decrease H/V spacing (one grid
+  step, pivoting about the selection centroid). Operate on the combined
+  pad selection; no-op under 2 pads (3 for distribute). Sketch-backed
+  pads mirror their move into the sketch; undo-snapshotted.
+- **Move / Drag / Move Selection** — activate the Select tool (footprint
+  pad-move is drag-under-select). Adds a `nudge_pads` helper +
+  `FootprintActiveBarNudgeSelection` foundation for the typed-delta
+  "Move Selection by X, Y…" dialog (dialog itself deferred to v0.15).
+- **Fill / Solid Region / Text Frame** — wired to the existing
+  filled-polygon (`PlaceRegion`) and silk-text (`PlaceString`) place
+  tools.
+- **Selection-filter "All - On / All - Off"** toggle wired to a new
+  `SelectionFilter::set_all`.
+
+### Fixed
+
+- **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
+  pad's `shape_params` before regenerating geometry, so changing a pad's
+  shape (e.g. RoundRect → Round) no longer strands stale parameter keys
+  for the solver / next bake.
+
+### Changed
+
+- `FOOTPRINT_EDITOR_ENABLED` flipped `false` → `true`
+  (`crates/signex-app/src/feature_flags.rs`). The
+  `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
+  test branches on the flag and now asserts the enabled behaviour.
+
+### Deferred to v0.15
+
+- 3D Body / Extruded 3D Body buttons (need the wgpu 3D pipeline);
+  Break Track / Drag Track End (need track-segment split infra); the
+  typed-delta Move-by-X,Y dialog; custom selection-filter preset apply;
+  true bounding-box text frames.
+
+### Constraints — Apache-clean invariants (carry forward)
+
+- Zero `kicad` substrings under `crates/`; no third-party
+  constraint-solver substrings under `signex-sketch` / `signex-bake`;
+  `cargo-deny` advisories + licenses green; full `cargo test --workspace`
+  green (GPU smoke tests skip headlessly).
+
 ## [0.13.0] — 2026-05-31
 
 The **v0.13 Symbol & Library** milestone. This release pairs the
