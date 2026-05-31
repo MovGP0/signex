@@ -5328,9 +5328,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
                 Act::DeselectAll => {
                     editor.state.selected_pad = None;
+                    editor.state.selected_pads_extra.clear();
                     editor.state.selected_silk_f = None;
                     editor.state.selected_sketch = None;
                     editor.state.selected_sketch_secondary = None;
+                    editor.state.selected_sketch_extra.clear();
                     editor.state.context_menu = None;
                     editor.canvas_cache.clear();
                 }
@@ -5711,6 +5713,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.selected_pads_extra.clear();
             editor.state.selected_sketch = None;
             editor.state.selected_sketch_secondary = None;
+            editor.state.selected_sketch_extra.clear();
             editor.state.selected_silk_f = None;
             editor.canvas_cache.clear();
             editor.state.active_bar_menu = None;
@@ -5830,9 +5833,19 @@ pub(crate) fn apply_footprint_primitive_edit(
             }
         }
         PrimitiveEditorMsg::FootprintSketchSelect { id, shift } => {
-            // None clears both selection slots. Some(id) without
+            // None clears every selection slot. Some(id) without
             // shift replaces primary; with shift adds to secondary
             // (or replaces secondary with the new id).
+            //
+            // v0.14 — clear `selected_sketch_extra` (the rubber-band
+            // multi-select set) on every single-click select. Without
+            // this, clicking empty space (or a single entity) after a
+            // rubber-band left the box-selected extras flagged
+            // selected, so they kept rendering in the orange selection
+            // colour instead of the blue idle DOF colour — the
+            // "unselected shape stays orange" bug. A single click is
+            // always a fresh selection, so the extras never carry over.
+            editor.state.selected_sketch_extra.clear();
             match (id, shift) {
                 (None, _) => {
                     editor.state.selected_sketch = None;
