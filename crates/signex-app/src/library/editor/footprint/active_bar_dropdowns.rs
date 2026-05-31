@@ -610,11 +610,22 @@ fn text_entries(
             .icon(ic::icon_dd_text_string(tid))
             .checked(active == PadsTool::PlaceString),
         ),
-        DropdownEntry::Item(stub_with_icon(
-            "Text Frame",
-            path,
-            ic::icon_dd_text_frame(tid),
-        )),
+        // v0.14 — "Text Frame" approximates bounded-box text by reusing
+        // the working silk-text place tool (`PlaceString`), exactly like
+        // the "String" row above. A true auto-wrapping bounding-box text
+        // primitive is deferred (none exists yet); for now this drops the
+        // same silk string at the cursor.
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Text Frame",
+                fp(
+                    path,
+                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
+                ),
+            )
+            .icon(ic::icon_dd_text_frame(tid))
+            .checked(active == PadsTool::PlaceString),
+        ),
     ]
 }
 
@@ -648,16 +659,32 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
                 .icon(ic::icon_dd_circle(tid)),
         ),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Fill",
-            path.clone(),
-            ic::icon_dd_polygon(tid),
-        )),
-        DropdownEntry::Item(stub_with_icon(
-            "Solid Region",
-            path.clone(),
-            ic::icon_dd_polygon(tid),
-        )),
+        // v0.14 — "Fill" and "Solid Region" are synonyms for the same
+        // primitive: a closed-loop *filled* polygon (`FpGraphic { filled:
+        // true }`). Both arm the existing Pads-mode `PlaceRegion` tool;
+        // the dispatcher flips the editor back to Normal mode and the
+        // canvas multi-click gesture (`region_or_polygon_click`) records
+        // `filled = true`. Mirrors the working "String" place button.
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Fill",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceRegion),
+                ),
+            )
+            .icon(ic::icon_dd_polygon(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Solid Region",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceRegion),
+                ),
+            )
+            .icon(ic::icon_dd_polygon(tid)),
+        ),
         DropdownEntry::Item(
             DropdownItem::new("Rectangle", arm(SketchTool::Rectangle))
                 .icon(ic::icon_dd_rect(tid)),
