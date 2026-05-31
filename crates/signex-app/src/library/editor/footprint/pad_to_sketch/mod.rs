@@ -138,6 +138,13 @@ fn mint_shape_geometry_for(
     pad: &mut EditorPad,
     entity_id: SketchEntityId,
 ) {
+    // This fn (re)generates the pad's shape geometry, so it owns the
+    // shape-parameter sidecar. Clear it first: when a pad's shape
+    // changes (e.g. RoundRect → Round), stale keys like `corner_r_*`
+    // would otherwise linger alongside the new shape's params and
+    // confuse the solver / next bake. Each shape branch below
+    // re-inserts exactly the keys it needs.
+    pad.shape_params.clear();
     match &pad.shape {
         LibPadShape::Round => {
             mint_round_pad_geometry(sketch, plane_id, pad, entity_id);
