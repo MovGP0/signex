@@ -233,11 +233,13 @@ pub fn items<'a>(
     items.push(ActiveBarItem::Separator);
 
     // Section 2: Create — primitive geometry tools.
-    items.push(mk_tool(
-        "Place Point",
-        SketchTool::Point,
-        ActiveBarIcon::Glyph("\u{2022}"), // •
-    ));
+    // v0.14 — Place Point removed from the palette. Intersections snap
+    // automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
+    // SnapKind::Intersection) and the Line/Rect/Circle/Arc tools
+    // auto-create their own endpoint Points, so a manual free-point tool
+    // was clutter in the footprint context. The SketchTool::Point
+    // variant + dispatch stay (constraints + pad auto-mint reference
+    // Points internally).
     items.push(mk_tool(
         "Place Line (2 clicks)",
         SketchTool::Line,
