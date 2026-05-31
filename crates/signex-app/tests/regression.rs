@@ -5774,3 +5774,355 @@ fn opening_snxsym_still_creates_editable_tab() {
         "a SymbolEditorState should be registered for the opened .snxsym path"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.14-footprint — #23 TAB-pause click suppression + #24 Line
+// length/angle dimension entry. (#25 is render-only: the dimension
+// pills in draw_sketch.rs read exactly the `placement_input` /
+// `placement_input_other` state these tests assert, so verifying the
+// state plumbing covers the data the pills display.)
+// ─────────────────────────────────────────────────────────────────
+
+/// v0.14-footprint #23 — while `placement_paused` is set, a sketch
+/// commit click must be dropped before it can advance `tool_pending`
+/// or mint geometry. Reproduces the "TAB shows paused but the Rounded
+/// Rectangle still commits" bug: the canvas-layer gate leaked the
+/// commit click, so the authoritative gate now lives at the top of
+/// the sketch-click dispatcher arm.
+#[test]
+fn placement_paused_suppresses_rounded_rect_commit_click() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{EditorMode, SketchTool, ToolPending};
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("pause-rrect.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("pause-rrect-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::RoundedRectangle;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // First click (NOT paused) → anchors the first corner.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Snapshot the post-first-click state: pending = RoundedRectangleFirst
+    // with exactly the one anchor Point minted.
+    let (count_before, pending_was_first) = {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get(&path)
+            .expect("editor present after first click");
+        let n = editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .map(|s| s.entities.len())
+            .unwrap_or(0);
+        (
+            n,
+            matches!(
+                editor.state.tool_pending,
+                ToolPending::RoundedRectangleFirst { .. }
+            ),
+        )
+    };
+    assert!(
+        pending_was_first,
+        "sanity: first click must arm RoundedRectangleFirst"
+    );
+    assert_eq!(
+        count_before, 1,
+        "sanity: first click mints exactly one anchor Point"
+    );
+
+    // TAB-pause, then the commit click. With the fix the click is
+    // dropped: no opposite corner, no rounded-rect geometry, gesture
+    // stays armed at RoundedRectangleFirst.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present");
+        editor.state.placement_paused = true;
+    }
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 12.0,
+            y_mm: 8.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present after paused click");
+    let count_after = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .map(|s| s.entities.len())
+        .unwrap_or(0);
+    assert_eq!(
+        count_after, count_before,
+        "paused commit click must mint no geometry; entity count changed {count_before} -> {count_after}"
+    );
+    assert!(
+        matches!(
+            editor.state.tool_pending,
+            ToolPending::RoundedRectangleFirst { .. }
+        ),
+        "paused commit click must NOT advance tool_pending; got {:?}",
+        editor.state.tool_pending
+    );
+}
+
+/// v0.14-footprint #24 — Tab toggles the focused Line dimension field
+/// between length and angle, stashing the inactive field in
+/// `placement_input_other`. Each field keeps its own typed digits
+/// across the round-trip (length "10" survives length→angle→length).
+#[test]
+fn placement_input_tab_swaps_line_length_and_angle() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool, ToolPending,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("line-tab.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("line-tab-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Anchor the first endpoint → tool_pending = LineFirst.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Focus = length "10", nothing stashed yet.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap();
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::LineFirst { .. }),
+            "sanity: first click arms LineFirst"
+        );
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "10".into(),
+            kind: PlacementInputKind::LineLength,
+        });
+        editor.state.placement_input_other = None;
+    }
+
+    // First Tab — focus moves to a fresh empty angle field; length
+    // "10" is stashed.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchPlacementInputTab,
+    }));
+    {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        let focused = editor
+            .state
+            .placement_input
+            .as_ref()
+            .expect("focused field present after Tab");
+        assert_eq!(
+            focused.kind,
+            PlacementInputKind::LineAngle,
+            "Tab focuses the angle field"
+        );
+        assert_eq!(focused.buffer, "", "fresh angle field starts empty");
+        let stashed = editor
+            .state
+            .placement_input_other
+            .as_ref()
+            .expect("length stashed after Tab");
+        assert_eq!(stashed.kind, PlacementInputKind::LineLength);
+        assert_eq!(stashed.buffer, "10", "stashed length keeps its digits");
+    }
+
+    // Type "90" into the angle field, then Tab back to length.
+    for ch in ['9', '0'] {
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch),
+        }));
+    }
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchPlacementInputTab,
+    }));
+    {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        let focused = editor
+            .state
+            .placement_input
+            .as_ref()
+            .expect("focused field present after second Tab");
+        assert_eq!(
+            focused.kind,
+            PlacementInputKind::LineLength,
+            "second Tab restores length focus"
+        );
+        assert_eq!(
+            focused.buffer, "10",
+            "length digits survived the length→angle→length round-trip"
+        );
+        let stashed = editor
+            .state
+            .placement_input_other
+            .as_ref()
+            .expect("angle stashed after second Tab");
+        assert_eq!(stashed.kind, PlacementInputKind::LineAngle);
+        assert_eq!(
+            stashed.buffer, "90",
+            "angle digits typed while focused are retained"
+        );
+    }
+}
+
+/// v0.14-footprint #24 — with BOTH a typed length and a typed angle
+/// pinned (in either placement slot), the Line second click commits
+/// the endpoint at `first + (len @ angle°)`, ignoring the cursor's own
+/// azimuth and distance. 10 mm @ 90° from the origin lands the
+/// endpoint at (0, 10) even though the cursor sits at (20, 0).
+#[test]
+fn placement_input_line_length_and_angle_commit_at_polar_offset() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::entity::EntityKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("line-polar.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("line-polar-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // First click → first endpoint at the origin.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Pin length = 10 (focused) and angle = 90 (stashed). The commit
+    // reads each field from whichever slot holds it.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap();
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "10".into(),
+            kind: PlacementInputKind::LineLength,
+        });
+        editor.state.placement_input_other = Some(PlacementInput {
+            buffer: "90".into(),
+            kind: PlacementInputKind::LineAngle,
+        });
+    }
+
+    // Second click — cursor at (20, 0): azimuth 0°, distance 20. Both
+    // are overridden by the typed 10 mm @ 90°.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 20.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present after second click");
+    let sketch = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .expect("sketch present after the click pair");
+    let line = sketch
+        .entities
+        .iter()
+        .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .expect("line entity emitted by the second click");
+    let end_id = match line.kind {
+        EntityKind::Line { end, .. } => end,
+        _ => unreachable!(),
+    };
+    let end_pt = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == end_id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("line end endpoint resolves to a Point");
+    assert!(
+        end_pt.0.abs() < 1e-9,
+        "endpoint x should be 0 (10 mm @ 90°), not the cursor's 20; got {}",
+        end_pt.0
+    );
+    assert!(
+        (end_pt.1 - 10.0).abs() < 1e-9,
+        "endpoint y should be 10 mm (10 @ 90°); got {}",
+        end_pt.1
+    );
+}

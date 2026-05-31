@@ -788,6 +788,10 @@ pub enum EditorMsg {
     /// open. Clears `state.placement_input = None`; the next click
     /// commits at the cursor position as if no buffer had been typed.
     FootprintSketchPlacementInputEscape,
+    /// v0.14-footprint — Tab toggles the active Line placement-input
+    /// field between length and angle (Fusion convention). No-op for
+    /// any other tool's placement input.
+    FootprintSketchPlacementInputTab,
     /// v0.13.3 — Sketch entity selection from canvas. `None` = clear.
     FootprintSketchSelect {
         id: Option<signex_sketch::id::SketchEntityId>,
@@ -1704,6 +1708,10 @@ pub enum PrimitiveEditorMsg {
     /// open. Clears `state.placement_input = None`; the next click
     /// commits at the cursor position as if no buffer had been typed.
     FootprintSketchPlacementInputEscape,
+    /// v0.14-footprint — Tab toggles the active Line placement-input
+    /// field between length and angle (Fusion convention). No-op for
+    /// any other tool's placement input.
+    FootprintSketchPlacementInputTab,
 
     // ── v0.13.3 — selection / constraint submenu / dimension ──
     /// v0.13.3 — Select a sketch entity. `None` clears the selection;

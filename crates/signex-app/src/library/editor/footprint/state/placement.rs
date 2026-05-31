@@ -19,6 +19,12 @@ pub enum PlacementInputKind {
     /// Line tool — second click commits at exactly `buffer` mm from
     /// the first endpoint, along the cursor's azimuth.
     LineLength,
+    /// Line tool — second click pins the segment azimuth to exactly
+    /// `buffer` degrees, measured CCW from the +X axis (standard math
+    /// convention, world-space). Toggled in via Tab while a Line
+    /// placement-input buffer is active; pairs with `LineLength` so
+    /// the user can dial in length and angle independently.
+    LineAngle,
     /// Circle tool — radius commit; second click ignores cursor delta.
     CircleRadius,
     /// Arc tool radius — second click ignores cursor delta from centre.
@@ -47,15 +53,32 @@ impl PlacementInputKind {
         }
     }
 
+    /// `true` for the two Line placement-input fields that Tab swaps
+    /// between (length ↔ angle).
+    pub fn is_line_field(self) -> bool {
+        matches!(self, Self::LineLength | Self::LineAngle)
+    }
+
+    /// Tab-toggle partner for the Line length/angle fields. Returns
+    /// `None` for every other kind (no second field to focus).
+    pub fn line_toggle(self) -> Option<Self> {
+        match self {
+            Self::LineLength => Some(Self::LineAngle),
+            Self::LineAngle => Some(Self::LineLength),
+            _ => None,
+        }
+    }
+
     /// `true` when the buffer accepts a leading minus sign.
     pub fn allows_negative(self) -> bool {
-        matches!(self, Self::ArcSweep)
+        matches!(self, Self::ArcSweep | Self::LineAngle)
     }
 
     /// Short label rendered in the cursor overlay.
     pub fn label(self) -> &'static str {
         match self {
             Self::LineLength => "len",
+            Self::LineAngle => "ang",
             Self::CircleRadius | Self::ArcRadius => "r",
             Self::ArcSweep => "deg",
             Self::OffsetDistance => "dist",

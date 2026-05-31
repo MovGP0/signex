@@ -1331,6 +1331,15 @@ pub(super) fn draw_filled_closed_loops(
 /// sees the running length / width / height / angle as they
 /// move the cursor.
 fn draw_dim_pill(frame: &mut canvas::Frame, centre: Point, label: &str) {
+    draw_dim_pill_styled(frame, centre, label, false);
+}
+
+/// v0.14-footprint — dimension-pill chrome with an explicit `focused`
+/// state. `focused` paints the accent-bordered "active field" variant
+/// used while the user Tab-cycles the Line length / angle inputs; the
+/// inactive field keeps the muted grey plate every passive live
+/// dimension uses.
+fn draw_dim_pill_styled(frame: &mut canvas::Frame, centre: Point, label: &str, focused: bool) {
     // Label text first so we can size the background plate from
     // its rough advance width. Iosevka 11px averages ≈ 6 px per
     // character; pad ±5 px on each side and 3 px top/bottom.
@@ -1340,21 +1349,33 @@ fn draw_dim_pill(frame: &mut canvas::Frame, centre: Point, label: &str) {
     let body_w = glyph_w * (label.chars().count() as f32) + pad_x * 2.0;
     let body_h = 14.0_f32 + pad_y * 2.0;
     let plate_origin = Point::new(centre.x - body_w / 2.0, centre.y - body_h / 2.0);
-    frame.fill_rectangle(
-        plate_origin,
-        iced::Size::new(body_w, body_h),
-        Color::from_rgba(0.20, 0.22, 0.26, 0.92),
-    );
+    // Focused field: bluish plate + bright accent border so the eye
+    // lands on the input Tab currently targets. Inactive field: the
+    // muted grey plate shared by every passive live-dimension pill.
+    let (plate, border, border_w, text) = if focused {
+        (
+            Color::from_rgba(0.10, 0.20, 0.34, 0.95),
+            Color::from_rgba(0.40, 0.70, 1.00, 0.95),
+            1.3_f32,
+            Color::from_rgba(1.00, 1.00, 1.00, 1.0),
+        )
+    } else {
+        (
+            Color::from_rgba(0.20, 0.22, 0.26, 0.92),
+            Color::from_rgba(0.10, 0.12, 0.15, 1.0),
+            0.8_f32,
+            Color::from_rgba(0.95, 0.95, 0.97, 1.0),
+        )
+    };
+    frame.fill_rectangle(plate_origin, iced::Size::new(body_w, body_h), plate);
     frame.stroke(
         &Path::rectangle(plate_origin, iced::Size::new(body_w, body_h)),
-        Stroke::default()
-            .with_width(0.8)
-            .with_color(Color::from_rgba(0.10, 0.12, 0.15, 1.0)),
+        Stroke::default().with_width(border_w).with_color(border),
     );
     frame.fill_text(canvas::Text {
         content: label.to_string(),
         position: centre,
-        color: Color::from_rgba(0.95, 0.95, 0.97, 1.0),
+        color: text,
         size: iced::Pixels(11.0),
         align_x: iced::alignment::Horizontal::Center.into(),
         align_y: iced::alignment::Vertical::Center,
@@ -1368,7 +1389,7 @@ pub(super) fn draw_sketch_tool_preview(
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
 ) {
-    use crate::library::editor::footprint::state::ToolPending;
+    use crate::library::editor::footprint::state::{PlacementInputKind, ToolPending};
     use signex_sketch::entity::EntityKind;
     use signex_sketch::id::SketchEntityId;
 
@@ -1376,6 +1397,17 @@ pub(super) fn draw_sketch_tool_preview(
         Some(c) => c,
         None => return,
     };
+
+    // v0.14-footprint — TAB-pause hides the live ghost + dimension
+    // overlay for sketch tools, mirroring how the Pads-mode placement
+    // ghost hides on pause. Without this the dashed preview keeps
+    // tracking the cursor after TAB, which reads as "still placing"
+    // even though clicks are suppressed — the "shows the pause but
+    // doesn't pause" feedback. Suppressing the preview makes the
+    // paused state unambiguous.
+    if state.placement_paused {
+        return;
+    }
 
     let resolve_point = |id: SketchEntityId| -> Option<(f64, f64)> {
         if let Some(solve) = state.last_solve.as_ref() {
@@ -1435,29 +1467,83 @@ pub(super) fn draw_sketch_tool_preview(
                 return;
             };
             let p0 = cstate.world_to_screen(first_world);
-            dashed(frame, p0, cursor_screen);
-            // v0.27 — Fusion-style live dimension pill. Length =
-            // distance(first, cursor) in mm; angle = direction in
-            // degrees. Length pill sits next to the segment
-            // midpoint; angle pill sits offset from the cursor.
-            let length_mm =
-                ((cursor.0 - first_world.0).powi(2) + (cursor.1 - first_world.1).powi(2)).sqrt();
-            let angle_deg =
-                ((cursor.1 - first_world.1).atan2(cursor.0 - first_world.0)).to_degrees();
-            let mid = Point::new((p0.x + cursor_screen.x) / 2.0, (p0.y + cursor_screen.y) / 2.0);
-            // Perpendicular offset for the length pill so it sits
-            // beside the segment, not on top of it.
-            let dx = cursor_screen.x - p0.x;
-            let dy = cursor_screen.y - p0.y;
-            let len_screen = (dx * dx + dy * dy).sqrt().max(1.0);
-            let nx = -dy / len_screen;
-            let ny = dx / len_screen;
-            let length_label =
-                Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
-            draw_dim_pill(frame, length_label, &format!("{:.3} mm", length_mm));
-            // Angle pill — offset down-right from the cursor.
-            let angle_label = Point::new(cursor_screen.x + 22.0, cursor_screen.y + 22.0);
-            draw_dim_pill(frame, angle_label, &format!("{:.1} deg", angle_deg));
+            // v0.14-footprint — the Line tool carries TWO live
+            // dimension fields (length + angle). The focused field
+            // lives in `placement_input`, the stashed one in
+            // `placement_input_other`; collect each typed buffer from
+            // whichever slot holds it so the preview reflects exactly
+            // what the second click will commit.
+            let mut len_buf: Option<&str> = None;
+            let mut ang_buf: Option<&str> = None;
+            for slot in [
+                state.placement_input.as_ref(),
+                state.placement_input_other.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                match slot.kind {
+                    PlacementInputKind::LineLength => len_buf = Some(slot.buffer.as_str()),
+                    PlacementInputKind::LineAngle => ang_buf = Some(slot.buffer.as_str()),
+                    _ => {}
+                }
+            }
+            let typed_len = len_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let typed_ang = ang_buf.and_then(|b| b.parse::<f64>().ok());
+            // Cursor-relative azimuth + distance (world space) — the
+            // fallback when a field hasn't been typed. Mirrors the
+            // second-click commit arm in dispatch/library.rs so the
+            // preview and the committed segment always agree.
+            let dxw = cursor.0 - first_world.0;
+            let dyw = cursor.1 - first_world.1;
+            let cursor_len = (dxw * dxw + dyw * dyw).sqrt();
+            let cursor_ang = if cursor_len > 1e-9 { dyw.atan2(dxw) } else { 0.0 };
+            let eff_len = typed_len.unwrap_or(cursor_len);
+            let eff_ang = typed_ang.map(f64::to_radians).unwrap_or(cursor_ang);
+            // Effective endpoint = first + (eff_len @ eff_ang). Draw the
+            // ghost to THIS point (not the raw cursor) so a typed
+            // length/angle visibly snaps the rubber-band into place.
+            let end_world = (
+                first_world.0 + eff_len * eff_ang.cos(),
+                first_world.1 + eff_len * eff_ang.sin(),
+            );
+            let p_end = cstate.world_to_screen(end_world);
+            dashed(frame, p0, p_end);
+            // Length pill beside the segment midpoint (perpendicular
+            // offset); angle pill off the endpoint. Each echoes the raw
+            // typed buffer verbatim while that field is being edited
+            // (so keystrokes never get reformatted mid-type — see
+            // reference_erasable_numeric_input) and the live computed
+            // value otherwise. The Tab-focused field is highlighted.
+            let mid = Point::new((p0.x + p_end.x) / 2.0, (p0.y + p_end.y) / 2.0);
+            let sdx = p_end.x - p0.x;
+            let sdy = p_end.y - p0.y;
+            let seg = (sdx * sdx + sdy * sdy).sqrt().max(1.0);
+            let nx = -sdy / seg;
+            let ny = sdx / seg;
+            let len_pos = Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
+            let ang_pos = Point::new(p_end.x + 22.0, p_end.y + 22.0);
+            let focused = state.placement_input.as_ref().map(|p| p.kind);
+            let len_text = match len_buf {
+                Some(b) if !b.is_empty() => format!("{b} mm"),
+                _ => format!("{eff_len:.3} mm"),
+            };
+            let ang_text = match ang_buf {
+                Some(b) if !b.is_empty() => format!("{b} deg"),
+                _ => format!("{:.1} deg", eff_ang.to_degrees()),
+            };
+            draw_dim_pill_styled(
+                frame,
+                len_pos,
+                &len_text,
+                focused == Some(PlacementInputKind::LineLength),
+            );
+            draw_dim_pill_styled(
+                frame,
+                ang_pos,
+                &ang_text,
+                focused == Some(PlacementInputKind::LineAngle),
+            );
         }
         ToolPending::RectangleFirst { first } => {
             // v0.15 — preview the axis-aligned rectangle from the
@@ -1805,7 +1891,17 @@ pub(super) fn draw_sketch_tool_preview(
     // on commit + on Esc). Position: 4 px right and 8 px below the
     // cursor, with a translucent rounded background so the buffer
     // reads against any canvas content.
-    if let Some(input) = state.placement_input.as_ref() {
+    //
+    // v0.14-footprint — the Line length/angle fields are rendered by
+    // the highlighted dimension pills above (focused vs stashed), so
+    // skip the generic overlay for them to avoid a double readout.
+    // Every other tool (radius / sweep / offset / fillet) still uses
+    // this overlay as its sole typed-value display.
+    if let Some(input) = state
+        .placement_input
+        .as_ref()
+        .filter(|p| !p.kind.is_line_field())
+    {
         let label = input.kind.label();
         let body = if input.buffer.is_empty() {
             format!("{label}: _")

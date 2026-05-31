@@ -1825,6 +1825,31 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             return publish(EditorMsg::FootprintSketchPlacementInputEscape);
                         }
                     }
+                    keyboard::Key::Named(keyboard::key::Named::Tab) => {
+                        // v0.14-footprint — while a Line placement is
+                        // in flight, Tab toggles the active dimension
+                        // field between length and angle (Fusion
+                        // convention) instead of pausing placement.
+                        // The toggle applies when the open buffer is a
+                        // Line field OR the Line tool is mid-gesture
+                        // (LineFirst) so the user can Tab to the angle
+                        // field before typing a single digit. For
+                        // every other tool Tab falls through to the
+                        // bootstrap placement-pause handler (Item 1).
+                        let line_field_active = self
+                            .state
+                            .placement_input
+                            .as_ref()
+                            .map(|p| p.kind.is_line_field())
+                            .unwrap_or(false)
+                            || kind_for_active == Some(PlacementInputKind::LineLength);
+                        if line_field_active {
+                            return publish(EditorMsg::FootprintSketchPlacementInputTab);
+                        }
+                        // Not a Line dimension context — let Tab reach
+                        // the global pre-placement-pause subscription.
+                        return None;
+                    }
                     _ => {
                         // Use the platform-supplied `text` so we get
                         // exactly the codepoint the user typed

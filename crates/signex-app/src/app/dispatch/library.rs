@@ -4152,6 +4152,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
         | PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
         | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputTab
         | PrimitiveEditorMsg::FootprintSketchSelect { .. }
         | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchMoveLine { .. }
@@ -5746,6 +5747,8 @@ pub(crate) fn apply_footprint_primitive_edit(
             // half-typed length would leak across to a freshly-started
             // tool gesture.
             editor.state.placement_input = None;
+            // v0.14-footprint — clear the stashed Line angle/length too.
+            editor.state.placement_input_other = None;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch) => {
@@ -5827,8 +5830,69 @@ pub(crate) fn apply_footprint_primitive_edit(
             // override. Tool pending state is left intact so the
             // gesture itself isn't cancelled (use right-click / tool
             // Esc for that).
-            if editor.state.placement_input.is_some() {
+            if editor.state.placement_input.is_some() || editor.state.placement_input_other.is_some()
+            {
                 editor.state.placement_input = None;
+                // v0.14-footprint — Esc also clears the stashed Line
+                // length/angle field so neither leaks into the next
+                // gesture.
+                editor.state.placement_input_other = None;
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacementInputTab => {
+            // v0.14-footprint — toggle the focused Line dimension
+            // field between length and angle. The focused field always
+            // lives in `placement_input`; the stashed (inactive) field
+            // lives in `placement_input_other`. Tab swaps them so the
+            // user can type a length, Tab, type an angle, and have
+            // BOTH consumed by the second click. Each field keeps its
+            // own typed digits across the swap.
+            use crate::library::editor::footprint::state::{
+                PlacementInput, PlacementInputKind, SketchTool, ToolPending,
+            };
+            // Determine the kind the focused field should become.
+            let current_kind = editor
+                .state
+                .placement_input
+                .as_ref()
+                .map(|p| p.kind)
+                // No buffer yet — only meaningful when the Line tool is
+                // mid-gesture; the implicit focused field is length, so
+                // Tab targets angle.
+                .or_else(|| {
+                    PlacementInputKind::from_active_tool(
+                        editor.state.active_tool,
+                        &editor.state.tool_pending,
+                    )
+                });
+            // Guard: only the Line length/angle pair toggles. Anything
+            // else leaves both slots untouched (defensive — the canvas
+            // only emits this for the Line context, but the dispatcher
+            // shouldn't assume that).
+            let is_line_ctx = matches!(editor.state.active_tool, SketchTool::Line)
+                && matches!(editor.state.tool_pending, ToolPending::LineFirst { .. });
+            if is_line_ctx
+                && let Some(kind) = current_kind
+                && kind.is_line_field()
+                && let Some(next_kind) = kind.line_toggle()
+            {
+                // Swap focused ↔ stashed. The focused field (if any)
+                // becomes the stash; the previously-stashed field (or a
+                // fresh empty one matched to `next_kind`) becomes
+                // focused.
+                let prev_focused = editor.state.placement_input.take();
+                let new_focused = match editor.state.placement_input_other.take() {
+                    Some(stashed) if stashed.kind == next_kind => stashed,
+                    // No stash for the target field yet (or a stale kind)
+                    // — start it empty so the next digit appends here.
+                    _ => PlacementInput {
+                        buffer: String::new(),
+                        kind: next_kind,
+                    },
+                };
+                editor.state.placement_input = Some(new_focused);
+                editor.state.placement_input_other = prev_focused;
                 editor.canvas_cache.clear();
             }
         }
@@ -7558,6 +7622,19 @@ pub(crate) fn apply_footprint_primitive_edit(
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
+            // v0.14-footprint — TAB-pause is the single source of truth
+            // for "suppress click-commit". The canvas layer also gates
+            // on `placement_paused` before publishing this message, but
+            // multi-click tools (Line / RoundedRectangle / Arc / …)
+            // route BOTH their anchor click and their commit click
+            // through this one handler, so the authoritative gate lives
+            // here too: while paused, drop the click before it can
+            // advance `tool_pending` or mint geometry. The Select tool
+            // never reaches this arm, so re-anchoring stays possible.
+            if editor.state.placement_paused {
+                return;
+            }
+
             // v0.16.1 — sticky construction flag captured once so each
             // newly-minted entity can be flagged in one place. Pads
             // (PadAttr-carrying centre Points minted via auto_mint /
@@ -7625,6 +7702,25 @@ pub(crate) fn apply_footprint_primitive_edit(
                 .placement_input
                 .as_ref()
                 .and_then(|p| p.buffer.parse::<f64>().ok());
+            // v0.14-footprint — the Line tool now carries TWO dimension
+            // fields (length + angle); the focused one lives in
+            // `placement_input`, the stashed one in
+            // `placement_input_other`. Pull each field's parsed value
+            // out of whichever slot currently holds it so the Line
+            // second-click arm can honour length, angle, or both
+            // regardless of which field has focus.
+            let line_dim_value = |kind: PlacementInputKind| -> Option<f64> {
+                [
+                    editor.state.placement_input.as_ref(),
+                    editor.state.placement_input_other.as_ref(),
+                ]
+                .into_iter()
+                .flatten()
+                .find(|p| p.kind == kind)
+                .and_then(|p| p.buffer.parse::<f64>().ok())
+            };
+            let line_len_typed = line_dim_value(PlacementInputKind::LineLength);
+            let line_ang_typed = line_dim_value(PlacementInputKind::LineAngle);
             let resolve_point_xy =
                 |id: SketchEntityId, primitive: &signex_library::primitive::footprint::Footprint| -> Option<(f64, f64)> {
                     primitive
@@ -7642,28 +7738,49 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.active_tool,
                 editor.state.tool_pending.clone(),
             ) {
-                // Line second click — pin distance from `first` along
-                // the cursor azimuth.
-                (
-                    Some(PlacementInputKind::LineLength),
-                    Some(len),
-                    SketchTool::Line,
-                    ToolPending::LineFirst { first },
-                ) if len > 0.0 => {
+                // Line second click — honour any typed length / angle.
+                // v0.14-footprint:
+                //   • length + angle → endpoint = first + (len @ angle°)
+                //   • length only    → len along the cursor azimuth (legacy)
+                //   • angle only     → azimuth pinned to angle°, length
+                //                      taken from the cursor distance
+                // The angle is degrees CCW from +X in world space, the
+                // same convention the live ghost-preview pill displays
+                // (draw_sketch.rs), so the committed segment matches the
+                // number the user saw while placing.
+                (_, _, SketchTool::Line, ToolPending::LineFirst { first })
+                    if line_len_typed.is_some() || line_ang_typed.is_some() =>
+                {
                     let primitive = editor.primitive();
                     if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
                         let dx = x_mm - fx;
                         let dy = y_mm - fy;
                         let cursor_len = (dx * dx + dy * dy).sqrt();
-                        if cursor_len > 1e-9 {
-                            let ux = dx / cursor_len;
-                            let uy = dy / cursor_len;
-                            (fx + len * ux, fy + len * uy, true)
+                        // World azimuth of the cursor relative to the
+                        // first endpoint; 0 when the cursor sits exactly
+                        // on `first` (no direction to read).
+                        let cursor_ang = if cursor_len > 1e-9 {
+                            dy.atan2(dx)
                         } else {
-                            // Cursor coincides with the first
-                            // endpoint — no azimuth to pin to. Fall
-                            // back to the raw click so the user gets
-                            // visible feedback that nothing happened.
+                            0.0
+                        };
+                        // Typed angle wins; else follow the cursor.
+                        let ang_rad = match line_ang_typed {
+                            Some(a) => a.to_radians(),
+                            None => cursor_ang,
+                        };
+                        // Typed (positive) length wins; else use the
+                        // cursor distance so an angle-only entry still
+                        // commits a sensibly-sized segment.
+                        let len = match line_len_typed {
+                            Some(l) if l > 0.0 => l,
+                            _ => cursor_len,
+                        };
+                        if len > 1e-9 {
+                            (fx + len * ang_rad.cos(), fy + len * ang_rad.sin(), true)
+                        } else {
+                            // Neither a typed length nor a usable cursor
+                            // distance — fall back to the raw click.
                             (x_mm, y_mm, false)
                         }
                     } else {
@@ -10424,6 +10541,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchPlacementInputBackspace
         | EditorMsg::FootprintSketchPlacementInputEnter
         | EditorMsg::FootprintSketchPlacementInputEscape
+        | EditorMsg::FootprintSketchPlacementInputTab
         | EditorMsg::FootprintSketchSelect { .. }
         | EditorMsg::FootprintSketchMovePoint { .. }
         | EditorMsg::FootprintSketchMoveLine { .. }
