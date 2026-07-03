@@ -43,6 +43,24 @@ tab, and the New Footprint / PCB Library create flow is live again.
 - **Selection-filter "All - On / All - Off"** toggle wired to a new
   `SelectionFilter::set_all`.
 
+### Added — deferred cleanup
+
+- **Move Selection by X, Y…** now opens a typed-delta modal (two mm
+  inputs) that nudges the pad selection by the entered amount, reusing
+  the same sketch-mirror + undo path as the one-step grid nudge.
+- **3D Body / Extruded 3D Body** active-bar items mint the footprint's
+  `body_3d` (extrude the courtyard, or the fab outline) — visible
+  immediately in the CPU 3D preview. The interactive wgpu pipeline stays
+  deferred (v2.x).
+- **Text Frame** is now a real bounding-box place tool: drag a rectangle
+  to set the frame; the silk string aligns/clips inside it. (No
+  auto-wrap yet.)
+- **Footprint-native selection-filter presets** — the filter dropdown's
+  All-On/All-Off toggle and preset chips are wired to real footprint
+  `SelectionFilterKind` presets, persisted under `footprint_filter_presets`
+  in prefs, with a "Save current filter as preset" capture. (Replaces the
+  schematic-typed presets that could not apply to footprints.)
+
 ### Fixed
 
 - **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
@@ -59,10 +77,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
 
 ### Deferred to v0.15
 
-- 3D Body / Extruded 3D Body buttons (need the wgpu 3D pipeline);
-  Break Track / Drag Track End (need track-segment split infra); the
-  typed-delta Move-by-X,Y dialog; custom selection-filter preset apply;
-  true bounding-box text frames.
+- Break Track / Drag Track End (need track-segment split infra).
 
 ### Constraints — Apache-clean invariants (carry forward)
 
