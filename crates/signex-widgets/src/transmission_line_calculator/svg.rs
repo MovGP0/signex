@@ -60,7 +60,6 @@ pub fn render_smith_chart_svg(
             radius,
             false,
             "smith-chart-grid",
-            &options,
         );
         push_svg_grid_labels(
             &mut svg,
@@ -79,7 +78,6 @@ pub fn render_smith_chart_svg(
             radius,
             true,
             "admittance-smith-chart-grid",
-            &options,
         );
     }
     if options.show_vswr {
@@ -308,11 +306,10 @@ fn push_svg_smith_chart_grid(
     radius: f64,
     reflected: bool,
     id: &str,
-    options: &SmithChartSvgOptions,
 ) {
     write!(svg, r#"<g id="{id}" clip-path="url(#smith-chart-disk)">"#)
         .expect("write to string cannot fail");
-    for line in smith_chart_grid(&options.resistance_labels, &options.reactance_labels) {
+    for line in smith_chart_grid() {
         let (hierarchy, color, width, opacity) = match (reflected, line.hierarchy) {
             (false, SmithChartGridHierarchy::Major) => ("major", "#4a6f9e", 0.85, 0.72),
             (false, SmithChartGridHierarchy::Minor) => ("minor", "#3a567a", 0.45, 0.28),

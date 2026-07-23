@@ -17,14 +17,7 @@ pub(in crate::transmission_line_calculator::tool) fn draw_admittance_grid(
     susceptance_labels: &[f64],
     show_labels: bool,
 ) {
-    draw_smith_chart_grid(
-        frame,
-        center,
-        radius,
-        conductance_labels,
-        susceptance_labels,
-        true,
-    );
+    draw_smith_chart_grid(frame, center, radius, true);
     if show_labels {
         draw_admittance_grid_labels(
             frame,

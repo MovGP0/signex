@@ -1,84 +1,113 @@
 use crate::transmission_line_calculator::smith_chart_grid::*;
 
-/// Verifies that conventional structural contours are always present and emphasized.
+/// Verifies the requested fine decimal resistance steps around the chart center.
 #[test]
-fn conventional_structural_contours_are_major() {
-    let grid = smith_chart_grid(
-        &[0.2, 0.5, 1.0, 2.0, 5.0],
-        &[-5.0, -2.0, -1.0, -0.5, -0.2, 0.2, 0.5, 1.0, 2.0, 5.0],
-    );
+fn decimal_resistance_grid_uses_range_dependent_steps() {
+    let grid = smith_chart_grid();
+
+    for value in [
+        0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.65, 0.70, 0.75, 0.80,
+        0.85, 0.90, 0.95, 1.00,
+    ] {
+        assert!(
+            grid.iter()
+                .any(|line| { line.kind == SmithChartGridLineKind::Resistance { value } })
+        );
+    }
+}
+
+/// Verifies that larger normalized values use progressively wider decimal steps.
+#[test]
+fn decimal_resistance_grid_widens_steps_at_larger_values() {
+    let grid = smith_chart_grid();
+
+    for value in [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 30.0, 40.0, 50.0] {
+        assert!(
+            grid.iter()
+                .any(|line| { line.kind == SmithChartGridLineKind::Resistance { value } })
+        );
+    }
+    for value in [0.61, 11.0, 22.0] {
+        assert!(
+            grid.iter()
+                .all(|line| { line.kind != SmithChartGridLineKind::Resistance { value } })
+        );
+    }
+}
+
+/// Verifies that complex-value contours use the same positive and negative decimal values.
+#[test]
+fn reactance_grid_mirrors_the_decimal_resistance_values() {
+    let grid = smith_chart_grid();
+
+    for value in [0.42, 0.95, 12.0, 40.0] {
+        for signed_value in [-value, value] {
+            assert!(grid.iter().any(|line| {
+                line.kind
+                    == SmithChartGridLineKind::Reactance {
+                        value: signed_value,
+                    }
+            }));
+        }
+    }
+}
+
+/// Verifies that primary 1-2-5 contours remain complete and visually emphasized.
+#[test]
+fn one_two_five_contours_are_complete_major_lines() {
+    let grid = smith_chart_grid();
 
     for kind in [
-        SmithChartGridLineKind::Resistance { value: 0.0 },
+        SmithChartGridLineKind::Resistance { value: 0.2 },
+        SmithChartGridLineKind::Resistance { value: 0.5 },
         SmithChartGridLineKind::Resistance { value: 1.0 },
-        SmithChartGridLineKind::Reactance { value: -1.0 },
+        SmithChartGridLineKind::Reactance { value: -0.5 },
         SmithChartGridLineKind::Reactance { value: 0.0 },
-        SmithChartGridLineKind::Reactance { value: 1.0 },
+        SmithChartGridLineKind::Reactance { value: 2.0 },
     ] {
         let line = grid.iter().find(|line| line.kind == kind).unwrap();
         assert_eq!(line.hierarchy, SmithChartGridHierarchy::Major);
-    }
-}
-
-/// Verifies that a constant-resistance contour has the conventional circle geometry.
-#[test]
-fn constant_resistance_contour_is_a_circle_tangent_to_open_circuit() {
-    let resistance = 0.5;
-    let grid = smith_chart_grid(&[resistance], &[]);
-    let line = grid
-        .iter()
-        .find(|line| line.kind == SmithChartGridLineKind::Resistance { value: resistance })
-        .unwrap();
-    let center = resistance / (1.0 + resistance);
-    let radius = 1.0 / (1.0 + resistance);
-
-    assert!(line.points.iter().all(|(x, y)| {
-        ((x - center).hypot(*y) - radius).abs() < 1.0e-12 && x.hypot(*y) <= 1.0 + 1.0e-12
-    }));
-    assert!(
-        line.points
-            .iter()
-            .any(|(x, y)| (*x - 1.0).abs() < 1.0e-12 && y.abs() < 1.0e-12)
-    );
-}
-
-/// Verifies that constant-reactance contours remain inside the chart and end at open circuit.
-#[test]
-fn constant_reactance_contours_run_from_boundary_to_open_circuit() {
-    let grid = smith_chart_grid(&[], &[-0.5, 0.5]);
-
-    for reactance in [-0.5, 0.5] {
-        let line = grid
-            .iter()
-            .find(|line| line.kind == SmithChartGridLineKind::Reactance { value: reactance })
-            .unwrap();
-
         assert!(
             line.points
                 .iter()
-                .all(|(x, y)| x.hypot(*y) <= 1.0 + 1.0e-12)
+                .any(|(x, y)| (*x - 1.0).abs() < 1.0e-12 && y.abs() < 1.0e-12)
         );
-        assert_eq!(line.points.last().copied(), Some((1.0, 0.0)));
-        assert_eq!(line.points[0].1.signum(), reactance.signum());
     }
 }
 
-/// Verifies that configured decimal contours are deduplicated and classified as minor.
+/// Verifies that fine contours stop before entering visually crowded chart regions.
 #[test]
-fn configured_decimal_contours_are_deduplicated_minor_lines() {
-    let grid = smith_chart_grid(&[0.2, 0.2, f64::NAN, -1.0], &[0.5, 0.5, f64::INFINITY]);
+fn minor_decimal_contours_are_adaptively_clipped() {
+    let grid = smith_chart_grid();
 
-    assert_eq!(
-        grid.iter()
-            .filter(|line| { line.kind == SmithChartGridLineKind::Resistance { value: 0.2 } })
-            .count(),
-        1
-    );
-    assert_eq!(
-        grid.iter()
-            .find(|line| { line.kind == SmithChartGridLineKind::Reactance { value: 0.5 } })
-            .unwrap()
-            .hierarchy,
-        SmithChartGridHierarchy::Minor
-    );
+    for kind in [
+        SmithChartGridLineKind::Resistance { value: 0.42 },
+        SmithChartGridLineKind::Reactance { value: 0.42 },
+        SmithChartGridLineKind::Reactance { value: -0.42 },
+    ] {
+        let line = grid.iter().find(|line| line.kind == kind).unwrap();
+        assert_eq!(line.hierarchy, SmithChartGridHierarchy::Minor);
+        assert_ne!(line.points.first(), line.points.last());
+        assert!(
+            line.points
+                .iter()
+                .all(|(x, y)| { (*x - 1.0).abs() > 1.0e-12 || y.abs() > 1.0e-12 })
+        );
+    }
+}
+
+/// Verifies that every generated contour is finite and stays inside the unit disk.
+#[test]
+fn adaptive_decimal_grid_stays_inside_the_smith_chart() {
+    let grid = smith_chart_grid();
+
+    assert!(!grid.is_empty());
+    for line in grid {
+        assert!(line.points.len() >= 2);
+        for (x, y) in &line.points {
+            assert!(x.is_finite());
+            assert!(y.is_finite());
+            assert!(x.hypot(*y) <= 1.0 + 1.0e-12);
+        }
+    }
 }

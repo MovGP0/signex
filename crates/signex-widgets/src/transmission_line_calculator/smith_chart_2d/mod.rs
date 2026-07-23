@@ -730,14 +730,7 @@ fn draw_impedance_grid(
     resistance_labels: &[f64],
     reactance_labels: &[f64],
 ) {
-    draw_smith_chart_grid(
-        frame,
-        center,
-        radius,
-        resistance_labels,
-        reactance_labels,
-        false,
-    );
+    draw_smith_chart_grid(frame, center, radius, false);
     draw_grid_labels(frame, center, radius, resistance_labels, reactance_labels);
 }
 
@@ -746,11 +739,9 @@ pub(in crate::transmission_line_calculator::tool) fn draw_smith_chart_grid(
     frame: &mut canvas::Frame,
     center: Point,
     radius: f32,
-    resistance_values: &[f64],
-    reactance_values: &[f64],
     reflected: bool,
 ) {
-    for line in smith_chart_grid(resistance_values, reactance_values) {
+    for line in smith_chart_grid() {
         let (color, width) = match (reflected, line.hierarchy) {
             (false, SmithChartGridHierarchy::Major) => {
                 (Color::from_rgba8(74, 111, 158, 0.72), 0.85)
