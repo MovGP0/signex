@@ -22,4 +22,6 @@ pub enum SolveError {
     TouchstoneReadFailed { reason: String },
     #[error("touchstone write failed: {reason}")]
     TouchstoneWriteFailed { reason: String },
+    #[error("RF calculation failed: {reason}")]
+    RfCalculationFailed { reason: String },
 }

@@ -3,6 +3,8 @@ mod binary_tiling;
 mod chart_geometry;
 mod circuit_tokens;
 mod model;
+#[allow(dead_code)]
+mod rust_rf_adapter;
 mod svg;
 pub mod tool;
 mod touchstone;
@@ -41,6 +43,9 @@ mod binary_tiling_tests;
 #[cfg(test)]
 #[path = "../../tests/transmission_line_calculator/lib_tests.rs"]
 mod lib_tests;
+#[cfg(test)]
+#[path = "../../tests/transmission_line_calculator/rust_rf_adapter_tests.rs"]
+mod rust_rf_adapter_tests;
 #[cfg(test)]
 #[path = "../../tests/transmission_line_calculator/s_parameter_interpolation_tests.rs"]
 mod s_parameter_interpolation_tests;
