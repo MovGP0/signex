@@ -56,6 +56,18 @@ fn reflection_round_trips_to_impedance() {
     assert_close(restored.im, impedance.im);
 }
 
+/// Verifies that ideal open and short loads map to the Smith-chart boundary.
+#[test]
+fn open_and_short_loads_have_boundary_reflections() {
+    let open = impedance_to_reflection(Complex::new(f64::INFINITY, 0.0), 50.0);
+    let short = impedance_to_reflection(Complex::ZERO, 50.0);
+
+    assert_close(open.re, 1.0);
+    assert_close(open.im, 0.0);
+    assert_close(short.re, -1.0);
+    assert_close(short.im, 0.0);
+}
+
 /// Verifies that series inductor adds positive reactance.
 #[test]
 fn series_inductor_adds_positive_reactance() {
@@ -103,6 +115,41 @@ fn half_wave_transmission_line_preserves_load() {
 
     assert_close(result.impedance.re, 30.0);
     assert_close(result.impedance.im, 10.0);
+}
+
+/// Verifies that a quarter-wave line performs the expected impedance inversion.
+#[test]
+fn quarter_wave_transmission_line_inverts_load() {
+    let settings = SolveSettings {
+        frequency_hz: 1.0e9,
+        reference_impedance_ohm: 50.0,
+        velocity_factor: 1.0,
+    };
+    let quarter_wave_m = SPEED_OF_LIGHT_M_PER_S / (4.0 * settings.frequency_hz);
+    let line = CircuitElement::new("TL", ElementKind::TransmissionLine, quarter_wave_m);
+    let result = solve(Complex::new(100.0, 0.0), &[line], settings).unwrap();
+
+    assert_close(result.impedance.re, 25.0);
+    assert_close(result.impedance.im, 0.0);
+}
+
+/// Verifies that a half-wave open stub retains the singular-network error.
+#[test]
+fn half_wave_open_stub_is_singular() {
+    let settings = SolveSettings {
+        frequency_hz: 1.0e9,
+        reference_impedance_ohm: 50.0,
+        velocity_factor: 1.0,
+    };
+    let half_wave_m = SPEED_OF_LIGHT_M_PER_S / (2.0 * settings.frequency_hz);
+    let stub = CircuitElement::new("Stub", ElementKind::OpenStub, half_wave_m);
+
+    assert_eq!(
+        solve(Complex::new(50.0, 0.0), &[stub], settings),
+        Err(SolveError::SingularNetwork {
+            kind: ElementKind::OpenStub,
+        })
+    );
 }
 
 /// Verifies that smith chart analysis emits s2p stability circles.

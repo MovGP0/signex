@@ -1,3 +1,7 @@
+use crate::transmission_line_calculator::rust_rf_adapter::{
+    impedance_from_reflection as rust_rf_impedance_from_reflection,
+    reflection_coefficient as rust_rf_reflection_coefficient,
+};
 use crate::transmission_line_calculator::*;
 
 pub(crate) const SPEED_OF_LIGHT_M_PER_S: f64 = 299_792_458.0;
@@ -35,12 +39,10 @@ pub fn length_to_meters(
 
 /// Converts impedance to a reflection coefficient for the given reference impedance.
 pub fn impedance_to_reflection(impedance: Complex, reference_impedance_ohm: f64) -> Complex {
-    let z0 = Complex::new(reference_impedance_ohm, 0.0);
-    (impedance - z0) / (impedance + z0)
+    rust_rf_reflection_coefficient(impedance, reference_impedance_ohm)
 }
 
 /// Converts a reflection coefficient to impedance for the given reference impedance.
 pub fn reflection_to_impedance(gamma: Complex, reference_impedance_ohm: f64) -> Complex {
-    let z0 = Complex::new(reference_impedance_ohm, 0.0);
-    z0 * ((Complex::ONE + gamma) / (Complex::ONE - gamma))
+    rust_rf_impedance_from_reflection(gamma, reference_impedance_ohm)
 }

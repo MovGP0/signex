@@ -1,3 +1,6 @@
+use crate::transmission_line_calculator::rust_rf_adapter::{
+    lossless_line_input_impedance, standing_wave_ratio,
+};
 use crate::transmission_line_calculator::*;
 
 pub(crate) const TAU: f64 = std::f64::consts::PI * 2.0;
@@ -45,11 +48,7 @@ pub fn solve(
     } else {
         -20.0 * gamma_mag.log10()
     };
-    let vswr = if gamma_mag >= 1.0 {
-        f64::INFINITY
-    } else {
-        (1.0 + gamma_mag) / (1.0 - gamma_mag)
-    };
+    let vswr = standing_wave_ratio(reflection_coefficient);
 
     Ok(SolveResult {
         impedance,
@@ -237,11 +236,7 @@ fn solve_smith_chart_nominal(
         } else {
             -20.0 * gamma_mag.log10()
         },
-        vswr: if gamma_mag >= 1.0 {
-            f64::INFINITY
-        } else {
-            (1.0 + gamma_mag) / (1.0 - gamma_mag)
-        },
+        vswr: standing_wave_ratio(reflection_coefficient),
         chart_x: reflection_coefficient.re,
         chart_y: reflection_coefficient.im,
         steps,
@@ -1784,16 +1779,17 @@ fn transmission_line_with_dielectric(
     frequency_hz: f64,
     effective_dielectric: f64,
 ) -> Result<Complex, SolveError> {
-    let z0 = Complex::new(characteristic_impedance_ohm, 0.0);
     let beta_l = electrical_length_rad_at(length_m, frequency_hz, effective_dielectric);
-    let j_tan = Complex::new(0.0, beta_l.tan());
-    let denominator = z0 + load * j_tan;
-    if denominator.magnitude() <= f64::EPSILON {
+    if lossless_line_is_singular(load, characteristic_impedance_ohm, beta_l) {
         return Err(SolveError::SingularNetwork {
             kind: ElementKind::TransmissionLine,
         });
     }
-    Ok(z0 * ((load + z0 * j_tan) / denominator))
+    Ok(lossless_line_input_impedance(
+        load,
+        characteristic_impedance_ohm,
+        beta_l,
+    ))
 }
 
 /// Opens stub impedance at for the requested workflow.
@@ -1809,7 +1805,11 @@ fn open_stub_impedance_at(
             kind: ElementKind::OpenStub,
         });
     }
-    Ok(Complex::new(0.0, -characteristic_impedance_ohm / tan))
+    Ok(lossless_line_input_impedance(
+        Complex::new(f64::INFINITY, 0.0),
+        characteristic_impedance_ohm,
+        electrical_length_rad_at(length_m, frequency_hz, effective_dielectric),
+    ))
 }
 
 /// Computes shorted-stub impedance at the supplied frequency.
@@ -1819,10 +1819,10 @@ fn shorted_stub_impedance_at(
     frequency_hz: f64,
     effective_dielectric: f64,
 ) -> Complex {
-    Complex::new(
-        0.0,
-        characteristic_impedance_ohm
-            * electrical_length_rad_at(length_m, frequency_hz, effective_dielectric).tan(),
+    lossless_line_input_impedance(
+        Complex::ZERO,
+        characteristic_impedance_ohm,
+        electrical_length_rad_at(length_m, frequency_hz, effective_dielectric),
     )
 }
 
@@ -1887,16 +1887,17 @@ fn transmission_line(
     characteristic_impedance_ohm: f64,
     settings: SolveSettings,
 ) -> Result<Complex, SolveError> {
-    let z0 = Complex::new(characteristic_impedance_ohm, 0.0);
     let beta_l = electrical_length_rad(length_m, settings);
-    let j_tan = Complex::new(0.0, beta_l.tan());
-    let denominator = z0 + load * j_tan;
-    if denominator.magnitude() <= f64::EPSILON {
+    if lossless_line_is_singular(load, characteristic_impedance_ohm, beta_l) {
         return Err(SolveError::SingularNetwork {
             kind: ElementKind::TransmissionLine,
         });
     }
-    Ok(z0 * ((load + z0 * j_tan) / denominator))
+    Ok(lossless_line_input_impedance(
+        load,
+        characteristic_impedance_ohm,
+        beta_l,
+    ))
 }
 
 /// Opens stub impedance for the requested workflow.
@@ -1911,7 +1912,11 @@ fn open_stub_impedance(
             kind: ElementKind::OpenStub,
         });
     }
-    Ok(Complex::new(0.0, -characteristic_impedance_ohm / tan))
+    Ok(lossless_line_input_impedance(
+        Complex::new(f64::INFINITY, 0.0),
+        characteristic_impedance_ohm,
+        electrical_length_rad(length_m, settings),
+    ))
 }
 
 /// Computes the shorted stub complex impedance.
@@ -1920,10 +1925,21 @@ fn shorted_stub_impedance(
     characteristic_impedance_ohm: f64,
     settings: SolveSettings,
 ) -> Result<Complex, SolveError> {
-    Ok(Complex::new(
-        0.0,
-        characteristic_impedance_ohm * electrical_length_rad(length_m, settings).tan(),
+    Ok(lossless_line_input_impedance(
+        Complex::ZERO,
+        characteristic_impedance_ohm,
+        electrical_length_rad(length_m, settings),
     ))
+}
+
+fn lossless_line_is_singular(
+    load: Complex,
+    characteristic_impedance_ohm: f64,
+    electrical_length_rad: f64,
+) -> bool {
+    let z0 = Complex::new(characteristic_impedance_ohm, 0.0);
+    let j_tan = Complex::new(0.0, electrical_length_rad.tan());
+    (z0 + load * j_tan).magnitude() <= f64::EPSILON
 }
 
 /// Creates a solve step describing an element transformation.
