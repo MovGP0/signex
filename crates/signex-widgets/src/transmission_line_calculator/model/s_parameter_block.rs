@@ -150,6 +150,10 @@ impl SParameterBlock {
             .collect()
     }
 
+    pub(crate) const fn network(&self) -> &RfNetwork {
+        &self.network
+    }
+
     /// Returns a Cartesian-linear sample at the requested frequency.
     pub fn interpolate(&self, frequency_hz: f64) -> Option<SParameterPoint> {
         if !frequency_hz.is_finite() || self.network.frequency_points() == 0 {

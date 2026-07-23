@@ -1,5 +1,4 @@
 mod reader;
-mod touchstone_format;
 mod writer;
 
 #[cfg(test)]
@@ -7,5 +6,5 @@ mod writer;
 mod touchstone_tests;
 
 pub use reader::{parse_touchstone, read_touchstone};
-pub use touchstone_format::TouchstoneFormat;
+pub use rust_rf::io::TouchstoneFormat;
 pub use writer::{serialize_touchstone, write_touchstone};

@@ -331,6 +331,7 @@ fn serializes_and_parses_two_port_data_with_noise() {
     let block = two_port_block();
     let raw = serialize_touchstone(&block, TouchstoneFormat::MagnitudeAngle).unwrap();
 
+    assert!(raw.contains("# MHz S MA R 50"));
     assert!(raw.contains("[Two-Port Data Order] 21_12"));
     assert!(raw.contains("[Reference] 50 75"));
     assert!(raw.contains("[Number of Noise Frequencies] 1"));

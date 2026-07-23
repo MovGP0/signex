@@ -246,11 +246,7 @@ const fn scalar_frequency_unit(unit: FrequencyUnit) -> ScalarUnit {
 }
 
 fn decode_touchstone(bytes: &[u8]) -> String {
-    if let Ok(text) = std::str::from_utf8(bytes) {
-        text.to_owned()
-    } else {
-        bytes.iter().map(|byte| char::from(*byte)).collect()
-    }
+    bytes.iter().map(|byte| char::from(*byte)).collect()
 }
 
 fn touchstone_error(reason: impl Into<String>) -> SolveError {
