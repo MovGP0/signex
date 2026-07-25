@@ -110,6 +110,7 @@ pub enum GerberViewerMessage
     PanBy(iced::Vector),
     FitPage,
     ToggleLayerManager,
+    ToggleLayerInformation,
     SelectGridSize(usize),
     ToggleGridEditor,
     NewGridNameChanged(String),
@@ -151,6 +152,7 @@ pub struct GerberViewerState
     pub zoom: f32,
     pub pan: iced::Vector,
     pub layer_manager_visible: bool,
+    layer_information_visible: bool,
     grid_catalog: Vec<GridSizePreset>,
     active_grid_index: usize,
     grid_visible: bool,
@@ -195,6 +197,7 @@ impl Default for GerberViewerState
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
+            layer_information_visible: false,
             grid_catalog,
             active_grid_index,
             grid_visible: true,
@@ -340,6 +343,22 @@ impl GerberViewerState
     pub fn toggle_layer_manager(&mut self)
     {
         self.layer_manager_visible = !self.layer_manager_visible;
+    }
+
+    pub fn toggle_layer_information(&mut self)
+    {
+        self.layer_information_visible = !self.layer_information_visible;
+        if self.layer_information_visible
+        {
+            self.layer_manager_visible = true;
+        }
+    }
+
+    fn active_layer_metadata(&self) -> Option<signex_gerber::LayerMetadata>
+    {
+        self.active_layer
+            .and_then(|index| self.layers.get(index))
+            .map(|layer| layer.layer.metadata())
     }
 
     pub fn set_layer_visible(&mut self, index: usize, visible: bool)
@@ -843,6 +862,19 @@ pub fn view<'a>(
                 "Show Layers"
             }))
             .on_press(GerberViewerMessage::ToggleLayerManager),
+            button(text(if state.layer_information_visible
+            {
+                "Hide Layer Info"
+            }
+            else
+            {
+                "Layer Info"
+            }))
+            .on_press_maybe(
+                state
+                    .active_layer
+                    .map(|_| GerberViewerMessage::ToggleLayerInformation),
+            ),
             clear_current,
             clear_all,
             Space::new().width(Length::Fill),
@@ -1090,6 +1122,103 @@ pub fn view<'a>(
                 row![visible, label]
                     .spacing(5)
                     .align_y(iced::Alignment::Center),
+            );
+        }
+    }
+
+    if state.layer_information_visible
+    {
+        layer_list = layer_list.push(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(crate::styles::chrome_separator(tokens)),
+        );
+        if let Some(metadata) = state.active_layer_metadata()
+        {
+            let bounds = metadata
+                .bounds
+                .map(|bounds| {
+                    format_bounds_in_unit(
+                        bounds,
+                        state.display_unit,
+                        &state.decimal_separator,
+                    )
+                })
+                .unwrap_or_else(|| "Bounds: unavailable".to_owned());
+            let coordinate_format = metadata
+                .coordinate_format
+                .unwrap_or_else(|| "Unavailable".to_owned());
+            let definitions = if metadata.definitions.is_empty()
+            {
+                "None".to_owned()
+            }
+            else
+            {
+                metadata.definitions.join("\n")
+            };
+            let attributes = if metadata.attributes.is_empty()
+            {
+                "None".to_owned()
+            }
+            else
+            {
+                metadata.attributes.join("\n")
+            };
+            let warnings = if metadata.warnings.is_empty()
+            {
+                "None".to_owned()
+            }
+            else
+            {
+                metadata.warnings.join("\n")
+            };
+            layer_list = layer_list.push(
+                column![
+                    text("Active Layer Information")
+                        .size(13)
+                        .color(text_primary),
+                    text(format!("File: {}", metadata.file_name))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Source: {}", metadata.source))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Format: {}", metadata.format))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Role: {}", metadata.layer_role))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Units: {}", metadata.units))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Coordinate format: {coordinate_format}"))
+                        .size(10)
+                        .color(text_muted),
+                    text(bounds).size(10).color(text_muted),
+                    text(format!("Rendered primitives: {}", metadata.primitive_count))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("{}:\n{definitions}", metadata.definition_label))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Attributes:\n{attributes}"))
+                        .size(10)
+                        .color(text_muted),
+                    text(format!("Warnings:\n{warnings}"))
+                        .size(10)
+                        .color(text_muted),
+                ]
+                .spacing(4),
+            );
+        }
+        else
+        {
+            layer_list = layer_list.push(
+                text("No active layer")
+                    .size(10)
+                    .color(text_muted),
             );
         }
     }
@@ -2452,6 +2581,36 @@ mod tests
 
         state.toggle_layer_manager();
         assert!(state.layer_manager_visible);
+    }
+
+    #[test]
+    fn layer_information_handles_missing_and_active_layers()
+    {
+        let mut state = GerberViewerState::default();
+
+        assert_eq!(state.active_layer_metadata(), None);
+        state.toggle_layer_information();
+        assert!(state.layer_information_visible);
+        assert!(state.layer_manager_visible);
+
+        let layer = signex_gerber::load_gerber_reader(
+            "copper.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![layer],
+            failures: Vec::new(),
+        });
+
+        let metadata = state
+            .active_layer_metadata()
+            .expect("loaded active layer metadata");
+        assert_eq!(metadata.file_name, "copper.gbr");
+        assert_eq!(metadata.format, "Gerber RS-274X");
+        assert_eq!(metadata.definition_label, "Apertures");
     }
 
     #[test]
