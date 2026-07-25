@@ -328,6 +328,27 @@ impl Signex
                     .set_layer_color(index, palette_index);
                 Task::none()
             }
+            GerberViewerMessage::SetGridColor(palette_index) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_grid_color(palette_index);
+                Task::none()
+            }
+            GerberViewerMessage::SetDCodeColor(palette_index) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_d_code_color(palette_index);
+                Task::none()
+            }
+            GerberViewerMessage::SetNegativeObjectColor(palette_index) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_negative_object_color(palette_index);
+                Task::none()
+            }
             GerberViewerMessage::ClearCurrentLayer => {
                 self.ui_state.gerber_viewer.clear_current_layer();
                 Task::none()

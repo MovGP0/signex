@@ -1323,6 +1323,7 @@ pub(super) fn zoom_transform_for_selection(
 struct LayerPalette
 {
     negative_ghost_color: String,
+    grid_color: String,
     d_code_color: String,
     compare_colors: Vec<String>,
     layer_colors: Vec<String>,
@@ -1356,6 +1357,16 @@ pub(super) fn material_negative_ghost_color() -> Color
     ))
     .expect("bundled Material Design Gerber layer palette must parse");
     parse_hex_color(&palette.negative_ghost_color)
+        .unwrap_or_else(|| Color::from_rgb8(117, 117, 117))
+}
+
+pub(super) fn material_grid_color() -> Color
+{
+    let palette: LayerPalette = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/material-layer-colors.toml"
+    ))
+    .expect("bundled Material Design Gerber layer palette must parse");
+    parse_hex_color(&palette.grid_color)
         .unwrap_or_else(|| Color::from_rgb8(117, 117, 117))
 }
 

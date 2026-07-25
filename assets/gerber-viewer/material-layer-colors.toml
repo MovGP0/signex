@@ -14,6 +14,9 @@ palette_sources = [
 # Material Grey 600, selected by HSL distance from the source negative-object color.
 negative_ghost_color = "#757575"
 
+# Material Grey 600, selected by HSL distance from the source grid color.
+grid_color = "#757575"
+
 # Material Grey 50, selected by HSL distance from the source D-code color.
 d_code_color = "#FAFAFA"
 

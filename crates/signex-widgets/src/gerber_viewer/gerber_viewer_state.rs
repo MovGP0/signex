@@ -26,6 +26,7 @@ pub struct GerberViewerState
     pub(super) grid_catalog: Vec<GridSizePreset>,
     pub(super) active_grid_index: usize,
     pub(super) grid_visible: bool,
+    pub(super) grid_color: Color,
     pub(super) display_unit: GerberDisplayUnit,
     pub(super) cursor_world_position: Option<signex_gerber::Point>,
     pub(super) measurement_active: bool,
@@ -78,6 +79,17 @@ impl Default for GerberViewerState
         let edit_grid_y =
             format_distance_input(active_grid.y, &decimal_separator);
         let edit_grid_unit = active_grid.unit;
+        let grid_color = material_grid_color();
+        let negative_ghost_color = material_negative_ghost_color();
+        let d_code_color = material_d_code_color();
+        let mut palette = material_layer_palette();
+        for color in [grid_color, negative_ghost_color, d_code_color]
+        {
+            if !palette.contains(&color)
+            {
+                palette.push(color);
+            }
+        }
         Self {
             layers: Vec::new(),
             active_layer: None,
@@ -94,6 +106,7 @@ impl Default for GerberViewerState
             grid_catalog,
             active_grid_index,
             grid_visible: true,
+            grid_color,
             display_unit: GerberDisplayUnit::Millimetres,
             cursor_world_position: None,
             measurement_active: false,
@@ -102,9 +115,9 @@ impl Default for GerberViewerState
             sketch_lines: false,
             sketch_polygons: false,
             ghost_negative_objects: false,
-            negative_ghost_color: material_negative_ghost_color(),
+            negative_ghost_color,
             show_d_code_labels: false,
-            d_code_color: material_d_code_color(),
+            d_code_color,
             compare_mode: false,
             compare_palette: material_compare_palette(),
             dim_inactive_layers: false,
@@ -129,7 +142,7 @@ impl Default for GerberViewerState
             edit_grid_y,
             edit_grid_unit,
             grid_editor_error: None,
-            palette: material_layer_palette(),
+            palette,
         }
     }
 }

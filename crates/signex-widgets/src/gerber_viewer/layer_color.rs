@@ -57,6 +57,20 @@ impl GerberViewerState
             .find(|choice| choice.palette_index == palette_index)
     }
 
+    pub(super) fn selected_color_choice(
+        &self,
+        color: Color,
+    ) -> Option<GerberLayerColorChoice>
+    {
+        let palette_index = self
+            .palette
+            .iter()
+            .position(|candidate| *candidate == color)?;
+        self.layer_color_choices()
+            .into_iter()
+            .find(|choice| choice.palette_index == palette_index)
+    }
+
     pub fn set_layer_color(&mut self, layer_index: usize, palette_index: usize)
     {
         let Some(color) = self.palette.get(palette_index).copied() else

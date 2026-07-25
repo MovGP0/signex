@@ -567,6 +567,65 @@ pub fn view<'a>(
         }
     }
 
+    let item_color_choices = state.layer_color_choices();
+    let grid_color = state.selected_color_choice(state.grid_color);
+    let d_code_color = state.selected_color_choice(state.d_code_color);
+    let negative_color =
+        state.selected_color_choice(state.negative_ghost_color);
+    layer_list = layer_list
+        .push(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(styles::chrome_separator(tokens)),
+        )
+        .push(text("Item colors · Material Design").size(12).color(text_primary))
+        .push(
+            row![
+                text("Grid").size(11).width(70),
+                pick_list(
+                    item_color_choices.clone(),
+                    grid_color,
+                    |choice| GerberViewerMessage::SetGridColor(
+                        choice.palette_index,
+                    ),
+                )
+                .width(Length::Fill),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .push(
+            row![
+                text("D-codes").size(11).width(70),
+                pick_list(
+                    item_color_choices.clone(),
+                    d_code_color,
+                    |choice| GerberViewerMessage::SetDCodeColor(
+                        choice.palette_index,
+                    ),
+                )
+                .width(Length::Fill),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .push(
+            row![
+                text("Negative").size(11).width(70),
+                pick_list(
+                    item_color_choices,
+                    negative_color,
+                    |choice| GerberViewerMessage::SetNegativeObjectColor(
+                        choice.palette_index,
+                    ),
+                )
+                .width(Length::Fill),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        );
+
     if state.layer_information_visible
     {
         layer_list = layer_list.push(
@@ -728,7 +787,7 @@ pub fn view<'a>(
     let canvas_widget: Element<'_, GerberViewerMessage> = canvas(GerberCanvas {
         layers: &state.layers,
         background: canvas_bg,
-        grid: styles::ti(tokens.text_secondary),
+        grid: state.grid_color,
         grid_visible: state.grid_visible,
         full_window_crosshair: state.full_window_crosshair,
         page_size: state.page_size,

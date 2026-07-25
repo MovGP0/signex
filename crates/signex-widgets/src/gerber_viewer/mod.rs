@@ -20,6 +20,7 @@ mod display;
 mod gerber_viewer_state;
 mod grid;
 mod highlight;
+mod item_colors;
 mod layer_color;
 mod layer_order;
 mod measurement;
@@ -45,7 +46,7 @@ use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index}
 
 use viewport::{
     material_compare_palette, material_d_code_color, material_layer_palette,
-    material_negative_ghost_color, page_bounds, visible_bounds,
+    material_grid_color, material_negative_ghost_color, page_bounds, visible_bounds,
     zoom_transform_for_selection,
 };
 
@@ -89,6 +90,10 @@ mod gerber_layer_order_test_definitions;
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/layer_color.rs"]
 mod gerber_layer_color_test_definitions;
+
+#[cfg(test)]
+#[path = "../../tests/gerber_viewer/item_colors.rs"]
+mod gerber_item_color_test_definitions;
 
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/flash_outline.rs"]
@@ -136,6 +141,9 @@ gerber_layer_order_test_definitions::gerber_layer_order_tests!();
 
 #[cfg(test)]
 gerber_layer_color_test_definitions::gerber_layer_color_tests!();
+
+#[cfg(test)]
+gerber_item_color_test_definitions::gerber_item_color_tests!();
 
 #[cfg(test)]
 gerber_flash_outline_test_definitions::gerber_flash_outline_tests!();
