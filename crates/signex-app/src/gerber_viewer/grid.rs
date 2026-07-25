@@ -81,6 +81,21 @@ impl GridSizePreset
         }
     }
 
+    pub fn converted_to(&self, unit: GridUnit) -> Self
+    {
+        let (x, y) = match unit
+        {
+            GridUnit::Mil => (self.x_mils(), self.y_mils()),
+            GridUnit::Mm => (self.x_millimetres(), self.y_millimetres()),
+        };
+        Self {
+            name: self.name.clone(),
+            x,
+            y,
+            unit,
+        }
+    }
+
     pub fn display_label(&self, decimal_separator: &str) -> String
     {
         let mils = format_dimensions(
@@ -288,6 +303,11 @@ fn format_dimensions(
 fn format_decimal(value: f64, decimals: usize, decimal_separator: &str) -> String
 {
     format!("{value:.decimals$}").replace('.', decimal_separator)
+}
+
+pub(super) fn format_distance_input(value: f64, decimal_separator: &str) -> String
+{
+    value.to_string().replace('.', decimal_separator)
 }
 
 fn parse_distance(value: &str, decimal_separator: &str) -> Option<f64>
