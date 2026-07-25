@@ -4,15 +4,15 @@ use iced::widget::column;
 
 pub fn view<'a>(
     state: &'a GerberViewerState,
-    keymap: &'a crate::keymap::CompiledKeymap,
+    shortcut_resolver: &'a dyn GerberShortcutResolver,
     tokens: &ThemeTokens,
 ) -> Element<'a, GerberViewerMessage>
 {
-    let text_primary = crate::styles::ti(tokens.text);
-    let text_muted = crate::styles::ti(tokens.text_secondary);
-    let border = crate::styles::ti(tokens.border);
-    let panel_bg = crate::styles::ti(tokens.panel_bg);
-    let canvas_bg = crate::styles::ti(tokens.bg);
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let border = styles::ti(tokens.border);
+    let panel_bg = styles::ti(tokens.panel_bg);
+    let canvas_bg = styles::ti(tokens.bg);
 
     let open_button = button(text(if state.loading
     {
@@ -38,6 +38,14 @@ pub fn view<'a>(
         GerberViewerMessage::SetHighlightedComponent,
     )
     .placeholder("Highlight component")
+    .width(180);
+    let net_choices = state.net_choices();
+    let net_picker = pick_list(
+        net_choices,
+        state.highlighted_net().map(str::to_owned),
+        GerberViewerMessage::SetHighlightedNet,
+    )
+    .placeholder("Highlight net")
     .width(180);
 
     let toolbar = container(
@@ -141,6 +149,12 @@ pub fn view<'a>(
                     .highlighted_component()
                     .map(|_| GerberViewerMessage::ClearComponentHighlight),
             ),
+            net_picker,
+            button(text("Clear Net")).on_press_maybe(
+                state
+                    .highlighted_net()
+                    .map(|_| GerberViewerMessage::ClearNetHighlight),
+            ),
             clear_current,
             clear_all,
             Space::new().width(Length::Fill),
@@ -153,7 +167,7 @@ pub fn view<'a>(
     )
     .padding([6, 10])
     .width(Length::Fill)
-    .style(crate::styles::toolbar_strip(tokens));
+    .style(styles::toolbar_strip(tokens));
 
     let grid_choices = grid_size_choices(
         &state.grid_catalog,
@@ -234,7 +248,7 @@ pub fn view<'a>(
     )
     .padding([4, 10])
     .width(Length::Fill)
-    .style(crate::styles::toolbar_strip(tokens));
+    .style(styles::toolbar_strip(tokens));
     let grid_editor: Element<'_, GerberViewerMessage> = if state.grid_editor_open
     {
         let unit_picker = pick_list(
@@ -329,7 +343,7 @@ pub fn view<'a>(
         container(editor_content)
             .padding([6, 10])
             .width(Length::Fill)
-            .style(crate::styles::toolbar_strip(tokens))
+            .style(styles::toolbar_strip(tokens))
             .into()
     }
     else
@@ -342,7 +356,7 @@ pub fn view<'a>(
         container(Space::new())
             .width(Length::Fill)
             .height(1)
-            .style(crate::styles::chrome_separator(tokens)),
+            .style(styles::chrome_separator(tokens)),
     ]
     .spacing(6);
 
@@ -391,7 +405,7 @@ pub fn view<'a>(
             .width(Length::Fill)
             .padding([5, 6])
             .on_press(GerberViewerMessage::SelectLayer(index))
-            .style(crate::styles::rail_tab(tokens, active));
+            .style(styles::rail_tab(tokens, active));
             layer_list = layer_list.push(
                 row![visible, label]
                     .spacing(5)
@@ -406,7 +420,7 @@ pub fn view<'a>(
             container(Space::new())
                 .width(Length::Fill)
                 .height(1)
-                .style(crate::styles::chrome_separator(tokens)),
+                .style(styles::chrome_separator(tokens)),
         );
         if let Some(metadata) = state.active_layer_metadata()
         {
@@ -503,7 +517,7 @@ pub fn view<'a>(
             container(Space::new())
                 .width(Length::Fill)
                 .height(1)
-                .style(crate::styles::chrome_separator(tokens)),
+                .style(styles::chrome_separator(tokens)),
         );
         layer_list = layer_list.push(
             text("D-Codes and Drill Tools")
@@ -561,17 +575,18 @@ pub fn view<'a>(
     let canvas_widget: Element<'_, GerberViewerMessage> = canvas(GerberCanvas {
         layers: &state.layers,
         background: canvas_bg,
-        grid: crate::styles::ti(tokens.text_secondary),
+        grid: styles::ti(tokens.text_secondary),
         grid_visible: state.grid_visible,
         full_window_crosshair: state.full_window_crosshair,
         page_size: state.page_size,
         zoom_selection_active: state.zoom_selection_active,
         highlighted_component: state.highlighted_component(),
+        highlighted_net: state.highlighted_net(),
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,
         grid_size: state.active_grid(),
-        keymap,
+        shortcut_resolver,
     })
     .width(Length::Fill)
     .height(Length::Fill)
@@ -651,7 +666,7 @@ pub fn view<'a>(
     )
     .padding([4, 10])
     .width(Length::Fill)
-    .style(crate::styles::status_bar(tokens));
+    .style(styles::status_bar(tokens));
 
     column![
         toolbar,

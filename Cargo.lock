@@ -5642,9 +5642,16 @@ name = "signex-widgets"
 version = "0.15.0"
 dependencies = [
  "chrono",
+ "dirs",
  "iced",
  "iced_aw",
+ "pdf-writer",
+ "serde",
+ "signex-gerber",
  "signex-types",
+ "tempfile",
+ "toml 0.8.23",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

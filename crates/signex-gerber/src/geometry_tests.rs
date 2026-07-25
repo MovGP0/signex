@@ -69,3 +69,33 @@ M02*
         layer.geometry.primitive_attributes.len()
     );
 }
+
+#[test]
+fn associates_x2_nets_with_primitives_and_honors_deletion()
+{
+    let source = r#"%FSLAX46Y46*%
+%MOMM*%
+%ADD10C,1.000*%
+D10*
+%TO.N,GND,SIGNAL*%
+X0000000Y0000000D03*
+%TO.N,N/C*%
+X0100000Y0000000D03*
+%TD.N*%
+X0200000Y0000000D03*
+M02*
+"#;
+
+    let layer = load_gerber_reader("nets.gbr", Cursor::new(source))
+        .expect("X2 net Gerber must parse");
+    let nets = layer
+        .geometry
+        .primitive_attributes
+        .iter()
+        .map(|attributes| attributes.nets.as_slice())
+        .collect::<Vec<_>>();
+
+    assert_eq!(nets[0], ["GND", "SIGNAL"]);
+    assert_eq!(nets[1], ["N/C"]);
+    assert!(nets[2].is_empty());
+}

@@ -345,40 +345,6 @@ macro_rules! gerber_layer_state_tests
     }
 
     #[test]
-    fn built_in_profiles_bind_page_keys_in_gerber_context()
-    {
-        let mut profiles = crate::keymap::ShortcutProfileSet::built_ins()
-            .expect("built-in shortcut profiles must parse");
-        let page_up = keyboard::Key::Named(keyboard::key::Named::PageUp);
-        let page_down = keyboard::Key::Named(keyboard::key::Named::PageDown);
-
-        for profile in ["altium", "classic"]
-        {
-            profiles
-                .set_active_profile(profile)
-                .expect("known built-in profile");
-            let keymap = profiles.compile_active();
-
-            assert!(matches!(
-                gerber_shortcut_message(
-                    &keymap,
-                    &page_up,
-                    keyboard::Modifiers::default(),
-                ),
-                Some(GerberViewerMessage::PreviousLayer),
-            ));
-            assert!(matches!(
-                gerber_shortcut_message(
-                    &keymap,
-                    &page_down,
-                    keyboard::Modifiers::default(),
-                ),
-                Some(GerberViewerMessage::NextLayer),
-            ));
-        }
-    }
-
-    #[test]
     fn clearing_current_layer_preserves_siblings_and_selects_next_layer()
     {
         let layer = signex_gerber::load_gerber_reader(

@@ -296,7 +296,7 @@ pub struct UiState {
     /// Whether the Tools > Passive Network Calculator modal is open.
     pub passive_calculator_open: bool,
     /// Reusable state rendered by the dedicated Gerber Viewer window.
-    pub gerber_viewer: crate::gerber_viewer::GerberViewerState,
+    pub gerber_viewer: signex_widgets::gerber_viewer::GerberViewerState,
     /// Command palette state — query / dropdown open flag / selected
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.

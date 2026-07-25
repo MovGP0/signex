@@ -359,7 +359,18 @@ fn parse_distance(value: &str, decimal_separator: &str) -> Option<f64>
 
 fn grid_settings_path() -> Option<PathBuf>
 {
-    crate::config_root::config_root().map(|root| root.join(SETTINGS_FILE_NAME))
+    let root = if cfg!(test)
+    {
+        std::env::temp_dir().join(format!(
+            "signex-widget-test-prefs-{}",
+            std::process::id(),
+        ))
+    }
+    else
+    {
+        dirs::config_dir()?.join("signex")
+    };
+    Some(root.join(SETTINGS_FILE_NAME))
 }
 
 fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>

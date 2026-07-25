@@ -1,7 +1,34 @@
 use iced::Task;
 
 use super::super::*;
-use crate::gerber_viewer::GerberViewerMessage;
+use signex_widgets::gerber_viewer::{
+    GerberShortcutResolver, GerberViewerMessage,
+};
+
+impl GerberShortcutResolver for crate::keymap::CompiledKeymap
+{
+    fn resolve_gerber_shortcut(
+        &self,
+        key: &iced::keyboard::Key,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> Option<GerberViewerMessage>
+    {
+        let stroke = crate::keymap::KeyStroke::from_iced(key, modifiers)?;
+        let lookup = self.lookup(
+            &[stroke],
+            &[
+                crate::keymap::ShortcutContext::Global,
+                crate::keymap::ShortcutContext::Gerber,
+            ],
+        );
+        match lookup.command?.as_str()
+        {
+            "gerber_next_layer" => Some(GerberViewerMessage::NextLayer),
+            "gerber_previous_layer" => Some(GerberViewerMessage::PreviousLayer),
+            _ => None,
+        }
+    }
+}
 
 impl Signex
 {
@@ -454,12 +481,62 @@ impl Signex
                     .clear_component_highlight();
                 Task::none()
             }
+            GerberViewerMessage::SetHighlightedNet(net) => {
+                self.ui_state.gerber_viewer.set_highlighted_net(net);
+                Task::none()
+            }
+            GerberViewerMessage::ClearNetHighlight => {
+                self.ui_state.gerber_viewer.clear_net_highlight();
+                Task::none()
+            }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
                 self.ui_state
                     .gerber_viewer
                     .zoom_to_selection(bounds, viewport);
                 Task::none()
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    #[test]
+    fn built_in_profiles_bind_page_keys_through_widget_boundary()
+    {
+        let mut profiles = crate::keymap::ShortcutProfileSet::built_ins()
+            .expect("built-in shortcut profiles must parse");
+        let page_up = iced::keyboard::Key::Named(
+            iced::keyboard::key::Named::PageUp,
+        );
+        let page_down = iced::keyboard::Key::Named(
+            iced::keyboard::key::Named::PageDown,
+        );
+
+        for profile in ["altium", "classic"]
+        {
+            profiles
+                .set_active_profile(profile)
+                .expect("known built-in profile");
+            let keymap = profiles.compile_active();
+
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &page_up,
+                    iced::keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::PreviousLayer),
+            ));
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &page_down,
+                    iced::keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::NextLayer),
+            ));
         }
     }
 }

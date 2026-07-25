@@ -8,7 +8,7 @@ use lib_gerber_edit::gerber::GerberLayerData;
 use lib_gerber_edit::gerber_types::{
     Aperture, AttributeDeletionCriterion, Command, CommentContent, CoordinateMode,
     CoordinateOffset, Coordinates, DCode, ExtendedCode, FunctionCode, GCode,
-    InterpolationMode, ObjectAttribute, Operation, Polarity, StandardComment,
+    InterpolationMode, Net, ObjectAttribute, Operation, Polarity, StandardComment,
 };
 
 /// A point in Gerber world space, expressed in millimetres.
@@ -145,6 +145,7 @@ pub enum GerberPrimitive
 pub struct GerberObjectAttributes
 {
     pub component: Option<String>,
+    pub nets: Vec<String>,
 }
 
 /// Render-ready geometry extracted from a parsed Gerber layer.
@@ -376,9 +377,20 @@ impl GeometryState
 
     fn apply_object_attribute(&mut self, attribute: &ObjectAttribute)
     {
-        if let ObjectAttribute::Component(component) = attribute
+        match attribute
         {
-            self.object_attributes.component = Some(component.clone());
+            ObjectAttribute::Component(component) => {
+                self.object_attributes.component = Some(component.clone());
+            }
+            ObjectAttribute::Net(net) => {
+                self.object_attributes.nets = match net
+                {
+                    Net::None => Vec::new(),
+                    Net::NotConnected => vec!["N/C".into()],
+                    Net::Connected(nets) => nets.clone(),
+                };
+            }
+            _ => {}
         }
     }
 
@@ -393,6 +405,11 @@ impl GeometryState
                 if name == ".C" =>
             {
                 self.object_attributes.component = None;
+            }
+            AttributeDeletionCriterion::SingleObjectAttribute(name)
+                if name == ".N" =>
+            {
+                self.object_attributes.nets.clear();
             }
             _ => {}
         }

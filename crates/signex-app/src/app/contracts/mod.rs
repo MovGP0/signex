@@ -23,7 +23,7 @@ pub enum DragTarget {
 pub enum Message {
     Menu(MenuMessage),
     OpenGerberViewer,
-    GerberViewer(crate::gerber_viewer::GerberViewerMessage),
+    GerberViewer(signex_widgets::gerber_viewer::GerberViewerMessage),
     GerberViewerOpened(iced::window::Id),
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),

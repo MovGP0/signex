@@ -18,8 +18,9 @@ pub(super) struct GerberCanvas<'a>
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
     pub(super) highlighted_component: Option<&'a str>,
+    pub(super) highlighted_net: Option<&'a str>,
     pub(super) grid_size: &'a GridSizePreset,
-    pub(super) keymap: &'a crate::keymap::CompiledKeymap,
+    pub(super) shortcut_resolver: &'a dyn GerberShortcutResolver,
     pub(super) redraw_generation: u64,
     pub(super) zoom: f32,
     pub(super) pan: iced::Vector,
@@ -61,7 +62,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 key,
                 modifiers,
                 ..
-            }) => gerber_shortcut_message(self.keymap, key, *modifiers)
+            }) => gerber_shortcut_message(self.shortcut_resolver, key, *modifiers)
                 .map(|message| canvas::Action::publish(message).and_capture()),
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                 if !cursor.is_over(bounds)
@@ -264,6 +265,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 &world_to_screen,
                 self.background,
                 self.highlighted_component,
+                self.highlighted_net,
             );
         }
         if let (Some(start), Some(end)) = (
@@ -456,6 +458,7 @@ pub(super) fn draw_layer(
     world_to_screen: &impl Fn(signex_gerber::Point) -> Point,
     background: Color,
     highlighted_component: Option<&str>,
+    highlighted_net: Option<&str>,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -465,14 +468,20 @@ pub(super) fn draw_layer(
         .iter()
         .enumerate()
     {
-        let dark_color = component_highlight_color(
+        let attributes = viewer_layer
+            .layer
+            .geometry
+            .primitive_attributes
+            .get(primitive_index);
+        let component_color = component_highlight_color(
             viewer_layer.color,
-            viewer_layer
-                .layer
-                .geometry
-                .primitive_attributes
-                .get(primitive_index),
+            attributes,
             highlighted_component,
+        );
+        let dark_color = net_highlight_color(
+            component_color,
+            attributes,
+            highlighted_net,
         );
         let polarity_color = |polarity: PrimitivePolarity| match polarity
         {

@@ -22,6 +22,7 @@ mod highlight;
 mod message;
 pub(crate) mod print;
 mod shortcuts;
+mod styles;
 mod view;
 
 #[path = "canvas.rs"]
@@ -30,6 +31,7 @@ mod viewport;
 pub use display::{GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
 pub use message::GerberViewerMessage;
+pub use shortcuts::GerberShortcutResolver;
 pub use view::view;
 
 use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index};
@@ -46,7 +48,7 @@ use grid::{
     format_distance_input, grid_size_choices, load_grid_catalog, load_page_size,
     persist_grid_catalog, persist_page_size, system_decimal_separator,
 };
-use highlight::component_highlight_color;
+use highlight::{component_highlight_color, net_highlight_color};
 
 const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;

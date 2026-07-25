@@ -65,9 +65,11 @@ macro_rules! gerber_highlight_tests
                 let layer_color = Color::from_rgb8(33, 150, 243);
                 let matching = signex_gerber::GerberObjectAttributes {
                     component: Some("R1".into()),
+                    ..Default::default()
                 };
                 let other = signex_gerber::GerberObjectAttributes {
                     component: Some("C2".into()),
+                    ..Default::default()
                 };
 
                 let highlighted = component_highlight_color(

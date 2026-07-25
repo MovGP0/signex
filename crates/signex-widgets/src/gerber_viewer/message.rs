@@ -60,6 +60,8 @@ pub enum GerberViewerMessage
     ToggleZoomSelection,
     SetHighlightedComponent(String),
     ClearComponentHighlight,
+    SetHighlightedNet(String),
+    ClearNetHighlight,
     ZoomToSelection
     {
         bounds: Bounds,
