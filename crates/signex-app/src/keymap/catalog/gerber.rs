@@ -89,4 +89,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_clear_highlight",
+        category: "display",
+        label: "Clear Gerber highlight",
+        menu_label: Some("Clear Highlight"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];

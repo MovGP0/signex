@@ -55,6 +55,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ToggleMirrored)
             }
+            "gerber_clear_highlight" =>
+            {
+                Some(GerberViewerMessage::ClearHighlight)
+            }
             _ => None,
         }
     }
@@ -644,6 +648,11 @@ impl Signex
                 self.ui_state
                     .gerber_viewer
                     .clear_d_code_highlight();
+                Task::none()
+            }
+            GerberViewerMessage::ClearHighlight =>
+            {
+                self.ui_state.gerber_viewer.clear_highlight();
                 Task::none()
             }
             GerberViewerMessage::SetSelectedItem(selection) =>

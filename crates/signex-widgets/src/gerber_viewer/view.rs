@@ -265,28 +265,13 @@ pub fn view<'a>(
                     .map(|_| GerberViewerMessage::ToggleSourceView),
             ),
             component_picker,
-            button(text("Clear Component")).on_press_maybe(
-                state
-                    .highlighted_component()
-                    .map(|_| GerberViewerMessage::ClearComponentHighlight),
-            ),
             net_picker,
-            button(text("Clear Net")).on_press_maybe(
-                state
-                    .highlighted_net()
-                    .map(|_| GerberViewerMessage::ClearNetHighlight),
-            ),
             attribute_picker,
-            button(text("Clear Attribute")).on_press_maybe(
-                state
-                    .highlighted_attribute()
-                    .map(|_| GerberViewerMessage::ClearAttributeHighlight),
-            ),
             d_code_picker,
-            button(text("Clear D-code")).on_press_maybe(
+            button(text("Clear Highlight")).on_press_maybe(
                 state
-                    .highlighted_d_code()
-                    .map(|_| GerberViewerMessage::ClearDCodeHighlight),
+                    .has_active_highlight()
+                    .then_some(GerberViewerMessage::ClearHighlight),
             ),
             clear_current,
             clear_all,

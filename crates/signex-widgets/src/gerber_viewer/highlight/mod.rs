@@ -8,6 +8,7 @@ const HIGHLIGHT_COLOR: Color = Color::from_rgb(
 const NON_MATCHING_ALPHA: f32 = 0.18;
 
 mod attribute;
+mod clear;
 mod component;
 mod d_code;
 mod net;

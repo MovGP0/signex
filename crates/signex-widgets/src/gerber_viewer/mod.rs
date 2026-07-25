@@ -96,6 +96,10 @@ mod gerber_layer_color_test_definitions;
 mod gerber_item_color_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/clear_highlight.rs"]
+mod gerber_clear_highlight_test_definitions;
+
+#[cfg(test)]
 #[path = "../../tests/gerber_viewer/flash_outline.rs"]
 mod gerber_flash_outline_test_definitions;
 
@@ -144,6 +148,9 @@ gerber_layer_color_test_definitions::gerber_layer_color_tests!();
 
 #[cfg(test)]
 gerber_item_color_test_definitions::gerber_item_color_tests!();
+
+#[cfg(test)]
+gerber_clear_highlight_test_definitions::gerber_clear_highlight_tests!();
 
 #[cfg(test)]
 gerber_flash_outline_test_definitions::gerber_flash_outline_tests!();
