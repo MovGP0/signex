@@ -438,6 +438,16 @@ impl Signex
                 };
                 Task::none()
             }
+            GerberViewerMessage::ToggleZoomSelection => {
+                self.ui_state.gerber_viewer.toggle_zoom_selection();
+                Task::none()
+            }
+            GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
+                self.ui_state
+                    .gerber_viewer
+                    .zoom_to_selection(bounds, viewport);
+                Task::none()
+            }
         }
     }
 }
