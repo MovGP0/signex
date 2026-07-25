@@ -51,6 +51,8 @@ pub enum GerberViewerMessage
     SetNewGridUnitMillimetres(bool),
     CreateGridDefinition,
     DeleteGridDefinition,
+    MoveGridUp,
+    MoveGridDown,
 }
 
 #[derive(Debug, Clone)]
@@ -320,6 +322,16 @@ impl GerberViewerState
         self.delete_grid_with(persist_grid_catalog);
     }
 
+    pub fn move_grid_up(&mut self)
+    {
+        self.move_grid_up_with(persist_grid_catalog);
+    }
+
+    pub fn move_grid_down(&mut self)
+    {
+        self.move_grid_down_with(persist_grid_catalog);
+    }
+
     fn create_grid_with(
         &mut self,
         persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
@@ -387,6 +399,53 @@ impl GerberViewerState
             self.active_grid_index.min(self.grid_catalog.len() - 1);
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
         self.status = format!("Deleted grid: {removed_label}");
+        self.grid_editor_error = None;
+    }
+
+    fn move_grid_up_with(
+        &mut self,
+        persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
+    )
+    {
+        let Some(target_index) = self.active_grid_index.checked_sub(1) else
+        {
+            return;
+        };
+        self.move_grid_to_with(target_index, persist);
+    }
+
+    fn move_grid_down_with(
+        &mut self,
+        persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
+    )
+    {
+        let target_index = self.active_grid_index + 1;
+        if target_index >= self.grid_catalog.len()
+        {
+            return;
+        }
+        self.move_grid_to_with(target_index, persist);
+    }
+
+    fn move_grid_to_with(
+        &mut self,
+        target_index: usize,
+        persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
+    )
+    {
+        let moved_label = self.active_grid().display_label(&self.decimal_separator);
+        let mut catalog = self.grid_catalog.clone();
+        catalog.swap(self.active_grid_index, target_index);
+        if let Err(error) = persist(&catalog)
+        {
+            self.grid_editor_error = Some(error);
+            return;
+        }
+
+        self.grid_catalog = catalog;
+        self.active_grid_index = target_index;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = format!("Moved grid: {moved_label}");
         self.grid_editor_error = None;
     }
 }
@@ -522,6 +581,16 @@ pub fn view<'a>(
                 .on_press_maybe(
                     (state.grid_catalog.len() > 1)
                         .then_some(GerberViewerMessage::DeleteGridDefinition),
+                ),
+            button(text("Move up"))
+                .on_press_maybe(
+                    (state.active_grid_index > 0)
+                        .then_some(GerberViewerMessage::MoveGridUp),
+                ),
+            button(text("Move down"))
+                .on_press_maybe(
+                    (state.active_grid_index + 1 < state.grid_catalog.len())
+                        .then_some(GerberViewerMessage::MoveGridDown),
                 ),
             Space::new().width(Length::Fill),
         ]
@@ -1337,6 +1406,73 @@ mod tests
         let original_catalog = state.grid_catalog.clone();
 
         state.delete_grid_with(|_| Err("settings unavailable".to_owned()));
+
+        assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(state.active_grid_index, 1);
+        assert_eq!(
+            state.grid_editor_error.as_deref(),
+            Some("settings unavailable")
+        );
+    }
+
+    #[test]
+    fn moving_grid_up_and_down_preserves_selected_definition()
+    {
+        let mut state = GerberViewerState::default();
+        state.grid_catalog = grid::default_grid_catalog()[0..3].to_vec();
+        state.active_grid_index = 1;
+        let original_catalog = state.grid_catalog.clone();
+        let selected = state.active_grid().clone();
+        let mut persisted = Vec::new();
+
+        state.move_grid_up_with(|catalog| {
+            persisted = catalog.to_vec();
+            Ok(())
+        });
+
+        assert_eq!(state.grid_catalog, persisted);
+        assert_eq!(state.active_grid_index, 0);
+        assert_eq!(state.active_grid(), &selected);
+        assert_eq!(state.grid_catalog[1], original_catalog[0]);
+
+        state.move_grid_down_with(|catalog| {
+            persisted = catalog.to_vec();
+            Ok(())
+        });
+
+        assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(state.grid_catalog, persisted);
+        assert_eq!(state.active_grid_index, 1);
+        assert_eq!(state.active_grid(), &selected);
+    }
+
+    #[test]
+    fn moving_grid_at_boundary_is_a_no_op()
+    {
+        let mut state = GerberViewerState::default();
+        state.grid_catalog = grid::default_grid_catalog()[0..3].to_vec();
+        let original_catalog = state.grid_catalog.clone();
+        let original_generation = state.redraw_generation;
+
+        state.active_grid_index = 0;
+        state.move_grid_up_with(|_| panic!("upper boundary must not persist"));
+        state.active_grid_index = state.grid_catalog.len() - 1;
+        state.move_grid_down_with(|_| panic!("lower boundary must not persist"));
+
+        assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(state.active_grid_index, 2);
+        assert_eq!(state.redraw_generation, original_generation);
+    }
+
+    #[test]
+    fn failed_grid_move_does_not_change_catalog_or_selection()
+    {
+        let mut state = GerberViewerState::default();
+        state.grid_catalog = grid::default_grid_catalog()[0..3].to_vec();
+        state.active_grid_index = 1;
+        let original_catalog = state.grid_catalog.clone();
+
+        state.move_grid_up_with(|_| Err("settings unavailable".to_owned()));
 
         assert_eq!(state.grid_catalog, original_catalog);
         assert_eq!(state.active_grid_index, 1);

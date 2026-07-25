@@ -178,6 +178,14 @@ impl Signex
                 self.ui_state.gerber_viewer.delete_grid();
                 Task::none()
             }
+            GerberViewerMessage::MoveGridUp => {
+                self.ui_state.gerber_viewer.move_grid_up();
+                Task::none()
+            }
+            GerberViewerMessage::MoveGridDown => {
+                self.ui_state.gerber_viewer.move_grid_down();
+                Task::none()
+            }
         }
     }
 }
