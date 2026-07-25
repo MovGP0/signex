@@ -14,7 +14,7 @@ macro_rules! gerber_ghost_negatives_tests
             {
                 let dark = Color::from_rgb8(211, 47, 47);
                 let background = Color::from_rgb8(20, 20, 20);
-                let ghost = Color::from_rgb8(120, 144, 156);
+                let ghost = Color::from_rgb8(117, 117, 117);
 
                 assert_eq!(
                     primitive_polarity_color(
@@ -55,7 +55,7 @@ macro_rules! gerber_ghost_negatives_tests
                         state.negative_ghost_color,
                         true,
                     ),
-                    Color::from_rgb8(120, 144, 156)
+                    Color::from_rgb8(117, 117, 117)
                 );
                 assert_eq!(state.redraw_generation, generation + 1);
             }

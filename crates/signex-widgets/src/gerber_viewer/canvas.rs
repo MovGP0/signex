@@ -1164,7 +1164,7 @@ pub(super) fn material_negative_ghost_color() -> Color
     ))
     .expect("bundled Material Design Gerber layer palette must parse");
     parse_hex_color(&palette.negative_ghost_color)
-        .unwrap_or_else(|| Color::from_rgb8(120, 144, 156))
+        .unwrap_or_else(|| Color::from_rgb8(117, 117, 117))
 }
 
 pub(super) fn parse_hex_color(value: &str) -> Option<Color>
