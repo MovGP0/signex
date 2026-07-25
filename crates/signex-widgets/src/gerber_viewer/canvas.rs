@@ -19,6 +19,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) zoom_selection_active: bool,
     pub(super) measurement_active: bool,
     pub(super) measurement: Option<GerberMeasurement>,
+    pub(super) sketch_flashes: bool,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -323,6 +324,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 highlighted_d_code,
                 self.selected_item,
                 layer_index,
+                self.sketch_flashes,
             );
         }
         if let Some(measurement) = self.measurement
@@ -529,6 +531,7 @@ pub(super) fn draw_layer(
     highlighted_d_code: Option<i32>,
     selected_item: Option<GerberItemSelection>,
     layer_index: usize,
+    sketch_flashes: bool,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -613,6 +616,7 @@ pub(super) fn draw_layer(
                     aperture,
                     scale,
                     polarity_color(*polarity),
+                    flash_render_mode(sketch_flashes),
                 );
             }
             GerberPrimitive::Region { points, polarity } => {
@@ -666,14 +670,20 @@ pub(super) fn draw_flash(
     aperture: &ApertureShape,
     scale: f32,
     color: Color,
+    render_mode: FlashRenderMode,
 )
 {
     match aperture
     {
         ApertureShape::Circle { diameter } => {
-            frame.fill(
-                &canvas::Path::circle(center, (*diameter as f32 * scale / 2.0).max(0.5)),
+            paint_flash_path(
+                frame,
+                &canvas::Path::circle(
+                    center,
+                    (*diameter as f32 * scale / 2.0).max(0.5),
+                ),
                 color,
+                render_mode,
             );
         }
         ApertureShape::Rectangle { width, height }
@@ -682,12 +692,14 @@ pub(super) fn draw_flash(
                 (*width as f32 * scale).max(1.0),
                 (*height as f32 * scale).max(1.0),
             );
-            frame.fill(
+            paint_flash_path(
+                frame,
                 &canvas::Path::rectangle(
                     Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
                     size,
                 ),
                 color,
+                render_mode,
             );
         }
         ApertureShape::Polygon {
@@ -718,10 +730,56 @@ pub(super) fn draw_flash(
                 }
                 builder.close();
             });
-            frame.fill(&path, color);
+            paint_flash_path(frame, &path, color, render_mode);
         }
         ApertureShape::Macro { .. } => {
-            frame.fill(&canvas::Path::circle(center, (0.075 * scale).max(1.5)), color);
+            paint_flash_path(
+                frame,
+                &canvas::Path::circle(center, (0.075 * scale).max(1.5)),
+                color,
+                render_mode,
+            );
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FlashRenderMode
+{
+    Filled,
+    Outline,
+}
+
+pub(super) fn flash_render_mode(sketch_flashes: bool) -> FlashRenderMode
+{
+    if sketch_flashes
+    {
+        FlashRenderMode::Outline
+    }
+    else
+    {
+        FlashRenderMode::Filled
+    }
+}
+
+fn paint_flash_path(
+    frame: &mut canvas::Frame,
+    path: &canvas::Path,
+    color: Color,
+    render_mode: FlashRenderMode,
+)
+{
+    match render_mode
+    {
+        FlashRenderMode::Filled => frame.fill(path, color),
+        FlashRenderMode::Outline =>
+        {
+            frame.stroke(
+                path,
+                canvas::Stroke::default()
+                    .with_color(color)
+                    .with_width(1.0),
+            );
         }
     }
 }

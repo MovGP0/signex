@@ -91,6 +91,15 @@ pub fn view<'a>(
                     GerberViewerMessage::OpenExcellonFiles,
                 )),
             button(text("Redraw")).on_press(GerberViewerMessage::RedrawViewport),
+            button(text(if state.sketch_flashes
+            {
+                "Fill Flashes"
+            }
+            else
+            {
+                "Sketch Flashes (F)"
+            }))
+            .on_press(GerberViewerMessage::ToggleSketchFlashes),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -637,6 +646,7 @@ pub fn view<'a>(
         zoom_selection_active: state.zoom_selection_active,
         measurement_active: state.measurement_active(),
         measurement: state.measurement(),
+        sketch_flashes: state.sketch_flashes,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

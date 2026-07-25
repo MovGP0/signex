@@ -25,6 +25,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
         {
             "gerber_next_layer" => Some(GerberViewerMessage::NextLayer),
             "gerber_previous_layer" => Some(GerberViewerMessage::PreviousLayer),
+            "gerber_sketch_flashes" =>
+            {
+                Some(GerberViewerMessage::ToggleSketchFlashes)
+            }
             _ => None,
         }
     }
@@ -293,6 +297,11 @@ impl Signex
                 self.ui_state.gerber_viewer.redraw_viewport();
                 Task::none()
             }
+            GerberViewerMessage::ToggleSketchFlashes =>
+            {
+                self.ui_state.gerber_viewer.toggle_sketch_flashes();
+                Task::none()
+            }
             GerberViewerMessage::ZoomBy(factor) => {
                 self.ui_state.gerber_viewer.zoom_by(factor);
                 Task::none()
@@ -557,7 +566,7 @@ mod tests
     use super::*;
 
     #[test]
-    fn built_in_profiles_bind_page_keys_through_widget_boundary()
+    fn built_in_profiles_bind_gerber_keys_through_widget_boundary()
     {
         let mut profiles = crate::keymap::ShortcutProfileSet::built_ins()
             .expect("built-in shortcut profiles must parse");
@@ -567,6 +576,7 @@ mod tests
         let page_down = iced::keyboard::Key::Named(
             iced::keyboard::key::Named::PageDown,
         );
+        let f = iced::keyboard::Key::Character("f".into());
 
         for profile in ["altium", "classic"]
         {
@@ -588,6 +598,13 @@ mod tests
                     iced::keyboard::Modifiers::default(),
                 ),
                 Some(GerberViewerMessage::NextLayer),
+            ));
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &f,
+                    iced::keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::ToggleSketchFlashes),
             ));
         }
     }

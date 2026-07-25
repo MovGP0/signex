@@ -78,6 +78,10 @@ mod gerber_grid_state_test_definitions;
 mod gerber_layer_state_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/flash_outline.rs"]
+mod gerber_flash_outline_test_definitions;
+
+#[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
 
 #[cfg(test)]
@@ -85,3 +89,6 @@ gerber_grid_state_test_definitions::gerber_grid_state_tests!();
 
 #[cfg(test)]
 gerber_layer_state_test_definitions::gerber_layer_state_tests!();
+
+#[cfg(test)]
+gerber_flash_outline_test_definitions::gerber_flash_outline_tests!();

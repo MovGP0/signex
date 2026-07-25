@@ -30,6 +30,7 @@ pub struct GerberViewerState
     pub(super) cursor_world_position: Option<signex_gerber::Point>,
     pub(super) measurement_active: bool,
     pub(super) measurement: Option<GerberMeasurement>,
+    pub(super) sketch_flashes: bool,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -86,6 +87,7 @@ impl Default for GerberViewerState
             cursor_world_position: None,
             measurement_active: false,
             measurement: None,
+            sketch_flashes: false,
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -818,5 +820,19 @@ impl GerberViewerState
         self.edit_grid_y =
             format_distance_input(grid.y, &self.decimal_separator);
         self.edit_grid_unit = grid.unit;
+    }
+
+    pub fn toggle_sketch_flashes(&mut self)
+    {
+        self.sketch_flashes = !self.sketch_flashes;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.sketch_flashes
+        {
+            "Flashed items shown in outline mode.".into()
+        }
+        else
+        {
+            "Flashed items shown filled.".into()
+        };
     }
 }

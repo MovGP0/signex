@@ -108,3 +108,4 @@ context = "gerber"
 [keyboard_shortcuts.sections.bindings]
 "PageUp" = "gerber_previous_layer"
 "PageDown" = "gerber_next_layer"
+"F" = "gerber_sketch_flashes"
