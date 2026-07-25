@@ -174,6 +174,10 @@ impl Signex
                 self.ui_state.gerber_viewer.create_grid();
                 Task::none()
             }
+            GerberViewerMessage::DeleteGridDefinition => {
+                self.ui_state.gerber_viewer.delete_grid();
+                Task::none()
+            }
         }
     }
 }

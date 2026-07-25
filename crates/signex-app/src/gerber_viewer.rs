@@ -50,6 +50,7 @@ pub enum GerberViewerMessage
     NewGridYChanged(String),
     SetNewGridUnitMillimetres(bool),
     CreateGridDefinition,
+    DeleteGridDefinition,
 }
 
 #[derive(Debug, Clone)]
@@ -314,6 +315,11 @@ impl GerberViewerState
         self.create_grid_with(persist_grid_catalog);
     }
 
+    pub fn delete_grid(&mut self)
+    {
+        self.delete_grid_with(persist_grid_catalog);
+    }
+
     fn create_grid_with(
         &mut self,
         persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
@@ -352,6 +358,35 @@ impl GerberViewerState
         self.new_grid_name.clear();
         self.new_grid_x.clear();
         self.new_grid_y.clear();
+        self.grid_editor_error = None;
+    }
+
+    fn delete_grid_with(
+        &mut self,
+        persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
+    )
+    {
+        if self.grid_catalog.len() <= 1
+        {
+            self.grid_editor_error =
+                Some("At least one grid definition must remain.".to_owned());
+            return;
+        }
+
+        let removed_label = self.active_grid().display_label(&self.decimal_separator);
+        let mut catalog = self.grid_catalog.clone();
+        catalog.remove(self.active_grid_index);
+        if let Err(error) = persist(&catalog)
+        {
+            self.grid_editor_error = Some(error);
+            return;
+        }
+
+        self.grid_catalog = catalog;
+        self.active_grid_index =
+            self.active_grid_index.min(self.grid_catalog.len() - 1);
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = format!("Deleted grid: {removed_label}");
         self.grid_editor_error = None;
     }
 }
@@ -483,6 +518,11 @@ pub fn view<'a>(
             unit_picker,
             button(text("Create"))
                 .on_press(GerberViewerMessage::CreateGridDefinition),
+            button(text("Delete selected"))
+                .on_press_maybe(
+                    (state.grid_catalog.len() > 1)
+                        .then_some(GerberViewerMessage::DeleteGridDefinition),
+                ),
             Space::new().width(Length::Fill),
         ]
         .spacing(8)
@@ -1233,6 +1273,73 @@ mod tests
         state.create_grid_with(|_| Err("settings unavailable".to_owned()));
 
         assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(
+            state.grid_editor_error.as_deref(),
+            Some("settings unavailable")
+        );
+    }
+
+    #[test]
+    fn deleting_grid_persists_catalog_and_selects_next_entry()
+    {
+        let mut state = GerberViewerState::default();
+        state.grid_catalog = grid::default_grid_catalog()[0..3].to_vec();
+        state.active_grid_index = 1;
+        let removed = state.grid_catalog[1].clone();
+        let next = state.grid_catalog[2].clone();
+        let initial_generation = state.redraw_generation;
+        let mut persisted = Vec::new();
+
+        state.delete_grid_with(|catalog| {
+            persisted = catalog.to_vec();
+            Ok(())
+        });
+
+        assert_eq!(state.grid_catalog, persisted);
+        assert_eq!(state.grid_catalog.len(), 2);
+        assert!(!state.grid_catalog.contains(&removed));
+        assert_eq!(state.active_grid_index, 1);
+        assert_eq!(state.active_grid(), &next);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
+        assert!(state.status.starts_with("Deleted grid: "));
+        assert_eq!(state.grid_editor_error, None);
+    }
+
+    #[test]
+    fn deleting_final_grid_selects_previous_and_never_empties_catalog()
+    {
+        let mut state = GerberViewerState::default();
+        state.grid_catalog = grid::default_grid_catalog()[0..2].to_vec();
+        state.active_grid_index = 1;
+        let previous = state.grid_catalog[0].clone();
+
+        state.delete_grid_with(|_| Ok(()));
+
+        assert_eq!(state.grid_catalog, vec![previous.clone()]);
+        assert_eq!(state.active_grid_index, 0);
+        assert_eq!(state.active_grid(), &previous);
+
+        state.delete_grid_with(|_| panic!("last grid must not persist"));
+
+        assert_eq!(state.grid_catalog, vec![previous]);
+        assert_eq!(
+            state.grid_editor_error.as_deref(),
+            Some("At least one grid definition must remain.")
+        );
+    }
+
+    #[test]
+    fn failed_grid_deletion_does_not_change_catalog_or_selection()
+    {
+        let mut state = GerberViewerState::default();
+        state.grid_catalog = grid::default_grid_catalog()[0..3].to_vec();
+        state.active_grid_index = 1;
+        let original_catalog = state.grid_catalog.clone();
+
+        state.delete_grid_with(|_| Err("settings unavailable".to_owned()));
+
+        assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(state.active_grid_index, 1);
         assert_eq!(
             state.grid_editor_error.as_deref(),
             Some("settings unavailable")
