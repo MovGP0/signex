@@ -1,0 +1,79 @@
+# Default Gerber layer-slot palette.
+# These are Material Design colors and are intentionally independent of the GUI theme.
+# The source palette supplies slot order and HSL matching inputs only; its RGB values are not stored here.
+# Distance = sqrt((circular hue delta / 180 * average saturation)^2
+#               + saturation delta^2 + lightness delta^2).
+
+version = 1
+color_space = "hsl"
+palette_sources = [
+  "https://htmlcolorcodes.com/color-chart/material-design-color-chart/",
+  "https://www.materialpalette.com/colors",
+]
+
+layer_colors = [
+  "#D32F2F", # 01 Material Red 700
+  "#81C784", # 02 Material Green 300
+  "#D32F2F", # 03 Material Red 700
+  "#4DB6AC", # 04 Material Teal 300
+  "#E57373", # 05 Material Red 300
+  "#B0BEC5", # 06 Material Blue Grey 200
+  "#26C6DA", # 07 Material Cyan 400
+  "#EF9A9A", # 08 Material Red 200
+  "#E6EE9C", # 09 Material Lime 200
+  "#81C784", # 10 Material Green 300
+  "#E64A19", # 11 Material Deep Orange 700
+  "#4DD0E1", # 12 Material Cyan 300
+  "#F06292", # 13 Material Pink 300
+  "#3F51B5", # 14 Material Indigo 500
+  "#D32F2F", # 15 Material Red 700
+  "#81C784", # 16 Material Green 300
+  "#D32F2F", # 17 Material Red 700
+  "#4DB6AC", # 18 Material Teal 300
+  "#E57373", # 19 Material Red 300
+  "#B0BEC5", # 20 Material Blue Grey 200
+  "#26C6DA", # 21 Material Cyan 400
+  "#EF9A9A", # 22 Material Red 200
+  "#E6EE9C", # 23 Material Lime 200
+  "#81C784", # 24 Material Green 300
+  "#E64A19", # 25 Material Deep Orange 700
+  "#4DD0E1", # 26 Material Cyan 300
+  "#F06292", # 27 Material Pink 300
+  "#3F51B5", # 28 Material Indigo 500
+  "#D32F2F", # 29 Material Red 700
+  "#81C784", # 30 Material Green 300
+  "#D32F2F", # 31 Material Red 700
+  "#4DB6AC", # 32 Material Teal 300
+  "#E57373", # 33 Material Red 300
+  "#B0BEC5", # 34 Material Blue Grey 200
+  "#26C6DA", # 35 Material Cyan 400
+  "#EF9A9A", # 36 Material Red 200
+  "#E6EE9C", # 37 Material Lime 200
+  "#81C784", # 38 Material Green 300
+  "#E64A19", # 39 Material Deep Orange 700
+  "#4DD0E1", # 40 Material Cyan 300
+  "#F06292", # 41 Material Pink 300
+  "#3F51B5", # 42 Material Indigo 500
+  "#D32F2F", # 43 Material Red 700
+  "#81C784", # 44 Material Green 300
+  "#D32F2F", # 45 Material Red 700
+  "#4DB6AC", # 46 Material Teal 300
+  "#E57373", # 47 Material Red 300
+  "#B0BEC5", # 48 Material Blue Grey 200
+  "#26C6DA", # 49 Material Cyan 400
+  "#EF9A9A", # 50 Material Red 200
+  "#E6EE9C", # 51 Material Lime 200
+  "#81C784", # 52 Material Green 300
+  "#E64A19", # 53 Material Deep Orange 700
+  "#4DD0E1", # 54 Material Cyan 300
+  "#F06292", # 55 Material Pink 300
+  "#3F51B5", # 56 Material Indigo 500
+  "#D32F2F", # 57 Material Red 700
+  "#81C784", # 58 Material Green 300
+  "#D32F2F", # 59 Material Red 700
+  "#4DB6AC", # 60 Material Teal 300
+  "#E57373", # 61 Material Red 300
+  "#B0BEC5", # 62 Material Blue Grey 200
+  "#26C6DA", # 63 Material Cyan 400
+  "#EF9A9A", # 64 Material Red 200
+]

@@ -1,0 +1,13 @@
+[package]
+name = "signex-gerber"
+description = "Gerber and Excellon loading and viewer-domain support for Signex"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+lib_gerber_edit = { workspace = true }
+
+[dev-dependencies]
+zip = "2.4.2"

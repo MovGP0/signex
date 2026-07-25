@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 signex-types = { workspace = true }
+signex-gerber = { workspace = true }
 signex-engine = { workspace = true }
 signex-renderer = { workspace = true }
 signex-gfx = { workspace = true }

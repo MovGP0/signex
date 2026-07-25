@@ -5,6 +5,7 @@ use super::*;
 mod command_palette;
 mod document;
 mod escape;
+mod gerber_viewer;
 pub(crate) mod input;
 mod keymap;
 pub(crate) mod library;
@@ -18,6 +19,17 @@ impl Signex {
         self.apply_pcb_renderer_dirty_hint(&message);
 
         match message {
+            Message::OpenGerberViewer => self.handle_open_gerber_viewer(),
+            Message::GerberViewer(message) => self.dispatch_gerber_viewer_message(message),
+            Message::GerberViewerOpened(id) => {
+                self.ui_state
+                    .windows
+                    .insert(id, super::state::WindowKind::GerberViewer);
+                Task::batch([
+                    crate::chrome::apply_rounded_corners::<Message>(id),
+                    iced::window::gain_focus(id),
+                ])
+            }
             Message::PassiveCalculator(message) => {
                 self.ui_state.passive_calculator.update(message);
                 Task::none()
@@ -348,6 +360,7 @@ impl Signex {
                         // here beyond letting the window-id mapping
                         // drop above.
                         WindowKind::ComponentEditor { .. } => {}
+                        WindowKind::GerberViewer => {}
                     }
                 }
                 Task::none()
@@ -470,6 +483,10 @@ impl Signex {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
+            WindowMsg::StartWindowDrag(id) => crate::chrome::start_window_drag(id),
+            WindowMsg::StartWindowResize { id, direction } => {
+                crate::chrome::start_window_resize(id, direction)
+            }
             WindowMsg::StartDetachedModalResize { modal, direction } => {
                 // Find the OS window id hosting this modal, then ask
                 // the OS to start a resize drag in the requested
@@ -503,6 +520,9 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::MinimizeWindow(id) => iced::window::minimize(id, true),
+            WindowMsg::ToggleMaximizeWindow(id) => iced::window::toggle_maximize(id),
+            WindowMsg::CloseWindow(id) => iced::window::close(id),
             WindowMsg::WindowCloseRequested(id) => {
                 // OS close request (Alt+F4 / native close). Daemon mode
                 // does not auto-close, so route the main window through

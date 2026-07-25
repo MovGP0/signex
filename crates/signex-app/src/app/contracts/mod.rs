@@ -22,6 +22,9 @@ pub enum DragTarget {
 #[derive(Debug, Clone)]
 pub enum Message {
     Menu(MenuMessage),
+    OpenGerberViewer,
+    GerberViewer(crate::gerber_viewer::GerberViewerMessage),
+    GerberViewerOpened(iced::window::Id),
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted

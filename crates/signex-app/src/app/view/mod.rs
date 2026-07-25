@@ -78,6 +78,17 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
+                super::state::WindowKind::GerberViewer => {
+                    let tokens = &self.document_state.panel_ctx.tokens;
+                    let body = crate::gerber_viewer::view(&self.ui_state.gerber_viewer, tokens)
+                        .map(Message::GerberViewer);
+                    self.view_secondary_window_frame(
+                        window_id,
+                        "Signex — Gerber Viewer",
+                        body,
+                        tokens,
+                    )
+                }
                 super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the
