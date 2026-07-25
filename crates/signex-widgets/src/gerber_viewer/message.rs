@@ -3,6 +3,8 @@
 #[derive(Debug, Clone)]
 pub enum GerberViewerMessage
 {
+    NoOp,
+    CloseRequested,
     OpenGerberFiles,
     GerberFilesChosen(Option<Vec<PathBuf>>),
     GerberFilesLoaded(GerberLoadBatch),

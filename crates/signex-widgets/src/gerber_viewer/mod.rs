@@ -23,6 +23,7 @@ mod highlight;
 mod item_colors;
 mod layer_color;
 mod layer_order;
+mod menu;
 mod measurement;
 mod message;
 mod pcb_export;
@@ -143,6 +144,10 @@ mod gerber_dim_inactive_layers_test_definitions;
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/mirror_view.rs"]
 mod gerber_mirror_view_test_definitions;
+
+#[cfg(test)]
+#[path = "../../tests/gerber_viewer/menu.rs"]
+mod gerber_menu_test_definitions;
 
 #[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();

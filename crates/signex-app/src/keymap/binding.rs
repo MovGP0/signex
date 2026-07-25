@@ -59,7 +59,7 @@ impl Modifiers {
             ctrl: modifiers.control(),
             alt: modifiers.alt(),
             shift: modifiers.shift(),
-            command: modifiers.command(),
+            command: modifiers.logo(),
         }
     }
 

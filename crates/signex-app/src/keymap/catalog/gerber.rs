@@ -113,4 +113,20 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_print",
+        category: "file",
+        label: "Print visible Gerber layers",
+        menu_label: Some("Print"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "gerber_quit",
+        category: "file",
+        label: "Close the Gerber viewer",
+        menu_label: Some("Quit"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];

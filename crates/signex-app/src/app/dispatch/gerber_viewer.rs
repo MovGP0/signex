@@ -67,6 +67,14 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ExportNativePcb)
             }
+            "gerber_print" =>
+            {
+                Some(GerberViewerMessage::PrintVisibleLayers)
+            }
+            "gerber_quit" =>
+            {
+                Some(GerberViewerMessage::CloseRequested)
+            }
             _ => None,
         }
     }
@@ -100,6 +108,24 @@ impl Signex
     {
         match message
         {
+            GerberViewerMessage::NoOp => Task::none(),
+            GerberViewerMessage::CloseRequested =>
+            {
+                let window_id = self.ui_state.windows.iter().find_map(
+                    |(id, kind)| {
+                        matches!(
+                            kind,
+                            crate::app::state::WindowKind::GerberViewer,
+                        )
+                        .then_some(*id)
+                    },
+                );
+                match window_id
+                {
+                    Some(window_id) => iced::window::close(window_id),
+                    None => Task::none(),
+                }
+            }
             GerberViewerMessage::OpenAutodetectedFiles => {
                 self.ui_state.gerber_viewer.begin_loading();
                 Task::perform(
@@ -799,6 +825,7 @@ mod tests
         let d = iced::keyboard::Key::Character("d".into());
         let plus = iced::keyboard::Key::Character("+".into());
         let minus = iced::keyboard::Key::Character("-".into());
+        let q = iced::keyboard::Key::Character("q".into());
 
         for profile in ["altium", "classic"]
         {
@@ -863,6 +890,35 @@ mod tests
                 ),
                 Some(GerberViewerMessage::MoveLayerDown),
             ));
+            let print = keymap.resolve_gerber_shortcut(
+                &p,
+                iced::keyboard::Modifiers::CTRL,
+            );
+            let print_stroke = crate::keymap::KeyStroke::from_iced(
+                &p,
+                iced::keyboard::Modifiers::CTRL,
+            )
+            .expect("Ctrl+P must be a key stroke");
+            let print_lookup = keymap.lookup(
+                &[print_stroke.clone()],
+                &[
+                    crate::keymap::ShortcutContext::Global,
+                    crate::keymap::ShortcutContext::Gerber,
+                ],
+            );
+            assert!(
+                matches!(print, Some(GerberViewerMessage::PrintVisibleLayers)),
+                "{profile} resolved Ctrl+P to {print:?}; stroke was {print_stroke:?}; lookup was \
+                 {print_lookup:?}",
+            );
+            let quit = keymap.resolve_gerber_shortcut(
+                &q,
+                iced::keyboard::Modifiers::CTRL,
+            );
+            assert!(
+                matches!(quit, Some(GerberViewerMessage::CloseRequested)),
+                "{profile} resolved Ctrl+Q to {quit:?}",
+            );
         }
     }
 }

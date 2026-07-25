@@ -13,24 +13,7 @@ pub fn view<'a>(
     let border = styles::ti(tokens.border);
     let panel_bg = styles::ti(tokens.panel_bg);
     let canvas_bg = styles::ti(tokens.bg);
-
-    let open_button = button(text(if state.loading
-    {
-        "Loading…"
-    }
-    else
-    {
-        "Open Gerber Files…"
-    }))
-    .on_press_maybe((!state.loading).then_some(GerberViewerMessage::OpenGerberFiles));
-    let clear_current = button(text("Clear Current")).on_press_maybe(
-        state
-            .active_layer
-            .map(|_| GerberViewerMessage::ClearCurrentLayer),
-    );
-    let clear_all = button(text("Clear All")).on_press_maybe(
-        (!state.layers.is_empty()).then_some(GerberViewerMessage::ClearAllLayers),
-    );
+    let menu_bar = menu::view(state, tokens);
     let component_choices = state.component_choices();
     let component_picker = pick_list(
         component_choices,
@@ -73,143 +56,7 @@ pub fn view<'a>(
 
     let toolbar = container(
         row![
-            open_button,
-            button(text("Open Autodetected…"))
-                .on_press_maybe((!state.loading).then_some(
-                    GerberViewerMessage::OpenAutodetectedFiles,
-                )),
-            button(text("Open ZIP…"))
-                .on_press_maybe((!state.loading).then_some(
-                    GerberViewerMessage::OpenZipArchive,
-                )),
-            button(text("Open Job…"))
-                .on_press_maybe((!state.loading).then_some(
-                    GerberViewerMessage::OpenGerberJob,
-                )),
-            button(text("Open Drill Files…"))
-                .on_press_maybe((!state.loading).then_some(
-                    GerberViewerMessage::OpenExcellonFiles,
-                )),
-            button(text("Redraw")).on_press(GerberViewerMessage::RedrawViewport),
-            button(text(if state.sketch_flashes
-            {
-                "Fill Flashes"
-            }
-            else
-            {
-                "Sketch Flashes (F)"
-            }))
-            .on_press(GerberViewerMessage::ToggleSketchFlashes),
-            button(text(if state.sketch_lines
-            {
-                "Fill Lines"
-            }
-            else
-            {
-                "Sketch Lines (L)"
-            }))
-            .on_press(GerberViewerMessage::ToggleSketchLines),
-            button(text(if state.sketch_polygons
-            {
-                "Fill Polygons"
-            }
-            else
-            {
-                "Sketch Polygons (P)"
-            }))
-            .on_press(GerberViewerMessage::ToggleSketchPolygons),
-            button(text(if state.ghost_negative_objects
-            {
-                "Hide Negative Objects"
-            }
-            else
-            {
-                "Ghost Negative Objects"
-            }))
-            .on_press(GerberViewerMessage::ToggleGhostNegativeObjects),
-            button(text(if state.show_d_code_labels
-            {
-                "Hide D-Codes"
-            }
-            else
-            {
-                "Show D-Codes (D)"
-            }))
-            .on_press(GerberViewerMessage::ToggleDCodeLabels),
-            button(text(if state.compare_mode
-            {
-                "Normal Layer Colors"
-            }
-            else
-            {
-                "XOR Compare"
-            }))
-            .on_press(GerberViewerMessage::ToggleCompareMode),
-            button(text(if state.forced_opacity_mode
-            {
-                "Normal Layer Opacity"
-            }
-            else
-            {
-                "Forced Opacity"
-            }))
-            .on_press(GerberViewerMessage::ToggleForcedOpacityMode),
-            button(text(if state.dim_inactive_layers
-            {
-                "Normal Layer Contrast"
-            }
-            else
-            {
-                "Dim Inactive Layers"
-            }))
-            .on_press(GerberViewerMessage::ToggleDimInactiveLayers),
-            button(text(if state.mirrored
-            {
-                "Normal Orientation"
-            }
-            else
-            {
-                "Flip Gerber View"
-            }))
-            .on_press(GerberViewerMessage::ToggleMirrored),
-            button(text("Reload All")).on_press_maybe(
-                (!state.loading && !state.layers.is_empty())
-                    .then_some(GerberViewerMessage::ReloadAllLayers),
-            ),
-            button(text("−")).on_press(GerberViewerMessage::ZoomBy(1.0 / 1.2)),
-            button(text("+")).on_press(GerberViewerMessage::ZoomBy(1.2)),
-            button(text("Fit")).on_press(GerberViewerMessage::FitPage),
-            button(text(if state.zoom_selection_active
-            {
-                "Cancel Zoom Area"
-            }
-            else
-            {
-                "Zoom Area"
-            }))
-            .on_press(GerberViewerMessage::ToggleZoomSelection),
-            button(text(if state.measurement_active()
-            {
-                "Cancel Measure"
-            }
-            else
-            {
-                "Measure"
-            }))
-            .on_press(GerberViewerMessage::ToggleMeasurement),
-            button(text("Reset Measure")).on_press_maybe(
-                state
-                    .measurement()
-                    .map(|_| GerberViewerMessage::ResetMeasurement),
-            ),
-            button(text("Print PDF…")).on_press_maybe(
-                self::print::has_visible_layers(state)
-                    .then_some(GerberViewerMessage::PrintVisibleLayers),
-            ),
-            button(text("Export Lossy PCB…")).on_press_maybe(
-                (!state.layers.is_empty())
-                    .then_some(GerberViewerMessage::ExportNativePcb),
-            ),
+            text("Layer").size(11).color(text_muted),
             button(text("Previous Layer (PgUp)")).on_press_maybe(
                 previous_layer_index(state.active_layer, state.layers.len())
                     .map(|_| GerberViewerMessage::PreviousLayer),
@@ -230,53 +77,7 @@ pub fn view<'a>(
                     .filter(|index| *index > 0)
                     .map(|_| GerberViewerMessage::MoveLayerDown),
             ),
-            button(text(if state.layer_manager_visible
-            {
-                "Hide Layers"
-            }
-            else
-            {
-                "Show Layers"
-            }))
-            .on_press(GerberViewerMessage::ToggleLayerManager),
-            button(text(if state.layer_information_visible
-            {
-                "Hide Layer Info"
-            }
-            else
-            {
-                "Layer Info"
-            }))
-            .on_press_maybe(
-                state
-                    .active_layer
-                    .map(|_| GerberViewerMessage::ToggleLayerInformation),
-            ),
-            button(text(if state.d_code_list_visible
-            {
-                "Hide D-Codes"
-            }
-            else
-            {
-                "List D-Codes"
-            }))
-            .on_press_maybe(
-                (!state.layers.is_empty())
-                    .then_some(GerberViewerMessage::ToggleDCodeList),
-            ),
-            button(text(if state.source_view_visible
-            {
-                "Hide Source"
-            }
-            else
-            {
-                "Show Source"
-            }))
-            .on_press_maybe(
-                state
-                    .active_layer
-                    .map(|_| GerberViewerMessage::ToggleSourceView),
-            ),
+            text("Highlight").size(11).color(text_muted),
             component_picker,
             net_picker,
             attribute_picker,
@@ -286,8 +87,6 @@ pub fn view<'a>(
                     .has_active_highlight()
                     .then_some(GerberViewerMessage::ClearHighlight),
             ),
-            clear_current,
-            clear_all,
             Space::new().width(Length::Fill),
             text(format!("{} / {MAX_VIEWER_LAYERS} layers", state.layers.len()))
                 .size(11)
@@ -899,6 +698,7 @@ pub fn view<'a>(
     .style(styles::status_bar(tokens));
 
     column![
+        menu_bar,
         toolbar,
         grid_toolbar,
         grid_editor,
