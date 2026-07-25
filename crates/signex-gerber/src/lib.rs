@@ -14,7 +14,8 @@ pub use geometry::{
 pub use lib_gerber_edit::layer::LayerType;
 pub use loading::{
     GerberLoadBatch, GerberLoadFailure, GerberReloadBatch, LoadedLayer, load_excellon_file,
-    load_excellon_files, load_excellon_reader, load_gerber_file, load_gerber_files,
+    load_excellon_files, load_excellon_reader, load_autodetected_file,
+    load_autodetected_files, load_autodetected_reader, load_gerber_file, load_gerber_files,
     load_gerber_reader, reload_layers,
 };
 pub use metadata::{LayerDefinition, LayerDefinitionGroup, LayerMetadata};

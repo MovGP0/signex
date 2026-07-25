@@ -137,6 +137,137 @@ where
     batch
 }
 
+/// Loads one fabrication file after detecting Gerber or Excellon from content
+/// signatures, falling back to a documented filename extension.
+pub fn load_autodetected_file(
+    path: impl AsRef<Path>,
+) -> Result<LoadedLayer, GerberLoadFailure>
+{
+    let path = path.as_ref();
+    let file = File::open(path).map_err(|error| GerberLoadFailure {
+        path: path.to_path_buf(),
+        message: format!("could not open file: {error}"),
+    })?;
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let mut layer = load_autodetected_reader(name, file).map_err(|mut failure| {
+        failure.path = path.to_path_buf();
+        failure
+    })?;
+    layer.source_path = Some(path.to_path_buf());
+    Ok(layer)
+}
+
+pub fn load_autodetected_files<I, P>(paths: I) -> GerberLoadBatch
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<Path>,
+{
+    let mut batch = GerberLoadBatch::default();
+    for path in paths
+    {
+        match load_autodetected_file(path.as_ref())
+        {
+            Ok(layer) => batch.layers.push(layer),
+            Err(failure) => batch.failures.push(failure),
+        }
+    }
+    batch
+}
+
+pub fn load_autodetected_reader<R>(
+    name: impl Into<String>,
+    mut reader: R,
+) -> Result<LoadedLayer, GerberLoadFailure>
+where
+    R: Read,
+{
+    let name = name.into();
+    let path = PathBuf::from(&name);
+    let mut source = String::new();
+    reader
+        .read_to_string(&mut source)
+        .map_err(|error| GerberLoadFailure {
+            path: path.clone(),
+            message: format!("fabrication source is not valid UTF-8 text: {error}"),
+        })?;
+    let gerber_signature = source.contains("%FS")
+        || source.contains("%MO")
+        || source.contains("%AD");
+    let excellon_signature = source
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with(';'))
+        .is_some_and(|line| line == "M48");
+
+    let detected = match (gerber_signature, excellon_signature)
+    {
+        (true, true) => {
+            return Err(GerberLoadFailure {
+                path,
+                message: "ambiguous fabrication file: contains both Gerber and Excellon signatures"
+                    .to_owned(),
+            });
+        }
+        (true, false) => FabricationFormat::Gerber,
+        (false, true) => FabricationFormat::Excellon,
+        (false, false) => format_from_extension(&name).ok_or_else(|| GerberLoadFailure {
+            path: path.clone(),
+            message: "unsupported fabrication file: no Gerber or Excellon signature or recognized extension"
+                .to_owned(),
+        })?,
+    };
+
+    let synthetic_name = match detected
+    {
+        FabricationFormat::Gerber => "autodetected.gbr",
+        FabricationFormat::Excellon => "autodetected.drl",
+    };
+    let mut layer = match detected
+    {
+        FabricationFormat::Gerber => {
+            load_gerber_reader(synthetic_name, source.as_bytes())
+        }
+        FabricationFormat::Excellon => {
+            load_excellon_reader(synthetic_name, source.as_bytes())
+        }
+    }
+    .map_err(|failure| GerberLoadFailure {
+        path: path.clone(),
+        message: failure.message,
+    })?;
+    layer.name = name;
+    Ok(layer)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FabricationFormat
+{
+    Gerber,
+    Excellon,
+}
+
+fn format_from_extension(name: &str) -> Option<FabricationFormat>
+{
+    let extension = Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    if matches!(extension.to_ascii_lowercase().as_str(), "drl" | "drd")
+    {
+        return Some(FabricationFormat::Excellon);
+    }
+    if matches!(extension.to_ascii_lowercase().as_str(), "ger" | "pho")
+        || LayerType::try_from(extension)
+            .is_ok_and(|layer_type| layer_type != LayerType::Drill)
+    {
+        return Some(FabricationFormat::Gerber);
+    }
+    None
+}
+
 /// Loads one RS-274X layer from an arbitrary reader.
 ///
 /// This is the common parser seam used by disk loading and archive tests.

@@ -31,6 +31,46 @@ impl Signex
     {
         match message
         {
+            GerberViewerMessage::OpenAutodetectedFiles => {
+                self.ui_state.gerber_viewer.begin_loading();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Open Fabrication Files")
+                            .pick_files()
+                            .await
+                            .map(|files| {
+                                files
+                                    .into_iter()
+                                    .map(|file| file.path().to_path_buf())
+                                    .collect::<Vec<_>>()
+                            })
+                    },
+                    |paths| {
+                        Message::GerberViewer(
+                            GerberViewerMessage::AutodetectedFilesChosen(paths),
+                        )
+                    },
+                )
+            }
+            GerberViewerMessage::AutodetectedFilesChosen(Some(paths)) => Task::perform(
+                async move { signex_gerber::load_autodetected_files(paths) },
+                |batch| {
+                    Message::GerberViewer(
+                        GerberViewerMessage::AutodetectedFilesLoaded(batch),
+                    )
+                },
+            ),
+            GerberViewerMessage::AutodetectedFilesChosen(None) => {
+                self.ui_state.gerber_viewer.loading = false;
+                self.ui_state.gerber_viewer.status =
+                    "Open fabrication files cancelled.".into();
+                Task::none()
+            }
+            GerberViewerMessage::AutodetectedFilesLoaded(batch) => {
+                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                Task::none()
+            }
             GerberViewerMessage::OpenGerberFiles => {
                 self.ui_state.gerber_viewer.begin_loading();
                 Task::perform(

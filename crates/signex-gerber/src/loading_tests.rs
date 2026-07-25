@@ -8,7 +8,7 @@ use lib_gerber_edit::layer::LayerData;
 
 use super::{
     GerberPrimitive, LayerType, load_excellon_reader, load_gerber_file,
-    load_gerber_reader, reload_layers,
+    load_autodetected_reader, load_gerber_reader, reload_layers,
 };
 
 fn generated_fixture_member(member: &str) -> Vec<u8>
@@ -138,6 +138,46 @@ fn reload_reparses_changed_files_and_reports_missing_sources()
         batch.failures[0].message,
         "layer has no disk source to reload",
     );
+}
+
+#[test]
+fn autodetection_prefers_content_over_misleading_extensions()
+{
+    let gerber = load_autodetected_reader(
+        "unknown.txt",
+        Cursor::new(
+            b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+        ),
+    )
+    .expect("Gerber content must be detected");
+    let drill = load_autodetected_reader(
+        "misnamed.gbr",
+        Cursor::new(b"M48\nMETRIC\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nM30\n"),
+    )
+    .expect("Excellon content must override extension");
+
+    assert!(matches!(gerber.data, LayerData::Gerber(_)));
+    assert_eq!(gerber.name, "unknown.txt");
+    assert!(matches!(drill.data, LayerData::Excellon(_)));
+    assert_eq!(drill.name, "misnamed.gbr");
+}
+
+#[test]
+fn autodetection_reports_ambiguous_and_unsupported_content()
+{
+    let ambiguous = load_autodetected_reader(
+        "ambiguous.txt",
+        Cursor::new(b"M48\n%FSLAX46Y46*%\n%MOMM*%\n"),
+    )
+    .expect_err("mixed signatures must be ambiguous");
+    let unsupported = load_autodetected_reader(
+        "notes.txt",
+        Cursor::new(b"This is not fabrication data.\n"),
+    )
+    .expect_err("unknown content must be unsupported");
+
+    assert!(ambiguous.message.contains("ambiguous fabrication file"));
+    assert!(unsupported.message.contains("unsupported fabrication file"));
 }
 
 #[test]

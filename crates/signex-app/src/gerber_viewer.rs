@@ -99,6 +99,9 @@ pub enum GerberViewerMessage
     OpenExcellonFiles,
     ExcellonFilesChosen(Option<Vec<PathBuf>>),
     ExcellonFilesLoaded(GerberLoadBatch),
+    OpenAutodetectedFiles,
+    AutodetectedFilesChosen(Option<Vec<PathBuf>>),
+    AutodetectedFilesLoaded(GerberLoadBatch),
     ReloadAllLayers,
     LayersReloaded(signex_gerber::GerberReloadBatch),
     SelectLayer(usize),
@@ -909,6 +912,10 @@ pub fn view<'a>(
     let toolbar = container(
         row![
             open_button,
+            button(text("Open Autodetected…"))
+                .on_press_maybe((!state.loading).then_some(
+                    GerberViewerMessage::OpenAutodetectedFiles,
+                )),
             button(text("Open Drill Files…"))
                 .on_press_maybe((!state.loading).then_some(
                     GerberViewerMessage::OpenExcellonFiles,
@@ -2696,6 +2703,41 @@ mod tests
         });
         assert_eq!(state.layers.len(), MAX_VIEWER_LAYERS);
         assert!(state.status.contains("1 layer(s) were skipped"));
+    }
+
+    #[test]
+    fn autodetected_mixed_batch_adds_each_successful_format_as_a_layer()
+    {
+        let gerber = signex_gerber::load_autodetected_reader(
+            "artwork.data",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("Gerber signature");
+        let drill = signex_gerber::load_autodetected_reader(
+            "drill.data",
+            Cursor::new(b"M48\nMETRIC\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nM30\n"),
+        )
+        .expect("Excellon signature");
+        let mut state = GerberViewerState::default();
+
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![gerber, drill],
+            failures: vec![signex_gerber::GerberLoadFailure {
+                path: PathBuf::from("notes.txt"),
+                message: "unsupported fabrication file".to_owned(),
+            }],
+        });
+
+        assert_eq!(state.layers.len(), 2);
+        assert_eq!(state.layers[0].layer.name, "artwork.data");
+        assert_eq!(
+            state.layers[1].layer.layer_type,
+            signex_gerber::LayerType::Drill,
+        );
+        assert!(state.status.contains("Loaded 2 fabrication layer(s)."));
+        assert!(state.status.contains("1 file(s) could not be loaded"));
     }
 
     #[test]
