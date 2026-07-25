@@ -4,6 +4,7 @@
 //! translates the parsed representation into stable, renderer-independent
 //! geometry consumed by the Signex application.
 
+mod archive;
 mod geometry;
 mod loading;
 mod metadata;
@@ -11,6 +12,7 @@ mod metadata;
 pub use geometry::{
     ApertureShape, Bounds, GerberGeometry, GerberPrimitive, Point, PrimitivePolarity,
 };
+pub use archive::{load_zip_archive, load_zip_reader};
 pub use lib_gerber_edit::layer::LayerType;
 pub use loading::{
     GerberLoadBatch, GerberLoadFailure, GerberReloadBatch, LoadedLayer, load_excellon_file,

@@ -102,6 +102,9 @@ pub enum GerberViewerMessage
     OpenAutodetectedFiles,
     AutodetectedFilesChosen(Option<Vec<PathBuf>>),
     AutodetectedFilesLoaded(GerberLoadBatch),
+    OpenZipArchive,
+    ZipArchiveChosen(Option<PathBuf>),
+    ZipArchiveLoaded(GerberLoadBatch),
     ReloadAllLayers,
     LayersReloaded(signex_gerber::GerberReloadBatch),
     SelectLayer(usize),
@@ -915,6 +918,10 @@ pub fn view<'a>(
             button(text("Open Autodetected…"))
                 .on_press_maybe((!state.loading).then_some(
                     GerberViewerMessage::OpenAutodetectedFiles,
+                )),
+            button(text("Open ZIP…"))
+                .on_press_maybe((!state.loading).then_some(
+                    GerberViewerMessage::OpenZipArchive,
                 )),
             button(text("Open Drill Files…"))
                 .on_press_maybe((!state.loading).then_some(

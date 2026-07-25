@@ -71,6 +71,42 @@ impl Signex
                 self.ui_state.gerber_viewer.apply_load_batch(batch);
                 Task::none()
             }
+            GerberViewerMessage::OpenZipArchive => {
+                self.ui_state.gerber_viewer.begin_loading();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Open Gerber and Drill ZIP Archive")
+                            .add_filter("ZIP archive", &["zip"])
+                            .pick_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    |path| {
+                        Message::GerberViewer(
+                            GerberViewerMessage::ZipArchiveChosen(path),
+                        )
+                    },
+                )
+            }
+            GerberViewerMessage::ZipArchiveChosen(Some(path)) => Task::perform(
+                async move { signex_gerber::load_zip_archive(path) },
+                |batch| {
+                    Message::GerberViewer(
+                        GerberViewerMessage::ZipArchiveLoaded(batch),
+                    )
+                },
+            ),
+            GerberViewerMessage::ZipArchiveChosen(None) => {
+                self.ui_state.gerber_viewer.loading = false;
+                self.ui_state.gerber_viewer.status =
+                    "Open ZIP archive cancelled.".into();
+                Task::none()
+            }
+            GerberViewerMessage::ZipArchiveLoaded(batch) => {
+                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                Task::none()
+            }
             GerberViewerMessage::OpenGerberFiles => {
                 self.ui_state.gerber_viewer.begin_loading();
                 Task::perform(
