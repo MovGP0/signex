@@ -517,6 +517,13 @@ impl Signex
                     .clear_d_code_highlight();
                 Task::none()
             }
+            GerberViewerMessage::SetSelectedItem(selection) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_selected_item(selection);
+                Task::none()
+            }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
                 self.ui_state
                     .gerber_viewer

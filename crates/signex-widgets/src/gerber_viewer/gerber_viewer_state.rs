@@ -16,6 +16,7 @@ pub struct GerberViewerState
     pub loading: bool,
     pub status: String,
     pub redraw_generation: u64,
+    pub(super) selected_item: Option<GerberItemSelection>,
     pub zoom: f32,
     pub pan: iced::Vector,
     pub layer_manager_visible: bool,
@@ -69,6 +70,7 @@ impl Default for GerberViewerState
             loading: false,
             status: "Open one or more Gerber files to begin.".into(),
             redraw_generation: 0,
+            selected_item: None,
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
@@ -201,6 +203,7 @@ impl GerberViewerState
             ));
         }
         self.status = status;
+        self.retain_valid_selection();
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
         self.retain_available_attribute_highlight();
@@ -222,6 +225,7 @@ impl GerberViewerState
         {
             Some(index.min(self.layers.len() - 1))
         };
+        self.remove_layer_from_selection(index);
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
         self.retain_available_attribute_highlight();
@@ -235,6 +239,7 @@ impl GerberViewerState
         self.active_layer = None;
         self.zoom = 1.0;
         self.pan = iced::Vector::default();
+        self.selected_item = None;
         self.highlighted_component = None;
         self.highlighted_net = None;
         self.highlighted_attribute = None;

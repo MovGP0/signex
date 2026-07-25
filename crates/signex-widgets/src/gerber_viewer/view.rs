@@ -620,6 +620,7 @@ pub fn view<'a>(
         highlighted_net: state.highlighted_net(),
         highlighted_attribute: state.highlighted_attribute(),
         highlighted_d_code: state.highlighted_d_code(),
+        selected_item: state.selected_item(),
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,

@@ -22,6 +22,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) highlighted_net: Option<&'a str>,
     pub(super) highlighted_attribute: Option<&'a GerberAttributeValue>,
     pub(super) highlighted_d_code: Option<i32>,
+    pub(super) selected_item: Option<GerberItemSelection>,
     pub(super) grid_size: &'a GridSizePreset,
     pub(super) shortcut_resolver: &'a dyn GerberShortcutResolver,
     pub(super) redraw_generation: u64,
@@ -44,6 +45,12 @@ impl GerberCanvas<'_>
             x: f64::from(world_center.x + (screen.x - screen_center.x) / scale),
             y: f64::from(world_center.y - (screen.y - screen_center.y) / scale),
         })
+    }
+
+    fn pixels_per_world_unit(&self, bounds: Rectangle) -> Option<f32>
+    {
+        let world_bounds = page_bounds(visible_bounds(self.layers), self.page_size)?;
+        Some(fit_transform(world_bounds, bounds, self.zoom, self.pan).0)
     }
 }
 
@@ -95,6 +102,23 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 state.zoom_selection_start = Some(position);
                 state.zoom_selection_current = Some(position);
                 Some(canvas::Action::capture())
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) =>
+            {
+                let position = cursor.position_in(bounds)?;
+                let world = self.screen_to_world(bounds, position)?;
+                let scale = self.pixels_per_world_unit(bounds)?;
+                let selection = hit_test_visible_item(
+                    self.layers,
+                    world,
+                    6.0 / f64::from(scale),
+                );
+                Some(
+                    canvas::Action::publish(
+                        GerberViewerMessage::SetSelectedItem(selection),
+                    )
+                    .and_capture(),
+                )
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 if state.zoom_selection_start.is_some()
@@ -283,6 +307,8 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.highlighted_net,
                 self.highlighted_attribute,
                 highlighted_d_code,
+                self.selected_item,
+                layer_index,
             );
         }
         if let (Some(start), Some(end)) = (
@@ -478,6 +504,8 @@ pub(super) fn draw_layer(
     highlighted_net: Option<&str>,
     highlighted_attribute: Option<&GerberAttributeValue>,
     highlighted_d_code: Option<i32>,
+    selected_item: Option<GerberItemSelection>,
+    layer_index: usize,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -512,10 +540,27 @@ pub(super) fn draw_layer(
             primitive,
             highlighted_d_code,
         );
-        let polarity_color = |polarity: PrimitivePolarity| match polarity
+        let selected = selected_item == Some(GerberItemSelection {
+            layer_index,
+            primitive_index,
+        });
+        let dark_color = selected_primitive_color(
+            dark_color,
+            selected_item,
+            layer_index,
+            primitive_index,
+        );
+        let polarity_color = |polarity: PrimitivePolarity| if selected
         {
-            PrimitivePolarity::Dark => dark_color,
-            PrimitivePolarity::Clear => background,
+            dark_color
+        }
+        else
+        {
+            match polarity
+            {
+                PrimitivePolarity::Dark => dark_color,
+                PrimitivePolarity::Clear => background,
+            }
         };
         match primitive
         {

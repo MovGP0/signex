@@ -66,6 +66,7 @@ pub enum GerberViewerMessage
     ClearAttributeHighlight,
     SetHighlightedDCode(i32),
     ClearDCodeHighlight,
+    SetSelectedItem(Option<GerberItemSelection>),
     ZoomToSelection
     {
         bounds: Bounds,

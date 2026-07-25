@@ -22,6 +22,7 @@ mod grid;
 mod highlight;
 mod message;
 pub(crate) mod print;
+mod selection;
 mod shortcuts;
 mod styles;
 mod view;
@@ -32,6 +33,7 @@ mod viewport;
 pub use display::{GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
 pub use message::GerberViewerMessage;
+pub use selection::GerberItemSelection;
 pub use shortcuts::GerberShortcutResolver;
 pub use view::view;
 
@@ -53,6 +55,7 @@ use highlight::{
     attribute_highlight_color, component_highlight_color, d_code_highlight_color,
     net_highlight_color,
 };
+use selection::{hit_test_visible_item, selected_primitive_color};
 
 const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;
