@@ -61,6 +61,7 @@ fn tools_menu_contains_requested_commands_in_order()
             "List DCodes ...",
             "Show Source ...",
             "Measure Tool",
+            "Edit Grids ...",
             "Clear Current Layer ...",
         ],
     );

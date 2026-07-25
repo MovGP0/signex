@@ -28,6 +28,12 @@ pub(super) fn view(
                 GerberViewerMessage::ToggleMeasurement,
                 colors,
             ),
+            leaf(
+                "Edit Grids ...",
+                None,
+                GerberViewerMessage::OpenGridEditor,
+                colors,
+            ),
             leaf_if(
                 "Clear Current Layer ...",
                 None,

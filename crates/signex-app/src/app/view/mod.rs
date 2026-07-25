@@ -93,6 +93,27 @@ impl Signex {
                         tokens,
                     )
                 }
+                super::state::WindowKind::GerberGridEditor => {
+                    let tokens = &self.document_state.panel_ctx.tokens;
+                    let body = match self.ui_state.gerber_grid_editor.as_ref()
+                    {
+                        Some(editor) => signex_widgets::grid_editor::view(
+                            editor,
+                            tokens,
+                        )
+                        .map(Message::GerberGridEditor),
+                        None => iced::widget::Space::new()
+                            .width(iced::Length::Fill)
+                            .height(iced::Length::Fill)
+                            .into(),
+                    };
+                    self.view_secondary_window_frame(
+                        window_id,
+                        "Signex — Grid Editor",
+                        body,
+                        tokens,
+                    )
+                }
                 super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the

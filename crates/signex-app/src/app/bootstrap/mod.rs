@@ -41,6 +41,13 @@ impl Signex {
             return "Signex — Gerber Viewer".to_string();
         }
 
+        if matches!(
+            self.ui_state.windows.get(&id),
+            Some(super::state::WindowKind::GerberGridEditor)
+        ) {
+            return "Signex — Grid Editor".to_string();
+        }
+
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_paths.len();
         if dirty_count == 0 {

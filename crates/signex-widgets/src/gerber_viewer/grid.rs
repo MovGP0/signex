@@ -6,22 +6,24 @@ use serde::{Deserialize, Serialize};
 use super::GerberPageSize;
 
 const MILLIMETRES_PER_MIL: f64 = 0.0254;
+const MILLIMETRES_PER_INCH: f64 = 25.4;
 const SETTINGS_FILE_NAME: &str = "gerber_viewer.toml";
 // Use the en-US decimal point only when the operating-system locale cannot be read.
 const DEFAULT_DECIMAL_SEPARATOR: &str = ".";
-pub(super) const DEFAULT_GRID_INDEX: usize = 1;
+pub(crate) const DEFAULT_GRID_INDEX: usize = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub(super) enum GridUnit
+pub enum GridUnit
 {
     Mil,
     Mm,
+    Inch,
 }
 
 impl GridUnit
 {
-    pub const ALL: [Self; 2] = [Self::Mil, Self::Mm];
+    pub const ALL: [Self; 3] = [Self::Mm, Self::Mil, Self::Inch];
 }
 
 impl fmt::Display for GridUnit
@@ -30,14 +32,15 @@ impl fmt::Display for GridUnit
     {
         formatter.write_str(match self
         {
-            Self::Mil => "mils",
+            Self::Mil => "mil",
             Self::Mm => "mm",
+            Self::Inch => "inch",
         })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub(super) struct GridSizePreset
+pub(crate) struct GridSizePreset
 {
     pub name: Option<String>,
     pub x: f64,
@@ -53,6 +56,7 @@ impl GridSizePreset
         {
             GridUnit::Mil => self.x * MILLIMETRES_PER_MIL,
             GridUnit::Mm => self.x,
+            GridUnit::Inch => self.x * MILLIMETRES_PER_INCH,
         }
     }
 
@@ -62,6 +66,7 @@ impl GridSizePreset
         {
             GridUnit::Mil => self.y * MILLIMETRES_PER_MIL,
             GridUnit::Mm => self.y,
+            GridUnit::Inch => self.y * MILLIMETRES_PER_INCH,
         }
     }
 
@@ -71,6 +76,7 @@ impl GridSizePreset
         {
             GridUnit::Mil => self.x,
             GridUnit::Mm => self.x / MILLIMETRES_PER_MIL,
+            GridUnit::Inch => self.x * 1_000.0,
         }
     }
 
@@ -80,6 +86,7 @@ impl GridSizePreset
         {
             GridUnit::Mil => self.y,
             GridUnit::Mm => self.y / MILLIMETRES_PER_MIL,
+            GridUnit::Inch => self.y * 1_000.0,
         }
     }
 
@@ -89,6 +96,10 @@ impl GridSizePreset
         {
             GridUnit::Mil => (self.x_mils(), self.y_mils()),
             GridUnit::Mm => (self.x_millimetres(), self.y_millimetres()),
+            GridUnit::Inch => (
+                self.x_millimetres() / MILLIMETRES_PER_INCH,
+                self.y_millimetres() / MILLIMETRES_PER_INCH,
+            ),
         };
         Self {
             name: self.name.clone(),
@@ -114,10 +125,18 @@ impl GridSizePreset
             "mm",
             decimal_separator,
         );
+        let inches = format_dimensions(
+            self.x_millimetres() / MILLIMETRES_PER_INCH,
+            self.y_millimetres() / MILLIMETRES_PER_INCH,
+            4,
+            "inch",
+            decimal_separator,
+        );
         let dimensions = match self.unit
         {
             GridUnit::Mil => format!("{mils} ({millimetres})"),
             GridUnit::Mm => format!("{millimetres} ({mils})"),
+            GridUnit::Inch => format!("{inches} ({millimetres})"),
         };
 
         match self.name.as_deref()
@@ -143,7 +162,7 @@ struct PageSizeSettings
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct GridSizeChoice
+pub(crate) struct GridSizeChoice
 {
     pub index: usize,
     label: String,
@@ -157,7 +176,7 @@ impl fmt::Display for GridSizeChoice
     }
 }
 
-pub(super) fn default_grid_catalog() -> Vec<GridSizePreset>
+pub(crate) fn default_grid_catalog() -> Vec<GridSizePreset>
 {
     let settings: GerberViewerSettings = toml::from_str(include_str!(
         "../../../../assets/gerber-viewer/default-settings.toml"
@@ -214,7 +233,7 @@ pub(super) fn load_page_size() -> GerberPageSize
         .size
 }
 
-pub(super) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String>
+pub(crate) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String>
 {
     let path = grid_settings_path()
         .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
@@ -232,7 +251,7 @@ pub(super) fn persist_page_size(
     persist_settings_to(&path, catalog, page_size)
 }
 
-pub(super) fn create_grid_definition(
+pub(crate) fn create_grid_definition(
     name: &str,
     x: &str,
     y: &str,
@@ -263,7 +282,7 @@ pub(super) fn create_grid_definition(
     })
 }
 
-pub(super) fn grid_size_choices(
+pub(crate) fn grid_size_choices(
     catalog: &[GridSizePreset],
     decimal_separator: &str,
 ) -> Vec<GridSizeChoice>
@@ -374,7 +393,7 @@ fn format_decimal(value: f64, decimals: usize, decimal_separator: &str) -> Strin
     format!("{value:.decimals$}").replace('.', decimal_separator)
 }
 
-pub(super) fn format_distance_input(value: f64, decimal_separator: &str) -> String
+pub(crate) fn format_distance_input(value: f64, decimal_separator: &str) -> String
 {
     value.to_string().replace('.', decimal_separator)
 }

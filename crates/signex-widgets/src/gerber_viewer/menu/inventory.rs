@@ -40,5 +40,6 @@ pub(crate) const TOOLS_MENU_LABELS: &[&str] = &[
     "List DCodes ...",
     "Show Source ...",
     "Measure Tool",
+    "Edit Grids ...",
     "Clear Current Layer ...",
 ];

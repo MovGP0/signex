@@ -30,6 +30,18 @@ impl Signex {
                     iced::window::gain_focus(id),
                 ])
             }
+            Message::GerberGridEditor(message) => {
+                self.dispatch_gerber_grid_editor_message(message)
+            }
+            Message::GerberGridEditorOpened(id) => {
+                self.ui_state
+                    .windows
+                    .insert(id, super::state::WindowKind::GerberGridEditor);
+                Task::batch([
+                    crate::chrome::apply_rounded_corners::<Message>(id),
+                    iced::window::gain_focus(id),
+                ])
+            }
             Message::PassiveCalculator(message) => {
                 self.ui_state.passive_calculator.update(message);
                 Task::none()
@@ -361,6 +373,9 @@ impl Signex {
                         // drop above.
                         WindowKind::ComponentEditor { .. } => {}
                         WindowKind::GerberViewer => {}
+                        WindowKind::GerberGridEditor => {
+                            self.ui_state.gerber_grid_editor = None;
+                        }
                     }
                 }
                 Task::none()

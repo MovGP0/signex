@@ -297,6 +297,9 @@ pub struct UiState {
     pub passive_calculator_open: bool,
     /// Reusable state rendered by the dedicated Gerber Viewer window.
     pub gerber_viewer: signex_widgets::gerber_viewer::GerberViewerState,
+    /// Draft state rendered by the dedicated Gerber grid editor window.
+    pub gerber_grid_editor:
+        Option<signex_widgets::grid_editor::GerberGridEditorState>,
     /// Command palette state — query / dropdown open flag / selected
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.

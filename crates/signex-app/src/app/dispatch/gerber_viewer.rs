@@ -4,6 +4,10 @@ use super::super::*;
 use signex_widgets::gerber_viewer::{
     GerberShortcutResolver, GerberViewerMessage,
 };
+use signex_widgets::grid_editor::{
+    GerberGridEditorMessage, GerberGridEditorOutcome,
+    GerberGridEditorState,
+};
 
 impl GerberShortcutResolver for crate::keymap::CompiledKeymap
 {
@@ -82,6 +86,87 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
 
 impl Signex
 {
+    fn grid_editor_window_id(&self) -> Option<iced::window::Id>
+    {
+        self.ui_state.windows.iter().find_map(|(id, kind)| {
+            matches!(
+                kind,
+                crate::app::state::WindowKind::GerberGridEditor,
+            )
+            .then_some(*id)
+        })
+    }
+
+    fn handle_open_gerber_grid_editor(&mut self) -> Task<Message>
+    {
+        if let Some(id) = self.grid_editor_window_id()
+        {
+            return iced::window::gain_focus(id);
+        }
+
+        self.ui_state.gerber_grid_editor = Some(
+            GerberGridEditorState::from_viewer(
+                &self.ui_state.gerber_viewer,
+            ),
+        );
+        let (_id, open_task) = iced::window::open(
+            iced::window::Settings {
+                size: iced::Size::new(860.0, 580.0),
+                min_size: Some(iced::Size::new(720.0, 460.0)),
+                icon: crate::app::bootstrap::bundled_window_icon(),
+                decorations: false,
+                ..Default::default()
+            },
+        );
+        open_task.map(Message::GerberGridEditorOpened)
+    }
+
+    pub(super) fn dispatch_gerber_grid_editor_message(
+        &mut self,
+        message: GerberGridEditorMessage,
+    ) -> Task<Message>
+    {
+        let outcome = match self.ui_state.gerber_grid_editor.as_mut()
+        {
+            Some(editor) => editor.update(message),
+            None => return Task::none(),
+        };
+
+        match outcome
+        {
+            GerberGridEditorOutcome::None => Task::none(),
+            GerberGridEditorOutcome::Cancel =>
+            {
+                self.grid_editor_window_id()
+                    .map_or_else(Task::none, iced::window::close)
+            }
+            GerberGridEditorOutcome::Apply =>
+            {
+                let result = self
+                    .ui_state
+                    .gerber_grid_editor
+                    .as_ref()
+                    .expect("grid editor exists while applying")
+                    .apply_to(&mut self.ui_state.gerber_viewer);
+                match result
+                {
+                    Ok(()) => self
+                        .grid_editor_window_id()
+                        .map_or_else(Task::none, iced::window::close),
+                    Err(error) =>
+                    {
+                        if let Some(editor) =
+                            self.ui_state.gerber_grid_editor.as_mut()
+                        {
+                            editor.set_error(error);
+                        }
+                        Task::none()
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn handle_open_gerber_viewer(&mut self) -> Task<Message>
     {
         if let Some(id) = self.ui_state.windows.iter().find_map(|(id, kind)| {
@@ -482,9 +567,8 @@ impl Signex
                 self.ui_state.gerber_viewer.select_grid_size(index);
                 Task::none()
             }
-            GerberViewerMessage::ToggleGridEditor => {
-                self.ui_state.gerber_viewer.toggle_grid_editor();
-                Task::none()
+            GerberViewerMessage::OpenGridEditor => {
+                self.handle_open_gerber_grid_editor()
             }
             GerberViewerMessage::NewGridNameChanged(value) => {
                 self.ui_state.gerber_viewer.set_new_grid_name(value);

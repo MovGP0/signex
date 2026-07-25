@@ -188,6 +188,7 @@ impl Signex {
             Some(WindowKind::DetachedPanel(_)) => InputTarget::DetachedPanel,
             Some(WindowKind::ComponentEditor { .. }) => InputTarget::ComponentEditor,
             Some(WindowKind::GerberViewer) => InputTarget::GerberToolWindow,
+            Some(WindowKind::GerberGridEditor { .. }) => InputTarget::GerberToolWindow,
         }
     }
 
@@ -585,6 +586,9 @@ mod tests {
             },
         );
         let gerber_viewer = open_window(&mut app, WindowKind::GerberViewer);
+        let document_id = app.ui_state.gerber_workspace.active_document_id();
+        let gerber_grid_editor =
+            open_window(&mut app, WindowKind::GerberGridEditor { document_id });
 
         assert_eq!(
             app.input_target(Some(modal)),
@@ -595,6 +599,10 @@ mod tests {
         assert_eq!(app.input_target(Some(editor)), InputTarget::ComponentEditor);
         assert_eq!(
             app.input_target(Some(gerber_viewer)),
+            InputTarget::GerberToolWindow
+        );
+        assert_eq!(
+            app.input_target(Some(gerber_grid_editor)),
             InputTarget::GerberToolWindow
         );
     }

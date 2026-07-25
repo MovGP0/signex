@@ -158,6 +158,7 @@ impl Signex {
                 ),
                 passive_calculator_open: false,
                 gerber_viewer: signex_widgets::gerber_viewer::GerberViewerState::default(),
+                gerber_grid_editor: None,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,

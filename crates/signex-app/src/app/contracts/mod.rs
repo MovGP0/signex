@@ -25,6 +25,10 @@ pub enum Message {
     OpenGerberViewer,
     GerberViewer(signex_widgets::gerber_viewer::GerberViewerMessage),
     GerberViewerOpened(iced::window::Id),
+    GerberGridEditor(
+        signex_widgets::grid_editor::GerberGridEditorMessage,
+    ),
+    GerberGridEditorOpened(iced::window::Id),
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted

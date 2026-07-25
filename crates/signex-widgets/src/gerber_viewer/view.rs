@@ -169,15 +169,6 @@ pub fn view<'a>(
                 .size(10)
                 .color(text_muted),
             Space::new().width(Length::Fill),
-            button(text(if state.grid_editor_open
-            {
-                "Close Grid Editor"
-            }
-            else
-            {
-                "Edit Grids…"
-            }))
-            .on_press(GerberViewerMessage::ToggleGridEditor),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
@@ -185,108 +176,6 @@ pub fn view<'a>(
     .padding([4, 10])
     .width(Length::Fill)
     .style(styles::toolbar_strip(tokens));
-    let grid_editor: Element<'_, GerberViewerMessage> = if state.grid_editor_open
-    {
-        let unit_picker = pick_list(
-            GridUnit::ALL,
-            Some(state.new_grid_unit),
-            |unit| {
-                GerberViewerMessage::SetNewGridUnitMillimetres(
-                    unit == GridUnit::Mm,
-                )
-            },
-        )
-        .width(90);
-        let add_form = row![
-            text("Add grid").size(12).color(text_primary),
-            text_input("Optional name", &state.new_grid_name)
-                .on_input(GerberViewerMessage::NewGridNameChanged)
-                .width(180),
-            text_input("X distance", &state.new_grid_x)
-                .on_input(GerberViewerMessage::NewGridXChanged)
-                .width(120),
-            text("⨯").size(13).color(text_muted),
-            text_input("Y distance", &state.new_grid_y)
-                .on_input(GerberViewerMessage::NewGridYChanged)
-                .width(120),
-            unit_picker,
-            button(text("Create"))
-                .on_press(GerberViewerMessage::CreateGridDefinition),
-            button(text("Delete selected"))
-                .on_press_maybe(
-                    (state.grid_catalog.len() > 1)
-                        .then_some(GerberViewerMessage::DeleteGridDefinition),
-                ),
-            button(text("Move up"))
-                .on_press_maybe(
-                    (state.active_grid_index > 0)
-                        .then_some(GerberViewerMessage::MoveGridUp),
-                ),
-            button(text("Move down"))
-                .on_press_maybe(
-                    (state.active_grid_index + 1 < state.grid_catalog.len())
-                        .then_some(GerberViewerMessage::MoveGridDown),
-                ),
-            Space::new().width(Length::Fill),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
-        let edit_unit_picker = pick_list(
-            GridUnit::ALL,
-            Some(state.edit_grid_unit),
-            |unit| {
-                GerberViewerMessage::SetEditGridUnitMillimetres(
-                    unit == GridUnit::Mm,
-                )
-            },
-        )
-        .width(90);
-        let edit_form = row![
-            text("Edit selected").size(12).color(text_primary),
-            text_input("Optional name", &state.edit_grid_name)
-                .on_input(GerberViewerMessage::EditGridNameChanged)
-                .width(180),
-            text_input("X distance", &state.edit_grid_x)
-                .on_input(GerberViewerMessage::EditGridXChanged)
-                .width(120),
-            text("⨯").size(13).color(text_muted),
-            text_input("Y distance", &state.edit_grid_y)
-                .on_input(GerberViewerMessage::EditGridYChanged)
-                .width(120),
-            edit_unit_picker,
-            button(text("Update"))
-                .on_press(GerberViewerMessage::UpdateGridDefinition),
-            Space::new().width(Length::Fill),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
-        let editor_content = if let Some(error) = state.grid_editor_error.as_deref()
-        {
-            column![
-                add_form,
-                edit_form,
-                text(error)
-                    .size(10)
-                    .color(Color::from_rgb8(239, 83, 80)),
-            ]
-            .spacing(4)
-        }
-        else
-        {
-            column![add_form, edit_form]
-        };
-
-        container(editor_content)
-            .padding([6, 10])
-            .width(Length::Fill)
-            .style(styles::toolbar_strip(tokens))
-            .into()
-    }
-    else
-    {
-        Space::new().height(0).into()
-    };
-
     let mut layer_list = column![
         text("Layers").size(13).color(text_primary),
         container(Space::new())
@@ -701,7 +590,6 @@ pub fn view<'a>(
         menu_bar,
         toolbar,
         grid_toolbar,
-        grid_editor,
         content,
         status,
     ]

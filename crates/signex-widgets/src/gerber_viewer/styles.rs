@@ -2,12 +2,12 @@ use iced::widget::{button, container};
 use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 
-pub(super) fn ti(color: signex_types::theme::Color) -> Color
+pub(crate) fn ti(color: signex_types::theme::Color) -> Color
 {
     Color::from_rgba8(color.r, color.g, color.b, color.a as f32 / 255.0)
 }
 
-pub(super) fn chrome_separator(
+pub(crate) fn chrome_separator(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static
 {
@@ -18,7 +18,7 @@ pub(super) fn chrome_separator(
     }
 }
 
-pub(super) fn toolbar_strip(
+pub(crate) fn toolbar_strip(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static
 {
@@ -56,7 +56,7 @@ pub(super) fn status_bar(
     }
 }
 
-pub(super) fn rail_tab(
+pub(crate) fn rail_tab(
     tokens: &ThemeTokens,
     is_active: bool,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static

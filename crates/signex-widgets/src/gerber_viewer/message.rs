@@ -52,7 +52,7 @@ pub enum GerberViewerMessage
     ToggleDCodeList,
     ToggleSourceView,
     SelectGridSize(usize),
-    ToggleGridEditor,
+    OpenGridEditor,
     NewGridNameChanged(String),
     NewGridXChanged(String),
     NewGridYChanged(String),

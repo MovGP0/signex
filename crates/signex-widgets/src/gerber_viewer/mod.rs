@@ -3,7 +3,6 @@
 use iced::mouse;
 use iced::widget::{
     Space, button, canvas, checkbox, container, pick_list, row, scrollable, text,
-    text_input,
 };
 use iced::{
     Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme,
@@ -30,13 +29,14 @@ mod pcb_export;
 pub(crate) mod print;
 mod selection;
 mod shortcuts;
-mod styles;
+pub(crate) mod styles;
 mod view;
 
 #[path = "canvas.rs"]
 mod viewport;
 
 pub use display::{GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
+pub use grid::GridUnit;
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
 pub use measurement::GerberMeasurement;
 pub use message::GerberViewerMessage;
@@ -58,11 +58,14 @@ use viewport::{
 #[cfg(test)]
 use viewport::*;
 
+pub(crate) use grid::{
+    DEFAULT_GRID_INDEX, GridSizeChoice, GridSizePreset,
+    create_grid_definition, default_grid_catalog,
+    format_distance_input, grid_size_choices, persist_grid_catalog,
+};
 use grid::{
-    DEFAULT_GRID_INDEX, GridSizePreset, GridUnit, create_grid_definition,
-    default_forced_opacity, default_inactive_layer_opacity, format_distance_input,
-    grid_size_choices,
-    load_grid_catalog, load_page_size, persist_grid_catalog, persist_page_size,
+    default_forced_opacity, default_inactive_layer_opacity,
+    load_grid_catalog, load_page_size, persist_page_size,
     system_decimal_separator,
 };
 use highlight::{
