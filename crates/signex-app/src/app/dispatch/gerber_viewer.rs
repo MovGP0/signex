@@ -228,6 +228,12 @@ impl Signex
                     .set_polar_coordinates(polar);
                 Task::none()
             }
+            GerberViewerMessage::ToggleFullWindowCrosshair(full_window) => {
+                self.ui_state
+                    .gerber_viewer
+                    .set_full_window_crosshair(full_window);
+                Task::none()
+            }
         }
     }
 }

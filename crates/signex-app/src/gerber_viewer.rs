@@ -124,6 +124,7 @@ pub enum GerberViewerMessage
     SetDisplayUnit(GerberDisplayUnit),
     CursorWorldPositionChanged(Option<signex_gerber::Point>),
     TogglePolarCoordinates(bool),
+    ToggleFullWindowCrosshair(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -151,6 +152,7 @@ pub struct GerberViewerState
     display_unit: GerberDisplayUnit,
     cursor_world_position: Option<signex_gerber::Point>,
     polar_coordinates: bool,
+    full_window_crosshair: bool,
     decimal_separator: String,
     grid_editor_open: bool,
     new_grid_name: String,
@@ -194,6 +196,7 @@ impl Default for GerberViewerState
             display_unit: GerberDisplayUnit::Millimetres,
             cursor_world_position: None,
             polar_coordinates: false,
+            full_window_crosshair: false,
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -392,6 +395,15 @@ impl GerberViewerState
     pub fn set_polar_coordinates(&mut self, polar: bool)
     {
         self.polar_coordinates = polar;
+    }
+
+    pub fn set_full_window_crosshair(&mut self, full_window: bool)
+    {
+        if self.full_window_crosshair != full_window
+        {
+            self.full_window_crosshair = full_window;
+            self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        }
     }
 
     fn active_grid(&self) -> &GridSizePreset
@@ -799,6 +811,9 @@ pub fn view<'a>(
             checkbox(state.polar_coordinates)
                 .label("Polar")
                 .on_toggle(GerberViewerMessage::TogglePolarCoordinates),
+            checkbox(state.full_window_crosshair)
+                .label("Full crosshair")
+                .on_toggle(GerberViewerMessage::ToggleFullWindowCrosshair),
             text(cursor_label)
                 .size(10)
                 .color(text_muted),
@@ -1006,6 +1021,7 @@ pub fn view<'a>(
         background: canvas_bg,
         grid: crate::styles::ti(tokens.text_secondary),
         grid_visible: state.grid_visible,
+        full_window_crosshair: state.full_window_crosshair,
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,
@@ -1074,6 +1090,7 @@ struct GerberCanvas<'a>
     background: Color,
     grid: Color,
     grid_visible: bool,
+    full_window_crosshair: bool,
     grid_size: &'a GridSizePreset,
     redraw_generation: u64,
     zoom: f32,
@@ -1172,7 +1189,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry>
     {
         let _redraw_generation = self.redraw_generation;
@@ -1204,6 +1221,18 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
+            if self.full_window_crosshair
+            {
+                if let Some(position) = cursor.position_in(bounds)
+                {
+                    draw_full_window_crosshair(
+                        &mut frame,
+                        bounds,
+                        position,
+                        self.grid,
+                    );
+                }
+            }
             return vec![frame.into_geometry()];
         };
 
@@ -1237,6 +1266,18 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.background,
             );
         }
+        if self.full_window_crosshair
+        {
+            if let Some(position) = cursor.position_in(bounds)
+            {
+                draw_full_window_crosshair(
+                    &mut frame,
+                    bounds,
+                    position,
+                    self.grid,
+                );
+            }
+        }
         vec![frame.into_geometry()]
     }
 
@@ -1259,6 +1300,42 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
         {
             mouse::Interaction::default()
         }
+    }
+}
+
+fn full_window_crosshair_segments(
+    bounds: Rectangle,
+    position: Point,
+) -> [(Point, Point); 2]
+{
+    [
+        (
+            Point::new(0.0, position.y),
+            Point::new(bounds.width, position.y),
+        ),
+        (
+            Point::new(position.x, 0.0),
+            Point::new(position.x, bounds.height),
+        ),
+    ]
+}
+
+fn draw_full_window_crosshair(
+    frame: &mut canvas::Frame,
+    bounds: Rectangle,
+    position: Point,
+    color: Color,
+)
+{
+    let color = Color { a: 0.72, ..color };
+    for (start, end) in full_window_crosshair_segments(bounds, position)
+    {
+        frame.stroke(
+            &canvas::Path::line(start, end),
+            canvas::Stroke::default()
+                .with_color(color)
+                .with_width(1.0),
+        );
     }
 }
 
@@ -1787,6 +1864,35 @@ mod tests
         assert!(state.polar_coordinates);
         assert_eq!(state.cursor_world_position, Some(position));
         assert_eq!(state.grid_catalog, grid_catalog);
+    }
+
+    #[test]
+    fn full_window_crosshair_spans_viewport_and_toggle_requests_redraw()
+    {
+        let bounds = Rectangle::new(
+            Point::ORIGIN,
+            iced::Size::new(640.0, 480.0),
+        );
+        let segments =
+            full_window_crosshair_segments(bounds, Point::new(120.0, 75.0));
+
+        assert_eq!(
+            segments,
+            [
+                (Point::new(0.0, 75.0), Point::new(640.0, 75.0)),
+                (Point::new(120.0, 0.0), Point::new(120.0, 480.0)),
+            ]
+        );
+
+        let mut state = GerberViewerState::default();
+        let initial_generation = state.redraw_generation;
+        state.set_full_window_crosshair(true);
+
+        assert!(state.full_window_crosshair);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
+
+        state.set_full_window_crosshair(true);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
     }
 
     #[test]
