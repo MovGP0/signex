@@ -416,8 +416,8 @@ fn persist_settings_to(
 }
 
 #[cfg(test)]
-#[path = "../../tests/gerber_viewer_tests.rs"]
-mod gerber_viewer_test_definitions;
+#[path = "../../tests/gerber_viewer/grid.rs"]
+mod gerber_grid_test_definitions;
 
 #[cfg(test)]
-gerber_viewer_test_definitions::gerber_grid_tests!();
+gerber_grid_test_definitions::gerber_grid_tests!();

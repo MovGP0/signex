@@ -1063,8 +1063,22 @@ fn gerber_shortcut_message(
 }
 
 #[cfg(test)]
-#[path = "../../tests/gerber_viewer_tests.rs"]
-mod gerber_viewer_test_definitions;
+#[path = "../../tests/gerber_viewer/canvas.rs"]
+mod gerber_canvas_test_definitions;
 
 #[cfg(test)]
-gerber_viewer_test_definitions::gerber_viewer_tests!();
+#[path = "../../tests/gerber_viewer/grid_state.rs"]
+mod gerber_grid_state_test_definitions;
+
+#[cfg(test)]
+#[path = "../../tests/gerber_viewer/layer_state.rs"]
+mod gerber_layer_state_test_definitions;
+
+#[cfg(test)]
+gerber_canvas_test_definitions::gerber_canvas_tests!();
+
+#[cfg(test)]
+gerber_grid_state_test_definitions::gerber_grid_state_tests!();
+
+#[cfg(test)]
+gerber_layer_state_test_definitions::gerber_layer_state_tests!();

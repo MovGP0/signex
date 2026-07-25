@@ -378,8 +378,8 @@ fn pt(millimetres: f64) -> f64
 }
 
 #[cfg(test)]
-#[path = "../../tests/gerber_viewer_tests.rs"]
-mod gerber_viewer_test_definitions;
+#[path = "../../tests/gerber_viewer/print.rs"]
+mod gerber_print_test_definitions;
 
 #[cfg(test)]
-gerber_viewer_test_definitions::gerber_print_tests!();
+gerber_print_test_definitions::gerber_print_tests!();
