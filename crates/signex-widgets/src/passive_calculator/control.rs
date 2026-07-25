@@ -199,9 +199,9 @@ impl CalculatorControl {
 
         if self.active_tab == CalculatorTab::RkmEncoder {
             let content = column![
-                text("RKM Encoder").size(24).color(token_color(tokens.text)),
+                text("RKM Encoder").size(16).color(token_color(tokens.text)),
                 text("Encode component specifications independently of network synthesis.")
-                    .size(13)
+                    .size(11)
                     .color(token_color(tokens.text_secondary)),
                 tabs,
                 self.rkm_encoder
@@ -209,7 +209,7 @@ impl CalculatorControl {
                     .map(CalculatorMessage::RkmEncoder),
             ]
             .spacing(14)
-            .padding(20);
+            .padding(12);
             return scrollable(content).height(Length::Fill).into();
         }
 
@@ -233,7 +233,7 @@ impl CalculatorControl {
                 .width(95),
             ),
             text(state.prefix.unit(self.kind))
-                .size(14)
+                .size(11)
                 .color(token_color(tokens.text_secondary)),
             labeled(
                 "Preferred series",
@@ -254,7 +254,7 @@ impl CalculatorControl {
                 .width(90),
             ),
             button(text("Calculate"))
-                .padding([9, 18])
+                .padding([4, 10])
                 .on_press(CalculatorMessage::Calculate),
         ]
         .spacing(12)
@@ -262,21 +262,21 @@ impl CalculatorControl {
 
         let mut content = column![
             text("Passive Network Calculator")
-                .size(24)
+                .size(16)
                 .color(token_color(tokens.text)),
             text("Find a bounded preferred-value series/parallel realization.")
-                .size(13)
+                .size(11)
                 .color(token_color(tokens.text_secondary)),
             tabs,
             target_row,
         ]
         .spacing(14)
-        .padding(20);
+        .padding(12);
 
         if let Some(error) = &state.validation_error {
             content = content.push(
                 text(error)
-                    .size(13)
+                    .size(11)
                     .color(iced::Color::from_rgb8(210, 70, 70)),
             );
         }
@@ -289,7 +289,7 @@ impl CalculatorControl {
                     text("Enter a target and select Calculate to generate a network.")
                         .color(token_color(tokens.text_secondary)),
                 )
-                .padding(24)
+                .padding(12)
                 .width(Length::Fill)
                 .style(move |_theme| panel_style(tokens)),
             );
@@ -310,7 +310,7 @@ impl CalculatorControl {
 
         let summary = column![
             text(result.expression(self.kind))
-                .size(20)
+                .size(14)
                 .color(token_color(tokens.text)),
             row![
                 metric("Target", format_value(target, self.kind), tokens),
@@ -330,7 +330,7 @@ impl CalculatorControl {
         if components.is_empty() {
             component_cards = component_cards.push(
                 text("No discrete component is required.")
-                    .size(13)
+                    .size(11)
                     .color(token_color(tokens.text_secondary)),
             );
         }
@@ -343,7 +343,7 @@ impl CalculatorControl {
         }
 
         container(column![summary, component_cards].spacing(16))
-            .padding(16)
+            .padding(12)
             .width(Length::Fill)
             .style(move |_theme| panel_style(tokens))
             .into()
@@ -366,8 +366,8 @@ fn tab_button<'a>(
     message: CalculatorMessage,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, CalculatorMessage> {
-    button(text(label).size(14))
-        .padding([8, 18])
+    button(text(label).size(11))
+        .padding([4, 10])
         .on_press(message)
         .style(move |_theme: &Theme, status| {
             let background = if active {
@@ -408,7 +408,7 @@ fn default_tolerance(series: ESeries) -> Tolerance {
 }
 
 fn labeled<'a, M: 'a>(label: &'a str, control: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    column![text(label).size(12), control.into()]
+    column![text(label).size(11), control.into()]
         .spacing(4)
         .into()
 }
@@ -420,9 +420,9 @@ fn metric<'a>(
 ) -> Element<'a, CalculatorMessage> {
     column![
         text(label)
-            .size(11)
+            .size(10)
             .color(token_color(tokens.text_secondary)),
-        text(value).size(13).color(token_color(tokens.text)),
+        text(value).size(11).color(token_color(tokens.text)),
     ]
     .spacing(2)
     .into()

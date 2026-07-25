@@ -17,14 +17,14 @@ pub fn color_code_representations<'a, Message: 'a>(
     };
     let mut color_codes = column![
         text(representation_label)
-            .size(11)
+            .size(10)
             .color(token_color(tokens.text_secondary))
     ]
     .spacing(8);
     if representations.is_empty() {
         color_codes = color_codes.push(
             text(color_code_unavailable_label(kind))
-                .size(12)
+                .size(11)
                 .color(token_color(tokens.text_secondary)),
         );
     } else {
@@ -61,7 +61,7 @@ fn color_code_line<'a, Message: 'a>(
         .push(
             container(
                 text(accessible_label)
-                    .size(12)
+                    .size(11)
                     .color(token_color(tokens.text)),
             )
             .width(Length::Fill),

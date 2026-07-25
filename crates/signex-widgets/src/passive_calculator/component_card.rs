@@ -85,7 +85,7 @@ impl<'a> ComponentCard<'a> {
 }
 
 fn labeled<'a, M: 'a>(label: &'a str, control: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    column![text(label).size(12), control.into()]
+    column![text(label).size(11), control.into()]
         .spacing(4)
         .into()
 }
@@ -97,9 +97,9 @@ fn metric<'a>(
 ) -> Element<'a, ComponentCardMessage> {
     column![
         text(label)
-            .size(11)
+            .size(10)
             .color(token_color(tokens.text_secondary)),
-        text(value).size(13).color(token_color(tokens.text)),
+        text(value).size(11).color(token_color(tokens.text)),
     ]
     .spacing(2)
     .into()
