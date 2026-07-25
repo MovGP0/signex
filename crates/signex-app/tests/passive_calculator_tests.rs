@@ -1,4 +1,4 @@
-use signex_app::app::{Message, Signex, WindowKind, WindowMsg};
+use signex_app::app::{Message, OverlayMsg, Signex};
 use signex_app::menu_bar::MenuMessage;
 use signex_widgets::passive_calculator::{CalculatorMessage, ComponentKind};
 
@@ -15,35 +15,55 @@ fn calculator_messages_update_the_dedicated_control_state() {
 }
 
 #[test]
-fn tools_menu_message_produces_a_window_open_task() {
+fn tools_menu_message_opens_the_modal_without_a_window_task() {
     let (mut app, _startup) = Signex::new();
+    assert!(!app.ui_state.passive_calculator_open);
+
     let task = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+
+    assert!(
+        app.ui_state.passive_calculator_open,
+        "the Tools menu entry should open the in-app modal"
+    );
     assert_eq!(
         task.units(),
-        1,
-        "opening the passive calculator should produce a window task"
+        0,
+        "the modal is an overlay, so no OS window task should be emitted"
     );
 }
 
 #[test]
-fn opened_calculator_window_gets_its_role_and_title() {
+fn reopening_while_open_is_a_no_op() {
     let (mut app, _startup) = Signex::new();
-    let id = iced::window::Id::unique();
-    let _task = app.update(Message::PassiveCalculatorOpened(id));
-    assert!(matches!(
-        app.ui_state.windows.get(&id),
-        Some(WindowKind::PassiveCalculator)
-    ));
-    assert_eq!(app.title(id), "Signex — Passive Network Calculator");
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    assert!(app.ui_state.passive_calculator_open);
 }
 
 #[test]
-fn closing_calculator_window_removes_its_window_role() {
+fn close_message_dismisses_the_modal() {
     let (mut app, _startup) = Signex::new();
-    let id = iced::window::Id::unique();
-    app.ui_state
-        .windows
-        .insert(id, WindowKind::PassiveCalculator);
-    let _task = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
-    assert!(!app.ui_state.windows.contains_key(&id));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+
+    let _task = app.update(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
+
+    assert!(!app.ui_state.passive_calculator_open);
+}
+
+#[test]
+fn closing_the_modal_keeps_the_entered_state() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    let _ = app.update(Message::PassiveCalculator(CalculatorMessage::KindChanged(
+        ComponentKind::Inductor,
+    )));
+
+    let _ = app.update(Message::Overlay(OverlayMsg::ClosePassiveCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+
+    assert_eq!(
+        app.ui_state.passive_calculator.kind,
+        ComponentKind::Inductor,
+        "reopening should show the state the user left behind"
+    );
 }

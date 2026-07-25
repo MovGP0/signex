@@ -82,7 +82,6 @@ impl KeymapRecorderState {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum WindowKind {
-    PassiveCalculator,
     DetachedModal(ModalId),
     /// Undocked document tab. Stores the tab's file path (unique per
     /// open tab in Signex) so the mapping survives tab reordering or

@@ -64,7 +64,9 @@ impl<'a> ComponentCard<'a> {
                 pick_list(Tolerance::ALL, Some(tolerance), move |tolerance| {
                     ComponentCardMessage::ToleranceChanged { index, tolerance }
                 })
-                .width(125),
+                .text_size(11)
+                .padding([4, 6])
+                .width(105),
             ),
         ]
         .spacing(28)

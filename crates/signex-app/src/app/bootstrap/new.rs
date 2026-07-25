@@ -154,6 +154,7 @@ impl Signex {
                 windows: std::collections::HashMap::new(),
                 passive_calculator: signex_widgets::passive_calculator::CalculatorControl::default(
                 ),
+                passive_calculator_open: false,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,

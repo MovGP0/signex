@@ -24,7 +24,6 @@ pub enum Message {
     Menu(MenuMessage),
     OpenPassiveCalculator,
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
-    PassiveCalculatorOpened(iced::window::Id),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted
     /// it. Lets the handler distinguish main-window tab reorder/select

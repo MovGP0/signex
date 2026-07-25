@@ -220,8 +220,9 @@ impl CalculatorControl {
                 "Target",
                 text_input("220", &state.target_input)
                     .on_input(CalculatorMessage::TargetChanged)
-                    .padding(8)
-                    .width(150),
+                    .size(11)
+                    .padding([4, 6])
+                    .width(110),
             ),
             labeled(
                 "Unit",
@@ -230,7 +231,9 @@ impl CalculatorControl {
                     Some(state.prefix),
                     CalculatorMessage::PrefixChanged,
                 )
-                .width(95),
+                .text_size(11)
+                .padding([4, 6])
+                .width(80),
             ),
             text(state.prefix.unit(self.kind))
                 .size(11)
@@ -242,7 +245,9 @@ impl CalculatorControl {
                     Some(state.series),
                     CalculatorMessage::SeriesChanged,
                 )
-                .width(100),
+                .text_size(11)
+                .padding([4, 6])
+                .width(85),
             ),
             labeled(
                 "Maximum parts",
@@ -251,9 +256,11 @@ impl CalculatorControl {
                     Some(state.max_components),
                     CalculatorMessage::MaxComponentsChanged,
                 )
-                .width(90),
+                .text_size(11)
+                .padding([4, 6])
+                .width(70),
             ),
-            button(text("Calculate"))
+            button(text("Calculate").size(11))
                 .padding([4, 10])
                 .on_press(CalculatorMessage::Calculate),
         ]

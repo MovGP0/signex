@@ -110,22 +110,6 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
-                super::state::WindowKind::PassiveCalculator => {
-                    let tokens = &self.document_state.panel_ctx.tokens;
-                    iced::widget::container(
-                        self.ui_state
-                            .passive_calculator
-                            .view(tokens)
-                            .map(Message::PassiveCalculator),
-                    )
-                    .width(iced::Length::Fill)
-                    .height(iced::Length::Fill)
-                    .style(move |_theme| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(crate::styles::ti(tokens.bg))),
-                        ..iced::widget::container::Style::default()
-                    })
-                    .into()
-                }
                 super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the
@@ -460,6 +444,7 @@ impl Signex {
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
@@ -801,6 +786,7 @@ impl Signex {
         layers.extend(self.preferences_overlay());
         layers.extend(self.find_replace_overlay());
         layers.extend(self.keyboard_shortcuts_overlay());
+        layers.extend(self.passive_calculator_overlay());
         layers.extend(self.first_run_tour_overlay());
         layers.extend(self.simple_dialogs_overlay());
         layers.extend(self.detachable_dialogs_overlay());
