@@ -28,6 +28,8 @@ pub(super) struct GerberCanvas<'a>
     pub(super) d_code_color: Color,
     pub(super) compare_mode: bool,
     pub(super) compare_palette: &'a [Color],
+    pub(super) forced_opacity_mode: bool,
+    pub(super) forced_opacity: f32,
     pub(super) dim_inactive_layers: bool,
     pub(super) inactive_layer_opacity: f32,
     pub(super) mirrored: bool,
@@ -335,12 +337,16 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
             draw_layer(
                 &mut frame,
                 viewer_layer,
-                compare_layer_color(
-                    viewer_layer.color,
-                    visible_ordinal,
-                    visible_layer_count,
-                    self.compare_mode,
-                    self.compare_palette,
+                forced_opacity_color(
+                    compare_layer_color(
+                        viewer_layer.color,
+                        visible_ordinal,
+                        visible_layer_count,
+                        self.compare_mode,
+                        self.compare_palette,
+                    ),
+                    self.forced_opacity_mode,
+                    self.forced_opacity,
                 ),
                 self.active_layer == Some(layer_index),
                 self.dim_inactive_layers,
@@ -570,6 +576,23 @@ pub(super) fn inactive_layer_color(
 
     Color {
         a: color.a * inactive_layer_opacity.clamp(0.0, 1.0),
+        ..color
+    }
+}
+
+pub(super) fn forced_opacity_color(
+    color: Color,
+    forced_opacity_mode: bool,
+    forced_opacity: f32,
+) -> Color
+{
+    if !forced_opacity_mode
+    {
+        return color;
+    }
+
+    Color {
+        a: forced_opacity.clamp(0.0, 1.0),
         ..color
     }
 }

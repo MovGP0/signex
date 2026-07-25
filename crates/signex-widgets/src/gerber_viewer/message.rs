@@ -39,6 +39,7 @@ pub enum GerberViewerMessage
     ToggleGhostNegativeObjects,
     ToggleDCodeLabels,
     ToggleCompareMode,
+    ToggleForcedOpacityMode,
     ToggleDimInactiveLayers,
     ToggleMirrored,
     ZoomBy(f32),

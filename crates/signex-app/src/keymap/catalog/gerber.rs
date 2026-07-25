@@ -82,6 +82,14 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "gerber_forced_opacity",
+        category: "display",
+        label: "Show Gerber layers with forced opacity",
+        menu_label: Some("Show with Forced Opacity Mode"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "gerber_flip_view",
         category: "display",
         label: "Mirror the Gerber view",

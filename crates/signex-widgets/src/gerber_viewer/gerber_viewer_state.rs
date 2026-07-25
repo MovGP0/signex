@@ -40,6 +40,8 @@ pub struct GerberViewerState
     pub(super) d_code_color: Color,
     pub(super) compare_mode: bool,
     pub(super) compare_palette: Vec<Color>,
+    pub(super) forced_opacity_mode: bool,
+    pub(super) forced_opacity: f32,
     pub(super) dim_inactive_layers: bool,
     pub(super) inactive_layer_opacity: f32,
     pub(super) mirrored: bool,
@@ -120,6 +122,8 @@ impl Default for GerberViewerState
             d_code_color,
             compare_mode: false,
             compare_palette: material_compare_palette(),
+            forced_opacity_mode: false,
+            forced_opacity: default_forced_opacity(),
             dim_inactive_layers: false,
             inactive_layer_opacity: default_inactive_layer_opacity(),
             mirrored: false,
@@ -933,6 +937,7 @@ impl GerberViewerState
         if self.compare_mode
         {
             self.dim_inactive_layers = false;
+            self.forced_opacity_mode = false;
         }
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
         self.status = if self.compare_mode
@@ -955,6 +960,7 @@ impl GerberViewerState
         if self.dim_inactive_layers
         {
             self.compare_mode = false;
+            self.forced_opacity_mode = false;
         }
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
         self.status = if self.dim_inactive_layers
@@ -964,6 +970,28 @@ impl GerberViewerState
         else
         {
             "All visible layers shown at normal contrast.".into()
+        };
+    }
+
+    pub fn toggle_forced_opacity_mode(&mut self)
+    {
+        self.forced_opacity_mode = !self.forced_opacity_mode;
+        if self.forced_opacity_mode
+        {
+            self.compare_mode = false;
+            self.dim_inactive_layers = false;
+        }
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.forced_opacity_mode
+        {
+            format!(
+                "Forced-opacity layer compositing enabled at {:.0}%.",
+                self.forced_opacity * 100.0,
+            )
+        }
+        else
+        {
+            "Forced-opacity layer compositing disabled.".to_owned()
         };
     }
 

@@ -55,7 +55,8 @@ use viewport::*;
 
 use grid::{
     DEFAULT_GRID_INDEX, GridSizePreset, GridUnit, create_grid_definition,
-    default_inactive_layer_opacity, format_distance_input, grid_size_choices,
+    default_forced_opacity, default_inactive_layer_opacity, format_distance_input,
+    grid_size_choices,
     load_grid_catalog, load_page_size, persist_grid_catalog, persist_page_size,
     system_decimal_separator,
 };
@@ -98,6 +99,10 @@ mod gerber_item_color_test_definitions;
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/clear_highlight.rs"]
 mod gerber_clear_highlight_test_definitions;
+
+#[cfg(test)]
+#[path = "../../tests/gerber_viewer/forced_opacity.rs"]
+mod gerber_forced_opacity_test_definitions;
 
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/flash_outline.rs"]
@@ -151,6 +156,9 @@ gerber_item_color_test_definitions::gerber_item_color_tests!();
 
 #[cfg(test)]
 gerber_clear_highlight_test_definitions::gerber_clear_highlight_tests!();
+
+#[cfg(test)]
+gerber_forced_opacity_test_definitions::gerber_forced_opacity_tests!();
 
 #[cfg(test)]
 gerber_flash_outline_test_definitions::gerber_flash_outline_tests!();

@@ -47,6 +47,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ToggleCompareMode)
             }
+            "gerber_forced_opacity" =>
+            {
+                Some(GerberViewerMessage::ToggleForcedOpacityMode)
+            }
             "gerber_dim_inactive_layers" =>
             {
                 Some(GerberViewerMessage::ToggleDimInactiveLayers)
@@ -395,6 +399,13 @@ impl Signex
             GerberViewerMessage::ToggleCompareMode =>
             {
                 self.ui_state.gerber_viewer.toggle_compare_mode();
+                Task::none()
+            }
+            GerberViewerMessage::ToggleForcedOpacityMode =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .toggle_forced_opacity_mode();
                 Task::none()
             }
             GerberViewerMessage::ToggleDimInactiveLayers =>

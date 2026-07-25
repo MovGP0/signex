@@ -175,7 +175,17 @@ struct BundledDisplaySettings
 #[derive(Debug, Deserialize)]
 struct BundledDrawingModeSettings
 {
+    forced_opacity: f32,
     inactive_layer_opacity: f32,
+}
+
+pub(super) fn default_forced_opacity() -> f32
+{
+    let settings: BundledDisplaySettings = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/default-settings.toml"
+    ))
+    .expect("bundled Gerber viewer settings must parse");
+    settings.drawing_mode.forced_opacity.clamp(0.0, 1.0)
 }
 
 pub(super) fn default_inactive_layer_opacity() -> f32

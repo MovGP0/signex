@@ -145,6 +145,15 @@ pub fn view<'a>(
                 "XOR Compare"
             }))
             .on_press(GerberViewerMessage::ToggleCompareMode),
+            button(text(if state.forced_opacity_mode
+            {
+                "Normal Layer Opacity"
+            }
+            else
+            {
+                "Forced Opacity"
+            }))
+            .on_press(GerberViewerMessage::ToggleForcedOpacityMode),
             button(text(if state.dim_inactive_layers
             {
                 "Normal Layer Contrast"
@@ -788,6 +797,8 @@ pub fn view<'a>(
         d_code_color: state.d_code_color,
         compare_mode: state.compare_mode,
         compare_palette: &state.compare_palette,
+        forced_opacity_mode: state.forced_opacity_mode,
+        forced_opacity: state.forced_opacity,
         dim_inactive_layers: state.dim_inactive_layers,
         inactive_layer_opacity: state.inactive_layer_opacity,
         mirrored: state.mirrored,
