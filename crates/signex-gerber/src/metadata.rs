@@ -143,7 +143,7 @@ impl LoadedLayer
             .unwrap_or_else(|| "In-memory source".to_owned());
         let layer_role = self.layer_type.to_string().trim().to_owned();
 
-        match &self.data
+        let mut metadata = match &self.data
         {
             LayerData::Gerber(layer) => {
                 let format = &layer.coordinate_format;
@@ -226,7 +226,35 @@ impl LoadedLayer
                 attributes: Vec::new(),
                 warnings: Vec::new(),
             },
+        };
+
+        if let Some(context) = &self.job_context
+        {
+            metadata.attributes.push(format!(
+                "Job file: {}",
+                context.job_path.display(),
+            ));
+            if let Some(function) = &context.file_attributes.file_function
+            {
+                metadata
+                    .attributes
+                    .push(format!("Job file function: {function}"));
+            }
+            if let Some(polarity) = &context.file_attributes.file_polarity
+            {
+                metadata
+                    .attributes
+                    .push(format!("Job file polarity: {polarity}"));
+            }
+            if let Some(format) = &context.file_attributes.file_format
+            {
+                metadata
+                    .attributes
+                    .push(format!("Job file format: {format}"));
+            }
         }
+
+        metadata
     }
 }
 

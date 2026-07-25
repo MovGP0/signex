@@ -105,6 +105,9 @@ pub enum GerberViewerMessage
     OpenZipArchive,
     ZipArchiveChosen(Option<PathBuf>),
     ZipArchiveLoaded(GerberLoadBatch),
+    OpenGerberJob,
+    GerberJobChosen(Option<PathBuf>),
+    GerberJobLoaded(GerberLoadBatch),
     ReloadAllLayers,
     LayersReloaded(signex_gerber::GerberReloadBatch),
     SelectLayer(usize),
@@ -922,6 +925,10 @@ pub fn view<'a>(
             button(text("Open ZIP…"))
                 .on_press_maybe((!state.loading).then_some(
                     GerberViewerMessage::OpenZipArchive,
+                )),
+            button(text("Open Job…"))
+                .on_press_maybe((!state.loading).then_some(
+                    GerberViewerMessage::OpenGerberJob,
                 )),
             button(text("Open Drill Files…"))
                 .on_press_maybe((!state.loading).then_some(

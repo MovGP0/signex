@@ -12,6 +12,7 @@ pub struct LoadedLayer
 {
     pub source_path: Option<PathBuf>,
     original_source: Option<String>,
+    pub job_context: Option<crate::GerberJobContext>,
     pub name: String,
     pub layer_type: LayerType,
     pub data: LayerData,
@@ -81,6 +82,7 @@ where
             });
             continue;
         };
+        let job_context = layer.job_context.clone();
         let result = match layer.data
         {
             LayerData::Gerber(_) => load_gerber_file(&path),
@@ -92,7 +94,10 @@ where
         };
         match result
         {
-            Ok(layer) => batch.layers.push((index, layer)),
+            Ok(mut layer) => {
+                layer.job_context = job_context;
+                batch.layers.push((index, layer));
+            }
             Err(failure) => batch.failures.push(failure),
         }
     }
@@ -328,6 +333,7 @@ where
     Ok(LoadedLayer {
         source_path: None,
         original_source: Some(original_source),
+        job_context: None,
         name,
         layer_type,
         data: LayerData::Gerber(data),
@@ -426,6 +432,7 @@ where
     Ok(LoadedLayer {
         source_path: None,
         original_source: Some(original_source),
+        job_context: None,
         name,
         layer_type: LayerType::Drill,
         data: LayerData::Excellon(data),

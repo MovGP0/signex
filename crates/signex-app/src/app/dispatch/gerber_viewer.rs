@@ -107,6 +107,42 @@ impl Signex
                 self.ui_state.gerber_viewer.apply_load_batch(batch);
                 Task::none()
             }
+            GerberViewerMessage::OpenGerberJob => {
+                self.ui_state.gerber_viewer.begin_loading();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Open Gerber Job File")
+                            .add_filter("Gerber job", &["gbrjob"])
+                            .pick_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    |path| {
+                        Message::GerberViewer(
+                            GerberViewerMessage::GerberJobChosen(path),
+                        )
+                    },
+                )
+            }
+            GerberViewerMessage::GerberJobChosen(Some(path)) => Task::perform(
+                async move { signex_gerber::load_gerber_job_file(path) },
+                |batch| {
+                    Message::GerberViewer(
+                        GerberViewerMessage::GerberJobLoaded(batch),
+                    )
+                },
+            ),
+            GerberViewerMessage::GerberJobChosen(None) => {
+                self.ui_state.gerber_viewer.loading = false;
+                self.ui_state.gerber_viewer.status =
+                    "Open Gerber job cancelled.".into();
+                Task::none()
+            }
+            GerberViewerMessage::GerberJobLoaded(batch) => {
+                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                Task::none()
+            }
             GerberViewerMessage::OpenGerberFiles => {
                 self.ui_state.gerber_viewer.begin_loading();
                 Task::perform(
