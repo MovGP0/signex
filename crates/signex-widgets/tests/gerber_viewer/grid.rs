@@ -88,6 +88,31 @@ macro_rules! gerber_grid_tests
     }
 
     #[test]
+    fn parses_linux_and_macos_locale_decimal_point_output()
+    {
+        assert_eq!(
+            parse_posix_decimal_separator(b".\n"),
+            Some(".".to_owned())
+        );
+        assert_eq!(
+            parse_posix_decimal_separator(b"\",\"\n"),
+            Some(",".to_owned())
+        );
+        assert_eq!(
+            parse_posix_decimal_separator(b"decimal_point=\",\" \n"),
+            Some(",".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_unusable_locale_decimal_point_output()
+    {
+        assert_eq!(parse_posix_decimal_separator(b"\n"), None);
+        assert_eq!(parse_posix_decimal_separator(b"\"\"\n"), None);
+        assert_eq!(parse_posix_decimal_separator(&[0xff]), None);
+    }
+
+    #[test]
     fn creates_named_and_unnamed_grid_definitions()
     {
         let named = create_grid_definition(

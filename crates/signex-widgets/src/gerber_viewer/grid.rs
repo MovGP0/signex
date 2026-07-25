@@ -291,12 +291,20 @@ fn platform_decimal_separator() -> Option<String>
         return None;
     }
 
-    let separator = String::from_utf8(output.stdout)
-        .ok()?
+    parse_posix_decimal_separator(&output.stdout)
+}
+
+#[cfg(any(unix, test))]
+fn parse_posix_decimal_separator(output: &[u8]) -> Option<String>
+{
+    let output = std::str::from_utf8(output).ok()?.trim();
+    let value = output
+        .split_once('=')
+        .map_or(output, |(_, value)| value)
         .trim()
-        .trim_matches('"')
-        .to_owned();
-    (!separator.is_empty()).then_some(separator)
+        .trim_matches('"');
+
+    (!value.is_empty()).then(|| value.to_owned())
 }
 
 #[cfg(not(any(unix, windows)))]
