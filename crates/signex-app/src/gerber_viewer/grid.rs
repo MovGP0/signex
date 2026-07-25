@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use super::GerberPageSize;
+
 const MILLIMETRES_PER_MIL: f64 = 0.0254;
 const SETTINGS_FILE_NAME: &str = "gerber_viewer.toml";
 // Use the en-US decimal point only when the operating-system locale cannot be read.
@@ -130,6 +132,14 @@ impl GridSizePreset
 struct GerberViewerSettings
 {
     grid_sizes: Vec<GridSizePreset>,
+    #[serde(default)]
+    page_size: PageSizeSettings,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct PageSizeSettings
+{
+    size: GerberPageSize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,11 +174,31 @@ pub(super) fn load_grid_catalog() -> Vec<GridSizePreset>
         .unwrap_or_else(default_grid_catalog)
 }
 
+pub(super) fn load_page_size() -> GerberPageSize
+{
+    grid_settings_path()
+        .and_then(|path| load_settings_from(&path).ok())
+        .unwrap_or_else(default_settings)
+        .page_size
+        .size
+}
+
 pub(super) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String>
 {
     let path = grid_settings_path()
         .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
-    persist_grid_catalog_to(&path, catalog)
+    let page_size = load_page_size();
+    persist_settings_to(&path, catalog, page_size)
+}
+
+pub(super) fn persist_page_size(
+    page_size: GerberPageSize,
+    catalog: &[GridSizePreset],
+) -> Result<(), String>
+{
+    let path = grid_settings_path()
+        .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
+    persist_settings_to(&path, catalog, page_size)
 }
 
 pub(super) fn create_grid_definition(
@@ -334,10 +364,7 @@ fn grid_settings_path() -> Option<PathBuf>
 
 fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>
 {
-    let source = std::fs::read_to_string(path)
-        .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
-    let settings: GerberViewerSettings = toml::from_str(&source)
-        .map_err(|error| format!("Could not parse {}: {error}", path.display()))?;
+    let settings = load_settings_from(path)?;
     if settings.grid_sizes.iter().any(|grid| {
         !grid.x.is_finite()
             || grid.x <= 0.0
@@ -350,10 +377,37 @@ fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>
     Ok(settings.grid_sizes)
 }
 
+#[cfg(test)]
 fn persist_grid_catalog_to(path: &Path, catalog: &[GridSizePreset]) -> Result<(), String>
+{
+    persist_settings_to(path, catalog, GerberPageSize::default())
+}
+
+fn default_settings() -> GerberViewerSettings
+{
+    toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/default-settings.toml"
+    ))
+    .expect("bundled Gerber viewer settings must parse")
+}
+
+fn load_settings_from(path: &Path) -> Result<GerberViewerSettings, String>
+{
+    let source = std::fs::read_to_string(path)
+        .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+    toml::from_str(&source)
+        .map_err(|error| format!("Could not parse {}: {error}", path.display()))
+}
+
+fn persist_settings_to(
+    path: &Path,
+    catalog: &[GridSizePreset],
+    page_size: GerberPageSize,
+) -> Result<(), String>
 {
     let settings = GerberViewerSettings {
         grid_sizes: catalog.to_vec(),
+        page_size: PageSizeSettings { size: page_size },
     };
     let source = toml::to_string_pretty(&settings)
         .map_err(|error| format!("Could not serialize Gerber viewer settings: {error}"))?;
@@ -514,5 +568,21 @@ mod tests
 
         assert_eq!(loaded, catalog);
         assert_eq!(loaded.last().and_then(|grid| grid.name.as_deref()), Some("Assembly"));
+    }
+
+    #[test]
+    fn persists_page_size_in_the_shared_gerber_settings_file()
+    {
+        let directory = tempfile::tempdir().expect("temporary settings directory");
+        let path = directory.path().join("gerber_viewer.toml");
+        let catalog = default_grid_catalog();
+
+        persist_settings_to(&path, &catalog, GerberPageSize::A3)
+            .expect("Gerber settings must persist");
+        let loaded = load_settings_from(&path)
+            .expect("persisted Gerber settings must load");
+
+        assert_eq!(loaded.page_size.size, GerberPageSize::A3);
+        assert_eq!(loaded.grid_sizes, catalog);
     }
 }

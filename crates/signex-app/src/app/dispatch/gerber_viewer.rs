@@ -384,6 +384,10 @@ impl Signex
                     .set_full_window_crosshair(full_window);
                 Task::none()
             }
+            GerberViewerMessage::SetPageSize(page_size) => {
+                self.ui_state.gerber_viewer.set_page_size(page_size);
+                Task::none()
+            }
         }
     }
 }

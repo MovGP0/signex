@@ -19,8 +19,8 @@ mod grid;
 
 use grid::{
     DEFAULT_GRID_INDEX, GridSizePreset, GridUnit, create_grid_definition,
-    format_distance_input, grid_size_choices, load_grid_catalog, persist_grid_catalog,
-    system_decimal_separator,
+    format_distance_input, grid_size_choices, load_grid_catalog, load_page_size,
+    persist_grid_catalog, persist_page_size, system_decimal_separator,
 };
 
 const MAX_VIEWER_LAYERS: usize = 32;
@@ -90,6 +90,78 @@ impl fmt::Display for GerberDisplayUnit
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GerberPageSize
+{
+    FullSize,
+    A4,
+    A3,
+    A2,
+    A,
+    B,
+    C,
+}
+
+impl GerberPageSize
+{
+    const ALL: [Self; 7] = [
+        Self::FullSize,
+        Self::A4,
+        Self::A3,
+        Self::A2,
+        Self::A,
+        Self::B,
+        Self::C,
+    ];
+
+    fn dimensions_millimetres(self) -> Option<(f64, f64)>
+    {
+        match self
+        {
+            Self::FullSize => None,
+            Self::A4 => Some((297.0, 210.0)),
+            Self::A3 => Some((420.0, 297.0)),
+            Self::A2 => Some((594.0, 420.0)),
+            Self::A => Some((279.4, 215.9)),
+            Self::B => Some((431.8, 279.4)),
+            Self::C => Some((558.8, 431.8)),
+        }
+    }
+}
+
+impl Default for GerberPageSize
+{
+    fn default() -> Self
+    {
+        Self::FullSize
+    }
+}
+
+impl fmt::Display for GerberPageSize
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        formatter.write_str(match self
+        {
+            Self::FullSize => "Full size",
+            Self::A4 => "A4",
+            Self::A3 => "A3",
+            Self::A2 => "A2",
+            Self::A => "ANSI A",
+            Self::B => "ANSI B",
+            Self::C => "ANSI C",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GerberPrintLayout
+{
+    pub page_size: GerberPageSize,
+    pub bounds: Bounds,
+}
+
 #[derive(Debug, Clone)]
 pub enum GerberViewerMessage
 {
@@ -144,6 +216,7 @@ pub enum GerberViewerMessage
     CursorWorldPositionChanged(Option<signex_gerber::Point>),
     TogglePolarCoordinates(bool),
     ToggleFullWindowCrosshair(bool),
+    SetPageSize(GerberPageSize),
 }
 
 #[derive(Debug, Clone)]
@@ -175,6 +248,7 @@ pub struct GerberViewerState
     cursor_world_position: Option<signex_gerber::Point>,
     polar_coordinates: bool,
     full_window_crosshair: bool,
+    page_size: GerberPageSize,
     decimal_separator: String,
     grid_editor_open: bool,
     new_grid_name: String,
@@ -222,6 +296,7 @@ impl Default for GerberViewerState
             cursor_world_position: None,
             polar_coordinates: false,
             full_window_crosshair: false,
+            page_size: load_page_size(),
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -388,6 +463,44 @@ impl GerberViewerState
         self.zoom = 1.0;
         self.pan = iced::Vector::default();
         self.status = "Fit page to viewport.".into();
+    }
+
+    pub fn set_page_size(&mut self, page_size: GerberPageSize)
+    {
+        let grid_catalog = self.grid_catalog.clone();
+        self.set_page_size_with(page_size, move |value| {
+            persist_page_size(value, &grid_catalog)
+        });
+    }
+
+    fn set_page_size_with(
+        &mut self,
+        page_size: GerberPageSize,
+        persist: impl FnOnce(GerberPageSize) -> Result<(), String>,
+    )
+    {
+        if self.page_size == page_size
+        {
+            return;
+        }
+        if let Err(error) = persist(page_size)
+        {
+            self.status = format!("Could not save Gerber page size: {error}");
+            return;
+        }
+        self.page_size = page_size;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = format!("Page size: {page_size}.");
+    }
+
+    pub fn print_layout(&self) -> Option<GerberPrintLayout>
+    {
+        page_bounds(visible_bounds(&self.layers), self.page_size).map(|bounds| {
+            GerberPrintLayout {
+                page_size: self.page_size,
+                bounds,
+            }
+        })
     }
 
     pub fn toggle_layer_manager(&mut self)
@@ -1026,6 +1139,12 @@ pub fn view<'a>(
         GerberViewerMessage::SetDisplayUnit,
     )
     .width(125);
+    let page_size_picker = pick_list(
+        GerberPageSize::ALL,
+        Some(state.page_size),
+        GerberViewerMessage::SetPageSize,
+    )
+    .width(105);
     let cursor_label = state
         .cursor_world_position
         .map(|position| {
@@ -1054,6 +1173,8 @@ pub fn view<'a>(
                 .on_toggle(GerberViewerMessage::ToggleGridVisibility),
             grid_picker,
             display_unit_picker,
+            text("Page").size(11).color(text_muted),
+            page_size_picker,
             checkbox(state.polar_coordinates)
                 .label("Polar")
                 .on_toggle(GerberViewerMessage::TogglePolarCoordinates),
@@ -1412,6 +1533,7 @@ pub fn view<'a>(
         grid: crate::styles::ti(tokens.text_secondary),
         grid_visible: state.grid_visible,
         full_window_crosshair: state.full_window_crosshair,
+        page_size: state.page_size,
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,
@@ -1523,6 +1645,7 @@ struct GerberCanvas<'a>
     grid: Color,
     grid_visible: bool,
     full_window_crosshair: bool,
+    page_size: GerberPageSize,
     grid_size: &'a GridSizePreset,
     keymap: &'a crate::keymap::CompiledKeymap,
     redraw_generation: u64,
@@ -1538,7 +1661,7 @@ impl GerberCanvas<'_>
         screen: Point,
     ) -> Option<signex_gerber::Point>
     {
-        let world_bounds = visible_bounds(self.layers)?;
+        let world_bounds = page_bounds(visible_bounds(self.layers), self.page_size)?;
         let (scale, world_center, screen_center) =
             fit_transform(world_bounds, bounds, self.zoom, self.pan);
         Some(signex_gerber::Point {
@@ -1635,7 +1758,8 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.background);
 
-        let Some(world_bounds) = visible_bounds(self.layers) else
+        let artwork_bounds = visible_bounds(self.layers);
+        let Some(world_bounds) = page_bounds(artwork_bounds, self.page_size) else
         {
             if self.grid_visible
             {
@@ -1694,6 +1818,13 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 world_to_screen(signex_gerber::Point { x: 0.0, y: 0.0 }),
             );
         }
+        draw_page_boundary(
+            &mut frame,
+            world_bounds,
+            scale,
+            &world_to_screen,
+            self.grid,
+        );
 
         for viewer_layer in self.layers.iter().filter(|layer| layer.visible)
         {
@@ -2084,6 +2215,58 @@ fn visible_bounds(layers: &[ViewerLayer]) -> Option<Bounds>
                 y: left.max.y.max(right.max.y),
             },
         })
+}
+
+fn page_bounds(
+    artwork_bounds: Option<Bounds>,
+    page_size: GerberPageSize,
+) -> Option<Bounds>
+{
+    let artwork = artwork_bounds?;
+    let Some((width, height)) = page_size.dimensions_millimetres()
+    else
+    {
+        return Some(artwork);
+    };
+    let center_x = (artwork.min.x + artwork.max.x) * 0.5;
+    let center_y = (artwork.min.y + artwork.max.y) * 0.5;
+    Some(Bounds {
+        min: signex_gerber::Point {
+            x: center_x - width * 0.5,
+            y: center_y - height * 0.5,
+        },
+        max: signex_gerber::Point {
+            x: center_x + width * 0.5,
+            y: center_y + height * 0.5,
+        },
+    })
+}
+
+fn draw_page_boundary(
+    frame: &mut canvas::Frame,
+    page: Bounds,
+    scale: f32,
+    world_to_screen: &impl Fn(signex_gerber::Point) -> Point,
+    color: Color,
+)
+{
+    let top_left = world_to_screen(signex_gerber::Point {
+        x: page.min.x,
+        y: page.max.y,
+    });
+    let path = canvas::Path::rectangle(
+        top_left,
+        iced::Size::new(
+            page.width() as f32 * scale,
+            page.height() as f32 * scale,
+        ),
+    );
+    frame.stroke(
+        &path,
+        canvas::Stroke::default()
+            .with_width(1.0)
+            .with_color(Color { a: 0.7, ..color }),
+    );
 }
 
 fn fit_transform(
@@ -2809,6 +2992,61 @@ mod tests
         state.fit_page();
         assert_eq!(state.zoom, 1.0);
         assert_eq!(state.pan, iced::Vector::default());
+    }
+
+    #[test]
+    fn page_size_updates_boundary_and_print_layout()
+    {
+        let artwork = Bounds {
+            min: signex_gerber::Point { x: 10.0, y: 20.0 },
+            max: signex_gerber::Point { x: 110.0, y: 70.0 },
+        };
+        assert_eq!(
+            page_bounds(Some(artwork), GerberPageSize::FullSize),
+            Some(artwork),
+        );
+        let a4 = page_bounds(Some(artwork), GerberPageSize::A4)
+            .expect("fixed page bounds");
+        assert!((a4.width() - 297.0).abs() < f64::EPSILON);
+        assert!((a4.height() - 210.0).abs() < f64::EPSILON);
+        assert!(((a4.min.x + a4.max.x) * 0.5 - 60.0).abs() < f64::EPSILON);
+        assert!(((a4.min.y + a4.max.y) * 0.5 - 45.0).abs() < f64::EPSILON);
+
+        let layer = signex_gerber::load_gerber_reader(
+            "page.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+        let mut state = GerberViewerState::default();
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![layer],
+            failures: Vec::new(),
+        });
+        let initial_generation = state.redraw_generation;
+        state.set_page_size_with(GerberPageSize::B, |_| Ok(()));
+
+        let layout = state.print_layout().expect("print layout");
+        assert_eq!(layout.page_size, GerberPageSize::B);
+        assert!((layout.bounds.width() - 431.8).abs() < 0.000_001);
+        assert!((layout.bounds.height() - 279.4).abs() < 0.000_001);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
+        assert_eq!(state.status, "Page size: ANSI B.");
+    }
+
+    #[test]
+    fn failed_page_size_persistence_keeps_existing_selection()
+    {
+        let mut state = GerberViewerState::default();
+        state.page_size = GerberPageSize::A4;
+
+        state.set_page_size_with(GerberPageSize::A3, |_| {
+            Err("settings unavailable".to_owned())
+        });
+
+        assert_eq!(state.page_size, GerberPageSize::A4);
+        assert!(state.status.contains("settings unavailable"));
     }
 
     #[test]
