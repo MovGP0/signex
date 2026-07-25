@@ -65,4 +65,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_flip_view",
+        category: "display",
+        label: "Mirror the Gerber view",
+        menu_label: Some("Flip Gerber View"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];

@@ -49,6 +49,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ToggleDimInactiveLayers)
             }
+            "gerber_flip_view" =>
+            {
+                Some(GerberViewerMessage::ToggleMirrored)
+            }
             _ => None,
         }
     }
@@ -354,6 +358,11 @@ impl Signex
                 self.ui_state
                     .gerber_viewer
                     .toggle_dim_inactive_layers();
+                Task::none()
+            }
+            GerberViewerMessage::ToggleMirrored =>
+            {
+                self.ui_state.gerber_viewer.toggle_mirrored();
                 Task::none()
             }
             GerberViewerMessage::ZoomBy(factor) => {

@@ -109,6 +109,10 @@ mod gerber_compare_mode_test_definitions;
 mod gerber_dim_inactive_layers_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/mirror_view.rs"]
+mod gerber_mirror_view_test_definitions;
+
+#[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
 
 #[cfg(test)]
@@ -138,3 +142,6 @@ gerber_compare_mode_test_definitions::gerber_compare_mode_tests!();
 
 #[cfg(test)]
 gerber_dim_inactive_layers_test_definitions::gerber_dim_inactive_layers_tests!();
+
+#[cfg(test)]
+gerber_mirror_view_test_definitions::gerber_mirror_view_tests!();

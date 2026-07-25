@@ -34,6 +34,7 @@ pub enum GerberViewerMessage
     ToggleDCodeLabels,
     ToggleCompareMode,
     ToggleDimInactiveLayers,
+    ToggleMirrored,
     ZoomBy(f32),
     PanBy(iced::Vector),
     FitPage,

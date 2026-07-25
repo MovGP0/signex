@@ -154,6 +154,15 @@ pub fn view<'a>(
                 "Dim Inactive Layers"
             }))
             .on_press(GerberViewerMessage::ToggleDimInactiveLayers),
+            button(text(if state.mirrored
+            {
+                "Normal Orientation"
+            }
+            else
+            {
+                "Flip Gerber View"
+            }))
+            .on_press(GerberViewerMessage::ToggleMirrored),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -711,6 +720,7 @@ pub fn view<'a>(
         compare_palette: &state.compare_palette,
         dim_inactive_layers: state.dim_inactive_layers,
         inactive_layer_opacity: state.inactive_layer_opacity,
+        mirrored: state.mirrored,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

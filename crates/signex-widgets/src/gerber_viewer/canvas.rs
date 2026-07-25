@@ -30,6 +30,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) compare_palette: &'a [Color],
     pub(super) dim_inactive_layers: bool,
     pub(super) inactive_layer_opacity: f32,
+    pub(super) mirrored: bool,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -54,10 +55,13 @@ impl GerberCanvas<'_>
         let world_bounds = page_bounds(visible_bounds(self.layers), self.page_size)?;
         let (scale, world_center, screen_center) =
             fit_transform(world_bounds, bounds, self.zoom, self.pan);
-        Some(signex_gerber::Point {
-            x: f64::from(world_center.x + (screen.x - screen_center.x) / scale),
-            y: f64::from(world_center.y - (screen.y - screen_center.y) / scale),
-        })
+        Some(screen_to_world_point(
+            screen,
+            world_center,
+            screen_center,
+            scale,
+            self.mirrored,
+        ))
     }
 
     fn pixels_per_world_unit(&self, bounds: Rectangle) -> Option<f32>
@@ -284,9 +288,12 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
         let (scale, world_center, screen_center) =
             fit_transform(world_bounds, bounds, self.zoom, self.pan);
         let world_to_screen = |point: signex_gerber::Point| -> Point {
-            Point::new(
-                screen_center.x + (point.x as f32 - world_center.x) * scale,
-                screen_center.y - (point.y as f32 - world_center.y) * scale,
+            world_to_screen_point(
+                point,
+                world_center,
+                screen_center,
+                scale,
+                self.mirrored,
             )
         };
         if self.grid_visible
@@ -1191,6 +1198,45 @@ pub(super) fn draw_page_boundary(
             .with_width(1.0)
             .with_color(Color { a: 0.7, ..color }),
     );
+}
+
+pub(super) fn world_to_screen_point(
+    point: signex_gerber::Point,
+    world_center: Point,
+    screen_center: Point,
+    scale: f32,
+    mirrored: bool,
+) -> Point
+{
+    let horizontal_direction = if mirrored { -1.0 } else { 1.0 };
+    Point::new(
+        screen_center.x
+            + (point.x as f32 - world_center.x)
+                * scale
+                * horizontal_direction,
+        screen_center.y - (point.y as f32 - world_center.y) * scale,
+    )
+}
+
+pub(super) fn screen_to_world_point(
+    point: Point,
+    world_center: Point,
+    screen_center: Point,
+    scale: f32,
+    mirrored: bool,
+) -> signex_gerber::Point
+{
+    let horizontal_direction = if mirrored { -1.0 } else { 1.0 };
+    signex_gerber::Point {
+        x: f64::from(
+            world_center.x
+                + (point.x - screen_center.x) / scale
+                    * horizontal_direction,
+        ),
+        y: f64::from(
+            world_center.y - (point.y - screen_center.y) / scale,
+        ),
+    }
 }
 
 pub(super) fn fit_transform(
