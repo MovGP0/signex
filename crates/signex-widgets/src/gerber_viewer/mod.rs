@@ -104,10 +104,6 @@ mod gerber_d_code_labels_test_definitions;
 mod gerber_compare_mode_test_definitions;
 
 #[cfg(test)]
-#[path = "../../tests/gerber_viewer/compare_mode.rs"]
-mod gerber_compare_mode_test_definitions;
-
-#[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
 
 #[cfg(test)]
@@ -131,8 +127,6 @@ gerber_ghost_negatives_test_definitions::gerber_ghost_negatives_tests!();
 #[cfg(test)]
 gerber_d_code_labels_test_definitions::gerber_d_code_labels_tests!();
 
-#[cfg(test)]
-gerber_compare_mode_test_definitions::gerber_compare_mode_tests!();
 
 #[cfg(test)]
 gerber_compare_mode_test_definitions::gerber_compare_mode_tests!();
