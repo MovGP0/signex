@@ -37,6 +37,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ToggleSketchPolygons)
             }
+            "gerber_show_d_codes" =>
+            {
+                Some(GerberViewerMessage::ToggleDCodeLabels)
+            }
             _ => None,
         }
     }
@@ -327,6 +331,11 @@ impl Signex
                     .toggle_ghost_negative_objects();
                 Task::none()
             }
+            GerberViewerMessage::ToggleDCodeLabels =>
+            {
+                self.ui_state.gerber_viewer.toggle_d_code_labels();
+                Task::none()
+            }
             GerberViewerMessage::ZoomBy(factor) => {
                 self.ui_state.gerber_viewer.zoom_by(factor);
                 Task::none()
@@ -604,6 +613,7 @@ mod tests
         let f = iced::keyboard::Key::Character("f".into());
         let l = iced::keyboard::Key::Character("l".into());
         let p = iced::keyboard::Key::Character("p".into());
+        let d = iced::keyboard::Key::Character("d".into());
 
         for profile in ["altium", "classic"]
         {
@@ -646,6 +656,13 @@ mod tests
                     iced::keyboard::Modifiers::default(),
                 ),
                 Some(GerberViewerMessage::ToggleSketchPolygons),
+            ));
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &d,
+                    iced::keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::ToggleDCodeLabels),
             ));
         }
     }

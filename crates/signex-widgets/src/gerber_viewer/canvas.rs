@@ -24,6 +24,8 @@ pub(super) struct GerberCanvas<'a>
     pub(super) sketch_polygons: bool,
     pub(super) ghost_negative_objects: bool,
     pub(super) negative_ghost_color: Color,
+    pub(super) show_d_code_labels: bool,
+    pub(super) d_code_color: Color,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -333,6 +335,9 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.sketch_polygons,
                 self.ghost_negative_objects,
                 self.negative_ghost_color,
+                self.show_d_code_labels,
+                self.d_code_color,
+                self.zoom,
             );
         }
         if let Some(measurement) = self.measurement
@@ -563,6 +568,9 @@ pub(super) fn draw_layer(
     sketch_polygons: bool,
     ghost_negative_objects: bool,
     negative_ghost_color: Color,
+    show_d_code_labels: bool,
+    d_code_color: Color,
+    zoom: f32,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -703,6 +711,67 @@ pub(super) fn draw_layer(
                 );
             }
         }
+        if d_code_labels_visible(show_d_code_labels, zoom)
+        {
+            if let Some(label) = d_code_label(primitive)
+            {
+                let anchor = world_to_screen(label.anchor);
+                frame.fill_text(canvas::Text {
+                    content: label.content,
+                    position: Point::new(anchor.x + 4.0, anchor.y - 4.0),
+                    color: d_code_color,
+                    size: iced::Pixels(11.0),
+                    align_x: iced::alignment::Horizontal::Left.into(),
+                    align_y: iced::alignment::Vertical::Bottom,
+                    ..canvas::Text::default()
+                });
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct DCodeLabel
+{
+    pub(super) content: String,
+    pub(super) anchor: signex_gerber::Point,
+}
+
+pub(super) fn d_code_labels_visible(
+    show_d_code_labels: bool,
+    zoom: f32,
+) -> bool
+{
+    show_d_code_labels && zoom >= 0.75
+}
+
+pub(super) fn d_code_label(
+    primitive: &GerberPrimitive,
+) -> Option<DCodeLabel>
+{
+    match primitive
+    {
+        GerberPrimitive::Stroke {
+            start,
+            end,
+            d_code: Some(d_code),
+            ..
+        } => Some(DCodeLabel {
+            content: format!("D{d_code}"),
+            anchor: signex_gerber::Point {
+                x: (start.x + end.x) / 2.0,
+                y: (start.y + end.y) / 2.0,
+            },
+        }),
+        GerberPrimitive::Flash {
+            position,
+            d_code: Some(d_code),
+            ..
+        } => Some(DCodeLabel {
+            content: format!("D{d_code}"),
+            anchor: *position,
+        }),
+        _ => None,
     }
 }
 
@@ -1133,6 +1202,7 @@ pub(super) fn zoom_transform_for_selection(
 struct LayerPalette
 {
     negative_ghost_color: String,
+    d_code_color: String,
     layer_colors: Vec<String>,
 }
 
@@ -1165,6 +1235,16 @@ pub(super) fn material_negative_ghost_color() -> Color
     .expect("bundled Material Design Gerber layer palette must parse");
     parse_hex_color(&palette.negative_ghost_color)
         .unwrap_or_else(|| Color::from_rgb8(117, 117, 117))
+}
+
+pub(super) fn material_d_code_color() -> Color
+{
+    let palette: LayerPalette = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/material-layer-colors.toml"
+    ))
+    .expect("bundled Material Design Gerber layer palette must parse");
+    parse_hex_color(&palette.d_code_color)
+        .unwrap_or_else(|| Color::from_rgb8(250, 250, 250))
 }
 
 pub(super) fn parse_hex_color(value: &str) -> Option<Color>

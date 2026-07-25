@@ -41,4 +41,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_show_d_codes",
+        category: "display",
+        label: "Show Gerber D-code labels",
+        menu_label: Some("Show D-Codes"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];

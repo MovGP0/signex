@@ -35,6 +35,8 @@ pub struct GerberViewerState
     pub(super) sketch_polygons: bool,
     pub(super) ghost_negative_objects: bool,
     pub(super) negative_ghost_color: Color,
+    pub(super) show_d_code_labels: bool,
+    pub(super) d_code_color: Color,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -96,6 +98,8 @@ impl Default for GerberViewerState
             sketch_polygons: false,
             ghost_negative_objects: false,
             negative_ghost_color: material_negative_ghost_color(),
+            show_d_code_labels: false,
+            d_code_color: material_d_code_color(),
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -883,6 +887,20 @@ impl GerberViewerState
         else
         {
             "Negative objects use normal compositing.".into()
+        };
+    }
+
+    pub fn toggle_d_code_labels(&mut self)
+    {
+        self.show_d_code_labels = !self.show_d_code_labels;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.show_d_code_labels
+        {
+            "D-code labels shown.".into()
+        }
+        else
+        {
+            "D-code labels hidden.".into()
         };
     }
 }
