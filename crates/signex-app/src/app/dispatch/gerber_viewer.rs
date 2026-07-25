@@ -222,6 +222,12 @@ impl Signex
                     .set_cursor_world_position(position);
                 Task::none()
             }
+            GerberViewerMessage::TogglePolarCoordinates(polar) => {
+                self.ui_state
+                    .gerber_viewer
+                    .set_polar_coordinates(polar);
+                Task::none()
+            }
         }
     }
 }

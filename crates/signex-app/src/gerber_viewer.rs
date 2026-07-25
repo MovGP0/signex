@@ -123,6 +123,7 @@ pub enum GerberViewerMessage
     ToggleGridVisibility(bool),
     SetDisplayUnit(GerberDisplayUnit),
     CursorWorldPositionChanged(Option<signex_gerber::Point>),
+    TogglePolarCoordinates(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +150,7 @@ pub struct GerberViewerState
     grid_visible: bool,
     display_unit: GerberDisplayUnit,
     cursor_world_position: Option<signex_gerber::Point>,
+    polar_coordinates: bool,
     decimal_separator: String,
     grid_editor_open: bool,
     new_grid_name: String,
@@ -191,6 +193,7 @@ impl Default for GerberViewerState
             grid_visible: true,
             display_unit: GerberDisplayUnit::Millimetres,
             cursor_world_position: None,
+            polar_coordinates: false,
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -384,6 +387,11 @@ impl GerberViewerState
     )
     {
         self.cursor_world_position = position;
+    }
+
+    pub fn set_polar_coordinates(&mut self, polar: bool)
+    {
+        self.polar_coordinates = polar;
     }
 
     fn active_grid(&self) -> &GridSizePreset
@@ -763,10 +771,11 @@ pub fn view<'a>(
     let cursor_label = state
         .cursor_world_position
         .map(|position| {
-            format_point_in_unit(
+            format_coordinate_in_unit(
                 position,
                 state.display_unit,
                 &state.decimal_separator,
+                state.polar_coordinates,
             )
         })
         .unwrap_or_else(|| "X: —  Y: —".to_owned());
@@ -787,6 +796,9 @@ pub fn view<'a>(
                 .on_toggle(GerberViewerMessage::ToggleGridVisibility),
             grid_picker,
             display_unit_picker,
+            checkbox(state.polar_coordinates)
+                .label("Polar")
+                .on_toggle(GerberViewerMessage::TogglePolarCoordinates),
             text(cursor_label)
                 .size(10)
                 .color(text_muted),
@@ -1497,12 +1509,25 @@ fn draw_flash(
     }
 }
 
-fn format_point_in_unit(
+fn format_coordinate_in_unit(
     point: signex_gerber::Point,
     unit: GerberDisplayUnit,
     decimal_separator: &str,
+    polar: bool,
 ) -> String
 {
+    if polar
+    {
+        let radius = point.x.hypot(point.y);
+        let angle = point.y.atan2(point.x).to_degrees();
+        return format!(
+            "R: {} {}  θ: {}°",
+            unit.format_value(radius, decimal_separator),
+            unit.suffix(),
+            format!("{angle:.2}").replace('.', decimal_separator),
+        );
+    }
+
     format!(
         "X: {}  Y: {} {}",
         unit.format_value(point.x, decimal_separator),
@@ -1683,21 +1708,85 @@ mod tests
         };
 
         assert_eq!(
-            format_point_in_unit(point, GerberDisplayUnit::Millimetres, "."),
+            format_coordinate_in_unit(
+                point,
+                GerberDisplayUnit::Millimetres,
+                ".",
+                false,
+            ),
             "X: 25.4000  Y: 12.7000 mm"
         );
         assert_eq!(
-            format_point_in_unit(point, GerberDisplayUnit::Inches, "."),
+            format_coordinate_in_unit(
+                point,
+                GerberDisplayUnit::Inches,
+                ".",
+                false,
+            ),
             "X: 1.0000  Y: 0.5000 in"
         );
         assert_eq!(
-            format_point_in_unit(point, GerberDisplayUnit::Mils, "."),
+            format_coordinate_in_unit(
+                point,
+                GerberDisplayUnit::Mils,
+                ".",
+                false,
+            ),
             "X: 1000.00  Y: 500.00 mils"
         );
         assert_eq!(
             format_bounds_in_unit(bounds, GerberDisplayUnit::Inches, "."),
             "Bounds: X 0.0000…1.0000  Y -0.5000…0.5000 in"
         );
+    }
+
+    #[test]
+    fn polar_coordinates_use_selected_unit_and_cartesian_origin()
+    {
+        let point = signex_gerber::Point { x: 25.4, y: 25.4 };
+
+        assert_eq!(
+            format_coordinate_in_unit(
+                point,
+                GerberDisplayUnit::Inches,
+                ".",
+                true,
+            ),
+            "R: 1.4142 in  θ: 45.00°"
+        );
+        assert_eq!(
+            format_coordinate_in_unit(
+                signex_gerber::Point::default(),
+                GerberDisplayUnit::Millimetres,
+                ".",
+                true,
+            ),
+            "R: 0.0000 mm  θ: 0.00°"
+        );
+        assert_eq!(
+            format_coordinate_in_unit(
+                signex_gerber::Point { x: 0.0, y: -25.4 },
+                GerberDisplayUnit::Mils,
+                ".",
+                true,
+            ),
+            "R: 1000.00 mils  θ: -90.00°"
+        );
+    }
+
+    #[test]
+    fn toggling_polar_coordinates_preserves_pointer_and_geometry_state()
+    {
+        let mut state = GerberViewerState::default();
+        let position = signex_gerber::Point { x: 3.0, y: 4.0 };
+        state.set_cursor_world_position(Some(position));
+        let grid_catalog = state.grid_catalog.clone();
+
+        state.set_polar_coordinates(true);
+
+        assert!(state.polar_coordinates);
+        assert_eq!(state.cursor_world_position, Some(position));
+        assert_eq!(state.grid_catalog, grid_catalog);
     }
 
     #[test]
