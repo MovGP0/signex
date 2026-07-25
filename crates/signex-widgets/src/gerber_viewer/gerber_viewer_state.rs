@@ -31,6 +31,7 @@ pub struct GerberViewerState
     pub(super) measurement_active: bool,
     pub(super) measurement: Option<GerberMeasurement>,
     pub(super) sketch_flashes: bool,
+    pub(super) sketch_lines: bool,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -88,6 +89,7 @@ impl Default for GerberViewerState
             measurement_active: false,
             measurement: None,
             sketch_flashes: false,
+            sketch_lines: false,
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -833,6 +835,20 @@ impl GerberViewerState
         else
         {
             "Flashed items shown filled.".into()
+        };
+    }
+
+    pub fn toggle_sketch_lines(&mut self)
+    {
+        self.sketch_lines = !self.sketch_lines;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.sketch_lines
+        {
+            "Line items shown in outline mode.".into()
+        }
+        else
+        {
+            "Line items shown filled.".into()
         };
     }
 }

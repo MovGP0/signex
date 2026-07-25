@@ -100,6 +100,15 @@ pub fn view<'a>(
                 "Sketch Flashes (F)"
             }))
             .on_press(GerberViewerMessage::ToggleSketchFlashes),
+            button(text(if state.sketch_lines
+            {
+                "Fill Lines"
+            }
+            else
+            {
+                "Sketch Lines (L)"
+            }))
+            .on_press(GerberViewerMessage::ToggleSketchLines),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -647,6 +656,7 @@ pub fn view<'a>(
         measurement_active: state.measurement_active(),
         measurement: state.measurement(),
         sketch_flashes: state.sketch_flashes,
+        sketch_lines: state.sketch_lines,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

@@ -29,6 +29,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ToggleSketchFlashes)
             }
+            "gerber_sketch_lines" =>
+            {
+                Some(GerberViewerMessage::ToggleSketchLines)
+            }
             _ => None,
         }
     }
@@ -300,6 +304,11 @@ impl Signex
             GerberViewerMessage::ToggleSketchFlashes =>
             {
                 self.ui_state.gerber_viewer.toggle_sketch_flashes();
+                Task::none()
+            }
+            GerberViewerMessage::ToggleSketchLines =>
+            {
+                self.ui_state.gerber_viewer.toggle_sketch_lines();
                 Task::none()
             }
             GerberViewerMessage::ZoomBy(factor) => {
@@ -577,6 +586,7 @@ mod tests
             iced::keyboard::key::Named::PageDown,
         );
         let f = iced::keyboard::Key::Character("f".into());
+        let l = iced::keyboard::Key::Character("l".into());
 
         for profile in ["altium", "classic"]
         {
@@ -605,6 +615,13 @@ mod tests
                     iced::keyboard::Modifiers::default(),
                 ),
                 Some(GerberViewerMessage::ToggleSketchFlashes),
+            ));
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &l,
+                    iced::keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::ToggleSketchLines),
             ));
         }
     }

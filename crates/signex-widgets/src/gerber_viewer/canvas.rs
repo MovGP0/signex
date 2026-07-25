@@ -20,6 +20,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) measurement_active: bool,
     pub(super) measurement: Option<GerberMeasurement>,
     pub(super) sketch_flashes: bool,
+    pub(super) sketch_lines: bool,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -325,6 +326,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.selected_item,
                 layer_index,
                 self.sketch_flashes,
+                self.sketch_lines,
             );
         }
         if let Some(measurement) = self.measurement
@@ -532,6 +534,7 @@ pub(super) fn draw_layer(
     selected_item: Option<GerberItemSelection>,
     layer_index: usize,
     sketch_flashes: bool,
+    sketch_lines: bool,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -596,12 +599,15 @@ pub(super) fn draw_layer(
                 width,
                 polarity,
                 ..
-            } => {
-                frame.stroke(
+            } =>
+            {
+                paint_line_path(
+                    frame,
                     &canvas::Path::line(world_to_screen(*start), world_to_screen(*end)),
-                    canvas::Stroke::default()
-                        .with_color(polarity_color(*polarity))
-                        .with_width((*width as f32 * scale).max(0.8)),
+                    polarity_color(*polarity),
+                    background,
+                    (*width as f32 * scale).max(0.8),
+                    line_render_mode(sketch_lines),
                 );
             }
             GerberPrimitive::Flash {
@@ -759,6 +765,73 @@ pub(super) fn flash_render_mode(sketch_flashes: bool) -> FlashRenderMode
     else
     {
         FlashRenderMode::Filled
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LineRenderMode
+{
+    Filled,
+    Outline,
+}
+
+pub(super) fn line_render_mode(sketch_lines: bool) -> LineRenderMode
+{
+    if sketch_lines
+    {
+        LineRenderMode::Outline
+    }
+    else
+    {
+        LineRenderMode::Filled
+    }
+}
+
+pub(super) fn line_stroke_widths(
+    aperture_width: f32,
+    render_mode: LineRenderMode,
+) -> (f32, Option<f32>)
+{
+    let aperture_width = aperture_width.max(0.8);
+    let inner_width = match render_mode
+    {
+        LineRenderMode::Filled => None,
+        LineRenderMode::Outline =>
+        {
+            let inner_width = aperture_width - 2.0;
+            (inner_width > 0.0).then_some(inner_width)
+        }
+    };
+    (aperture_width, inner_width)
+}
+
+fn paint_line_path(
+    frame: &mut canvas::Frame,
+    path: &canvas::Path,
+    color: Color,
+    background: Color,
+    aperture_width: f32,
+    render_mode: LineRenderMode,
+)
+{
+    let (outer_width, inner_width) =
+        line_stroke_widths(aperture_width, render_mode);
+    frame.stroke(
+        path,
+        canvas::Stroke::default()
+            .with_color(color)
+            .with_width(outer_width)
+            .with_line_cap(canvas::LineCap::Round),
+    );
+    if let Some(inner_width) = inner_width
+    {
+        frame.stroke(
+            path,
+            canvas::Stroke::default()
+                .with_color(background)
+                .with_width(inner_width)
+                .with_line_cap(canvas::LineCap::Round),
+        );
     }
 }
 

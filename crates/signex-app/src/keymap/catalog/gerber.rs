@@ -25,4 +25,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_sketch_lines",
+        category: "display",
+        label: "Sketch Gerber line items",
+        menu_label: Some("Sketch Lines"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];
