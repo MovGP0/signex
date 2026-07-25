@@ -41,6 +41,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ToggleDCodeLabels)
             }
+            "gerber_compare_layers" =>
+            {
+                Some(GerberViewerMessage::ToggleCompareMode)
+            }
             _ => None,
         }
     }
@@ -334,6 +338,11 @@ impl Signex
             GerberViewerMessage::ToggleDCodeLabels =>
             {
                 self.ui_state.gerber_viewer.toggle_d_code_labels();
+                Task::none()
+            }
+            GerberViewerMessage::ToggleCompareMode =>
+            {
+                self.ui_state.gerber_viewer.toggle_compare_mode();
                 Task::none()
             }
             GerberViewerMessage::ZoomBy(factor) => {

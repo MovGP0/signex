@@ -37,6 +37,8 @@ pub struct GerberViewerState
     pub(super) negative_ghost_color: Color,
     pub(super) show_d_code_labels: bool,
     pub(super) d_code_color: Color,
+    pub(super) compare_mode: bool,
+    pub(super) compare_palette: Vec<Color>,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -100,6 +102,8 @@ impl Default for GerberViewerState
             negative_ghost_color: material_negative_ghost_color(),
             show_d_code_labels: false,
             d_code_color: material_d_code_color(),
+            compare_mode: false,
+            compare_palette: material_compare_palette(),
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -901,6 +905,24 @@ impl GerberViewerState
         else
         {
             "D-code labels hidden.".into()
+        };
+    }
+
+    pub fn toggle_compare_mode(&mut self)
+    {
+        self.compare_mode = !self.compare_mode;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.compare_mode
+        {
+            let visible_count =
+                self.layers.iter().filter(|layer| layer.visible).count();
+            format!(
+                "Layer compare mode enabled for {visible_count} visible layer(s)."
+            )
+        }
+        else
+        {
+            "Layer compare mode disabled.".into()
         };
     }
 }

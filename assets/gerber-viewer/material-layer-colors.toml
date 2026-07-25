@@ -17,6 +17,16 @@ negative_ghost_color = "#757575"
 # Material Grey 50, selected by HSL distance from the source D-code color.
 d_code_color = "#FAFAFA"
 
+# Deterministic Material colors used only for multi-layer comparison.
+compare_colors = [
+  "#D32F2F", # Material Red 700
+  "#00BCD4", # Material Cyan 500
+  "#4CAF50", # Material Green 500
+  "#FFC107", # Material Amber 500
+  "#9C27B0", # Material Purple 500
+  "#2196F3", # Material Blue 500
+]
+
 layer_colors = [
   "#D32F2F", # 01 Material Red 700
   "#81C784", # 02 Material Green 300

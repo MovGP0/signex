@@ -26,6 +26,8 @@ pub(super) struct GerberCanvas<'a>
     pub(super) negative_ghost_color: Color,
     pub(super) show_d_code_labels: bool,
     pub(super) d_code_color: Color,
+    pub(super) compare_mode: bool,
+    pub(super) compare_palette: &'a [Color],
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -304,11 +306,14 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
             self.grid,
         );
 
-        for (layer_index, viewer_layer) in self
+        let visible_layer_count =
+            self.layers.iter().filter(|layer| layer.visible).count();
+        for (visible_ordinal, (layer_index, viewer_layer)) in self
             .layers
             .iter()
             .enumerate()
             .filter(|(_, layer)| layer.visible)
+            .enumerate()
         {
             let highlighted_d_code = if self.active_layer == Some(layer_index)
             {
@@ -321,6 +326,13 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
             draw_layer(
                 &mut frame,
                 viewer_layer,
+                compare_layer_color(
+                    viewer_layer.color,
+                    visible_ordinal,
+                    visible_layer_count,
+                    self.compare_mode,
+                    self.compare_palette,
+                ),
                 scale,
                 &world_to_screen,
                 self.background,
@@ -532,6 +544,37 @@ pub(super) fn visible_grid_spacing(spacing: f32) -> Option<f32>
     }
 }
 
+pub(super) fn compare_layer_color(
+    original: Color,
+    visible_ordinal: usize,
+    visible_layer_count: usize,
+    compare_mode: bool,
+    compare_palette: &[Color],
+) -> Color
+{
+    if !compare_mode || visible_layer_count < 2 || compare_palette.is_empty()
+    {
+        return original;
+    }
+
+    Color {
+        a: 0.68,
+        ..compare_palette[visible_ordinal % compare_palette.len()]
+    }
+}
+
+#[cfg(test)]
+pub(super) fn composite_compare_colors(top: Color, bottom: Color) -> Color
+{
+    let alpha = top.a + bottom.a * (1.0 - top.a);
+    Color {
+        r: (top.r * top.a + bottom.r * bottom.a * (1.0 - top.a)) / alpha,
+        g: (top.g * top.a + bottom.g * bottom.a * (1.0 - top.a)) / alpha,
+        b: (top.b * top.a + bottom.b * bottom.a * (1.0 - top.a)) / alpha,
+        a: alpha,
+    }
+}
+
 pub(super) fn primitive_polarity_color(
     polarity: PrimitivePolarity,
     dark_color: Color,
@@ -554,6 +597,7 @@ pub(super) fn primitive_polarity_color(
 pub(super) fn draw_layer(
     frame: &mut canvas::Frame,
     viewer_layer: &ViewerLayer,
+    layer_color: Color,
     scale: f32,
     world_to_screen: &impl Fn(signex_gerber::Point) -> Point,
     background: Color,
@@ -586,7 +630,7 @@ pub(super) fn draw_layer(
             .primitive_attributes
             .get(primitive_index);
         let component_color = component_highlight_color(
-            viewer_layer.color,
+            layer_color,
             attributes,
             highlighted_component,
         );
@@ -1203,6 +1247,7 @@ struct LayerPalette
 {
     negative_ghost_color: String,
     d_code_color: String,
+    compare_colors: Vec<String>,
     layer_colors: Vec<String>,
 }
 
@@ -1245,6 +1290,30 @@ pub(super) fn material_d_code_color() -> Color
     .expect("bundled Material Design Gerber layer palette must parse");
     parse_hex_color(&palette.d_code_color)
         .unwrap_or_else(|| Color::from_rgb8(250, 250, 250))
+}
+
+pub(super) fn material_compare_palette() -> Vec<Color>
+{
+    let palette: LayerPalette = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/material-layer-colors.toml"
+    ))
+    .expect("bundled Material Design Gerber layer palette must parse");
+    let colors = palette
+        .compare_colors
+        .iter()
+        .filter_map(|value| parse_hex_color(value))
+        .collect::<Vec<_>>();
+    if colors.is_empty()
+    {
+        vec![
+            Color::from_rgb8(211, 47, 47),
+            Color::from_rgb8(0, 188, 212),
+        ]
+    }
+    else
+    {
+        colors
+    }
 }
 
 pub(super) fn parse_hex_color(value: &str) -> Option<Color>

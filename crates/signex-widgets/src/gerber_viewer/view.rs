@@ -136,6 +136,15 @@ pub fn view<'a>(
                 "Show D-Codes (D)"
             }))
             .on_press(GerberViewerMessage::ToggleDCodeLabels),
+            button(text(if state.compare_mode
+            {
+                "Normal Layer Colors"
+            }
+            else
+            {
+                "XOR Compare"
+            }))
+            .on_press(GerberViewerMessage::ToggleCompareMode),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -689,6 +698,8 @@ pub fn view<'a>(
         negative_ghost_color: state.negative_ghost_color,
         show_d_code_labels: state.show_d_code_labels,
         d_code_color: state.d_code_color,
+        compare_mode: state.compare_mode,
+        compare_palette: &state.compare_palette,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),
