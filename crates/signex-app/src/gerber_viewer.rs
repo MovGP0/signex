@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
 
 use iced::mouse;
 use iced::widget::{
@@ -24,6 +24,68 @@ const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;
 const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 30.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GerberDisplayUnit
+{
+    Inches,
+    Mils,
+    Millimetres,
+}
+
+impl GerberDisplayUnit
+{
+    const ALL: [Self; 3] = [Self::Inches, Self::Mils, Self::Millimetres];
+
+    fn value_from_millimetres(self, value: f64) -> f64
+    {
+        match self
+        {
+            Self::Inches => value / 25.4,
+            Self::Mils => value / 0.0254,
+            Self::Millimetres => value,
+        }
+    }
+
+    fn decimal_places(self) -> usize
+    {
+        match self
+        {
+            Self::Inches | Self::Millimetres => 4,
+            Self::Mils => 2,
+        }
+    }
+
+    fn suffix(self) -> &'static str
+    {
+        match self
+        {
+            Self::Inches => "in",
+            Self::Mils => "mils",
+            Self::Millimetres => "mm",
+        }
+    }
+
+    fn format_value(self, millimetres: f64, decimal_separator: &str) -> String
+    {
+        let value = self.value_from_millimetres(millimetres);
+        let decimals = self.decimal_places();
+        format!("{value:.decimals$}").replace('.', decimal_separator)
+    }
+}
+
+impl fmt::Display for GerberDisplayUnit
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        formatter.write_str(match self
+        {
+            Self::Inches => "Inches",
+            Self::Mils => "Mils",
+            Self::Millimetres => "Millimetres",
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum GerberViewerMessage
@@ -59,6 +121,8 @@ pub enum GerberViewerMessage
     SetEditGridUnitMillimetres(bool),
     UpdateGridDefinition,
     ToggleGridVisibility(bool),
+    SetDisplayUnit(GerberDisplayUnit),
+    CursorWorldPositionChanged(Option<signex_gerber::Point>),
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +147,8 @@ pub struct GerberViewerState
     grid_catalog: Vec<GridSizePreset>,
     active_grid_index: usize,
     grid_visible: bool,
+    display_unit: GerberDisplayUnit,
+    cursor_world_position: Option<signex_gerber::Point>,
     decimal_separator: String,
     grid_editor_open: bool,
     new_grid_name: String,
@@ -123,6 +189,8 @@ impl Default for GerberViewerState
             grid_catalog,
             active_grid_index,
             grid_visible: true,
+            display_unit: GerberDisplayUnit::Millimetres,
+            cursor_world_position: None,
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -303,6 +371,19 @@ impl GerberViewerState
             self.grid_visible = visible;
             self.redraw_generation = self.redraw_generation.wrapping_add(1);
         }
+    }
+
+    pub fn set_display_unit(&mut self, unit: GerberDisplayUnit)
+    {
+        self.display_unit = unit;
+    }
+
+    pub fn set_cursor_world_position(
+        &mut self,
+        position: Option<signex_gerber::Point>,
+    )
+    {
+        self.cursor_world_position = position;
     }
 
     fn active_grid(&self) -> &GridSizePreset
@@ -673,6 +754,31 @@ pub fn view<'a>(
         GerberViewerMessage::SelectGridSize(choice.index)
     })
     .width(320);
+    let display_unit_picker = pick_list(
+        GerberDisplayUnit::ALL,
+        Some(state.display_unit),
+        GerberViewerMessage::SetDisplayUnit,
+    )
+    .width(125);
+    let cursor_label = state
+        .cursor_world_position
+        .map(|position| {
+            format_point_in_unit(
+                position,
+                state.display_unit,
+                &state.decimal_separator,
+            )
+        })
+        .unwrap_or_else(|| "X: —  Y: —".to_owned());
+    let bounds_label = visible_bounds(&state.layers)
+        .map(|bounds| {
+            format_bounds_in_unit(
+                bounds,
+                state.display_unit,
+                &state.decimal_separator,
+            )
+        })
+        .unwrap_or_else(|| "Bounds: —".to_owned());
     let grid_toolbar = container(
         row![
             text("Grid").size(11).color(text_muted),
@@ -680,11 +786,11 @@ pub fn view<'a>(
                 .label("Visible")
                 .on_toggle(GerberViewerMessage::ToggleGridVisibility),
             grid_picker,
-            text(format!(
-                "X: {:.4} mm  Y: {:.4} mm",
-                state.active_grid().x_millimetres(),
-                state.active_grid().y_millimetres(),
-            ))
+            display_unit_picker,
+            text(cursor_label)
+                .size(10)
+                .color(text_muted),
+            text(bounds_label)
             .size(10)
             .color(text_muted),
             Space::new().width(Length::Fill),
@@ -962,6 +1068,24 @@ struct GerberCanvas<'a>
     pan: iced::Vector,
 }
 
+impl GerberCanvas<'_>
+{
+    fn screen_to_world(
+        &self,
+        bounds: Rectangle,
+        screen: Point,
+    ) -> Option<signex_gerber::Point>
+    {
+        let world_bounds = visible_bounds(self.layers)?;
+        let (scale, world_center, screen_center) =
+            fit_transform(world_bounds, bounds, self.zoom, self.pan);
+        Some(signex_gerber::Point {
+            x: f64::from(world_center.x + (screen.x - screen_center.x) / scale),
+            y: f64::from(world_center.y - (screen.y - screen_center.y) / scale),
+        })
+    }
+}
+
 impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
 {
     type State = GerberCanvasState;
@@ -998,21 +1122,34 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 Some(canvas::Action::capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                let Some(previous) = state.drag_start else
+                if let Some(previous) = state.drag_start
                 {
-                    return None;
-                };
-                let current = Point::new(position.x - bounds.x, position.y - bounds.y);
-                state.drag_start = Some(current);
-                Some(
-                    canvas::Action::publish(GerberViewerMessage::PanBy(current - previous))
-                        .and_capture(),
-                )
+                    let current = Point::new(position.x - bounds.x, position.y - bounds.y);
+                    state.drag_start = Some(current);
+                    Some(
+                        canvas::Action::publish(GerberViewerMessage::PanBy(current - previous))
+                            .and_capture(),
+                    )
+                }
+                else
+                {
+                    let position = cursor.position_in(bounds)?;
+                    Some(canvas::Action::publish(
+                        GerberViewerMessage::CursorWorldPositionChanged(
+                            self.screen_to_world(bounds, position),
+                        ),
+                    ))
+                }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
                 state.drag_start = None;
                 Some(canvas::Action::capture())
             }
+            Event::Mouse(mouse::Event::CursorLeft) => Some(
+                canvas::Action::publish(
+                    GerberViewerMessage::CursorWorldPositionChanged(None),
+                ),
+            ),
             _ => None,
         }
     }
@@ -1360,6 +1497,36 @@ fn draw_flash(
     }
 }
 
+fn format_point_in_unit(
+    point: signex_gerber::Point,
+    unit: GerberDisplayUnit,
+    decimal_separator: &str,
+) -> String
+{
+    format!(
+        "X: {}  Y: {} {}",
+        unit.format_value(point.x, decimal_separator),
+        unit.format_value(point.y, decimal_separator),
+        unit.suffix(),
+    )
+}
+
+fn format_bounds_in_unit(
+    bounds: Bounds,
+    unit: GerberDisplayUnit,
+    decimal_separator: &str,
+) -> String
+{
+    format!(
+        "Bounds: X {}…{}  Y {}…{} {}",
+        unit.format_value(bounds.min.x, decimal_separator),
+        unit.format_value(bounds.max.x, decimal_separator),
+        unit.format_value(bounds.min.y, decimal_separator),
+        unit.format_value(bounds.max.y, decimal_separator),
+        unit.suffix(),
+    )
+}
+
 fn visible_bounds(layers: &[ViewerLayer]) -> Option<Bounds>
 {
     layers
@@ -1504,6 +1671,63 @@ mod tests
         state.set_grid_visible(true);
         assert!(state.grid_visible);
         assert_eq!(state.redraw_generation, initial_generation + 2);
+    }
+
+    #[test]
+    fn display_units_convert_coordinates_and_bounds_from_millimetres()
+    {
+        let point = signex_gerber::Point { x: 25.4, y: 12.7 };
+        let bounds = Bounds {
+            min: signex_gerber::Point { x: 0.0, y: -12.7 },
+            max: point,
+        };
+
+        assert_eq!(
+            format_point_in_unit(point, GerberDisplayUnit::Millimetres, "."),
+            "X: 25.4000  Y: 12.7000 mm"
+        );
+        assert_eq!(
+            format_point_in_unit(point, GerberDisplayUnit::Inches, "."),
+            "X: 1.0000  Y: 0.5000 in"
+        );
+        assert_eq!(
+            format_point_in_unit(point, GerberDisplayUnit::Mils, "."),
+            "X: 1000.00  Y: 500.00 mils"
+        );
+        assert_eq!(
+            format_bounds_in_unit(bounds, GerberDisplayUnit::Inches, "."),
+            "Bounds: X 0.0000…1.0000  Y -0.5000…0.5000 in"
+        );
+    }
+
+    #[test]
+    fn changing_display_unit_does_not_modify_source_geometry()
+    {
+        let layer = signex_gerber::load_gerber_reader(
+            "copper.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+        let mut state = GerberViewerState::default();
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![layer.clone()],
+            failures: Vec::new(),
+        });
+        let zoom = state.zoom;
+        let pan = state.pan;
+
+        state.set_display_unit(GerberDisplayUnit::Inches);
+        state.set_cursor_world_position(Some(signex_gerber::Point {
+            x: 25.4,
+            y: 12.7,
+        }));
+
+        assert_eq!(state.display_unit, GerberDisplayUnit::Inches);
+        assert_eq!(state.layers[0].layer, layer);
+        assert_eq!(state.zoom, zoom);
+        assert_eq!(state.pan, pan);
     }
 
     #[test]

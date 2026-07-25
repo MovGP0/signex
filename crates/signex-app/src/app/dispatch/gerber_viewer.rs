@@ -212,6 +212,16 @@ impl Signex
                 self.ui_state.gerber_viewer.set_grid_visible(visible);
                 Task::none()
             }
+            GerberViewerMessage::SetDisplayUnit(unit) => {
+                self.ui_state.gerber_viewer.set_display_unit(unit);
+                Task::none()
+            }
+            GerberViewerMessage::CursorWorldPositionChanged(position) => {
+                self.ui_state
+                    .gerber_viewer
+                    .set_cursor_world_position(position);
+                Task::none()
+            }
         }
     }
 }
