@@ -442,6 +442,18 @@ impl Signex
                 self.ui_state.gerber_viewer.toggle_zoom_selection();
                 Task::none()
             }
+            GerberViewerMessage::SetHighlightedComponent(component) => {
+                self.ui_state
+                    .gerber_viewer
+                    .set_highlighted_component(component);
+                Task::none()
+            }
+            GerberViewerMessage::ClearComponentHighlight => {
+                self.ui_state
+                    .gerber_viewer
+                    .clear_component_highlight();
+                Task::none()
+            }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
                 self.ui_state
                     .gerber_viewer

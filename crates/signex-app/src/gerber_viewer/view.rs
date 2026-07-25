@@ -31,6 +31,14 @@ pub fn view<'a>(
     let clear_all = button(text("Clear All")).on_press_maybe(
         (!state.layers.is_empty()).then_some(GerberViewerMessage::ClearAllLayers),
     );
+    let component_choices = state.component_choices();
+    let component_picker = pick_list(
+        component_choices,
+        state.highlighted_component().map(str::to_owned),
+        GerberViewerMessage::SetHighlightedComponent,
+    )
+    .placeholder("Highlight component")
+    .width(180);
 
     let toolbar = container(
         row![
@@ -126,6 +134,12 @@ pub fn view<'a>(
                 state
                     .active_layer
                     .map(|_| GerberViewerMessage::ToggleSourceView),
+            ),
+            component_picker,
+            button(text("Clear Component")).on_press_maybe(
+                state
+                    .highlighted_component()
+                    .map(|_| GerberViewerMessage::ClearComponentHighlight),
             ),
             clear_current,
             clear_all,
@@ -552,6 +566,7 @@ pub fn view<'a>(
         full_window_crosshair: state.full_window_crosshair,
         page_size: state.page_size,
         zoom_selection_active: state.zoom_selection_active,
+        highlighted_component: state.highlighted_component(),
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,

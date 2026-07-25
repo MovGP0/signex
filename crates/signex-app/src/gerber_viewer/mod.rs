@@ -18,6 +18,7 @@ use signex_types::theme::ThemeTokens;
 mod display;
 mod gerber_viewer_state;
 mod grid;
+mod highlight;
 mod message;
 pub(crate) mod print;
 mod shortcuts;
@@ -45,6 +46,7 @@ use grid::{
     format_distance_input, grid_size_choices, load_grid_catalog, load_page_size,
     persist_grid_catalog, persist_page_size, system_decimal_separator,
 };
+use highlight::component_highlight_color;
 
 const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;

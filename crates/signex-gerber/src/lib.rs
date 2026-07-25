@@ -11,7 +11,8 @@ mod loading;
 mod metadata;
 
 pub use geometry::{
-    ApertureShape, Bounds, GerberGeometry, GerberPrimitive, Point, PrimitivePolarity,
+    ApertureShape, Bounds, GerberGeometry, GerberObjectAttributes, GerberPrimitive, Point,
+    PrimitivePolarity,
 };
 pub use archive::{load_zip_archive, load_zip_reader};
 pub use job::{

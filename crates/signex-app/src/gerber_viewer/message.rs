@@ -58,6 +58,8 @@ pub enum GerberViewerMessage
     PrintVisibleLayers,
     GerberPrintFinished(Result<PathBuf, String>),
     ToggleZoomSelection,
+    SetHighlightedComponent(String),
+    ClearComponentHighlight,
     ZoomToSelection
     {
         bounds: Bounds,

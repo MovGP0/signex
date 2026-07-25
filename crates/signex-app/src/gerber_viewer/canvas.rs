@@ -17,6 +17,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
+    pub(super) highlighted_component: Option<&'a str>,
     pub(super) grid_size: &'a GridSizePreset,
     pub(super) keymap: &'a crate::keymap::CompiledKeymap,
     pub(super) redraw_generation: u64,
@@ -262,6 +263,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 scale,
                 &world_to_screen,
                 self.background,
+                self.highlighted_component,
             );
         }
         if let (Some(start), Some(end)) = (
@@ -453,13 +455,28 @@ pub(super) fn draw_layer(
     scale: f32,
     world_to_screen: &impl Fn(signex_gerber::Point) -> Point,
     background: Color,
+    highlighted_component: Option<&str>,
 )
 {
-    for primitive in &viewer_layer.layer.geometry.primitives
+    for (primitive_index, primitive) in viewer_layer
+        .layer
+        .geometry
+        .primitives
+        .iter()
+        .enumerate()
     {
+        let dark_color = component_highlight_color(
+            viewer_layer.color,
+            viewer_layer
+                .layer
+                .geometry
+                .primitive_attributes
+                .get(primitive_index),
+            highlighted_component,
+        );
         let polarity_color = |polarity: PrimitivePolarity| match polarity
         {
-            PrimitivePolarity::Dark => viewer_layer.color,
+            PrimitivePolarity::Dark => dark_color,
             PrimitivePolarity::Clear => background,
         };
         match primitive
@@ -517,7 +534,7 @@ pub(super) fn draw_layer(
                         world_to_screen(*position),
                         (*diameter as f32 * scale / 2.0).max(0.75),
                     ),
-                    viewer_layer.color,
+                    dark_color,
                 );
             }
             GerberPrimitive::DrillSlot {
@@ -529,7 +546,7 @@ pub(super) fn draw_layer(
                 frame.stroke(
                     &canvas::Path::line(world_to_screen(*start), world_to_screen(*end)),
                     canvas::Stroke::default()
-                        .with_color(viewer_layer.color)
+                        .with_color(dark_color)
                         .with_width((*width as f32 * scale).max(1.0)),
                 );
             }

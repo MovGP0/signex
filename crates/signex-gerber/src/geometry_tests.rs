@@ -37,3 +37,35 @@ fn extracts_strokes_and_standard_flashes()
         } if (*width - 2.0).abs() < 1e-9 && (*height - 1.0).abs() < 1e-9
     )));
 }
+
+#[test]
+fn associates_x2_components_with_emitted_primitives_and_honors_deletion()
+{
+    let source = r#"%FSLAX46Y46*%
+%MOMM*%
+%ADD10C,1.000*%
+D10*
+%TO.C,R1*%
+X0000000Y0000000D03*
+%TO.C,C2*%
+X0100000Y0000000D03*
+%TD.C*%
+X0200000Y0000000D03*
+M02*
+"#;
+
+    let layer = load_gerber_reader("components.gbr", Cursor::new(source))
+        .expect("X2 component Gerber must parse");
+    let components = layer
+        .geometry
+        .primitive_attributes
+        .iter()
+        .map(|attributes| attributes.component.as_deref())
+        .collect::<Vec<_>>();
+
+    assert_eq!(components, [Some("R1"), Some("C2"), None]);
+    assert_eq!(
+        layer.geometry.primitives.len(),
+        layer.geometry.primitive_attributes.len()
+    );
+}

@@ -6,8 +6,9 @@ use lib_gerber_edit::excellon_format::{
 };
 use lib_gerber_edit::gerber::GerberLayerData;
 use lib_gerber_edit::gerber_types::{
-    Aperture, Command, CoordinateMode, CoordinateOffset, Coordinates, DCode, ExtendedCode,
-    FunctionCode, GCode, InterpolationMode, Operation, Polarity,
+    Aperture, AttributeDeletionCriterion, Command, CommentContent, CoordinateMode,
+    CoordinateOffset, Coordinates, DCode, ExtendedCode, FunctionCode, GCode,
+    InterpolationMode, ObjectAttribute, Operation, Polarity, StandardComment,
 };
 
 /// A point in Gerber world space, expressed in millimetres.
@@ -139,17 +140,35 @@ pub enum GerberPrimitive
     },
 }
 
+/// Gerber X2 object attributes active when a primitive was emitted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GerberObjectAttributes
+{
+    pub component: Option<String>,
+}
+
 /// Render-ready geometry extracted from a parsed Gerber layer.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GerberGeometry
 {
     pub primitives: Vec<GerberPrimitive>,
+    pub primitive_attributes: Vec<GerberObjectAttributes>,
     pub bounds: Option<Bounds>,
     pub warnings: Vec<String>,
 }
 
 impl GerberGeometry
 {
+    fn push_primitive(
+        &mut self,
+        primitive: GerberPrimitive,
+        attributes: GerberObjectAttributes,
+    )
+    {
+        self.primitives.push(primitive);
+        self.primitive_attributes.push(attributes);
+    }
+
     pub fn from_layer(layer: &GerberLayerData) -> Self
     {
         let mut geometry = Self {
@@ -227,11 +246,14 @@ impl GerberGeometry
                         format.unit,
                     );
                     let diameter = drill_diameter(layer, tool, &mut geometry);
-                    geometry.primitives.push(GerberPrimitive::DrillHit {
-                        position: current,
-                        diameter,
-                        tool,
-                    });
+                    geometry.push_primitive(
+                        GerberPrimitive::DrillHit {
+                            position: current,
+                            diameter,
+                            tool,
+                        },
+                        GerberObjectAttributes::default(),
+                    );
                 }
                 ExcellonCommand::Slot {
                     from_x,
@@ -255,12 +277,15 @@ impl GerberGeometry
                         fmt.unit,
                     );
                     let width = drill_diameter(layer, tool, &mut geometry);
-                    geometry.primitives.push(GerberPrimitive::DrillSlot {
-                        start,
-                        end,
-                        width,
-                        tool,
-                    });
+                    geometry.push_primitive(
+                        GerberPrimitive::DrillSlot {
+                            start,
+                            end,
+                            width,
+                            tool,
+                        },
+                        GerberObjectAttributes::default(),
+                    );
                     current = end;
                 }
                 _ => {}
@@ -278,6 +303,8 @@ struct GeometryState
     interpolation: InterpolationMode,
     polarity: PrimitivePolarity,
     region_points: Option<Vec<Point>>,
+    region_attributes: GerberObjectAttributes,
+    object_attributes: GerberObjectAttributes,
 }
 
 impl Default for GeometryState
@@ -290,6 +317,8 @@ impl Default for GeometryState
             interpolation: InterpolationMode::Linear,
             polarity: PrimitivePolarity::Dark,
             region_points: None,
+            region_attributes: GerberObjectAttributes::default(),
+            object_attributes: GerberObjectAttributes::default(),
         }
     }
 }
@@ -317,6 +346,7 @@ impl GeometryState
             Command::FunctionCode(FunctionCode::GCode(GCode::RegionMode(true))) => {
                 self.finish_region(geometry);
                 self.region_points = Some(vec![self.current]);
+                self.region_attributes = self.object_attributes.clone();
             }
             Command::FunctionCode(FunctionCode::GCode(GCode::RegionMode(false))) => {
                 self.finish_region(geometry);
@@ -327,6 +357,42 @@ impl GeometryState
                     Polarity::Dark => PrimitivePolarity::Dark,
                     Polarity::Clear => PrimitivePolarity::Clear,
                 };
+            }
+            Command::ExtendedCode(ExtendedCode::ObjectAttribute(attribute))
+            | Command::FunctionCode(FunctionCode::GCode(GCode::Comment(
+                CommentContent::Standard(StandardComment::ObjectAttribute(attribute)),
+            ))) => {
+                self.apply_object_attribute(attribute);
+            }
+            Command::ExtendedCode(ExtendedCode::DeleteAttribute(criterion))
+            | Command::FunctionCode(FunctionCode::GCode(GCode::Comment(
+                CommentContent::Standard(StandardComment::DeleteAttribute(criterion)),
+            ))) => {
+                self.delete_object_attribute(criterion);
+            }
+            _ => {}
+        }
+    }
+
+    fn apply_object_attribute(&mut self, attribute: &ObjectAttribute)
+    {
+        if let ObjectAttribute::Component(component) = attribute
+        {
+            self.object_attributes.component = Some(component.clone());
+        }
+    }
+
+    fn delete_object_attribute(&mut self, criterion: &AttributeDeletionCriterion)
+    {
+        match criterion
+        {
+            AttributeDeletionCriterion::AllApertureAndObjectAttributes => {
+                self.object_attributes = GerberObjectAttributes::default();
+            }
+            AttributeDeletionCriterion::SingleObjectAttribute(name)
+                if name == ".C" =>
+            {
+                self.object_attributes.component = None;
             }
             _ => {}
         }
@@ -351,6 +417,7 @@ impl GeometryState
                 {
                     self.finish_region(geometry);
                     self.region_points = Some(vec![self.current]);
+                    self.region_attributes = self.object_attributes.clone();
                 }
                 else if let Some(points) = &mut self.region_points
                 {
@@ -374,13 +441,16 @@ impl GeometryState
                 {
                     for pair in points.windows(2)
                     {
-                        geometry.primitives.push(GerberPrimitive::Stroke {
-                            start: pair[0],
-                            end: pair[1],
-                            width,
-                            d_code: self.aperture,
-                            polarity: self.polarity,
-                        });
+                        geometry.push_primitive(
+                            GerberPrimitive::Stroke {
+                                start: pair[0],
+                                end: pair[1],
+                                width,
+                                d_code: self.aperture,
+                                polarity: self.polarity,
+                            },
+                            self.object_attributes.clone(),
+                        );
                     }
                 }
                 self.current = end;
@@ -408,12 +478,15 @@ impl GeometryState
                         "macro aperture '{name}' is represented by a prototype marker"
                     ));
                 }
-                geometry.primitives.push(GerberPrimitive::Flash {
-                    position: self.current,
-                    aperture,
-                    d_code: Some(code),
-                    polarity: self.polarity,
-                });
+                geometry.push_primitive(
+                    GerberPrimitive::Flash {
+                        position: self.current,
+                        aperture,
+                        d_code: Some(code),
+                        polarity: self.polarity,
+                    },
+                    self.object_attributes.clone(),
+                );
             }
         }
     }
@@ -424,10 +497,13 @@ impl GeometryState
         {
             if points.len() >= 3
             {
-                geometry.primitives.push(GerberPrimitive::Region {
-                    points,
-                    polarity: self.polarity,
-                });
+                geometry.push_primitive(
+                    GerberPrimitive::Region {
+                        points,
+                        polarity: self.polarity,
+                    },
+                    self.region_attributes.clone(),
+                );
             }
         }
     }
