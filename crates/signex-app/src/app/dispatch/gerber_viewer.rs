@@ -25,6 +25,8 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
         {
             "gerber_next_layer" => Some(GerberViewerMessage::NextLayer),
             "gerber_previous_layer" => Some(GerberViewerMessage::PreviousLayer),
+            "gerber_move_layer_up" => Some(GerberViewerMessage::MoveLayerUp),
+            "gerber_move_layer_down" => Some(GerberViewerMessage::MoveLayerDown),
             "gerber_sketch_flashes" =>
             {
                 Some(GerberViewerMessage::ToggleSketchFlashes)
@@ -301,6 +303,16 @@ impl Signex
             }
             GerberViewerMessage::PreviousLayer => {
                 self.ui_state.gerber_viewer.select_previous_layer();
+                Task::none()
+            }
+            GerberViewerMessage::MoveLayerUp =>
+            {
+                self.ui_state.gerber_viewer.move_active_layer_up();
+                Task::none()
+            }
+            GerberViewerMessage::MoveLayerDown =>
+            {
+                self.ui_state.gerber_viewer.move_active_layer_down();
                 Task::none()
             }
             GerberViewerMessage::SetLayerVisible(index, visible) => {
@@ -643,6 +655,8 @@ mod tests
         let l = iced::keyboard::Key::Character("l".into());
         let p = iced::keyboard::Key::Character("p".into());
         let d = iced::keyboard::Key::Character("d".into());
+        let plus = iced::keyboard::Key::Character("+".into());
+        let minus = iced::keyboard::Key::Character("-".into());
 
         for profile in ["altium", "classic"]
         {
@@ -692,6 +706,20 @@ mod tests
                     iced::keyboard::Modifiers::default(),
                 ),
                 Some(GerberViewerMessage::ToggleDCodeLabels),
+            ));
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &plus,
+                    iced::keyboard::Modifiers::SHIFT,
+                ),
+                Some(GerberViewerMessage::MoveLayerUp),
+            ));
+            assert!(matches!(
+                keymap.resolve_gerber_shortcut(
+                    &minus,
+                    iced::keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::MoveLayerDown),
             ));
         }
     }

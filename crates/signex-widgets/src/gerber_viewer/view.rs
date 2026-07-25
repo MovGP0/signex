@@ -205,6 +205,18 @@ pub fn view<'a>(
                 next_layer_index(state.active_layer, state.layers.len())
                     .map(|_| GerberViewerMessage::NextLayer),
             ),
+            button(text("Move Layer Up (+)")).on_press_maybe(
+                state
+                    .active_layer
+                    .filter(|index| *index + 1 < state.layers.len())
+                    .map(|_| GerberViewerMessage::MoveLayerUp),
+            ),
+            button(text("Move Layer Down (-)")).on_press_maybe(
+                state
+                    .active_layer
+                    .filter(|index| *index > 0)
+                    .map(|_| GerberViewerMessage::MoveLayerDown),
+            ),
             button(text(if state.layer_manager_visible
             {
                 "Hide Layers"

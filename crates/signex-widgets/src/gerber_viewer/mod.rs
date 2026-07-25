@@ -20,6 +20,7 @@ mod display;
 mod gerber_viewer_state;
 mod grid;
 mod highlight;
+mod layer_order;
 mod measurement;
 mod message;
 pub(crate) mod print;
@@ -81,6 +82,10 @@ mod gerber_grid_state_test_definitions;
 mod gerber_layer_state_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/layer_order.rs"]
+mod gerber_layer_order_test_definitions;
+
+#[cfg(test)]
 #[path = "../../tests/gerber_viewer/flash_outline.rs"]
 mod gerber_flash_outline_test_definitions;
 
@@ -120,6 +125,9 @@ gerber_grid_state_test_definitions::gerber_grid_state_tests!();
 
 #[cfg(test)]
 gerber_layer_state_test_definitions::gerber_layer_state_tests!();
+
+#[cfg(test)]
+gerber_layer_order_test_definitions::gerber_layer_order_tests!();
 
 #[cfg(test)]
 gerber_flash_outline_test_definitions::gerber_flash_outline_tests!();

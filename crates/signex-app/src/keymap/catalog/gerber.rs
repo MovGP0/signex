@@ -18,6 +18,22 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "gerber_move_layer_up",
+        category: "layers",
+        label: "Move active Gerber layer up",
+        menu_label: Some("Move Layer Up"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "gerber_move_layer_down",
+        category: "layers",
+        label: "Move active Gerber layer down",
+        menu_label: Some("Move Layer Down"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "gerber_sketch_flashes",
         category: "display",
         label: "Sketch Gerber flashed items",

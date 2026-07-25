@@ -23,6 +23,8 @@ pub enum GerberViewerMessage
     SelectLayer(usize),
     NextLayer,
     PreviousLayer,
+    MoveLayerUp,
+    MoveLayerDown,
     SetLayerVisible(usize, bool),
     ClearCurrentLayer,
     ClearAllLayers,
