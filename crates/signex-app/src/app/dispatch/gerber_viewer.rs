@@ -110,6 +110,14 @@ impl Signex
                 self.ui_state.gerber_viewer.select_layer(index);
                 Task::none()
             }
+            GerberViewerMessage::NextLayer => {
+                self.ui_state.gerber_viewer.select_next_layer();
+                Task::none()
+            }
+            GerberViewerMessage::PreviousLayer => {
+                self.ui_state.gerber_viewer.select_previous_layer();
+                Task::none()
+            }
             GerberViewerMessage::SetLayerVisible(index, visible) => {
                 self.ui_state
                     .gerber_viewer

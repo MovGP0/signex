@@ -13,6 +13,7 @@ pub enum ShortcutContext {
     Schematic,
     Footprint,
     Pcb,
+    Gerber,
     Library,
     Modal,
     TextInput,

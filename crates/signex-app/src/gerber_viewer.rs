@@ -5,7 +5,10 @@ use iced::widget::{
     Space, button, canvas, checkbox, column, container, pick_list, row, scrollable, text,
     text_input,
 };
-use iced::{Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme};
+use iced::{
+    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme,
+    keyboard,
+};
 use serde::Deserialize;
 use signex_gerber::{
     ApertureShape, Bounds, GerberLoadBatch, GerberPrimitive, LoadedLayer, PrimitivePolarity,
@@ -97,6 +100,8 @@ pub enum GerberViewerMessage
     ExcellonFilesChosen(Option<Vec<PathBuf>>),
     ExcellonFilesLoaded(GerberLoadBatch),
     SelectLayer(usize),
+    NextLayer,
+    PreviousLayer,
     SetLayerVisible(usize, bool),
     ClearCurrentLayer,
     ClearAllLayers,
@@ -351,6 +356,32 @@ impl GerberViewerState
         {
             self.active_layer = Some(index);
         }
+    }
+
+    pub fn select_next_layer(&mut self)
+    {
+        let Some(index) = next_layer_index(self.active_layer, self.layers.len())
+        else
+        {
+            return;
+        };
+        self.select_layer_with_status(index);
+    }
+
+    pub fn select_previous_layer(&mut self)
+    {
+        let Some(index) = previous_layer_index(self.active_layer, self.layers.len())
+        else
+        {
+            return;
+        };
+        self.select_layer_with_status(index);
+    }
+
+    fn select_layer_with_status(&mut self, index: usize)
+    {
+        self.active_layer = Some(index);
+        self.status = format!("Active layer: {}", self.layers[index].layer.name);
     }
 
     pub fn select_grid_size(&mut self, index: usize)
@@ -702,8 +733,61 @@ impl GerberViewerState
     }
 }
 
+fn next_layer_index(active_layer: Option<usize>, layer_count: usize) -> Option<usize>
+{
+    if layer_count == 0
+    {
+        return None;
+    }
+
+    match active_layer
+    {
+        Some(index) if index + 1 < layer_count => Some(index + 1),
+        None => Some(0),
+        _ => None,
+    }
+}
+
+fn previous_layer_index(active_layer: Option<usize>, layer_count: usize) -> Option<usize>
+{
+    if layer_count == 0
+    {
+        return None;
+    }
+
+    match active_layer
+    {
+        Some(index) if index > 0 && index < layer_count => Some(index - 1),
+        None => Some(layer_count - 1),
+        _ => None,
+    }
+}
+
+fn gerber_shortcut_message(
+    keymap: &crate::keymap::CompiledKeymap,
+    key: &keyboard::Key,
+    modifiers: keyboard::Modifiers,
+) -> Option<GerberViewerMessage>
+{
+    let stroke = crate::keymap::KeyStroke::from_iced(key, modifiers)?;
+    let lookup = keymap.lookup(
+        &[stroke],
+        &[
+            crate::keymap::ShortcutContext::Global,
+            crate::keymap::ShortcutContext::Gerber,
+        ],
+    );
+    match lookup.command?.as_str()
+    {
+        "gerber_next_layer" => Some(GerberViewerMessage::NextLayer),
+        "gerber_previous_layer" => Some(GerberViewerMessage::PreviousLayer),
+        _ => None,
+    }
+}
+
 pub fn view<'a>(
     state: &'a GerberViewerState,
+    keymap: &'a crate::keymap::CompiledKeymap,
     tokens: &ThemeTokens,
 ) -> Element<'a, GerberViewerMessage>
 {
@@ -742,6 +826,14 @@ pub fn view<'a>(
             button(text("−")).on_press(GerberViewerMessage::ZoomBy(1.0 / 1.2)),
             button(text("+")).on_press(GerberViewerMessage::ZoomBy(1.2)),
             button(text("Fit")).on_press(GerberViewerMessage::FitPage),
+            button(text("Previous Layer (PgUp)")).on_press_maybe(
+                previous_layer_index(state.active_layer, state.layers.len())
+                    .map(|_| GerberViewerMessage::PreviousLayer),
+            ),
+            button(text("Next Layer (PgDn)")).on_press_maybe(
+                next_layer_index(state.active_layer, state.layers.len())
+                    .map(|_| GerberViewerMessage::NextLayer),
+            ),
             button(text(if state.layer_manager_visible
             {
                 "Hide Layers"
@@ -1026,6 +1118,7 @@ pub fn view<'a>(
         zoom: state.zoom,
         pan: state.pan,
         grid_size: state.active_grid(),
+        keymap,
     })
     .width(Length::Fill)
     .height(Length::Fill)
@@ -1092,6 +1185,7 @@ struct GerberCanvas<'a>
     grid_visible: bool,
     full_window_crosshair: bool,
     grid_size: &'a GridSizePreset,
+    keymap: &'a crate::keymap::CompiledKeymap,
     redraw_generation: u64,
     zoom: f32,
     pan: iced::Vector,
@@ -1129,6 +1223,12 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
     {
         match event
         {
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                ..
+            }) => gerber_shortcut_message(self.keymap, key, *modifiers)
+                .map(|message| canvas::Action::publish(message).and_capture()),
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                 if !cursor.is_over(bounds)
                 {
@@ -2403,6 +2503,90 @@ mod tests
 
         state.select_layer(10);
         assert_eq!(state.active_layer, Some(0));
+    }
+
+    #[test]
+    fn layer_navigation_uses_loaded_order_without_wrapping()
+    {
+        let layer = signex_gerber::load_gerber_reader(
+            "layer.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+        let mut first = layer.clone();
+        first.name = "first.gbr".into();
+        let mut second = layer.clone();
+        second.name = "second.gbr".into();
+        let mut third = layer;
+        third.name = "third.gbr".into();
+        let mut state = GerberViewerState::default();
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![first, second, third],
+            failures: Vec::new(),
+        });
+        state.set_layer_visible(1, false);
+        state.select_layer(0);
+
+        state.select_next_layer();
+        assert_eq!(state.active_layer, Some(1));
+        assert_eq!(state.status, "Active layer: second.gbr");
+
+        state.select_next_layer();
+        assert_eq!(state.active_layer, Some(2));
+        state.select_next_layer();
+        assert_eq!(state.active_layer, Some(2));
+
+        state.select_previous_layer();
+        assert_eq!(state.active_layer, Some(1));
+        state.select_previous_layer();
+        assert_eq!(state.active_layer, Some(0));
+        state.select_previous_layer();
+        assert_eq!(state.active_layer, Some(0));
+    }
+
+    #[test]
+    fn layer_navigation_from_no_selection_uses_nearest_boundary()
+    {
+        assert_eq!(next_layer_index(None, 3), Some(0));
+        assert_eq!(previous_layer_index(None, 3), Some(2));
+        assert_eq!(next_layer_index(None, 0), None);
+        assert_eq!(previous_layer_index(None, 0), None);
+    }
+
+    #[test]
+    fn built_in_profiles_bind_page_keys_in_gerber_context()
+    {
+        let mut profiles = crate::keymap::ShortcutProfileSet::built_ins()
+            .expect("built-in shortcut profiles must parse");
+        let page_up = keyboard::Key::Named(keyboard::key::Named::PageUp);
+        let page_down = keyboard::Key::Named(keyboard::key::Named::PageDown);
+
+        for profile in ["altium", "classic"]
+        {
+            profiles
+                .set_active_profile(profile)
+                .expect("known built-in profile");
+            let keymap = profiles.compile_active();
+
+            assert!(matches!(
+                gerber_shortcut_message(
+                    &keymap,
+                    &page_up,
+                    keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::PreviousLayer),
+            ));
+            assert!(matches!(
+                gerber_shortcut_message(
+                    &keymap,
+                    &page_down,
+                    keyboard::Modifiers::default(),
+                ),
+                Some(GerberViewerMessage::NextLayer),
+            ));
+        }
     }
 
     #[test]

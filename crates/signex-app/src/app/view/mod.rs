@@ -80,8 +80,12 @@ impl Signex {
             return match kind {
                 super::state::WindowKind::GerberViewer => {
                     let tokens = &self.document_state.panel_ctx.tokens;
-                    let body = crate::gerber_viewer::view(&self.ui_state.gerber_viewer, tokens)
-                        .map(Message::GerberViewer);
+                    let body = crate::gerber_viewer::view(
+                        &self.ui_state.gerber_viewer,
+                        &self.ui_state.active_keymap,
+                        tokens,
+                    )
+                    .map(Message::GerberViewer);
                     self.view_secondary_window_frame(
                         window_id,
                         "Signex — Gerber Viewer",
