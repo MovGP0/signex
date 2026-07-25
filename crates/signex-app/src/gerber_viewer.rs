@@ -1,13 +1,22 @@
 use std::path::PathBuf;
 
 use iced::mouse;
-use iced::widget::{Space, button, canvas, checkbox, column, container, row, scrollable, text};
+use iced::widget::{
+    Space, button, canvas, checkbox, column, container, pick_list, row, scrollable, text,
+};
 use iced::{Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme};
 use serde::Deserialize;
 use signex_gerber::{
     ApertureShape, Bounds, GerberLoadBatch, GerberPrimitive, LoadedLayer, PrimitivePolarity,
 };
 use signex_types::theme::ThemeTokens;
+
+mod grid;
+
+use grid::{
+    DEFAULT_GRID_INDEX, GridSizePreset, default_grid_catalog, grid_size_choices,
+    system_decimal_separator,
+};
 
 const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;
@@ -32,6 +41,7 @@ pub enum GerberViewerMessage
     PanBy(iced::Vector),
     FitPage,
     ToggleLayerManager,
+    SelectGridSize(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +63,9 @@ pub struct GerberViewerState
     pub zoom: f32,
     pub pan: iced::Vector,
     pub layer_manager_visible: bool,
+    grid_catalog: Vec<GridSizePreset>,
+    active_grid_index: usize,
+    decimal_separator: String,
     palette: Vec<Color>,
 }
 
@@ -69,6 +82,9 @@ impl Default for GerberViewerState
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
+            grid_catalog: default_grid_catalog(),
+            active_grid_index: DEFAULT_GRID_INDEX,
+            decimal_separator: system_decimal_separator(),
             palette: material_layer_palette(),
         }
     }
@@ -213,6 +229,26 @@ impl GerberViewerState
             self.active_layer = Some(index);
         }
     }
+
+    pub fn select_grid_size(&mut self, index: usize)
+    {
+        let Some(grid) = self.grid_catalog.get(index) else
+        {
+            return;
+        };
+
+        self.active_grid_index = index;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = format!(
+            "Grid: {}",
+            grid.display_label(&self.decimal_separator),
+        );
+    }
+
+    fn active_grid(&self) -> &GridSizePreset
+    {
+        &self.grid_catalog[self.active_grid_index]
+    }
 }
 
 pub fn view<'a>(
@@ -275,6 +311,35 @@ pub fn view<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([6, 10])
+    .width(Length::Fill)
+    .style(crate::styles::toolbar_strip(tokens));
+
+    let grid_choices = grid_size_choices(
+        &state.grid_catalog,
+        &state.decimal_separator,
+    );
+    let selected_grid = grid_choices.get(state.active_grid_index).cloned();
+    let grid_picker = pick_list(grid_choices, selected_grid, |choice| {
+        GerberViewerMessage::SelectGridSize(choice.index)
+    })
+    .width(320);
+    let grid_toolbar = container(
+        row![
+            text("Grid").size(11).color(text_muted),
+            grid_picker,
+            text(format!(
+                "X: {:.4} mm  Y: {:.4} mm",
+                state.active_grid().x_millimetres(),
+                state.active_grid().y_millimetres(),
+            ))
+            .size(10)
+            .color(text_muted),
+            Space::new().width(Length::Fill),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 10])
     .width(Length::Fill)
     .style(crate::styles::toolbar_strip(tokens));
 
@@ -362,6 +427,7 @@ pub fn view<'a>(
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,
+        grid_size: state.active_grid(),
     })
     .width(Length::Fill)
     .height(Length::Fill)
@@ -404,6 +470,7 @@ pub fn view<'a>(
 
     column![
         toolbar,
+        grid_toolbar,
         content,
         status,
     ]
@@ -423,6 +490,7 @@ struct GerberCanvas<'a>
     layers: &'a [ViewerLayer],
     background: Color,
     grid: Color,
+    grid_size: &'a GridSizePreset,
     redraw_generation: u64,
     zoom: f32,
     pan: iced::Vector,
@@ -495,10 +563,17 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
         let _redraw_generation = self.redraw_generation;
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.background);
-        draw_grid(&mut frame, bounds, self.grid);
 
         let Some(world_bounds) = visible_bounds(self.layers) else
         {
+            draw_grid(
+                &mut frame,
+                bounds,
+                self.grid,
+                self.grid_size,
+                32.0 / 1.27,
+                Point::new(bounds.width / 2.0, bounds.height / 2.0),
+            );
             frame.fill_text(canvas::Text {
                 content: "Open Gerber files to inspect fabrication layers".into(),
                 position: Point::new(bounds.width / 2.0, bounds.height / 2.0),
@@ -522,6 +597,14 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 screen_center.y - (point.y as f32 - world_center.y) * scale,
             )
         };
+        draw_grid(
+            &mut frame,
+            bounds,
+            self.grid,
+            self.grid_size,
+            scale,
+            world_to_screen(signex_gerber::Point { x: 0.0, y: 0.0 }),
+        );
 
         for viewer_layer in self.layers.iter().filter(|layer| layer.visible)
         {
@@ -558,20 +641,94 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
     }
 }
 
-fn draw_grid(frame: &mut canvas::Frame, bounds: Rectangle, color: Color)
+fn draw_grid(
+    frame: &mut canvas::Frame,
+    bounds: Rectangle,
+    color: Color,
+    grid_size: &GridSizePreset,
+    pixels_per_millimetre: f32,
+    origin: Point,
+)
 {
-    let spacing = 32.0;
     let dot_color = Color { a: 0.16, ..color };
-    let mut x = 0.0;
-    while x <= bounds.width
+    let x_spacing = visible_grid_spacing(
+        grid_size.x_millimetres() as f32 * pixels_per_millimetre,
+    );
+    let y_spacing = visible_grid_spacing(
+        grid_size.y_millimetres() as f32 * pixels_per_millimetre,
+    );
+
+    match (x_spacing, y_spacing)
     {
-        let mut y = 0.0;
-        while y <= bounds.height
-        {
-            frame.fill(&canvas::Path::circle(Point::new(x, y), 0.75), dot_color);
-            y += spacing;
+        (Some(x_spacing), Some(y_spacing)) => {
+            let mut x = origin.x.rem_euclid(x_spacing);
+            while x <= bounds.width
+            {
+                let mut y = origin.y.rem_euclid(y_spacing);
+                while y <= bounds.height
+                {
+                    frame.fill(&canvas::Path::circle(Point::new(x, y), 0.75), dot_color);
+                    y += y_spacing;
+                }
+                x += x_spacing;
+            }
         }
-        x += spacing;
+        (Some(x_spacing), None) => {
+            let mut x = origin.x.rem_euclid(x_spacing);
+            while x <= bounds.width
+            {
+                frame.stroke(
+                    &canvas::Path::line(
+                        Point::new(x, 0.0),
+                        Point::new(x, bounds.height),
+                    ),
+                    canvas::Stroke::default()
+                        .with_color(dot_color)
+                        .with_width(1.0),
+                );
+                x += x_spacing;
+            }
+        }
+        (None, Some(y_spacing)) => {
+            let mut y = origin.y.rem_euclid(y_spacing);
+            while y <= bounds.height
+            {
+                frame.stroke(
+                    &canvas::Path::line(
+                        Point::new(0.0, y),
+                        Point::new(bounds.width, y),
+                    ),
+                    canvas::Stroke::default()
+                        .with_color(dot_color)
+                        .with_width(1.0),
+                );
+                y += y_spacing;
+            }
+        }
+        (None, None) => {}
+    }
+}
+
+fn visible_grid_spacing(spacing: f32) -> Option<f32>
+{
+    const MINIMUM_GRID_SPACING_PIXELS: f32 = 10.0;
+
+    if !spacing.is_finite() || spacing <= 0.0
+    {
+        return None;
+    }
+    if spacing >= MINIMUM_GRID_SPACING_PIXELS
+    {
+        Some(spacing)
+    }
+    else
+    {
+        Some(
+            spacing
+                * (MINIMUM_GRID_SPACING_PIXELS / spacing)
+                    .ceil()
+                    .max(1.0),
+        )
     }
 }
 
@@ -827,6 +984,42 @@ mod tests
 
         assert_eq!(palette.len(), 64);
         assert_eq!(palette[0], Color::from_rgb8(211, 47, 47));
+    }
+
+    #[test]
+    fn selecting_grid_updates_rectangular_viewport_spacing()
+    {
+        let mut state = GerberViewerState::default();
+        state.decimal_separator = ",".to_owned();
+        let initial_generation = state.redraw_generation;
+
+        assert_eq!(state.active_grid_index, DEFAULT_GRID_INDEX);
+        assert_eq!(state.active_grid().x_millimetres(), 1.27);
+        assert_eq!(state.active_grid().y_millimetres(), 1.27);
+
+        state.select_grid_size(13);
+
+        assert_eq!(state.active_grid_index, 13);
+        assert_eq!(state.active_grid().x_millimetres(), 1.5);
+        assert_eq!(state.active_grid().y_millimetres(), 2.5);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
+        assert_eq!(
+            state.status,
+            "Grid: 1,5000 mm ⨯ 2,5000 mm (59,06 mils ⨯ 98,43 mils)"
+        );
+    }
+
+    #[test]
+    fn zero_grid_axis_is_not_replaced_with_the_other_axis()
+    {
+        let mut state = GerberViewerState::default();
+
+        state.select_grid_size(19);
+
+        assert_eq!(state.active_grid().x_millimetres(), 0.05);
+        assert_eq!(state.active_grid().y_millimetres(), 0.0);
+        assert!(visible_grid_spacing(0.05 * 100.0).is_some());
+        assert_eq!(visible_grid_spacing(0.0), None);
     }
 
     #[test]

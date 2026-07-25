@@ -144,6 +144,10 @@ impl Signex
                 self.ui_state.gerber_viewer.toggle_layer_manager();
                 Task::none()
             }
+            GerberViewerMessage::SelectGridSize(index) => {
+                self.ui_state.gerber_viewer.select_grid_size(index);
+                Task::none()
+            }
         }
     }
 }
