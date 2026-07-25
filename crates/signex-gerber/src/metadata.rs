@@ -5,6 +5,22 @@ use lib_gerber_edit::layer::LayerData;
 
 use crate::{Bounds, LoadedLayer};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerDefinition
+{
+    pub code: String,
+    pub description: String,
+    pub usage_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerDefinitionGroup
+{
+    pub layer_name: String,
+    pub definition_label: &'static str,
+    pub definitions: Vec<LayerDefinition>,
+}
+
 /// Display-ready summary of the parsed data available for one fabrication layer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerMetadata
@@ -25,6 +41,99 @@ pub struct LayerMetadata
 
 impl LoadedLayer
 {
+    pub fn definition_group(&self) -> LayerDefinitionGroup
+    {
+        match &self.data
+        {
+            LayerData::Gerber(layer) => {
+                let mut definitions = layer
+                    .apertures
+                    .iter()
+                    .map(|(code, aperture)| LayerDefinition {
+                        code: format!("D{code}"),
+                        description: describe_aperture(aperture),
+                        usage_count: self
+                            .geometry
+                            .primitives
+                            .iter()
+                            .filter(|primitive| {
+                                matches!(
+                                    primitive,
+                                    crate::GerberPrimitive::Stroke {
+                                        d_code: Some(value),
+                                        ..
+                                    } | crate::GerberPrimitive::Flash {
+                                        d_code: Some(value),
+                                        ..
+                                    } if value == code
+                                )
+                            })
+                            .count(),
+                    })
+                    .collect::<Vec<_>>();
+                definitions.sort_by_key(|definition| {
+                    definition
+                        .code
+                        .trim_start_matches('D')
+                        .parse::<i32>()
+                        .unwrap_or_default()
+                });
+                LayerDefinitionGroup {
+                    layer_name: self.name.clone(),
+                    definition_label: "D-codes",
+                    definitions,
+                }
+            }
+            LayerData::Excellon(layer) => {
+                let mut definitions = layer
+                    .tools
+                    .iter()
+                    .map(|(tool, diameter)| LayerDefinition {
+                        code: format!("T{tool}"),
+                        description: format!(
+                            "⌀{diameter:.4} {}",
+                            unit_suffix(layer.unit.unit),
+                        ),
+                        usage_count: self
+                            .geometry
+                            .primitives
+                            .iter()
+                            .filter(|primitive| {
+                                matches!(
+                                    primitive,
+                                    crate::GerberPrimitive::DrillHit {
+                                        tool: Some(value),
+                                        ..
+                                    } | crate::GerberPrimitive::DrillSlot {
+                                        tool: Some(value),
+                                        ..
+                                    } if value == tool
+                                )
+                            })
+                            .count(),
+                    })
+                    .collect::<Vec<_>>();
+                definitions.sort_by_key(|definition| {
+                    definition
+                        .code
+                        .trim_start_matches('T')
+                        .parse::<u32>()
+                        .unwrap_or_default()
+                });
+                LayerDefinitionGroup {
+                    layer_name: self.name.clone(),
+                    definition_label: "Drill tools",
+                    definitions,
+                }
+            }
+            LayerData::Info(_) => LayerDefinitionGroup {
+                layer_name: self.name.clone(),
+                definition_label: "Definitions",
+                definitions: Vec::new(),
+            },
+        }
+    }
+
     pub fn metadata(&self) -> LayerMetadata
     {
         let source = self
@@ -38,14 +147,14 @@ impl LoadedLayer
         {
             LayerData::Gerber(layer) => {
                 let format = &layer.coordinate_format;
-                let mut definitions = layer
-                    .apertures
-                    .iter()
-                    .map(|(code, aperture)| {
-                        format!("D{code}: {}", describe_aperture(aperture))
+                let definitions = self
+                    .definition_group()
+                    .definitions
+                    .into_iter()
+                    .map(|definition| {
+                        format!("{}: {}", definition.code, definition.description)
                     })
-                    .collect::<Vec<_>>();
-                definitions.sort();
+                    .collect();
                 let attributes = layer
                     .header
                     .iter()
@@ -75,17 +184,18 @@ impl LoadedLayer
                 }
             }
             LayerData::Excellon(layer) => {
-                let mut definitions = layer
-                    .tools
-                    .iter()
-                    .map(|(tool, diameter)| {
+                let definitions = self
+                    .definition_group()
+                    .definitions
+                    .into_iter()
+                    .map(|definition| {
                         format!(
-                            "T{tool}: {diameter:.4} {}",
-                            unit_suffix(layer.unit.unit),
+                            "{}: {}",
+                            definition.code,
+                            definition.description.trim_start_matches('⌀'),
                         )
                     })
-                    .collect::<Vec<_>>();
-                definitions.sort();
+                    .collect();
 
                 LayerMetadata {
                     file_name: self.name.clone(),
@@ -243,5 +353,53 @@ mod tests
         );
         assert_eq!(metadata.primitive_count, 1);
         assert!(metadata.attributes.is_empty());
+    }
+
+    #[test]
+    fn definition_groups_report_sorted_codes_and_rendered_usage()
+    {
+        let gerber = crate::load_gerber_reader(
+            "copper.gtl",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD11R,1.0X2.0*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nD11*\nX0Y0D02*\nX1000000Y0D01*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+        let drill = crate::load_excellon_reader(
+            "holes.drl",
+            Cursor::new(
+                b"M48\nMETRIC\nT02C1.2\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nX2.0Y2.0\nM30\n",
+            ),
+        )
+        .expect("test Excellon must parse");
+
+        let gerber_group = gerber.definition_group();
+        assert_eq!(gerber_group.layer_name, "copper.gtl");
+        assert_eq!(gerber_group.definition_label, "D-codes");
+        assert_eq!(
+            gerber_group
+                .definitions
+                .iter()
+                .map(|definition| (
+                    definition.code.as_str(),
+                    definition.usage_count,
+                ))
+                .collect::<Vec<_>>(),
+            vec![("D10", 1), ("D11", 1)],
+        );
+
+        let drill_group = drill.definition_group();
+        assert_eq!(drill_group.definition_label, "Drill tools");
+        assert_eq!(
+            drill_group
+                .definitions
+                .iter()
+                .map(|definition| (
+                    definition.code.as_str(),
+                    definition.usage_count,
+                ))
+                .collect::<Vec<_>>(),
+            vec![("T1", 2), ("T2", 0)],
+        );
     }
 }

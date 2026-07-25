@@ -111,6 +111,7 @@ pub enum GerberViewerMessage
     FitPage,
     ToggleLayerManager,
     ToggleLayerInformation,
+    ToggleDCodeList,
     SelectGridSize(usize),
     ToggleGridEditor,
     NewGridNameChanged(String),
@@ -153,6 +154,7 @@ pub struct GerberViewerState
     pub pan: iced::Vector,
     pub layer_manager_visible: bool,
     layer_information_visible: bool,
+    d_code_list_visible: bool,
     grid_catalog: Vec<GridSizePreset>,
     active_grid_index: usize,
     grid_visible: bool,
@@ -198,6 +200,7 @@ impl Default for GerberViewerState
             pan: iced::Vector::default(),
             layer_manager_visible: true,
             layer_information_visible: false,
+            d_code_list_visible: false,
             grid_catalog,
             active_grid_index,
             grid_visible: true,
@@ -351,7 +354,26 @@ impl GerberViewerState
         if self.layer_information_visible
         {
             self.layer_manager_visible = true;
+            self.d_code_list_visible = false;
         }
+    }
+
+    pub fn toggle_d_code_list(&mut self)
+    {
+        self.d_code_list_visible = !self.d_code_list_visible;
+        if self.d_code_list_visible
+        {
+            self.layer_manager_visible = true;
+            self.layer_information_visible = false;
+        }
+    }
+
+    fn definition_groups(&self) -> Vec<signex_gerber::LayerDefinitionGroup>
+    {
+        self.layers
+            .iter()
+            .map(|layer| layer.layer.definition_group())
+            .collect()
     }
 
     fn active_layer_metadata(&self) -> Option<signex_gerber::LayerMetadata>
@@ -875,6 +897,18 @@ pub fn view<'a>(
                     .active_layer
                     .map(|_| GerberViewerMessage::ToggleLayerInformation),
             ),
+            button(text(if state.d_code_list_visible
+            {
+                "Hide D-Codes"
+            }
+            else
+            {
+                "List D-Codes"
+            }))
+            .on_press_maybe(
+                (!state.layers.is_empty())
+                    .then_some(GerberViewerMessage::ToggleDCodeList),
+            ),
             clear_current,
             clear_all,
             Space::new().width(Length::Fill),
@@ -1219,6 +1253,53 @@ pub fn view<'a>(
                 text("No active layer")
                     .size(10)
                     .color(text_muted),
+            );
+        }
+    }
+
+    if state.d_code_list_visible
+    {
+        layer_list = layer_list.push(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(crate::styles::chrome_separator(tokens)),
+        );
+        layer_list = layer_list.push(
+            text("D-Codes and Drill Tools")
+                .size(13)
+                .color(text_primary),
+        );
+        for group in state.definition_groups()
+        {
+            let definitions = if group.definitions.is_empty()
+            {
+                format!("No {} defined", group.definition_label.to_lowercase())
+            }
+            else
+            {
+                group
+                    .definitions
+                    .iter()
+                    .map(|definition| {
+                        format!(
+                            "{} — {} — {} use(s)",
+                            definition.code,
+                            definition.description,
+                            definition.usage_count,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            layer_list = layer_list.push(
+                column![
+                    text(format!("{} · {}", group.layer_name, group.definition_label))
+                        .size(11)
+                        .color(text_primary),
+                    text(definitions).size(10).color(text_muted),
+                ]
+                .spacing(2),
             );
         }
     }
@@ -2611,6 +2692,47 @@ mod tests
         assert_eq!(metadata.file_name, "copper.gbr");
         assert_eq!(metadata.format, "Gerber RS-274X");
         assert_eq!(metadata.definition_label, "Apertures");
+    }
+
+    #[test]
+    fn d_code_list_groups_all_loaded_layers_and_drill_tools()
+    {
+        let gerber = signex_gerber::load_gerber_reader(
+            "copper.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+        let drill = signex_gerber::load_excellon_reader(
+            "holes.drl",
+            Cursor::new(
+                b"M48\nMETRIC\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nM30\n",
+            ),
+        )
+        .expect("test Excellon must parse");
+        let mut state = GerberViewerState::default();
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![gerber, drill],
+            failures: Vec::new(),
+        });
+
+        state.toggle_d_code_list();
+        let groups = state.definition_groups();
+
+        assert!(state.d_code_list_visible);
+        assert!(!state.layer_information_visible);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].definition_label, "D-codes");
+        assert_eq!(groups[0].definitions[0].code, "D10");
+        assert_eq!(groups[0].definitions[0].usage_count, 1);
+        assert_eq!(groups[1].definition_label, "Drill tools");
+        assert_eq!(groups[1].definitions[0].code, "T1");
+        assert_eq!(groups[1].definitions[0].usage_count, 1);
+
+        state.toggle_layer_information();
+        assert!(state.layer_information_visible);
+        assert!(!state.d_code_list_visible);
     }
 
     #[test]

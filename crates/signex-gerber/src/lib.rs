@@ -16,7 +16,7 @@ pub use loading::{
     GerberLoadBatch, GerberLoadFailure, LoadedLayer, load_excellon_file, load_excellon_files,
     load_excellon_reader, load_gerber_file, load_gerber_files, load_gerber_reader,
 };
-pub use metadata::LayerMetadata;
+pub use metadata::{LayerDefinition, LayerDefinitionGroup, LayerMetadata};
 
 #[cfg(test)]
 mod geometry_tests;
