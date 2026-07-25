@@ -58,6 +58,7 @@ pub enum GerberViewerMessage
     EditGridYChanged(String),
     SetEditGridUnitMillimetres(bool),
     UpdateGridDefinition,
+    ToggleGridVisibility(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +82,7 @@ pub struct GerberViewerState
     pub layer_manager_visible: bool,
     grid_catalog: Vec<GridSizePreset>,
     active_grid_index: usize,
+    grid_visible: bool,
     decimal_separator: String,
     grid_editor_open: bool,
     new_grid_name: String,
@@ -120,6 +122,7 @@ impl Default for GerberViewerState
             layer_manager_visible: true,
             grid_catalog,
             active_grid_index,
+            grid_visible: true,
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -291,6 +294,15 @@ impl GerberViewerState
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
         self.status = format!("Grid: {label}");
         self.load_active_grid_into_editor();
+    }
+
+    pub fn set_grid_visible(&mut self, visible: bool)
+    {
+        if self.grid_visible != visible
+        {
+            self.grid_visible = visible;
+            self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        }
     }
 
     fn active_grid(&self) -> &GridSizePreset
@@ -664,6 +676,9 @@ pub fn view<'a>(
     let grid_toolbar = container(
         row![
             text("Grid").size(11).color(text_muted),
+            checkbox(state.grid_visible)
+                .label("Visible")
+                .on_toggle(GerberViewerMessage::ToggleGridVisibility),
             grid_picker,
             text(format!(
                 "X: {:.4} mm  Y: {:.4} mm",
@@ -872,6 +887,7 @@ pub fn view<'a>(
         layers: &state.layers,
         background: canvas_bg,
         grid: crate::styles::ti(tokens.text_secondary),
+        grid_visible: state.grid_visible,
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,
@@ -939,6 +955,7 @@ struct GerberCanvas<'a>
     layers: &'a [ViewerLayer],
     background: Color,
     grid: Color,
+    grid_visible: bool,
     grid_size: &'a GridSizePreset,
     redraw_generation: u64,
     zoom: f32,
@@ -1015,14 +1032,17 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
 
         let Some(world_bounds) = visible_bounds(self.layers) else
         {
-            draw_grid(
-                &mut frame,
-                bounds,
-                self.grid,
-                self.grid_size,
-                32.0 / 1.27,
-                Point::new(bounds.width / 2.0, bounds.height / 2.0),
-            );
+            if self.grid_visible
+            {
+                draw_grid(
+                    &mut frame,
+                    bounds,
+                    self.grid,
+                    self.grid_size,
+                    32.0 / 1.27,
+                    Point::new(bounds.width / 2.0, bounds.height / 2.0),
+                );
+            }
             frame.fill_text(canvas::Text {
                 content: "Open Gerber files to inspect fabrication layers".into(),
                 position: Point::new(bounds.width / 2.0, bounds.height / 2.0),
@@ -1046,14 +1066,17 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 screen_center.y - (point.y as f32 - world_center.y) * scale,
             )
         };
-        draw_grid(
-            &mut frame,
-            bounds,
-            self.grid,
-            self.grid_size,
-            scale,
-            world_to_screen(signex_gerber::Point { x: 0.0, y: 0.0 }),
-        );
+        if self.grid_visible
+        {
+            draw_grid(
+                &mut frame,
+                bounds,
+                self.grid,
+                self.grid_size,
+                scale,
+                world_to_screen(signex_gerber::Point { x: 0.0, y: 0.0 }),
+            );
+        }
 
         for viewer_layer in self.layers.iter().filter(|layer| layer.visible)
         {
@@ -1456,6 +1479,31 @@ mod tests
             state.status,
             "Grid: 1,5000 mm ⨯ 2,5000 mm (59,06 mils ⨯ 98,43 mils)"
         );
+    }
+
+    #[test]
+    fn toggling_grid_visibility_only_requests_viewport_redraw()
+    {
+        let mut state = GerberViewerState::default();
+        let grid_catalog = state.grid_catalog.clone();
+        let active_grid_index = state.active_grid_index;
+        let layers = state.layers.len();
+        let initial_generation = state.redraw_generation;
+
+        state.set_grid_visible(false);
+
+        assert!(!state.grid_visible);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
+        assert_eq!(state.grid_catalog, grid_catalog);
+        assert_eq!(state.active_grid_index, active_grid_index);
+        assert_eq!(state.layers.len(), layers);
+
+        state.set_grid_visible(false);
+        assert_eq!(state.redraw_generation, initial_generation + 1);
+
+        state.set_grid_visible(true);
+        assert!(state.grid_visible);
+        assert_eq!(state.redraw_generation, initial_generation + 2);
     }
 
     #[test]

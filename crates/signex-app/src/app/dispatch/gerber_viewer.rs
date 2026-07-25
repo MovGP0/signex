@@ -208,6 +208,10 @@ impl Signex
                 self.ui_state.gerber_viewer.update_grid();
                 Task::none()
             }
+            GerberViewerMessage::ToggleGridVisibility(visible) => {
+                self.ui_state.gerber_viewer.set_grid_visible(visible);
+                Task::none()
+            }
         }
     }
 }
