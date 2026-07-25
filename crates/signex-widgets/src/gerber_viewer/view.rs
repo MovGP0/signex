@@ -109,6 +109,15 @@ pub fn view<'a>(
                 "Sketch Lines (L)"
             }))
             .on_press(GerberViewerMessage::ToggleSketchLines),
+            button(text(if state.sketch_polygons
+            {
+                "Fill Polygons"
+            }
+            else
+            {
+                "Sketch Polygons (P)"
+            }))
+            .on_press(GerberViewerMessage::ToggleSketchPolygons),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -657,6 +666,7 @@ pub fn view<'a>(
         measurement: state.measurement(),
         sketch_flashes: state.sketch_flashes,
         sketch_lines: state.sketch_lines,
+        sketch_polygons: state.sketch_polygons,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

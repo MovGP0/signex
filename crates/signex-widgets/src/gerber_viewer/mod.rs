@@ -86,6 +86,10 @@ mod gerber_flash_outline_test_definitions;
 mod gerber_line_outline_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/polygon_outline.rs"]
+mod gerber_polygon_outline_test_definitions;
+
+#[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
 
 #[cfg(test)]
@@ -99,3 +103,6 @@ gerber_flash_outline_test_definitions::gerber_flash_outline_tests!();
 
 #[cfg(test)]
 gerber_line_outline_test_definitions::gerber_line_outline_tests!();
+
+#[cfg(test)]
+gerber_polygon_outline_test_definitions::gerber_polygon_outline_tests!();

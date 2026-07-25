@@ -32,6 +32,7 @@ pub struct GerberViewerState
     pub(super) measurement: Option<GerberMeasurement>,
     pub(super) sketch_flashes: bool,
     pub(super) sketch_lines: bool,
+    pub(super) sketch_polygons: bool,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -90,6 +91,7 @@ impl Default for GerberViewerState
             measurement: None,
             sketch_flashes: false,
             sketch_lines: false,
+            sketch_polygons: false,
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -849,6 +851,20 @@ impl GerberViewerState
         else
         {
             "Line items shown filled.".into()
+        };
+    }
+
+    pub fn toggle_sketch_polygons(&mut self)
+    {
+        self.sketch_polygons = !self.sketch_polygons;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.sketch_polygons
+        {
+            "Polygon items shown in outline mode.".into()
+        }
+        else
+        {
+            "Polygon items shown filled.".into()
         };
     }
 }

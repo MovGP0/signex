@@ -21,6 +21,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) measurement: Option<GerberMeasurement>,
     pub(super) sketch_flashes: bool,
     pub(super) sketch_lines: bool,
+    pub(super) sketch_polygons: bool,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -327,6 +328,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 layer_index,
                 self.sketch_flashes,
                 self.sketch_lines,
+                self.sketch_polygons,
             );
         }
         if let Some(measurement) = self.measurement
@@ -535,6 +537,7 @@ pub(super) fn draw_layer(
     layer_index: usize,
     sketch_flashes: bool,
     sketch_lines: bool,
+    sketch_polygons: bool,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -625,7 +628,8 @@ pub(super) fn draw_layer(
                     flash_render_mode(sketch_flashes),
                 );
             }
-            GerberPrimitive::Region { points, polarity } => {
+            GerberPrimitive::Region { points, polarity } =>
+            {
                 if points.len() < 3
                 {
                     continue;
@@ -638,7 +642,12 @@ pub(super) fn draw_layer(
                     }
                     builder.close();
                 });
-                frame.fill(&path, polarity_color(*polarity));
+                paint_polygon_path(
+                    frame,
+                    &path,
+                    polarity_color(*polarity),
+                    polygon_render_mode(sketch_polygons),
+                );
             }
             GerberPrimitive::DrillHit {
                 position,
@@ -832,6 +841,49 @@ fn paint_line_path(
                 .with_width(inner_width)
                 .with_line_cap(canvas::LineCap::Round),
         );
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PolygonRenderMode
+{
+    Filled,
+    Outline,
+}
+
+pub(super) fn polygon_render_mode(
+    sketch_polygons: bool,
+) -> PolygonRenderMode
+{
+    if sketch_polygons
+    {
+        PolygonRenderMode::Outline
+    }
+    else
+    {
+        PolygonRenderMode::Filled
+    }
+}
+
+fn paint_polygon_path(
+    frame: &mut canvas::Frame,
+    path: &canvas::Path,
+    color: Color,
+    render_mode: PolygonRenderMode,
+)
+{
+    match render_mode
+    {
+        PolygonRenderMode::Filled => frame.fill(path, color),
+        PolygonRenderMode::Outline =>
+        {
+            frame.stroke(
+                path,
+                canvas::Stroke::default()
+                    .with_color(color)
+                    .with_width(1.0),
+            );
+        }
     }
 }
 

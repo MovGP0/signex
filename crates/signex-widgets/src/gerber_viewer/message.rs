@@ -29,6 +29,7 @@ pub enum GerberViewerMessage
     RedrawViewport,
     ToggleSketchFlashes,
     ToggleSketchLines,
+    ToggleSketchPolygons,
     ZoomBy(f32),
     PanBy(iced::Vector),
     FitPage,

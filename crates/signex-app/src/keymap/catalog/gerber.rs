@@ -33,4 +33,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_sketch_polygons",
+        category: "display",
+        label: "Sketch Gerber polygon items",
+        menu_label: Some("Sketch Polygons"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];
