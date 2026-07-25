@@ -57,6 +57,48 @@ pub struct GerberLoadBatch
     pub failures: Vec<GerberLoadFailure>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GerberReloadBatch
+{
+    pub layers: Vec<(usize, LoadedLayer)>,
+    pub failures: Vec<GerberLoadFailure>,
+}
+
+/// Reparses disk-backed layers while preserving the caller's layer indices.
+pub fn reload_layers<I>(layers: I) -> GerberReloadBatch
+where
+    I: IntoIterator<Item = LoadedLayer>,
+{
+    let mut batch = GerberReloadBatch::default();
+    for (index, layer) in layers.into_iter().enumerate()
+    {
+        let Some(path) = layer.source_path.clone()
+        else
+        {
+            batch.failures.push(GerberLoadFailure {
+                path: PathBuf::from(&layer.name),
+                message: "layer has no disk source to reload".to_owned(),
+            });
+            continue;
+        };
+        let result = match layer.data
+        {
+            LayerData::Gerber(_) => load_gerber_file(&path),
+            LayerData::Excellon(_) => load_excellon_file(&path),
+            LayerData::Info(_) => Err(GerberLoadFailure {
+                path: path.clone(),
+                message: "information layers cannot be reloaded as fabrication data".to_owned(),
+            }),
+        };
+        match result
+        {
+            Ok(layer) => batch.layers.push((index, layer)),
+            Err(failure) => batch.failures.push(failure),
+        }
+    }
+    batch
+}
+
 /// Loads one RS-274X file from disk.
 pub fn load_gerber_file(path: impl AsRef<Path>) -> Result<LoadedLayer, GerberLoadFailure>
 {

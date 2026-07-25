@@ -7,7 +7,8 @@ use zip::ZipArchive;
 use lib_gerber_edit::layer::LayerData;
 
 use super::{
-    GerberPrimitive, LayerType, load_excellon_reader, load_gerber_reader,
+    GerberPrimitive, LayerType, load_excellon_reader, load_gerber_file,
+    load_gerber_reader, reload_layers,
 };
 
 fn generated_fixture_member(member: &str) -> Vec<u8>
@@ -100,6 +101,42 @@ fn drill_layer_reports_that_gerber_source_is_not_available()
     assert_eq!(
         layer.gerber_source(),
         Err("Source view is available only for Gerber layers."),
+    );
+}
+
+#[test]
+fn reload_reparses_changed_files_and_reports_missing_sources()
+{
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("reload.gbr");
+    std::fs::write(
+        &path,
+        b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+    )
+    .expect("write initial Gerber");
+    let original = load_gerber_file(&path).expect("load initial Gerber");
+    let in_memory = load_gerber_reader(
+        "memory.gbr",
+        Cursor::new(
+            b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+        ),
+    )
+    .expect("load in-memory Gerber");
+    std::fs::write(
+        &path,
+        b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nX1000000Y0D03*\nM02*\n",
+    )
+    .expect("replace Gerber");
+
+    let batch = reload_layers(vec![original, in_memory]);
+
+    assert_eq!(batch.layers.len(), 1);
+    assert_eq!(batch.layers[0].0, 0);
+    assert_eq!(batch.layers[0].1.geometry.primitives.len(), 2);
+    assert_eq!(batch.failures.len(), 1);
+    assert_eq!(
+        batch.failures[0].message,
+        "layer has no disk source to reload",
     );
 }
 

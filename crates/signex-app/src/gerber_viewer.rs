@@ -99,6 +99,8 @@ pub enum GerberViewerMessage
     OpenExcellonFiles,
     ExcellonFilesChosen(Option<Vec<PathBuf>>),
     ExcellonFilesLoaded(GerberLoadBatch),
+    ReloadAllLayers,
+    LayersReloaded(signex_gerber::GerberReloadBatch),
     SelectLayer(usize),
     NextLayer,
     PreviousLayer,
@@ -287,6 +289,39 @@ impl GerberViewerState
             messages.push("No files were selected.".into());
         }
         self.status = messages.join(" ");
+    }
+
+    pub fn apply_reload_batch(&mut self, batch: signex_gerber::GerberReloadBatch)
+    {
+        self.loading = false;
+        let reloaded_count = batch.layers.len();
+        for (index, layer) in batch.layers
+        {
+            if let Some(existing) = self.layers.get_mut(index)
+            {
+                existing.layer = layer;
+            }
+        }
+        if reloaded_count > 0
+        {
+            self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        }
+
+        let mut status = format!("Reloaded {reloaded_count} layer(s).");
+        if !batch.failures.is_empty()
+        {
+            let failures = batch
+                .failures
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" | ");
+            status.push_str(&format!(
+                " {} layer(s) could not be reloaded: {failures}",
+                batch.failures.len(),
+            ));
+        }
+        self.status = status;
     }
 
     pub fn clear_current_layer(&mut self)
@@ -879,6 +914,10 @@ pub fn view<'a>(
                     GerberViewerMessage::OpenExcellonFiles,
                 )),
             button(text("Redraw")).on_press(GerberViewerMessage::RedrawViewport),
+            button(text("Reload All")).on_press_maybe(
+                (!state.loading && !state.layers.is_empty())
+                    .then_some(GerberViewerMessage::ReloadAllLayers),
+            ),
             button(text("−")).on_press(GerberViewerMessage::ZoomBy(1.0 / 1.2)),
             button(text("+")).on_press(GerberViewerMessage::ZoomBy(1.2)),
             button(text("Fit")).on_press(GerberViewerMessage::FitPage),
@@ -2837,6 +2876,58 @@ mod tests
 
         state.clear_all_layers();
         assert_eq!(state.active_gerber_source(), Err("No active layer."));
+    }
+
+    #[test]
+    fn reload_replaces_only_successful_layer_data_and_preserves_view_state()
+    {
+        let first = signex_gerber::load_gerber_reader(
+            "first.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("first Gerber");
+        let second = signex_gerber::load_gerber_reader(
+            "second.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("second Gerber");
+        let replacement = signex_gerber::load_gerber_reader(
+            "first.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nX1000000Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("replacement Gerber");
+        let mut state = GerberViewerState::default();
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![first, second.clone()],
+            failures: Vec::new(),
+        });
+        state.select_layer(0);
+        state.set_layer_visible(0, false);
+        let color = state.layers[0].color;
+        let generation = state.redraw_generation;
+
+        state.apply_reload_batch(signex_gerber::GerberReloadBatch {
+            layers: vec![(0, replacement)],
+            failures: vec![signex_gerber::GerberLoadFailure {
+                path: PathBuf::from("second.gbr"),
+                message: "could not open file".to_owned(),
+            }],
+        });
+
+        assert_eq!(state.layers[0].layer.geometry.primitives.len(), 2);
+        assert_eq!(state.layers[1].layer, second);
+        assert!(!state.layers[0].visible);
+        assert_eq!(state.layers[0].color, color);
+        assert_eq!(state.active_layer, Some(0));
+        assert_eq!(state.redraw_generation, generation + 1);
+        assert!(state.status.contains("Reloaded 1 layer(s)."));
+        assert!(state.status.contains("1 layer(s) could not be reloaded"));
     }
 
     #[test]

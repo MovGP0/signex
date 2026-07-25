@@ -106,6 +106,24 @@ impl Signex
                 self.ui_state.gerber_viewer.apply_load_batch(batch);
                 Task::none()
             }
+            GerberViewerMessage::ReloadAllLayers => {
+                self.ui_state.gerber_viewer.begin_loading();
+                let layers = self
+                    .ui_state
+                    .gerber_viewer
+                    .layers
+                    .iter()
+                    .map(|layer| layer.layer.clone())
+                    .collect::<Vec<_>>();
+                Task::perform(
+                    async move { signex_gerber::reload_layers(layers) },
+                    |batch| Message::GerberViewer(GerberViewerMessage::LayersReloaded(batch)),
+                )
+            }
+            GerberViewerMessage::LayersReloaded(batch) => {
+                self.ui_state.gerber_viewer.apply_reload_batch(batch);
+                Task::none()
+            }
             GerberViewerMessage::SelectLayer(index) => {
                 self.ui_state.gerber_viewer.select_layer(index);
                 Task::none()
