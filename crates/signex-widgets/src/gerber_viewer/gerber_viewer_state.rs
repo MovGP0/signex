@@ -33,6 +33,8 @@ pub struct GerberViewerState
     pub(super) sketch_flashes: bool,
     pub(super) sketch_lines: bool,
     pub(super) sketch_polygons: bool,
+    pub(super) ghost_negative_objects: bool,
+    pub(super) negative_ghost_color: Color,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -92,6 +94,8 @@ impl Default for GerberViewerState
             sketch_flashes: false,
             sketch_lines: false,
             sketch_polygons: false,
+            ghost_negative_objects: false,
+            negative_ghost_color: material_negative_ghost_color(),
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -865,6 +869,20 @@ impl GerberViewerState
         else
         {
             "Polygon items shown filled.".into()
+        };
+    }
+
+    pub fn toggle_ghost_negative_objects(&mut self)
+    {
+        self.ghost_negative_objects = !self.ghost_negative_objects;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.ghost_negative_objects
+        {
+            "Negative objects revealed in ghost color.".into()
+        }
+        else
+        {
+            "Negative objects use normal compositing.".into()
         };
     }
 }

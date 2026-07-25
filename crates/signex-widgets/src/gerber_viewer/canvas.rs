@@ -22,6 +22,8 @@ pub(super) struct GerberCanvas<'a>
     pub(super) sketch_flashes: bool,
     pub(super) sketch_lines: bool,
     pub(super) sketch_polygons: bool,
+    pub(super) ghost_negative_objects: bool,
+    pub(super) negative_ghost_color: Color,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -329,6 +331,8 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.sketch_flashes,
                 self.sketch_lines,
                 self.sketch_polygons,
+                self.ghost_negative_objects,
+                self.negative_ghost_color,
             );
         }
         if let Some(measurement) = self.measurement
@@ -523,6 +527,25 @@ pub(super) fn visible_grid_spacing(spacing: f32) -> Option<f32>
     }
 }
 
+pub(super) fn primitive_polarity_color(
+    polarity: PrimitivePolarity,
+    dark_color: Color,
+    background: Color,
+    negative_ghost_color: Color,
+    ghost_negative_objects: bool,
+) -> Color
+{
+    match polarity
+    {
+        PrimitivePolarity::Dark => dark_color,
+        PrimitivePolarity::Clear if ghost_negative_objects =>
+        {
+            negative_ghost_color
+        }
+        PrimitivePolarity::Clear => background,
+    }
+}
+
 pub(super) fn draw_layer(
     frame: &mut canvas::Frame,
     viewer_layer: &ViewerLayer,
@@ -538,6 +561,8 @@ pub(super) fn draw_layer(
     sketch_flashes: bool,
     sketch_lines: bool,
     sketch_polygons: bool,
+    ghost_negative_objects: bool,
+    negative_ghost_color: Color,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -588,11 +613,13 @@ pub(super) fn draw_layer(
         }
         else
         {
-            match polarity
-            {
-                PrimitivePolarity::Dark => dark_color,
-                PrimitivePolarity::Clear => background,
-            }
+            primitive_polarity_color(
+                polarity,
+                dark_color,
+                background,
+                negative_ghost_color,
+                ghost_negative_objects,
+            )
         };
         match primitive
         {
@@ -1105,6 +1132,7 @@ pub(super) fn zoom_transform_for_selection(
 #[derive(Debug, Deserialize)]
 struct LayerPalette
 {
+    negative_ghost_color: String,
     layer_colors: Vec<String>,
 }
 
@@ -1127,6 +1155,16 @@ pub(super) fn material_layer_palette() -> Vec<Color>
     {
         colors
     }
+}
+
+pub(super) fn material_negative_ghost_color() -> Color
+{
+    let palette: LayerPalette = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/material-layer-colors.toml"
+    ))
+    .expect("bundled Material Design Gerber layer palette must parse");
+    parse_hex_color(&palette.negative_ghost_color)
+        .unwrap_or_else(|| Color::from_rgb8(120, 144, 156))
 }
 
 pub(super) fn parse_hex_color(value: &str) -> Option<Color>

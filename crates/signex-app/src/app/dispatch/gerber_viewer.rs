@@ -320,6 +320,13 @@ impl Signex
                 self.ui_state.gerber_viewer.toggle_sketch_polygons();
                 Task::none()
             }
+            GerberViewerMessage::ToggleGhostNegativeObjects =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .toggle_ghost_negative_objects();
+                Task::none()
+            }
             GerberViewerMessage::ZoomBy(factor) => {
                 self.ui_state.gerber_viewer.zoom_by(factor);
                 Task::none()

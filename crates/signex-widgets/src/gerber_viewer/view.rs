@@ -118,6 +118,15 @@ pub fn view<'a>(
                 "Sketch Polygons (P)"
             }))
             .on_press(GerberViewerMessage::ToggleSketchPolygons),
+            button(text(if state.ghost_negative_objects
+            {
+                "Hide Negative Objects"
+            }
+            else
+            {
+                "Ghost Negative Objects"
+            }))
+            .on_press(GerberViewerMessage::ToggleGhostNegativeObjects),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -667,6 +676,8 @@ pub fn view<'a>(
         sketch_flashes: state.sketch_flashes,
         sketch_lines: state.sketch_lines,
         sketch_polygons: state.sketch_polygons,
+        ghost_negative_objects: state.ghost_negative_objects,
+        negative_ghost_color: state.negative_ghost_color,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

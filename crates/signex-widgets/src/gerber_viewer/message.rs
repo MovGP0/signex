@@ -30,6 +30,7 @@ pub enum GerberViewerMessage
     ToggleSketchFlashes,
     ToggleSketchLines,
     ToggleSketchPolygons,
+    ToggleGhostNegativeObjects,
     ZoomBy(f32),
     PanBy(iced::Vector),
     FitPage,

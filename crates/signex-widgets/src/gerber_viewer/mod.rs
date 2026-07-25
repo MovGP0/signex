@@ -42,7 +42,8 @@ pub use view::view;
 use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index};
 
 use viewport::{
-    material_layer_palette, page_bounds, visible_bounds, zoom_transform_for_selection,
+    material_layer_palette, material_negative_ghost_color, page_bounds,
+    visible_bounds, zoom_transform_for_selection,
 };
 
 #[cfg(test)]
@@ -90,6 +91,10 @@ mod gerber_line_outline_test_definitions;
 mod gerber_polygon_outline_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/ghost_negatives.rs"]
+mod gerber_ghost_negatives_test_definitions;
+
+#[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
 
 #[cfg(test)]
@@ -106,3 +111,6 @@ gerber_line_outline_test_definitions::gerber_line_outline_tests!();
 
 #[cfg(test)]
 gerber_polygon_outline_test_definitions::gerber_polygon_outline_tests!();
+
+#[cfg(test)]
+gerber_ghost_negatives_test_definitions::gerber_ghost_negatives_tests!();

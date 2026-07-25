@@ -11,6 +11,9 @@ palette_sources = [
   "https://www.materialpalette.com/colors",
 ]
 
+# Material Blue Grey 400, used only for revealing clear-polarity objects.
+negative_ghost_color = "#78909C"
+
 layer_colors = [
   "#D32F2F", # 01 Material Red 700
   "#81C784", # 02 Material Green 300
