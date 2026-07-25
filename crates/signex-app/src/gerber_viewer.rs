@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use iced::mouse;
 use iced::widget::{
     Space, button, canvas, checkbox, column, container, pick_list, row, scrollable, text,
+    text_input,
 };
 use iced::{Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme};
 use serde::Deserialize;
@@ -14,7 +15,8 @@ use signex_types::theme::ThemeTokens;
 mod grid;
 
 use grid::{
-    DEFAULT_GRID_INDEX, GridSizePreset, default_grid_catalog, grid_size_choices,
+    DEFAULT_GRID_INDEX, GridSizePreset, GridUnit, create_grid_definition,
+    grid_size_choices, load_grid_catalog, persist_grid_catalog,
     system_decimal_separator,
 };
 
@@ -42,6 +44,12 @@ pub enum GerberViewerMessage
     FitPage,
     ToggleLayerManager,
     SelectGridSize(usize),
+    ToggleGridEditor,
+    NewGridNameChanged(String),
+    NewGridXChanged(String),
+    NewGridYChanged(String),
+    SetNewGridUnitMillimetres(bool),
+    CreateGridDefinition,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +74,12 @@ pub struct GerberViewerState
     grid_catalog: Vec<GridSizePreset>,
     active_grid_index: usize,
     decimal_separator: String,
+    grid_editor_open: bool,
+    new_grid_name: String,
+    new_grid_x: String,
+    new_grid_y: String,
+    new_grid_unit: GridUnit,
+    grid_editor_error: Option<String>,
     palette: Vec<Color>,
 }
 
@@ -73,6 +87,8 @@ impl Default for GerberViewerState
 {
     fn default() -> Self
     {
+        let grid_catalog = load_grid_catalog();
+        let active_grid_index = DEFAULT_GRID_INDEX.min(grid_catalog.len() - 1);
         Self {
             layers: Vec::new(),
             active_layer: None,
@@ -82,9 +98,15 @@ impl Default for GerberViewerState
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
-            grid_catalog: default_grid_catalog(),
-            active_grid_index: DEFAULT_GRID_INDEX,
+            grid_catalog,
+            active_grid_index,
             decimal_separator: system_decimal_separator(),
+            grid_editor_open: false,
+            new_grid_name: String::new(),
+            new_grid_x: String::new(),
+            new_grid_y: String::new(),
+            new_grid_unit: GridUnit::Mil,
+            grid_editor_error: None,
             palette: material_layer_palette(),
         }
     }
@@ -249,6 +271,89 @@ impl GerberViewerState
     {
         &self.grid_catalog[self.active_grid_index]
     }
+
+    pub fn toggle_grid_editor(&mut self)
+    {
+        self.grid_editor_open = !self.grid_editor_open;
+        self.grid_editor_error = None;
+    }
+
+    pub fn set_new_grid_name(&mut self, value: String)
+    {
+        self.new_grid_name = value;
+        self.grid_editor_error = None;
+    }
+
+    pub fn set_new_grid_x(&mut self, value: String)
+    {
+        self.new_grid_x = value;
+        self.grid_editor_error = None;
+    }
+
+    pub fn set_new_grid_y(&mut self, value: String)
+    {
+        self.new_grid_y = value;
+        self.grid_editor_error = None;
+    }
+
+    pub fn set_new_grid_unit_millimetres(&mut self, millimetres: bool)
+    {
+        self.new_grid_unit = if millimetres
+        {
+            GridUnit::Mm
+        }
+        else
+        {
+            GridUnit::Mil
+        };
+        self.grid_editor_error = None;
+    }
+
+    pub fn create_grid(&mut self)
+    {
+        self.create_grid_with(persist_grid_catalog);
+    }
+
+    fn create_grid_with(
+        &mut self,
+        persist: impl FnOnce(&[GridSizePreset]) -> Result<(), String>,
+    )
+    {
+        let grid = match create_grid_definition(
+            &self.new_grid_name,
+            &self.new_grid_x,
+            &self.new_grid_y,
+            self.new_grid_unit,
+            &self.decimal_separator,
+        )
+        {
+            Ok(grid) => grid,
+            Err(error) => {
+                self.grid_editor_error = Some(error);
+                return;
+            }
+        };
+        let mut catalog = self.grid_catalog.clone();
+        catalog.push(grid);
+        if let Err(error) = persist(&catalog)
+        {
+            self.grid_editor_error = Some(error);
+            return;
+        }
+
+        self.grid_catalog = catalog;
+        self.active_grid_index = self.grid_catalog.len() - 1;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = format!(
+            "Created grid: {}",
+            self.active_grid()
+                .display_label(&self.decimal_separator),
+        );
+        self.new_grid_name.clear();
+        self.new_grid_x.clear();
+        self.new_grid_y.clear();
+        self.grid_editor_error = None;
+    }
 }
 
 pub fn view<'a>(
@@ -335,6 +440,15 @@ pub fn view<'a>(
             .size(10)
             .color(text_muted),
             Space::new().width(Length::Fill),
+            button(text(if state.grid_editor_open
+            {
+                "Close Grid Editor"
+            }
+            else
+            {
+                "Edit Grids…"
+            }))
+            .on_press(GerberViewerMessage::ToggleGridEditor),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
@@ -342,6 +456,62 @@ pub fn view<'a>(
     .padding([4, 10])
     .width(Length::Fill)
     .style(crate::styles::toolbar_strip(tokens));
+    let grid_editor: Element<'_, GerberViewerMessage> = if state.grid_editor_open
+    {
+        let unit_picker = pick_list(
+            GridUnit::ALL,
+            Some(state.new_grid_unit),
+            |unit| {
+                GerberViewerMessage::SetNewGridUnitMillimetres(
+                    unit == GridUnit::Mm,
+                )
+            },
+        )
+        .width(90);
+        let form = row![
+            text("Add grid").size(12).color(text_primary),
+            text_input("Optional name", &state.new_grid_name)
+                .on_input(GerberViewerMessage::NewGridNameChanged)
+                .width(180),
+            text_input("X distance", &state.new_grid_x)
+                .on_input(GerberViewerMessage::NewGridXChanged)
+                .width(120),
+            text("⨯").size(13).color(text_muted),
+            text_input("Y distance", &state.new_grid_y)
+                .on_input(GerberViewerMessage::NewGridYChanged)
+                .width(120),
+            unit_picker,
+            button(text("Create"))
+                .on_press(GerberViewerMessage::CreateGridDefinition),
+            Space::new().width(Length::Fill),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+        let editor_content = if let Some(error) = state.grid_editor_error.as_deref()
+        {
+            column![
+                form,
+                text(error)
+                    .size(10)
+                    .color(Color::from_rgb8(239, 83, 80)),
+            ]
+            .spacing(4)
+        }
+        else
+        {
+            column![form]
+        };
+
+        container(editor_content)
+            .padding([6, 10])
+            .width(Length::Fill)
+            .style(crate::styles::toolbar_strip(tokens))
+            .into()
+    }
+    else
+    {
+        Space::new().height(0).into()
+    };
 
     let mut layer_list = column![
         text("Layers").size(13).color(text_primary),
@@ -471,6 +641,7 @@ pub fn view<'a>(
     column![
         toolbar,
         grid_toolbar,
+        grid_editor,
         content,
         status,
     ]
@@ -1006,6 +1177,65 @@ mod tests
         assert_eq!(
             state.status,
             "Grid: 1,5000 mm ⨯ 2,5000 mm (59,06 mils ⨯ 98,43 mils)"
+        );
+    }
+
+    #[test]
+    fn creating_grid_appends_selects_and_persists_definition()
+    {
+        let mut state = GerberViewerState::default();
+        state.decimal_separator = ",".to_owned();
+        state.set_new_grid_name(" Fine metric ".to_owned());
+        state.set_new_grid_x("0,05".to_owned());
+        state.set_new_grid_y("0".to_owned());
+        state.set_new_grid_unit_millimetres(true);
+        let original_count = state.grid_catalog.len();
+        let mut persisted = Vec::new();
+
+        state.create_grid_with(|catalog| {
+            persisted = catalog.to_vec();
+            Ok(())
+        });
+
+        assert_eq!(state.grid_catalog.len(), original_count + 1);
+        assert_eq!(persisted, state.grid_catalog);
+        assert_eq!(state.active_grid_index, original_count);
+        assert_eq!(state.active_grid().name.as_deref(), Some("Fine metric"));
+        assert_eq!(state.active_grid().x_millimetres(), 0.05);
+        assert_eq!(state.active_grid().y_millimetres(), 0.0);
+        assert_eq!(
+            state.status,
+            "Created grid: Fine metric: 0,0500 mm ⨯ 0,0000 mm (1,97 mils ⨯ 0,00 mils)"
+        );
+        assert!(state.new_grid_name.is_empty());
+        assert!(state.new_grid_x.is_empty());
+        assert!(state.new_grid_y.is_empty());
+        assert_eq!(state.grid_editor_error, None);
+    }
+
+    #[test]
+    fn invalid_or_unpersisted_grid_is_not_added()
+    {
+        let mut state = GerberViewerState::default();
+        let original_catalog = state.grid_catalog.clone();
+        state.set_new_grid_x("0".to_owned());
+        state.set_new_grid_y("1".to_owned());
+
+        state.create_grid_with(|_| panic!("invalid grid must not persist"));
+
+        assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(
+            state.grid_editor_error.as_deref(),
+            Some("X must be a finite number greater than zero.")
+        );
+
+        state.set_new_grid_x("1".to_owned());
+        state.create_grid_with(|_| Err("settings unavailable".to_owned()));
+
+        assert_eq!(state.grid_catalog, original_catalog);
+        assert_eq!(
+            state.grid_editor_error.as_deref(),
+            Some("settings unavailable")
         );
     }
 

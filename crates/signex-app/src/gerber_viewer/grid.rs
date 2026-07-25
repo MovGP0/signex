@@ -1,13 +1,15 @@
 use std::fmt;
+use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const MILLIMETRES_PER_MIL: f64 = 0.0254;
+const SETTINGS_FILE_NAME: &str = "gerber_viewer.toml";
 // Use the en-US decimal point only when the operating-system locale cannot be read.
 const DEFAULT_DECIMAL_SEPARATOR: &str = ".";
 pub(super) const DEFAULT_GRID_INDEX: usize = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum GridUnit
 {
@@ -15,7 +17,24 @@ pub(super) enum GridUnit
     Mm,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+impl GridUnit
+{
+    pub const ALL: [Self; 2] = [Self::Mil, Self::Mm];
+}
+
+impl fmt::Display for GridUnit
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        formatter.write_str(match self
+        {
+            Self::Mil => "mils",
+            Self::Mm => "mm",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub(super) struct GridSizePreset
 {
     pub name: Option<String>,
@@ -92,7 +111,7 @@ impl GridSizePreset
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct GerberViewerSettings
 {
     grid_sizes: Vec<GridSizePreset>,
@@ -120,6 +139,52 @@ pub(super) fn default_grid_catalog() -> Vec<GridSizePreset>
     ))
     .expect("bundled Gerber viewer settings must parse");
     settings.grid_sizes
+}
+
+pub(super) fn load_grid_catalog() -> Vec<GridSizePreset>
+{
+    grid_settings_path()
+        .and_then(|path| load_grid_catalog_from(&path).ok())
+        .filter(|catalog| !catalog.is_empty())
+        .unwrap_or_else(default_grid_catalog)
+}
+
+pub(super) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String>
+{
+    let path = grid_settings_path()
+        .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
+    persist_grid_catalog_to(&path, catalog)
+}
+
+pub(super) fn create_grid_definition(
+    name: &str,
+    x: &str,
+    y: &str,
+    unit: GridUnit,
+    decimal_separator: &str,
+) -> Result<GridSizePreset, String>
+{
+    let x = parse_distance(x, decimal_separator)
+        .ok_or_else(|| "X must be a finite number greater than zero.".to_owned())?;
+    if x <= 0.0
+    {
+        return Err("X must be a finite number greater than zero.".to_owned());
+    }
+
+    let y = parse_distance(y, decimal_separator)
+        .ok_or_else(|| "Y must be a finite non-negative number.".to_owned())?;
+    if y < 0.0
+    {
+        return Err("Y must be a finite non-negative number.".to_owned());
+    }
+
+    let name = name.trim();
+    Ok(GridSizePreset {
+        name: (!name.is_empty()).then(|| name.to_owned()),
+        x,
+        y,
+        unit,
+    })
 }
 
 pub(super) fn grid_size_choices(
@@ -225,6 +290,57 @@ fn format_decimal(value: f64, decimals: usize, decimal_separator: &str) -> Strin
     format!("{value:.decimals$}").replace('.', decimal_separator)
 }
 
+fn parse_distance(value: &str, decimal_separator: &str) -> Option<f64>
+{
+    let value = value.trim();
+    let normalized = if decimal_separator == DEFAULT_DECIMAL_SEPARATOR
+    {
+        value.to_owned()
+    }
+    else
+    {
+        value.replace(decimal_separator, DEFAULT_DECIMAL_SEPARATOR)
+    };
+    normalized
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
+fn grid_settings_path() -> Option<PathBuf>
+{
+    crate::config_root::config_root().map(|root| root.join(SETTINGS_FILE_NAME))
+}
+
+fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>
+{
+    let source = std::fs::read_to_string(path)
+        .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+    let settings: GerberViewerSettings = toml::from_str(&source)
+        .map_err(|error| format!("Could not parse {}: {error}", path.display()))?;
+    if settings.grid_sizes.iter().any(|grid| {
+        !grid.x.is_finite()
+            || grid.x <= 0.0
+            || !grid.y.is_finite()
+            || grid.y < 0.0
+    })
+    {
+        return Err("The persisted grid catalog contains invalid distances.".to_owned());
+    }
+    Ok(settings.grid_sizes)
+}
+
+fn persist_grid_catalog_to(path: &Path, catalog: &[GridSizePreset]) -> Result<(), String>
+{
+    let settings = GerberViewerSettings {
+        grid_sizes: catalog.to_vec(),
+    };
+    let source = toml::to_string_pretty(&settings)
+        .map_err(|error| format!("Could not serialize Gerber viewer settings: {error}"))?;
+    signex_types::atomic_io::atomic_write(path, source.as_bytes())
+        .map_err(|error| format!("Could not save {}: {error}", path.display()))
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -302,5 +418,77 @@ mod tests
     {
         assert_eq!(DEFAULT_DECIMAL_SEPARATOR, ".");
         assert!(!system_decimal_separator().is_empty());
+    }
+
+    #[test]
+    fn creates_named_and_unnamed_grid_definitions()
+    {
+        let named = create_grid_definition(
+            " Fine metric ",
+            "0,05",
+            "0",
+            GridUnit::Mm,
+            ",",
+        )
+        .expect("valid named metric grid");
+        let unnamed = create_grid_definition(
+            "  ",
+            "2.5",
+            "2.5",
+            GridUnit::Mil,
+            ".",
+        )
+        .expect("valid unnamed mil grid");
+
+        assert_eq!(named.name.as_deref(), Some("Fine metric"));
+        assert_eq!(named.x, 0.05);
+        assert_eq!(named.y, 0.0);
+        assert_eq!(named.unit, GridUnit::Mm);
+        assert_eq!(unnamed.name, None);
+    }
+
+    #[test]
+    fn rejects_invalid_grid_distances()
+    {
+        for x in ["", "0", "-1", "NaN", "inf"]
+        {
+            assert!(
+                create_grid_definition("", x, "1", GridUnit::Mm, ".")
+                    .is_err()
+            );
+        }
+        for y in ["", "-1", "NaN", "inf"]
+        {
+            assert!(
+                create_grid_definition("", "1", y, GridUnit::Mm, ".")
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn persists_and_loads_the_ordered_grid_catalog()
+    {
+        let directory = tempfile::tempdir().expect("temporary settings directory");
+        let path = directory.path().join("gerber_viewer.toml");
+        let mut catalog = default_grid_catalog();
+        catalog.push(
+            create_grid_definition(
+                "Assembly",
+                "0.25",
+                "0.5",
+                GridUnit::Mm,
+                ".",
+            )
+            .expect("valid custom grid"),
+        );
+
+        persist_grid_catalog_to(&path, &catalog)
+            .expect("grid catalog must persist");
+        let loaded = load_grid_catalog_from(&path)
+            .expect("persisted grid catalog must load");
+
+        assert_eq!(loaded, catalog);
+        assert_eq!(loaded.last().and_then(|grid| grid.name.as_deref()), Some("Assembly"));
     }
 }

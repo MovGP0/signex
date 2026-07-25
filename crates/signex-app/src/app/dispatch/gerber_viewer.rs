@@ -148,6 +148,32 @@ impl Signex
                 self.ui_state.gerber_viewer.select_grid_size(index);
                 Task::none()
             }
+            GerberViewerMessage::ToggleGridEditor => {
+                self.ui_state.gerber_viewer.toggle_grid_editor();
+                Task::none()
+            }
+            GerberViewerMessage::NewGridNameChanged(value) => {
+                self.ui_state.gerber_viewer.set_new_grid_name(value);
+                Task::none()
+            }
+            GerberViewerMessage::NewGridXChanged(value) => {
+                self.ui_state.gerber_viewer.set_new_grid_x(value);
+                Task::none()
+            }
+            GerberViewerMessage::NewGridYChanged(value) => {
+                self.ui_state.gerber_viewer.set_new_grid_y(value);
+                Task::none()
+            }
+            GerberViewerMessage::SetNewGridUnitMillimetres(millimetres) => {
+                self.ui_state
+                    .gerber_viewer
+                    .set_new_grid_unit_millimetres(millimetres);
+                Task::none()
+            }
+            GerberViewerMessage::CreateGridDefinition => {
+                self.ui_state.gerber_viewer.create_grid();
+                Task::none()
+            }
         }
     }
 }
