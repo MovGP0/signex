@@ -26,6 +26,7 @@ sketch_flashed_items = false
 sketch_lines = false
 sketch_polygons = false
 forced_opacity = 0.60
+inactive_layer_opacity = 0.28
 
 [page_size]
 # Supported values: "full_size", "a4", "a3", "a2", "a", "b", "c".

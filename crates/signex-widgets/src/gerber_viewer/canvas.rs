@@ -28,6 +28,8 @@ pub(super) struct GerberCanvas<'a>
     pub(super) d_code_color: Color,
     pub(super) compare_mode: bool,
     pub(super) compare_palette: &'a [Color],
+    pub(super) dim_inactive_layers: bool,
+    pub(super) inactive_layer_opacity: f32,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -333,6 +335,9 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                     self.compare_mode,
                     self.compare_palette,
                 ),
+                self.active_layer == Some(layer_index),
+                self.dim_inactive_layers,
+                self.inactive_layer_opacity,
                 scale,
                 &world_to_screen,
                 self.background,
@@ -544,6 +549,24 @@ pub(super) fn visible_grid_spacing(spacing: f32) -> Option<f32>
     }
 }
 
+pub(super) fn inactive_layer_color(
+    color: Color,
+    active: bool,
+    dim_inactive_layers: bool,
+    inactive_layer_opacity: f32,
+) -> Color
+{
+    if !dim_inactive_layers || active
+    {
+        return color;
+    }
+
+    Color {
+        a: color.a * inactive_layer_opacity.clamp(0.0, 1.0),
+        ..color
+    }
+}
+
 pub(super) fn compare_layer_color(
     original: Color,
     visible_ordinal: usize,
@@ -598,6 +621,9 @@ pub(super) fn draw_layer(
     frame: &mut canvas::Frame,
     viewer_layer: &ViewerLayer,
     layer_color: Color,
+    active: bool,
+    dim_inactive_layers: bool,
+    inactive_layer_opacity: f32,
     scale: f32,
     world_to_screen: &impl Fn(signex_gerber::Point) -> Point,
     background: Color,
@@ -630,7 +656,12 @@ pub(super) fn draw_layer(
             .primitive_attributes
             .get(primitive_index);
         let component_color = component_highlight_color(
-            layer_color,
+            inactive_layer_color(
+                layer_color,
+                active,
+                dim_inactive_layers,
+                inactive_layer_opacity,
+            ),
             attributes,
             highlighted_component,
         );

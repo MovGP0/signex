@@ -39,6 +39,8 @@ pub struct GerberViewerState
     pub(super) d_code_color: Color,
     pub(super) compare_mode: bool,
     pub(super) compare_palette: Vec<Color>,
+    pub(super) dim_inactive_layers: bool,
+    pub(super) inactive_layer_opacity: f32,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -104,6 +106,8 @@ impl Default for GerberViewerState
             d_code_color: material_d_code_color(),
             compare_mode: false,
             compare_palette: material_compare_palette(),
+            dim_inactive_layers: false,
+            inactive_layer_opacity: default_inactive_layer_opacity(),
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -923,6 +927,20 @@ impl GerberViewerState
         else
         {
             "Layer compare mode disabled.".into()
+        };
+    }
+
+    pub fn toggle_dim_inactive_layers(&mut self)
+    {
+        self.dim_inactive_layers = !self.dim_inactive_layers;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.dim_inactive_layers
+        {
+            "Inactive layers dimmed.".into()
+        }
+        else
+        {
+            "All visible layers shown at normal contrast.".into()
         };
     }
 }

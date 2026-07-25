@@ -57,4 +57,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_dim_inactive_layers",
+        category: "display",
+        label: "Dim inactive Gerber layers",
+        menu_label: Some("Dim Inactive Layers"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];

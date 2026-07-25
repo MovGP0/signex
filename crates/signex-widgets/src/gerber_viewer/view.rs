@@ -145,6 +145,15 @@ pub fn view<'a>(
                 "XOR Compare"
             }))
             .on_press(GerberViewerMessage::ToggleCompareMode),
+            button(text(if state.dim_inactive_layers
+            {
+                "Normal Layer Contrast"
+            }
+            else
+            {
+                "Dim Inactive Layers"
+            }))
+            .on_press(GerberViewerMessage::ToggleDimInactiveLayers),
             button(text("Reload All")).on_press_maybe(
                 (!state.loading && !state.layers.is_empty())
                     .then_some(GerberViewerMessage::ReloadAllLayers),
@@ -700,6 +709,8 @@ pub fn view<'a>(
         d_code_color: state.d_code_color,
         compare_mode: state.compare_mode,
         compare_palette: &state.compare_palette,
+        dim_inactive_layers: state.dim_inactive_layers,
+        inactive_layer_opacity: state.inactive_layer_opacity,
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

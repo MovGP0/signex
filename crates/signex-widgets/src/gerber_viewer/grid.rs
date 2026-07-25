@@ -166,6 +166,27 @@ pub(super) fn default_grid_catalog() -> Vec<GridSizePreset>
     settings.grid_sizes
 }
 
+#[derive(Debug, Deserialize)]
+struct BundledDisplaySettings
+{
+    drawing_mode: BundledDrawingModeSettings,
+}
+
+#[derive(Debug, Deserialize)]
+struct BundledDrawingModeSettings
+{
+    inactive_layer_opacity: f32,
+}
+
+pub(super) fn default_inactive_layer_opacity() -> f32
+{
+    let settings: BundledDisplaySettings = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/default-settings.toml"
+    ))
+    .expect("bundled Gerber viewer settings must parse");
+    settings.drawing_mode.inactive_layer_opacity.clamp(0.0, 1.0)
+}
+
 pub(super) fn load_grid_catalog() -> Vec<GridSizePreset>
 {
     grid_settings_path()

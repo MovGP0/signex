@@ -52,8 +52,9 @@ use viewport::*;
 
 use grid::{
     DEFAULT_GRID_INDEX, GridSizePreset, GridUnit, create_grid_definition,
-    format_distance_input, grid_size_choices, load_grid_catalog, load_page_size,
-    persist_grid_catalog, persist_page_size, system_decimal_separator,
+    default_inactive_layer_opacity, format_distance_input, grid_size_choices,
+    load_grid_catalog, load_page_size, persist_grid_catalog, persist_page_size,
+    system_decimal_separator,
 };
 use highlight::{
     attribute_highlight_color, component_highlight_color, d_code_highlight_color,
@@ -104,6 +105,10 @@ mod gerber_d_code_labels_test_definitions;
 mod gerber_compare_mode_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/dim_inactive_layers.rs"]
+mod gerber_dim_inactive_layers_test_definitions;
+
+#[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
 
 #[cfg(test)]
@@ -130,3 +135,6 @@ gerber_d_code_labels_test_definitions::gerber_d_code_labels_tests!();
 
 #[cfg(test)]
 gerber_compare_mode_test_definitions::gerber_compare_mode_tests!();
+
+#[cfg(test)]
+gerber_dim_inactive_layers_test_definitions::gerber_dim_inactive_layers_tests!();
