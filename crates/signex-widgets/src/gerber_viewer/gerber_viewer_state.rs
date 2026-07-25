@@ -41,6 +41,7 @@ pub struct GerberViewerState
     pub(super) compare_palette: Vec<Color>,
     pub(super) dim_inactive_layers: bool,
     pub(super) inactive_layer_opacity: f32,
+    pub(super) mirrored: bool,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -108,6 +109,7 @@ impl Default for GerberViewerState
             compare_palette: material_compare_palette(),
             dim_inactive_layers: false,
             inactive_layer_opacity: default_inactive_layer_opacity(),
+            mirrored: false,
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -915,6 +917,10 @@ impl GerberViewerState
     pub fn toggle_compare_mode(&mut self)
     {
         self.compare_mode = !self.compare_mode;
+        if self.compare_mode
+        {
+            self.dim_inactive_layers = false;
+        }
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
         self.status = if self.compare_mode
         {
@@ -933,6 +939,10 @@ impl GerberViewerState
     pub fn toggle_dim_inactive_layers(&mut self)
     {
         self.dim_inactive_layers = !self.dim_inactive_layers;
+        if self.dim_inactive_layers
+        {
+            self.compare_mode = false;
+        }
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
         self.status = if self.dim_inactive_layers
         {
@@ -941,6 +951,20 @@ impl GerberViewerState
         else
         {
             "All visible layers shown at normal contrast.".into()
+        };
+    }
+
+    pub fn toggle_mirrored(&mut self)
+    {
+        self.mirrored = !self.mirrored;
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        self.status = if self.mirrored
+        {
+            "Gerber view mirrored horizontally.".into()
+        }
+        else
+        {
+            "Gerber view shown in normal orientation.".into()
         };
     }
 }

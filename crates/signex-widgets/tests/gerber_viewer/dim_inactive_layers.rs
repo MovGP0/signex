@@ -60,6 +60,23 @@ macro_rules! gerber_dim_inactive_layers_tests
                 assert!(state.dim_inactive_layers);
                 assert_eq!(state.redraw_generation, generation + 1);
             }
+
+            #[test]
+            fn dim_and_compare_modes_are_mutually_exclusive()
+            {
+                let mut state = GerberViewerState::default();
+
+                state.toggle_compare_mode();
+                state.toggle_dim_inactive_layers();
+
+                assert!(state.dim_inactive_layers);
+                assert!(!state.compare_mode);
+
+                state.toggle_compare_mode();
+
+                assert!(state.compare_mode);
+                assert!(!state.dim_inactive_layers);
+            }
         }
     };
 }
