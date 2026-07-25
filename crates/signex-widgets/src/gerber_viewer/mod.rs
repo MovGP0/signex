@@ -25,6 +25,7 @@ mod layer_color;
 mod layer_order;
 mod measurement;
 mod message;
+mod pcb_export;
 pub(crate) mod print;
 mod selection;
 mod shortcuts;
@@ -38,6 +39,9 @@ pub use display::{GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
 pub use measurement::GerberMeasurement;
 pub use message::GerberViewerMessage;
+pub use pcb_export::{
+    GerberPcbExport, GerberPcbExportReport, GerberPcbSkippedItem,
+};
 pub use selection::GerberItemSelection;
 pub use shortcuts::GerberShortcutResolver;
 pub use view::view;
@@ -97,6 +101,10 @@ mod gerber_layer_color_test_definitions;
 mod gerber_item_color_test_definitions;
 
 #[cfg(test)]
+#[path = "../../tests/gerber_viewer/pcb_export.rs"]
+mod gerber_pcb_export_test_definitions;
+
+#[cfg(test)]
 #[path = "../../tests/gerber_viewer/clear_highlight.rs"]
 mod gerber_clear_highlight_test_definitions;
 
@@ -153,6 +161,9 @@ gerber_layer_color_test_definitions::gerber_layer_color_tests!();
 
 #[cfg(test)]
 gerber_item_color_test_definitions::gerber_item_color_tests!();
+
+#[cfg(test)]
+gerber_pcb_export_test_definitions::gerber_pcb_export_tests!();
 
 #[cfg(test)]
 gerber_clear_highlight_test_definitions::gerber_clear_highlight_tests!();

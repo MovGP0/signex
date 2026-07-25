@@ -63,6 +63,10 @@ impl GerberShortcutResolver for crate::keymap::CompiledKeymap
             {
                 Some(GerberViewerMessage::ClearHighlight)
             }
+            "gerber_export_native_pcb" =>
+            {
+                Some(GerberViewerMessage::ExportNativePcb)
+            }
             _ => None,
         }
     }
@@ -604,6 +608,96 @@ impl Signex
                 {
                     Ok(path) => {
                         format!("Printed visible Gerber layers to {}.", path.display())
+                    }
+                    Err(error) => error,
+                };
+                Task::none()
+            }
+            GerberViewerMessage::ExportNativePcb =>
+            {
+                self.ui_state.gerber_viewer.status =
+                    "Choose where to save the lossy native PCB conversion."
+                        .into();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Export Lossy Gerber Conversion")
+                            .add_filter("Signex PCB", &["snxpcb"])
+                            .set_file_name("gerber-import.snxpcb")
+                            .save_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    |path| {
+                        Message::GerberViewer(
+                            GerberViewerMessage::NativePcbPathChosen(path),
+                        )
+                    },
+                )
+            }
+            GerberViewerMessage::NativePcbPathChosen(Some(mut path)) =>
+            {
+                if path.extension().is_none()
+                {
+                    path.set_extension("snxpcb");
+                }
+                let export = self.ui_state.gerber_viewer.export_native_pcb();
+                let summary = export.report.detailed_summary();
+                if export.report.converted_count() == 0
+                {
+                    self.ui_state.gerber_viewer.status = format!(
+                        "No supported Gerber artwork was exported. {summary}",
+                    );
+                    return Task::none();
+                }
+                let source = match export.write_string()
+                {
+                    Ok(source) => source,
+                    Err(error) =>
+                    {
+                        self.ui_state.gerber_viewer.status = error;
+                        return Task::none();
+                    }
+                };
+                Task::perform(
+                    async move {
+                        signex_types::atomic_io::atomic_write(
+                            &path,
+                            source.as_bytes(),
+                        )
+                        .map_err(|error| {
+                            format!(
+                                "Could not write {}: {error}",
+                                path.display(),
+                            )
+                        })?;
+                        Ok((path, summary))
+                    },
+                    |result| {
+                        Message::GerberViewer(
+                            GerberViewerMessage::NativePcbExportFinished(
+                                result,
+                            ),
+                        )
+                    },
+                )
+            }
+            GerberViewerMessage::NativePcbPathChosen(None) =>
+            {
+                self.ui_state.gerber_viewer.status =
+                    "Lossy native PCB export cancelled.".into();
+                Task::none()
+            }
+            GerberViewerMessage::NativePcbExportFinished(result) =>
+            {
+                self.ui_state.gerber_viewer.status = match result
+                {
+                    Ok((path, summary)) =>
+                    {
+                        format!(
+                            "Exported lossy native PCB to {}. {summary}",
+                            path.display(),
+                        )
                     }
                     Err(error) => error,
                 };

@@ -105,4 +105,12 @@ pub(super) const GERBER: &[CommandMetadata] = &[
         group: CommandGroup::Gerber,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "gerber_export_native_pcb",
+        category: "file",
+        label: "Export Gerber artwork to native PCB",
+        menu_label: Some("Export to PCB Editor"),
+        group: CommandGroup::Gerber,
+        ..CommandMetadata::DEFAULT
+    },
 ];

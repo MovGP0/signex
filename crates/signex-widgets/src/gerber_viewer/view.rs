@@ -206,6 +206,10 @@ pub fn view<'a>(
                 self::print::has_visible_layers(state)
                     .then_some(GerberViewerMessage::PrintVisibleLayers),
             ),
+            button(text("Export Lossy PCB…")).on_press_maybe(
+                (!state.layers.is_empty())
+                    .then_some(GerberViewerMessage::ExportNativePcb),
+            ),
             button(text("Previous Layer (PgUp)")).on_press_maybe(
                 previous_layer_index(state.active_layer, state.layers.len())
                     .map(|_| GerberViewerMessage::PreviousLayer),

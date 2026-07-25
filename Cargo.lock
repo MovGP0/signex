@@ -5651,6 +5651,7 @@ dependencies = [
  "signex-types",
  "tempfile",
  "toml 0.8.23",
+ "uuid",
  "windows-sys 0.61.2",
 ]
 
