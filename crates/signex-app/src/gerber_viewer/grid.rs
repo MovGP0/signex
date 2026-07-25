@@ -372,35 +372,35 @@ mod tests
         let catalog = default_grid_catalog();
         let labels = catalog
             .iter()
-            .map(|grid| grid.display_label(","))
+            .map(|grid| grid.display_label("."))
             .collect::<Vec<_>>();
 
         assert_eq!(catalog.len(), 22);
         assert_eq!(
             labels,
             [
-                "100,00 mils (2,5400 mm)",
-                "50,00 mils (1,2700 mm)",
-                "25,00 mils (0,6350 mm)",
-                "20,00 mils (0,5080 mm)",
-                "10,00 mils (0,2540 mm)",
-                "5,00 mils (0,1270 mm)",
-                "2,50 mils (0,0635 mm)",
-                "2,00 mils (0,0508 mm)",
-                "1,00 mils (0,0254 mm)",
-                "0,50 mils (0,0127 mm)",
-                "0,20 mils (0,0051 mm)",
-                "0,10 mils (0,0025 mm)",
-                "5,0000 mm (196,85 mils)",
-                "1,5000 mm ⨯ 2,5000 mm (59,06 mils ⨯ 98,43 mils)",
-                "1,0000 mm (39,37 mils)",
-                "0,5000 mm (19,69 mils)",
-                "0,2500 mm (9,84 mils)",
-                "0,2000 mm (7,87 mils)",
-                "0,1000 mm (3,94 mils)",
-                "0,0500 mm ⨯ 0,0000 mm (1,97 mils ⨯ 0,00 mils)",
-                "0,0250 mm ⨯ 0,0000 mm (0,98 mils ⨯ 0,00 mils)",
-                "0,0100 mm ⨯ 0,0000 mm (0,39 mils ⨯ 0,00 mils)",
+                "100.00 mils (2.5400 mm)",
+                "50.00 mils (1.2700 mm)",
+                "25.00 mils (0.6350 mm)",
+                "20.00 mils (0.5080 mm)",
+                "10.00 mils (0.2540 mm)",
+                "5.00 mils (0.1270 mm)",
+                "2.50 mils (0.0635 mm)",
+                "2.00 mils (0.0508 mm)",
+                "1.00 mils (0.0254 mm)",
+                "0.50 mils (0.0127 mm)",
+                "0.20 mils (0.0051 mm)",
+                "0.10 mils (0.0025 mm)",
+                "5.0000 mm (196.85 mils)",
+                "1.5000 mm ⨯ 2.5000 mm (59.06 mils ⨯ 98.43 mils)",
+                "1.0000 mm (39.37 mils)",
+                "0.5000 mm (19.69 mils)",
+                "0.2500 mm (9.84 mils)",
+                "0.2000 mm (7.87 mils)",
+                "0.1000 mm (3.94 mils)",
+                "0.0500 mm ⨯ 0.0000 mm (1.97 mils ⨯ 0.00 mils)",
+                "0.0250 mm ⨯ 0.0000 mm (0.98 mils ⨯ 0.00 mils)",
+                "0.0100 mm ⨯ 0.0000 mm (0.39 mils ⨯ 0.00 mils)",
             ]
         );
     }
@@ -431,6 +431,10 @@ mod tests
             catalog[21].display_label("."),
             "0.0100 mm ⨯ 0.0000 mm (0.39 mils ⨯ 0.00 mils)"
         );
+        assert_eq!(
+            catalog[21].display_label(","),
+            "0,0100 mm ⨯ 0,0000 mm (0,39 mils ⨯ 0,00 mils)"
+        );
     }
 
     #[test]
@@ -445,10 +449,10 @@ mod tests
     {
         let named = create_grid_definition(
             " Fine metric ",
-            "0,05",
+            "0.05",
             "0",
             GridUnit::Mm,
-            ",",
+            ".",
         )
         .expect("valid named metric grid");
         let unnamed = create_grid_definition(

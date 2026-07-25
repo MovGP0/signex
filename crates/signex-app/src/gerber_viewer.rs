@@ -1462,7 +1462,7 @@ mod tests
     fn selecting_grid_updates_rectangular_viewport_spacing()
     {
         let mut state = GerberViewerState::default();
-        state.decimal_separator = ",".to_owned();
+        state.decimal_separator = ".".to_owned();
         let initial_generation = state.redraw_generation;
 
         assert_eq!(state.active_grid_index, DEFAULT_GRID_INDEX);
@@ -1477,7 +1477,7 @@ mod tests
         assert_eq!(state.redraw_generation, initial_generation + 1);
         assert_eq!(
             state.status,
-            "Grid: 1,5000 mm ⨯ 2,5000 mm (59,06 mils ⨯ 98,43 mils)"
+            "Grid: 1.5000 mm ⨯ 2.5000 mm (59.06 mils ⨯ 98.43 mils)"
         );
     }
 
@@ -1510,9 +1510,9 @@ mod tests
     fn creating_grid_appends_selects_and_persists_definition()
     {
         let mut state = GerberViewerState::default();
-        state.decimal_separator = ",".to_owned();
+        state.decimal_separator = ".".to_owned();
         state.set_new_grid_name(" Fine metric ".to_owned());
-        state.set_new_grid_x("0,05".to_owned());
+        state.set_new_grid_x("0.05".to_owned());
         state.set_new_grid_y("0".to_owned());
         state.set_new_grid_unit_millimetres(true);
         let original_count = state.grid_catalog.len();
@@ -1531,7 +1531,7 @@ mod tests
         assert_eq!(state.active_grid().y_millimetres(), 0.0);
         assert_eq!(
             state.status,
-            "Created grid: Fine metric: 0,0500 mm ⨯ 0,0000 mm (1,97 mils ⨯ 0,00 mils)"
+            "Created grid: Fine metric: 0.0500 mm ⨯ 0.0000 mm (1.97 mils ⨯ 0.00 mils)"
         );
         assert!(state.new_grid_name.is_empty());
         assert!(state.new_grid_x.is_empty());
@@ -1571,14 +1571,14 @@ mod tests
         let mut state = GerberViewerState::default();
         state.grid_catalog = grid::default_grid_catalog()[0..3].to_vec();
         state.active_grid_index = 1;
-        state.decimal_separator = ",".to_owned();
+        state.decimal_separator = ".".to_owned();
         state.load_active_grid_into_editor();
         let original_count = state.grid_catalog.len();
         let initial_generation = state.redraw_generation;
         state.set_edit_grid_name(" Fine metric ".to_owned());
         state.set_edit_grid_unit_millimetres(true);
-        state.set_edit_grid_x("0,05".to_owned());
-        state.set_edit_grid_y("0,10".to_owned());
+        state.set_edit_grid_x("0.05".to_owned());
+        state.set_edit_grid_y("0.10".to_owned());
         let mut persisted = Vec::new();
 
         state.update_grid_with(|catalog| {
@@ -1596,11 +1596,11 @@ mod tests
         assert_eq!(state.redraw_generation, initial_generation + 1);
         assert_eq!(
             state.status,
-            "Updated grid: Fine metric: 0,0500 mm ⨯ 0,1000 mm (1,97 mils ⨯ 3,94 mils)"
+            "Updated grid: Fine metric: 0.0500 mm ⨯ 0.1000 mm (1.97 mils ⨯ 3.94 mils)"
         );
         assert_eq!(state.edit_grid_name, "Fine metric");
-        assert_eq!(state.edit_grid_x, "0,05");
-        assert_eq!(state.edit_grid_y, "0,1");
+        assert_eq!(state.edit_grid_x, "0.05");
+        assert_eq!(state.edit_grid_y, "0.1");
         assert_eq!(state.grid_editor_error, None);
     }
 
@@ -1610,7 +1610,7 @@ mod tests
         let mut state = GerberViewerState::default();
         state.grid_catalog = grid::default_grid_catalog()[0..2].to_vec();
         state.active_grid_index = 0;
-        state.decimal_separator = ",".to_owned();
+        state.decimal_separator = ".".to_owned();
         state.load_active_grid_into_editor();
         let original_x = state.active_grid().x_millimetres();
         let original_y = state.active_grid().y_millimetres();
@@ -1618,8 +1618,8 @@ mod tests
         state.set_edit_grid_unit_millimetres(true);
 
         assert_eq!(state.edit_grid_unit, GridUnit::Mm);
-        assert_eq!(state.edit_grid_x, "2,54");
-        assert_eq!(state.edit_grid_y, "2,54");
+        assert_eq!(state.edit_grid_x, "2.54");
+        assert_eq!(state.edit_grid_y, "2.54");
         let metric = create_grid_definition(
             "",
             &state.edit_grid_x,
