@@ -11,6 +11,7 @@ use crate::GerberGeometry;
 pub struct LoadedLayer
 {
     pub source_path: Option<PathBuf>,
+    original_source: Option<String>,
     pub name: String,
     pub layer_type: LayerType,
     pub data: LayerData,
@@ -30,6 +31,21 @@ impl std::fmt::Display for GerberLoadFailure
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
     {
         write!(formatter, "{}: {}", self.path.display(), self.message)
+    }
+}
+
+impl LoadedLayer
+{
+    /// Returns the exact text supplied to the Gerber parser.
+    pub fn gerber_source(&self) -> Result<&str, &'static str>
+    {
+        if !matches!(self.data, LayerData::Gerber(_))
+        {
+            return Err("Source view is available only for Gerber layers.");
+        }
+        self.original_source
+            .as_deref()
+            .ok_or("The original Gerber source is unavailable.")
     }
 }
 
@@ -84,13 +100,20 @@ where
 /// This is the common parser seam used by disk loading and archive tests.
 pub fn load_gerber_reader<R>(
     name: impl Into<String>,
-    reader: R,
+    mut reader: R,
 ) -> Result<LoadedLayer, GerberLoadFailure>
 where
     R: Read,
 {
     let name = name.into();
     let path = PathBuf::from(&name);
+    let mut original_source = String::new();
+    reader
+        .read_to_string(&mut original_source)
+        .map_err(|error| GerberLoadFailure {
+            path: path.clone(),
+            message: format!("Gerber source is not valid UTF-8 text: {error}"),
+        })?;
     let extension = Path::new(&name)
         .extension()
         .and_then(|value| value.to_str())
@@ -112,12 +135,14 @@ where
         });
     }
 
-    let (layer_type, data) = LayerData::parse(requested_type, BufReader::new(reader)).map_err(
-        |error| GerberLoadFailure {
-            path: path.clone(),
-            message: error.to_string(),
-        },
-    )?;
+    let (layer_type, data) = LayerData::parse(
+        requested_type,
+        BufReader::new(original_source.as_bytes()),
+    )
+    .map_err(|error| GerberLoadFailure {
+        path: path.clone(),
+        message: error.to_string(),
+    })?;
     let LayerData::Gerber(data) = data else
     {
         return Err(GerberLoadFailure {
@@ -129,6 +154,7 @@ where
 
     Ok(LoadedLayer {
         source_path: None,
+        original_source: Some(original_source),
         name,
         layer_type,
         data: LayerData::Gerber(data),
@@ -177,13 +203,20 @@ where
 /// Loads one Excellon drill layer from an arbitrary reader.
 pub fn load_excellon_reader<R>(
     name: impl Into<String>,
-    reader: R,
+    mut reader: R,
 ) -> Result<LoadedLayer, GerberLoadFailure>
 where
     R: Read,
 {
     let name = name.into();
     let path = PathBuf::from(&name);
+    let mut original_source = String::new();
+    reader
+        .read_to_string(&mut original_source)
+        .map_err(|error| GerberLoadFailure {
+            path: path.clone(),
+            message: format!("Excellon source is not valid UTF-8 text: {error}"),
+        })?;
     let extension = Path::new(&name)
         .extension()
         .and_then(|value| value.to_str())
@@ -200,12 +233,14 @@ where
         });
     }
 
-    let (_, data) = LayerData::parse(LayerType::Drill, BufReader::new(reader)).map_err(
-        |error| GerberLoadFailure {
-            path: path.clone(),
-            message: error.to_string(),
-        },
-    )?;
+    let (_, data) = LayerData::parse(
+        LayerType::Drill,
+        BufReader::new(original_source.as_bytes()),
+    )
+    .map_err(|error| GerberLoadFailure {
+        path: path.clone(),
+        message: error.to_string(),
+    })?;
     let LayerData::Excellon(data) = data else
     {
         return Err(GerberLoadFailure {
@@ -217,6 +252,7 @@ where
 
     Ok(LoadedLayer {
         source_path: None,
+        original_source: Some(original_source),
         name,
         layer_type: LayerType::Drill,
         data: LayerData::Excellon(data),

@@ -77,6 +77,33 @@ fn accepts_common_generic_gerber_extension()
 }
 
 #[test]
+fn preserves_original_gerber_source_text_exactly()
+{
+    let source =
+        "%FSLAX46Y46*%\r\n%MOMM*%\r\nG04 Original spacing stays here *\r\nM02*\r\n";
+
+    let layer = load_gerber_reader("source.gbr", Cursor::new(source.as_bytes()))
+        .expect("test Gerber must parse");
+
+    assert_eq!(layer.gerber_source(), Ok(source));
+}
+
+#[test]
+fn drill_layer_reports_that_gerber_source_is_not_available()
+{
+    let layer = load_excellon_reader(
+        "holes.drl",
+        Cursor::new(b"M48\nMETRIC\nT01C0.8\n%\nM30\n"),
+    )
+    .expect("test Excellon must parse");
+
+    assert_eq!(
+        layer.gerber_source(),
+        Err("Source view is available only for Gerber layers."),
+    );
+}
+
+#[test]
 fn loads_generated_excellon_layer_with_tools_and_hits()
 {
     let bytes = generated_fixture_member("proto-PTH.drl");

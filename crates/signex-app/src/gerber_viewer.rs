@@ -112,6 +112,7 @@ pub enum GerberViewerMessage
     ToggleLayerManager,
     ToggleLayerInformation,
     ToggleDCodeList,
+    ToggleSourceView,
     SelectGridSize(usize),
     ToggleGridEditor,
     NewGridNameChanged(String),
@@ -155,6 +156,7 @@ pub struct GerberViewerState
     pub layer_manager_visible: bool,
     layer_information_visible: bool,
     d_code_list_visible: bool,
+    source_view_visible: bool,
     grid_catalog: Vec<GridSizePreset>,
     active_grid_index: usize,
     grid_visible: bool,
@@ -201,6 +203,7 @@ impl Default for GerberViewerState
             layer_manager_visible: true,
             layer_information_visible: false,
             d_code_list_visible: false,
+            source_view_visible: false,
             grid_catalog,
             active_grid_index,
             grid_visible: true,
@@ -366,6 +369,18 @@ impl GerberViewerState
             self.layer_manager_visible = true;
             self.layer_information_visible = false;
         }
+    }
+
+    pub fn toggle_source_view(&mut self)
+    {
+        self.source_view_visible = !self.source_view_visible;
+    }
+
+    fn active_gerber_source(&self) -> Result<(&str, &str), &'static str>
+    {
+        let index = self.active_layer.ok_or("No active layer.")?;
+        let layer = self.layers.get(index).ok_or("No active layer.")?;
+        Ok((&layer.layer.name, layer.layer.gerber_source()?))
     }
 
     fn definition_groups(&self) -> Vec<signex_gerber::LayerDefinitionGroup>
@@ -909,6 +924,19 @@ pub fn view<'a>(
                 (!state.layers.is_empty())
                     .then_some(GerberViewerMessage::ToggleDCodeList),
             ),
+            button(text(if state.source_view_visible
+            {
+                "Hide Source"
+            }
+            else
+            {
+                "Show Source"
+            }))
+            .on_press_maybe(
+                state
+                    .active_layer
+                    .map(|_| GerberViewerMessage::ToggleSourceView),
+            ),
             clear_current,
             clear_all,
             Space::new().width(Length::Fill),
@@ -1341,7 +1369,48 @@ pub fn view<'a>(
             background: Some(Background::Color(canvas_bg)),
             ..container::Style::default()
         });
-    let content: Element<'_, GerberViewerMessage> = if state.layer_manager_visible
+    let content: Element<'_, GerberViewerMessage> = if state.source_view_visible
+    {
+        let source_content: Element<'_, GerberViewerMessage> =
+            match state.active_gerber_source()
+            {
+                Ok((name, source)) => column![
+                    text(format!("Original Gerber source — {name}"))
+                        .size(13)
+                        .color(text_primary),
+                    scrollable(
+                        container(
+                            text(source)
+                                .size(11)
+                                .font(iced::Font::MONOSPACE)
+                                .color(text_primary),
+                        )
+                        .padding(12)
+                        .width(Length::Fill),
+                    )
+                    .height(Length::Fill),
+                ]
+                .spacing(8)
+                .padding(10)
+                .into(),
+                Err(message) => container(
+                    text(message)
+                        .size(12)
+                        .color(text_muted),
+                )
+                .center(Length::Fill)
+                .into(),
+            };
+        container(source_content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(canvas_bg)),
+                ..container::Style::default()
+            })
+            .into()
+    }
+    else if state.layer_manager_visible
     {
         row![canvas_panel, sidebar]
             .width(Length::Fill)
@@ -2733,6 +2802,41 @@ mod tests
         state.toggle_layer_information();
         assert!(state.layer_information_visible);
         assert!(!state.d_code_list_visible);
+    }
+
+    #[test]
+    fn source_view_preserves_original_text_and_handles_drill_layers()
+    {
+        let source = "%FSLAX46Y46*%\r\n%MOMM*%\r\nG04 Keep me *\r\nM02*\r\n";
+        let gerber = signex_gerber::load_gerber_reader(
+            "source.gbr",
+            Cursor::new(source.as_bytes()),
+        )
+        .expect("test Gerber must parse");
+        let drill = signex_gerber::load_excellon_reader(
+            "holes.drl",
+            Cursor::new(b"M48\nMETRIC\nT01C0.8\n%\nM30\n"),
+        )
+        .expect("test Excellon must parse");
+        let mut state = GerberViewerState::default();
+        state.apply_load_batch(GerberLoadBatch {
+            layers: vec![gerber, drill],
+            failures: Vec::new(),
+        });
+        state.select_layer(0);
+
+        state.toggle_source_view();
+        assert!(state.source_view_visible);
+        assert_eq!(state.active_gerber_source(), Ok(("source.gbr", source)));
+
+        state.select_layer(1);
+        assert_eq!(
+            state.active_gerber_source(),
+            Err("Source view is available only for Gerber layers."),
+        );
+
+        state.clear_all_layers();
+        assert_eq!(state.active_gerber_source(), Err("No active layer."));
     }
 
     #[test]

@@ -160,6 +160,10 @@ impl Signex
                 self.ui_state.gerber_viewer.toggle_d_code_list();
                 Task::none()
             }
+            GerberViewerMessage::ToggleSourceView => {
+                self.ui_state.gerber_viewer.toggle_source_view();
+                Task::none()
+            }
             GerberViewerMessage::SelectGridSize(index) => {
                 self.ui_state.gerber_viewer.select_grid_size(index);
                 Task::none()
