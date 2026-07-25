@@ -11,6 +11,10 @@ use lib_gerber_edit::gerber_types::{
     InterpolationMode, Net, ObjectAttribute, Operation, Polarity, StandardComment,
 };
 
+use crate::object_attributes::{
+    GerberObjectAttributes, normalize_object_attribute,
+};
+
 /// A point in Gerber world space, expressed in millimetres.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Point
@@ -138,14 +142,6 @@ pub enum GerberPrimitive
         width: f64,
         tool: Option<u32>,
     },
-}
-
-/// Gerber X2 object attributes active when a primitive was emitted.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct GerberObjectAttributes
-{
-    pub component: Option<String>,
-    pub nets: Vec<String>,
 }
 
 /// Render-ready geometry extracted from a parsed Gerber layer.
@@ -392,6 +388,12 @@ impl GeometryState
             }
             _ => {}
         }
+
+        let attribute = normalize_object_attribute(attribute);
+        self.object_attributes
+            .attributes
+            .retain(|active| active.name != attribute.name);
+        self.object_attributes.attributes.push(attribute);
     }
 
     fn delete_object_attribute(&mut self, criterion: &AttributeDeletionCriterion)
@@ -405,11 +407,23 @@ impl GeometryState
                 if name == ".C" =>
             {
                 self.object_attributes.component = None;
+                self.object_attributes
+                    .attributes
+                    .retain(|attribute| attribute.name != *name);
             }
             AttributeDeletionCriterion::SingleObjectAttribute(name)
                 if name == ".N" =>
             {
                 self.object_attributes.nets.clear();
+                self.object_attributes
+                    .attributes
+                    .retain(|attribute| attribute.name != *name);
+            }
+            AttributeDeletionCriterion::SingleObjectAttribute(name) =>
+            {
+                self.object_attributes
+                    .attributes
+                    .retain(|attribute| attribute.name != *name);
             }
             _ => {}
         }

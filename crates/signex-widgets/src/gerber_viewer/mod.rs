@@ -11,7 +11,8 @@ use iced::{
 };
 use serde::Deserialize;
 use signex_gerber::{
-    ApertureShape, Bounds, GerberLoadBatch, GerberPrimitive, LoadedLayer, PrimitivePolarity,
+    ApertureShape, Bounds, GerberAttributeValue, GerberLoadBatch, GerberPrimitive,
+    LoadedLayer, PrimitivePolarity,
 };
 use signex_types::theme::ThemeTokens;
 
@@ -48,7 +49,9 @@ use grid::{
     format_distance_input, grid_size_choices, load_grid_catalog, load_page_size,
     persist_grid_catalog, persist_page_size, system_decimal_separator,
 };
-use highlight::{component_highlight_color, net_highlight_color};
+use highlight::{
+    attribute_highlight_color, component_highlight_color, net_highlight_color,
+};
 
 const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;

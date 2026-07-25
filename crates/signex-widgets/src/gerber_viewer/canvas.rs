@@ -19,6 +19,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) zoom_selection_active: bool,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
+    pub(super) highlighted_attribute: Option<&'a GerberAttributeValue>,
     pub(super) grid_size: &'a GridSizePreset,
     pub(super) shortcut_resolver: &'a dyn GerberShortcutResolver,
     pub(super) redraw_generation: u64,
@@ -266,6 +267,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.background,
                 self.highlighted_component,
                 self.highlighted_net,
+                self.highlighted_attribute,
             );
         }
         if let (Some(start), Some(end)) = (
@@ -459,6 +461,7 @@ pub(super) fn draw_layer(
     background: Color,
     highlighted_component: Option<&str>,
     highlighted_net: Option<&str>,
+    highlighted_attribute: Option<&GerberAttributeValue>,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -478,10 +481,15 @@ pub(super) fn draw_layer(
             attributes,
             highlighted_component,
         );
-        let dark_color = net_highlight_color(
+        let net_color = net_highlight_color(
             component_color,
             attributes,
             highlighted_net,
+        );
+        let dark_color = attribute_highlight_color(
+            net_color,
+            attributes,
+            highlighted_attribute,
         );
         let polarity_color = |polarity: PrimitivePolarity| match polarity
         {

@@ -9,10 +9,10 @@ mod geometry;
 mod job;
 mod loading;
 mod metadata;
+mod object_attributes;
 
 pub use geometry::{
-    ApertureShape, Bounds, GerberGeometry, GerberObjectAttributes, GerberPrimitive, Point,
-    PrimitivePolarity,
+    ApertureShape, Bounds, GerberGeometry, GerberPrimitive, Point, PrimitivePolarity,
 };
 pub use archive::{load_zip_archive, load_zip_reader};
 pub use job::{
@@ -26,6 +26,7 @@ pub use loading::{
     load_gerber_reader, reload_layers,
 };
 pub use metadata::{LayerDefinition, LayerDefinitionGroup, LayerMetadata};
+pub use object_attributes::{GerberAttributeValue, GerberObjectAttributes};
 
 #[cfg(test)]
 mod geometry_tests;

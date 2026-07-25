@@ -65,6 +65,11 @@ M02*
 
     assert_eq!(components, [Some("R1"), Some("C2"), None]);
     assert_eq!(
+        layer.geometry.primitive_attributes[0].attributes[0].name,
+        ".C"
+    );
+    assert!(layer.geometry.primitive_attributes[2].attributes.is_empty());
+    assert_eq!(
         layer.geometry.primitives.len(),
         layer.geometry.primitive_attributes.len()
     );
@@ -98,4 +103,62 @@ M02*
     assert_eq!(nets[0], ["GND", "SIGNAL"]);
     assert_eq!(nets[1], ["N/C"]);
     assert!(nets[2].is_empty());
+    assert_eq!(
+        layer.geometry.primitive_attributes[0].attributes[0].name,
+        ".N"
+    );
+    assert!(layer.geometry.primitive_attributes[2].attributes.is_empty());
+}
+
+#[test]
+fn preserves_replaces_and_deletes_all_x2_object_attributes()
+{
+    let source = r#"%FSLAX46Y46*%
+%MOMM*%
+%ADD10C,1.000*%
+D10*
+%TO.CVal,10k*%
+X0000000Y0000000D03*
+%TO.CVal,22k*%
+%TO.MyAttribute,Alpha,Beta*%
+X0100000Y0000000D03*
+%TD.CVal*%
+X0200000Y0000000D03*
+%TD*%
+X0300000Y0000000D03*
+M02*
+"#;
+
+    let layer = load_gerber_reader("attributes.gbr", Cursor::new(source))
+        .expect("X2 object attributes must parse");
+    let attributes = &layer.geometry.primitive_attributes;
+
+    assert_eq!(
+        attributes[0].attributes,
+        [super::GerberAttributeValue {
+            name: ".CVal".into(),
+            values: vec!["10k".into()],
+        }]
+    );
+    assert_eq!(
+        attributes[1].attributes,
+        [
+            super::GerberAttributeValue {
+                name: ".CVal".into(),
+                values: vec!["22k".into()],
+            },
+            super::GerberAttributeValue {
+                name: ".MyAttribute".into(),
+                values: vec!["Alpha".into(), "Beta".into()],
+            },
+        ]
+    );
+    assert_eq!(
+        attributes[2].attributes,
+        [super::GerberAttributeValue {
+            name: ".MyAttribute".into(),
+            values: vec!["Alpha".into(), "Beta".into()],
+        }]
+    );
+    assert!(attributes[3].attributes.is_empty());
 }

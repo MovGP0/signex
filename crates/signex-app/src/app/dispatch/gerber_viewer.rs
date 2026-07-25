@@ -489,6 +489,20 @@ impl Signex
                 self.ui_state.gerber_viewer.clear_net_highlight();
                 Task::none()
             }
+            GerberViewerMessage::SetHighlightedAttribute(attribute) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_highlighted_attribute(attribute);
+                Task::none()
+            }
+            GerberViewerMessage::ClearAttributeHighlight =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .clear_attribute_highlight();
+                Task::none()
+            }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
                 self.ui_state
                     .gerber_viewer

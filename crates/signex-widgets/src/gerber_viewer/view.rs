@@ -47,6 +47,14 @@ pub fn view<'a>(
     )
     .placeholder("Highlight net")
     .width(180);
+    let attribute_choices = state.attribute_choices();
+    let attribute_picker = pick_list(
+        attribute_choices,
+        state.highlighted_attribute().cloned(),
+        GerberViewerMessage::SetHighlightedAttribute,
+    )
+    .placeholder("Highlight attribute")
+    .width(220);
 
     let toolbar = container(
         row![
@@ -154,6 +162,12 @@ pub fn view<'a>(
                 state
                     .highlighted_net()
                     .map(|_| GerberViewerMessage::ClearNetHighlight),
+            ),
+            attribute_picker,
+            button(text("Clear Attribute")).on_press_maybe(
+                state
+                    .highlighted_attribute()
+                    .map(|_| GerberViewerMessage::ClearAttributeHighlight),
             ),
             clear_current,
             clear_all,
@@ -582,6 +596,7 @@ pub fn view<'a>(
         zoom_selection_active: state.zoom_selection_active,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),
+        highlighted_attribute: state.highlighted_attribute(),
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,

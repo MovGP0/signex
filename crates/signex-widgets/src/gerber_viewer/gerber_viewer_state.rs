@@ -33,6 +33,7 @@ pub struct GerberViewerState
     pub(super) zoom_selection_active: bool,
     pub(super) highlighted_component: Option<String>,
     pub(super) highlighted_net: Option<String>,
+    pub(super) highlighted_attribute: Option<GerberAttributeValue>,
     pub(super) decimal_separator: String,
     pub(super) grid_editor_open: bool,
     pub(super) new_grid_name: String,
@@ -84,6 +85,7 @@ impl Default for GerberViewerState
             zoom_selection_active: false,
             highlighted_component: None,
             highlighted_net: None,
+            highlighted_attribute: None,
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -161,6 +163,7 @@ impl GerberViewerState
         self.status = messages.join(" ");
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
+        self.retain_available_attribute_highlight();
     }
 
     pub fn apply_reload_batch(&mut self, batch: signex_gerber::GerberReloadBatch)
@@ -196,6 +199,7 @@ impl GerberViewerState
         self.status = status;
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
+        self.retain_available_attribute_highlight();
     }
 
     pub fn clear_current_layer(&mut self)
@@ -215,6 +219,7 @@ impl GerberViewerState
         };
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
+        self.retain_available_attribute_highlight();
         self.status = "Cleared the current layer.".into();
     }
 
@@ -226,6 +231,7 @@ impl GerberViewerState
         self.pan = iced::Vector::default();
         self.highlighted_component = None;
         self.highlighted_net = None;
+        self.highlighted_attribute = None;
         self.status = "Cleared all Gerber layers.".into();
     }
 

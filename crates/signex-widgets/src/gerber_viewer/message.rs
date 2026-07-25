@@ -62,6 +62,8 @@ pub enum GerberViewerMessage
     ClearComponentHighlight,
     SetHighlightedNet(String),
     ClearNetHighlight,
+    SetHighlightedAttribute(GerberAttributeValue),
+    ClearAttributeHighlight,
     ZoomToSelection
     {
         bounds: Bounds,
