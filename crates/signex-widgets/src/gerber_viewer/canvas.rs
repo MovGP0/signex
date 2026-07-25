@@ -17,6 +17,8 @@ pub(super) struct GerberCanvas<'a>
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
+    pub(super) measurement_active: bool,
+    pub(super) measurement: Option<GerberMeasurement>,
     pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
@@ -102,6 +104,18 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 state.zoom_selection_start = Some(position);
                 state.zoom_selection_current = Some(position);
                 Some(canvas::Action::capture())
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+                if self.measurement_active =>
+            {
+                let position = cursor.position_in(bounds)?;
+                let world = self.screen_to_world(bounds, position)?;
+                Some(
+                    canvas::Action::publish(
+                        GerberViewerMessage::CaptureMeasurementPoint(world),
+                    )
+                    .and_capture(),
+                )
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) =>
             {
@@ -309,6 +323,15 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 highlighted_d_code,
                 self.selected_item,
                 layer_index,
+            );
+        }
+        if let Some(measurement) = self.measurement
+        {
+            draw_measurement(
+                &mut frame,
+                measurement,
+                &world_to_screen,
+                self.grid,
             );
         }
         if let (Some(start), Some(end)) = (

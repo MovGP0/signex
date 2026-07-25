@@ -399,6 +399,23 @@ impl Signex
                     .set_cursor_world_position(position);
                 Task::none()
             }
+            GerberViewerMessage::ToggleMeasurement =>
+            {
+                self.ui_state.gerber_viewer.toggle_measurement();
+                Task::none()
+            }
+            GerberViewerMessage::CaptureMeasurementPoint(point) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .capture_measurement_point(point);
+                Task::none()
+            }
+            GerberViewerMessage::ResetMeasurement =>
+            {
+                self.ui_state.gerber_viewer.reset_measurement();
+                Task::none()
+            }
             GerberViewerMessage::TogglePolarCoordinates(polar) => {
                 self.ui_state
                     .gerber_viewer

@@ -107,6 +107,20 @@ pub fn view<'a>(
                 "Zoom Area"
             }))
             .on_press(GerberViewerMessage::ToggleZoomSelection),
+            button(text(if state.measurement_active()
+            {
+                "Cancel Measure"
+            }
+            else
+            {
+                "Measure"
+            }))
+            .on_press(GerberViewerMessage::ToggleMeasurement),
+            button(text("Reset Measure")).on_press_maybe(
+                state
+                    .measurement()
+                    .map(|_| GerberViewerMessage::ResetMeasurement),
+            ),
             button(text("Print PDF…")).on_press_maybe(
                 self::print::has_visible_layers(state)
                     .then_some(GerberViewerMessage::PrintVisibleLayers),
@@ -245,6 +259,9 @@ pub fn view<'a>(
             )
         })
         .unwrap_or_else(|| "Bounds: —".to_owned());
+    let measurement_label = state
+        .measurement_summary()
+        .unwrap_or_else(|| "Measurement: —".to_owned());
     let grid_toolbar = container(
         row![
             text("Grid").size(11).color(text_muted),
@@ -267,6 +284,9 @@ pub fn view<'a>(
             text(bounds_label)
             .size(10)
             .color(text_muted),
+            text(measurement_label)
+                .size(10)
+                .color(text_muted),
             Space::new().width(Length::Fill),
             button(text(if state.grid_editor_open
             {
@@ -615,6 +635,8 @@ pub fn view<'a>(
         full_window_crosshair: state.full_window_crosshair,
         page_size: state.page_size,
         zoom_selection_active: state.zoom_selection_active,
+        measurement_active: state.measurement_active(),
+        measurement: state.measurement(),
         active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),

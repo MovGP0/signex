@@ -28,6 +28,8 @@ pub struct GerberViewerState
     pub(super) grid_visible: bool,
     pub(super) display_unit: GerberDisplayUnit,
     pub(super) cursor_world_position: Option<signex_gerber::Point>,
+    pub(super) measurement_active: bool,
+    pub(super) measurement: Option<GerberMeasurement>,
     pub(super) polar_coordinates: bool,
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
@@ -82,6 +84,8 @@ impl Default for GerberViewerState
             grid_visible: true,
             display_unit: GerberDisplayUnit::Millimetres,
             cursor_world_position: None,
+            measurement_active: false,
+            measurement: None,
             polar_coordinates: false,
             full_window_crosshair: false,
             page_size: load_page_size(),
@@ -240,6 +244,8 @@ impl GerberViewerState
         self.zoom = 1.0;
         self.pan = iced::Vector::default();
         self.selected_item = None;
+        self.measurement_active = false;
+        self.measurement = None;
         self.highlighted_component = None;
         self.highlighted_net = None;
         self.highlighted_attribute = None;
@@ -265,6 +271,14 @@ impl GerberViewerState
     pub fn toggle_zoom_selection(&mut self)
     {
         self.zoom_selection_active = !self.zoom_selection_active;
+        if self.zoom_selection_active
+        {
+            self.measurement_active = false;
+            if self.measurement.is_some_and(|measurement| measurement.end.is_none())
+            {
+                self.measurement = None;
+            }
+        }
         self.status = if self.zoom_selection_active
         {
             "Drag a rectangle with the left mouse button to zoom.".into()
