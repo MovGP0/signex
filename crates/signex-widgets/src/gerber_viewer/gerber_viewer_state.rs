@@ -34,6 +34,7 @@ pub struct GerberViewerState
     pub(super) highlighted_component: Option<String>,
     pub(super) highlighted_net: Option<String>,
     pub(super) highlighted_attribute: Option<GerberAttributeValue>,
+    pub(super) highlighted_d_code: Option<i32>,
     pub(super) decimal_separator: String,
     pub(super) grid_editor_open: bool,
     pub(super) new_grid_name: String,
@@ -86,6 +87,7 @@ impl Default for GerberViewerState
             highlighted_component: None,
             highlighted_net: None,
             highlighted_attribute: None,
+            highlighted_d_code: None,
             decimal_separator: decimal_separator.clone(),
             grid_editor_open: false,
             new_grid_name: String::new(),
@@ -129,6 +131,7 @@ impl GerberViewerState
         if loaded_count > 0
         {
             self.active_layer = Some(self.layers.len() - 1);
+            self.highlighted_d_code = None;
         }
 
         let mut messages = Vec::new();
@@ -164,6 +167,7 @@ impl GerberViewerState
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
         self.retain_available_attribute_highlight();
+        self.retain_available_d_code_highlight();
     }
 
     pub fn apply_reload_batch(&mut self, batch: signex_gerber::GerberReloadBatch)
@@ -200,6 +204,7 @@ impl GerberViewerState
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
         self.retain_available_attribute_highlight();
+        self.retain_available_d_code_highlight();
     }
 
     pub fn clear_current_layer(&mut self)
@@ -220,6 +225,7 @@ impl GerberViewerState
         self.retain_available_component_highlight();
         self.retain_available_net_highlight();
         self.retain_available_attribute_highlight();
+        self.highlighted_d_code = None;
         self.status = "Cleared the current layer.".into();
     }
 
@@ -232,6 +238,7 @@ impl GerberViewerState
         self.highlighted_component = None;
         self.highlighted_net = None;
         self.highlighted_attribute = None;
+        self.highlighted_d_code = None;
         self.status = "Cleared all Gerber layers.".into();
     }
 
@@ -408,6 +415,10 @@ impl GerberViewerState
     {
         if index < self.layers.len()
         {
+            if self.active_layer != Some(index)
+            {
+                self.highlighted_d_code = None;
+            }
             self.active_layer = Some(index);
         }
     }
@@ -434,6 +445,10 @@ impl GerberViewerState
 
     pub(super) fn select_layer_with_status(&mut self, index: usize)
     {
+        if self.active_layer != Some(index)
+        {
+            self.highlighted_d_code = None;
+        }
         self.active_layer = Some(index);
         self.status = format!("Active layer: {}", self.layers[index].layer.name);
     }

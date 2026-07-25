@@ -55,6 +55,21 @@ pub fn view<'a>(
     )
     .placeholder("Highlight attribute")
     .width(220);
+    let d_code_choices = state.d_code_choices();
+    let selected_d_code = state.highlighted_d_code().and_then(|selected|
+    {
+        d_code_choices
+            .iter()
+            .find(|choice| choice.code == selected)
+            .cloned()
+    });
+    let d_code_picker = pick_list(
+        d_code_choices,
+        selected_d_code,
+        |choice| GerberViewerMessage::SetHighlightedDCode(choice.code),
+    )
+    .placeholder("Highlight D-code")
+    .width(220);
 
     let toolbar = container(
         row![
@@ -168,6 +183,12 @@ pub fn view<'a>(
                 state
                     .highlighted_attribute()
                     .map(|_| GerberViewerMessage::ClearAttributeHighlight),
+            ),
+            d_code_picker,
+            button(text("Clear D-code")).on_press_maybe(
+                state
+                    .highlighted_d_code()
+                    .map(|_| GerberViewerMessage::ClearDCodeHighlight),
             ),
             clear_current,
             clear_all,
@@ -594,9 +615,11 @@ pub fn view<'a>(
         full_window_crosshair: state.full_window_crosshair,
         page_size: state.page_size,
         zoom_selection_active: state.zoom_selection_active,
+        active_layer: state.active_layer,
         highlighted_component: state.highlighted_component(),
         highlighted_net: state.highlighted_net(),
         highlighted_attribute: state.highlighted_attribute(),
+        highlighted_d_code: state.highlighted_d_code(),
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,

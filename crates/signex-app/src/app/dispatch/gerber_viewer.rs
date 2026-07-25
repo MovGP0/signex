@@ -503,6 +503,20 @@ impl Signex
                     .clear_attribute_highlight();
                 Task::none()
             }
+            GerberViewerMessage::SetHighlightedDCode(d_code) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_highlighted_d_code(d_code);
+                Task::none()
+            }
+            GerberViewerMessage::ClearDCodeHighlight =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .clear_d_code_highlight();
+                Task::none()
+            }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
                 self.ui_state
                     .gerber_viewer

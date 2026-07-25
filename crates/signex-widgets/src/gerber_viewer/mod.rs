@@ -50,7 +50,8 @@ use grid::{
     persist_grid_catalog, persist_page_size, system_decimal_separator,
 };
 use highlight::{
-    attribute_highlight_color, component_highlight_color, net_highlight_color,
+    attribute_highlight_color, component_highlight_color, d_code_highlight_color,
+    net_highlight_color,
 };
 
 const MAX_VIEWER_LAYERS: usize = 32;

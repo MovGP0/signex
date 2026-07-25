@@ -17,9 +17,11 @@ pub(super) struct GerberCanvas<'a>
     pub(super) full_window_crosshair: bool,
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
+    pub(super) active_layer: Option<usize>,
     pub(super) highlighted_component: Option<&'a str>,
     pub(super) highlighted_net: Option<&'a str>,
     pub(super) highlighted_attribute: Option<&'a GerberAttributeValue>,
+    pub(super) highlighted_d_code: Option<i32>,
     pub(super) grid_size: &'a GridSizePreset,
     pub(super) shortcut_resolver: &'a dyn GerberShortcutResolver,
     pub(super) redraw_generation: u64,
@@ -257,8 +259,20 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
             self.grid,
         );
 
-        for viewer_layer in self.layers.iter().filter(|layer| layer.visible)
+        for (layer_index, viewer_layer) in self
+            .layers
+            .iter()
+            .enumerate()
+            .filter(|(_, layer)| layer.visible)
         {
+            let highlighted_d_code = if self.active_layer == Some(layer_index)
+            {
+                self.highlighted_d_code
+            }
+            else
+            {
+                None
+            };
             draw_layer(
                 &mut frame,
                 viewer_layer,
@@ -268,6 +282,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.highlighted_component,
                 self.highlighted_net,
                 self.highlighted_attribute,
+                highlighted_d_code,
             );
         }
         if let (Some(start), Some(end)) = (
@@ -462,6 +477,7 @@ pub(super) fn draw_layer(
     highlighted_component: Option<&str>,
     highlighted_net: Option<&str>,
     highlighted_attribute: Option<&GerberAttributeValue>,
+    highlighted_d_code: Option<i32>,
 )
 {
     for (primitive_index, primitive) in viewer_layer
@@ -486,10 +502,15 @@ pub(super) fn draw_layer(
             attributes,
             highlighted_net,
         );
-        let dark_color = attribute_highlight_color(
+        let attribute_color = attribute_highlight_color(
             net_color,
             attributes,
             highlighted_attribute,
+        );
+        let dark_color = d_code_highlight_color(
+            attribute_color,
+            primitive,
+            highlighted_d_code,
         );
         let polarity_color = |polarity: PrimitivePolarity| match polarity
         {
