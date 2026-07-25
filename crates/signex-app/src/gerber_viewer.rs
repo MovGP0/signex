@@ -16,6 +16,7 @@ use signex_gerber::{
 use signex_types::theme::ThemeTokens;
 
 mod grid;
+pub(crate) mod print;
 
 use grid::{
     DEFAULT_GRID_INDEX, GridSizePreset, GridUnit, create_grid_definition,
@@ -217,6 +218,8 @@ pub enum GerberViewerMessage
     TogglePolarCoordinates(bool),
     ToggleFullWindowCrosshair(bool),
     SetPageSize(GerberPageSize),
+    PrintVisibleLayers,
+    GerberPrintFinished(Result<PathBuf, String>),
 }
 
 #[derive(Debug, Clone)]
@@ -501,6 +504,11 @@ impl GerberViewerState
                 bounds,
             }
         })
+    }
+
+    pub(crate) fn print_pdf(&self) -> Result<Vec<u8>, String>
+    {
+        print::build_pdf(self)
     }
 
     pub fn toggle_layer_manager(&mut self)
@@ -1055,6 +1063,10 @@ pub fn view<'a>(
             button(text("−")).on_press(GerberViewerMessage::ZoomBy(1.0 / 1.2)),
             button(text("+")).on_press(GerberViewerMessage::ZoomBy(1.2)),
             button(text("Fit")).on_press(GerberViewerMessage::FitPage),
+            button(text("Print PDF…")).on_press_maybe(
+                self::print::has_visible_layers(state)
+                    .then_some(GerberViewerMessage::PrintVisibleLayers),
+            ),
             button(text("Previous Layer (PgUp)")).on_press_maybe(
                 previous_layer_index(state.active_layer, state.layers.len())
                     .map(|_| GerberViewerMessage::PreviousLayer),

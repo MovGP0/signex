@@ -66,6 +66,7 @@ webbrowser = "1"
 tiny_http = "0.12"
 dirs = "5"
 toml = { workspace = true }
+pdf-writer = { workspace = true }
 tokio = { workspace = true }
 # `fonts::production_temp_fallback_path()`'s no-config-dir fallback
 # needs a real (non-dev) random-named tempdir at runtime, not just in

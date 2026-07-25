@@ -388,6 +388,56 @@ impl Signex
                 self.ui_state.gerber_viewer.set_page_size(page_size);
                 Task::none()
             }
+            GerberViewerMessage::PrintVisibleLayers => {
+                let bytes = match self.ui_state.gerber_viewer.print_pdf()
+                {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        self.ui_state.gerber_viewer.status = error;
+                        return Task::none();
+                    }
+                };
+                self.ui_state.gerber_viewer.status =
+                    "Choose where to save the Gerber print PDF.".into();
+                Task::perform(
+                    async move {
+                        let Some(file) = rfd::AsyncFileDialog::new()
+                            .set_title("Print Visible Gerber Layers to PDF")
+                            .add_filter("PDF document", &["pdf"])
+                            .set_file_name("gerber-view.pdf")
+                            .save_file()
+                            .await
+                        else
+                        {
+                            return Err("Gerber PDF print cancelled.".to_owned());
+                        };
+                        let mut path = file.path().to_path_buf();
+                        if path.extension().is_none()
+                        {
+                            path.set_extension("pdf");
+                        }
+                        std::fs::write(&path, bytes).map_err(|error| {
+                            format!("Could not write {}: {error}", path.display())
+                        })?;
+                        Ok(path)
+                    },
+                    |result| {
+                        Message::GerberViewer(
+                            GerberViewerMessage::GerberPrintFinished(result),
+                        )
+                    },
+                )
+            }
+            GerberViewerMessage::GerberPrintFinished(result) => {
+                self.ui_state.gerber_viewer.status = match result
+                {
+                    Ok(path) => {
+                        format!("Printed visible Gerber layers to {}.", path.display())
+                    }
+                    Err(error) => error,
+                };
+                Task::none()
+            }
         }
     }
 }
