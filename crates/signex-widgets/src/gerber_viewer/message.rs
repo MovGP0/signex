@@ -26,6 +26,7 @@ pub enum GerberViewerMessage
     MoveLayerUp,
     MoveLayerDown,
     SetLayerVisible(usize, bool),
+    SetLayerColor(usize, usize),
     ClearCurrentLayer,
     ClearAllLayers,
     RedrawViewport,

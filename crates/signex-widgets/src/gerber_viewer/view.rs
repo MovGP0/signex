@@ -509,6 +509,7 @@ pub fn view<'a>(
     }
     else
     {
+        let color_choices = state.layer_color_choices();
         for (index, viewer_layer) in state.layers.iter().enumerate().rev()
         {
             let active = state.active_layer == Some(index);
@@ -545,8 +546,21 @@ pub fn view<'a>(
             .padding([5, 6])
             .on_press(GerberViewerMessage::SelectLayer(index))
             .style(styles::rail_tab(tokens, active));
+            let selected_color = state.selected_layer_color_choice(index);
+            let color_picker = pick_list(
+                color_choices.clone(),
+                selected_color,
+                move |choice| {
+                    GerberViewerMessage::SetLayerColor(
+                        index,
+                        choice.palette_index,
+                    )
+                },
+            )
+            .placeholder("Layer color")
+            .width(128);
             layer_list = layer_list.push(
-                row![visible, label]
+                row![visible, label, color_picker]
                     .spacing(5)
                     .align_y(iced::Alignment::Center),
             );

@@ -321,6 +321,13 @@ impl Signex
                     .set_layer_visible(index, visible);
                 Task::none()
             }
+            GerberViewerMessage::SetLayerColor(index, palette_index) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_layer_color(index, palette_index);
+                Task::none()
+            }
             GerberViewerMessage::ClearCurrentLayer => {
                 self.ui_state.gerber_viewer.clear_current_layer();
                 Task::none()
