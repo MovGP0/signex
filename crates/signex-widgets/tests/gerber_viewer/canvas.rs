@@ -133,11 +133,58 @@ macro_rules! gerber_canvas_tests
         let initial_generation = state.redraw_generation;
         state.set_full_window_crosshair(true);
 
-        assert!(state.full_window_crosshair);
+        assert_eq!(state.crosshair_mode, GerberCrosshairMode::Full);
         assert_eq!(state.redraw_generation, initial_generation + 1);
 
         state.set_full_window_crosshair(true);
         assert_eq!(state.redraw_generation, initial_generation + 1);
+    }
+
+    #[test]
+    fn crosshair_cycles_none_short_full_and_uses_matching_segments()
+    {
+        let bounds = Rectangle::new(
+            Point::ORIGIN,
+            iced::Size::new(640.0, 480.0),
+        );
+        let position = Point::new(120.0, 75.0);
+
+        assert!(crosshair_segments(
+            bounds,
+            position,
+            GerberCrosshairMode::None,
+        )
+        .is_empty());
+        assert_eq!(
+            crosshair_segments(bounds, position, GerberCrosshairMode::Short),
+            vec![
+                (Point::new(112.0, 75.0), Point::new(128.0, 75.0)),
+                (Point::new(120.0, 67.0), Point::new(120.0, 83.0)),
+            ],
+        );
+
+        let mut state = GerberViewerState::default();
+        assert_eq!(state.crosshair_mode, GerberCrosshairMode::Short);
+        state.cycle_crosshair_mode();
+        assert_eq!(state.crosshair_mode, GerberCrosshairMode::Full);
+        state.cycle_crosshair_mode();
+        assert_eq!(state.crosshair_mode, GerberCrosshairMode::None);
+        state.cycle_crosshair_mode();
+        assert_eq!(state.crosshair_mode, GerberCrosshairMode::Short);
+    }
+
+    #[test]
+    fn display_units_cycle_millimetres_mils_inches()
+    {
+        let mut state = GerberViewerState::default();
+
+        assert_eq!(state.display_unit, GerberDisplayUnit::Millimetres);
+        state.cycle_display_unit();
+        assert_eq!(state.display_unit, GerberDisplayUnit::Mils);
+        state.cycle_display_unit();
+        assert_eq!(state.display_unit, GerberDisplayUnit::Inches);
+        state.cycle_display_unit();
+        assert_eq!(state.display_unit, GerberDisplayUnit::Millimetres);
     }
 
     #[test]

@@ -50,18 +50,24 @@ impl GerberViewerState
         second_layer: usize,
     )
     {
-        let Some(selection) = self.selected_item.as_mut() else
+        let remap = |selection: &mut GerberItemSelection|
         {
-            return;
+            if selection.layer_index == first_layer
+            {
+                selection.layer_index = second_layer;
+            }
+            else if selection.layer_index == second_layer
+            {
+                selection.layer_index = first_layer;
+            }
         };
-
-        if selection.layer_index == first_layer
+        if let Some(selection) = self.selected_item.as_mut()
         {
-            selection.layer_index = second_layer;
+            remap(selection);
         }
-        else if selection.layer_index == second_layer
+        for selection in &mut self.region_selection
         {
-            selection.layer_index = first_layer;
+            remap(selection);
         }
     }
 }

@@ -22,6 +22,16 @@ macro_rules! gerber_measurement_tests
                     Some(signex_gerber::Point { x: 3.0, y: 4.0 })
                 );
                 assert_eq!(measurement.distance(), Some(5.0));
+                assert!(
+                    (measurement.angle_degrees().expect("angle") - 53.130_102_354_155_98)
+                        .abs()
+                        < 1.0e-12
+                );
+                assert!(
+                    (measurement.angle_radians().expect("angle") - 0.927_295_218_001_612_2)
+                        .abs()
+                        < 1.0e-12
+                );
             }
 
             #[test]
@@ -73,6 +83,48 @@ macro_rules! gerber_measurement_tests
                     )
                     .as_deref(),
                     Some("Distance: 1,0000 in  ΔX: 1,0000  ΔY: 0,0000")
+                );
+            }
+
+            #[test]
+            fn annotation_uses_scientific_delta_notation_degrees_and_radians()
+            {
+                let measurement = GerberMeasurement {
+                    start: signex_gerber::Point { x: 1.0, y: 2.0 },
+                    end: Some(signex_gerber::Point { x: 4.0, y: 6.0 }),
+                };
+
+                assert_eq!(
+                    format_measurement_annotation(
+                        measurement,
+                        GerberDisplayUnit::Millimetres,
+                        ".",
+                    )
+                    .as_deref(),
+                    Some(
+                        "Δx 3.0000 mm  Δy 4.0000 mm\n\
+r 5.0000 mm  θ 53.13° (0.92729 rad)"
+                    ),
+                );
+            }
+
+            #[test]
+            fn drag_measurement_keeps_measurement_tool_active()
+            {
+                let mut state = GerberViewerState::default();
+                state.decimal_separator = ".".into();
+                state.activate_measurement_tool();
+                state.begin_measurement(signex_gerber::Point { x: 1.0, y: 2.0 });
+                state.update_measurement(signex_gerber::Point { x: 4.0, y: 6.0 });
+                state.complete_measurement(signex_gerber::Point { x: 4.0, y: 6.0 });
+
+                assert!(state.measurement_active());
+                assert_eq!(
+                    state.measurement_annotation().as_deref(),
+                    Some(
+                        "Δx 3.0000 mm  Δy 4.0000 mm\n\
+r 5.0000 mm  θ 53.13° (0.92729 rad)"
+                    ),
                 );
             }
 

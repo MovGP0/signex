@@ -634,15 +634,45 @@ impl Signex
                 self.ui_state.gerber_viewer.set_display_unit(unit);
                 Task::none()
             }
+            GerberViewerMessage::CycleDisplayUnit =>
+            {
+                self.ui_state.gerber_viewer.cycle_display_unit();
+                Task::none()
+            }
             GerberViewerMessage::CursorWorldPositionChanged(position) => {
                 self.ui_state
                     .gerber_viewer
                     .set_cursor_world_position(position);
                 Task::none()
             }
+            GerberViewerMessage::ActivateSelectionTool =>
+            {
+                self.ui_state.gerber_viewer.activate_selection_tool();
+                Task::none()
+            }
+            GerberViewerMessage::ActivateMeasurementTool =>
+            {
+                self.ui_state.gerber_viewer.activate_measurement_tool();
+                Task::none()
+            }
             GerberViewerMessage::ToggleMeasurement =>
             {
                 self.ui_state.gerber_viewer.toggle_measurement();
+                Task::none()
+            }
+            GerberViewerMessage::BeginMeasurement(point) =>
+            {
+                self.ui_state.gerber_viewer.begin_measurement(point);
+                Task::none()
+            }
+            GerberViewerMessage::UpdateMeasurement(point) =>
+            {
+                self.ui_state.gerber_viewer.update_measurement(point);
+                Task::none()
+            }
+            GerberViewerMessage::CompleteMeasurement(point) =>
+            {
+                self.ui_state.gerber_viewer.complete_measurement(point);
                 Task::none()
             }
             GerberViewerMessage::CaptureMeasurementPoint(point) =>
@@ -667,6 +697,11 @@ impl Signex
                 self.ui_state
                     .gerber_viewer
                     .set_full_window_crosshair(full_window);
+                Task::none()
+            }
+            GerberViewerMessage::CycleCrosshairMode =>
+            {
+                self.ui_state.gerber_viewer.cycle_crosshair_mode();
                 Task::none()
             }
             GerberViewerMessage::SetPageSize(page_size) => {
@@ -875,6 +910,13 @@ impl Signex
                 self.ui_state
                     .gerber_viewer
                     .set_selected_item(selection);
+                Task::none()
+            }
+            GerberViewerMessage::SetRegionSelection(selections) =>
+            {
+                self.ui_state
+                    .gerber_viewer
+                    .set_region_selection(selections);
                 Task::none()
             }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {

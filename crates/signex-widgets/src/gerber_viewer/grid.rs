@@ -12,6 +12,16 @@ const SETTINGS_FILE_NAME: &str = "gerber_viewer.toml";
 const DEFAULT_DECIMAL_SEPARATOR: &str = ".";
 pub(crate) const DEFAULT_GRID_INDEX: usize = 1;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum GerberGridStyle
+{
+    #[default]
+    Dots,
+    Lines,
+    SmallCrosses,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GridUnit
@@ -152,7 +162,15 @@ struct GerberViewerSettings
 {
     grid_sizes: Vec<GridSizePreset>,
     #[serde(default)]
+    grid_display: GridDisplaySettings,
+    #[serde(default)]
     page_size: PageSizeSettings,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct GridDisplaySettings
+{
+    style: GerberGridStyle,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -233,12 +251,21 @@ pub(super) fn load_page_size() -> GerberPageSize
         .size
 }
 
+pub(super) fn load_grid_style() -> GerberGridStyle
+{
+    grid_settings_path()
+        .and_then(|path| load_settings_from(&path).ok())
+        .unwrap_or_else(default_settings)
+        .grid_display
+        .style
+}
+
 pub(crate) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String>
 {
     let path = grid_settings_path()
         .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
     let page_size = load_page_size();
-    persist_settings_to(&path, catalog, page_size)
+    persist_settings_to(&path, catalog, page_size, load_grid_style())
 }
 
 pub(super) fn persist_page_size(
@@ -248,7 +275,7 @@ pub(super) fn persist_page_size(
 {
     let path = grid_settings_path()
         .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
-    persist_settings_to(&path, catalog, page_size)
+    persist_settings_to(&path, catalog, page_size, load_grid_style())
 }
 
 pub(crate) fn create_grid_definition(
@@ -449,7 +476,12 @@ fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>
 #[cfg(test)]
 fn persist_grid_catalog_to(path: &Path, catalog: &[GridSizePreset]) -> Result<(), String>
 {
-    persist_settings_to(path, catalog, GerberPageSize::default())
+    persist_settings_to(
+        path,
+        catalog,
+        GerberPageSize::default(),
+        GerberGridStyle::default(),
+    )
 }
 
 fn default_settings() -> GerberViewerSettings
@@ -472,10 +504,12 @@ fn persist_settings_to(
     path: &Path,
     catalog: &[GridSizePreset],
     page_size: GerberPageSize,
+    grid_style: GerberGridStyle,
 ) -> Result<(), String>
 {
     let settings = GerberViewerSettings {
         grid_sizes: catalog.to_vec(),
+        grid_display: GridDisplaySettings { style: grid_style },
         page_size: PageSizeSettings { size: page_size },
     };
     let source = toml::to_string_pretty(&settings)

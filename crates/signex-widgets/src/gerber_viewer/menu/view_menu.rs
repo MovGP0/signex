@@ -120,7 +120,7 @@ pub(super) fn view(
                 colors,
             ),
             checked_leaf(
-                "Inactive Layer View Mode",
+                "Interactive Layer View Mode",
                 state.dim_inactive_layers,
                 GerberViewerMessage::ToggleDimInactiveLayers,
                 colors,

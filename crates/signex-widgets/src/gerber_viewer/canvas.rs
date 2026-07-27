@@ -6,6 +6,9 @@ pub(super) struct GerberCanvasState
     drag_start: Option<Point>,
     zoom_selection_start: Option<Point>,
     zoom_selection_current: Option<Point>,
+    item_selection_start: Option<Point>,
+    item_selection_current: Option<Point>,
+    measurement_dragging: bool,
 }
 
 pub(super) struct GerberCanvas<'a>
@@ -14,11 +17,14 @@ pub(super) struct GerberCanvas<'a>
     pub(super) background: Color,
     pub(super) grid: Color,
     pub(super) grid_visible: bool,
-    pub(super) full_window_crosshair: bool,
+    pub(super) grid_style: GerberGridStyle,
+    pub(super) crosshair_mode: GerberCrosshairMode,
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
+    pub(super) selection_active: bool,
     pub(super) measurement_active: bool,
     pub(super) measurement: Option<GerberMeasurement>,
+    pub(super) measurement_annotation: Option<String>,
     pub(super) sketch_flashes: bool,
     pub(super) sketch_lines: bool,
     pub(super) sketch_polygons: bool,
@@ -39,6 +45,7 @@ pub(super) struct GerberCanvas<'a>
     pub(super) highlighted_attribute: Option<&'a GerberAttributeValue>,
     pub(super) highlighted_d_code: Option<i32>,
     pub(super) selected_item: Option<GerberItemSelection>,
+    pub(super) selected_items: &'a [GerberItemSelection],
     pub(super) grid_size: &'a GridSizePreset,
     pub(super) shortcut_resolver: &'a dyn GerberShortcutResolver,
     pub(super) redraw_generation: u64,
@@ -127,29 +134,21 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
             {
                 let position = cursor.position_in(bounds)?;
                 let world = self.screen_to_world(bounds, position)?;
+                state.measurement_dragging = true;
                 Some(
                     canvas::Action::publish(
-                        GerberViewerMessage::CaptureMeasurementPoint(world),
+                        GerberViewerMessage::BeginMeasurement(world),
                     )
                     .and_capture(),
                 )
             }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) =>
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+                if self.selection_active =>
             {
                 let position = cursor.position_in(bounds)?;
-                let world = self.screen_to_world(bounds, position)?;
-                let scale = self.pixels_per_world_unit(bounds)?;
-                let selection = hit_test_visible_item(
-                    self.layers,
-                    world,
-                    6.0 / f64::from(scale),
-                );
-                Some(
-                    canvas::Action::publish(
-                        GerberViewerMessage::SetSelectedItem(selection),
-                    )
-                    .and_capture(),
-                )
+                state.item_selection_start = Some(position);
+                state.item_selection_current = Some(position);
+                Some(canvas::Action::capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 if state.zoom_selection_start.is_some()
@@ -157,6 +156,23 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                     state.zoom_selection_current =
                         Some(Point::new(position.x - bounds.x, position.y - bounds.y));
                     Some(canvas::Action::capture())
+                }
+                else if state.item_selection_start.is_some()
+                {
+                    state.item_selection_current =
+                        Some(Point::new(position.x - bounds.x, position.y - bounds.y));
+                    Some(canvas::Action::capture())
+                }
+                else if state.measurement_dragging
+                {
+                    let position = cursor.position_in(bounds)?;
+                    let world = self.screen_to_world(bounds, position)?;
+                    Some(
+                        canvas::Action::publish(
+                            GerberViewerMessage::UpdateMeasurement(world),
+                        )
+                        .and_capture(),
+                    )
                 }
                 else if let Some(previous) = state.drag_start
                 {
@@ -224,6 +240,75 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                     .and_capture(),
                 )
             }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                if state.measurement_dragging =>
+            {
+                state.measurement_dragging = false;
+                let position = cursor.position_in(bounds)?;
+                let world = self.screen_to_world(bounds, position)?;
+                Some(
+                    canvas::Action::publish(
+                        GerberViewerMessage::CompleteMeasurement(world),
+                    )
+                    .and_capture(),
+                )
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                if state.item_selection_start.is_some() =>
+            {
+                let start = state.item_selection_start.take()?;
+                let end = state.item_selection_current.take().unwrap_or(start);
+                let selection = normalized_screen_rectangle(start, end);
+                if let Some(selection) = selection.filter(|selection|
+                {
+                    selection.width >= 4.0 || selection.height >= 4.0
+                })
+                {
+                    let world_first = self.screen_to_world(
+                        bounds,
+                        Point::new(selection.x, selection.y),
+                    )?;
+                    let world_second = self.screen_to_world(
+                        bounds,
+                        Point::new(
+                            selection.x + selection.width,
+                            selection.y + selection.height,
+                        ),
+                    )?;
+                    let selections = hit_test_visible_items_in_bounds(
+                        self.layers,
+                        Bounds {
+                            min: signex_gerber::Point {
+                                x: world_first.x.min(world_second.x),
+                                y: world_first.y.min(world_second.y),
+                            },
+                            max: signex_gerber::Point {
+                                x: world_first.x.max(world_second.x),
+                                y: world_first.y.max(world_second.y),
+                            },
+                        },
+                    );
+                    return Some(
+                        canvas::Action::publish(
+                            GerberViewerMessage::SetRegionSelection(selections),
+                        )
+                        .and_capture(),
+                    );
+                }
+                let world = self.screen_to_world(bounds, end)?;
+                let scale = self.pixels_per_world_unit(bounds)?;
+                let selection = hit_test_visible_item(
+                    self.layers,
+                    world,
+                    6.0 / f64::from(scale),
+                );
+                Some(
+                    canvas::Action::publish(
+                        GerberViewerMessage::SetSelectedItem(selection),
+                    )
+                    .and_capture(),
+                )
+            }
             Event::Mouse(mouse::Event::CursorLeft) => Some(
                 canvas::Action::publish(
                     GerberViewerMessage::CursorWorldPositionChanged(None),
@@ -256,6 +341,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                     bounds,
                     self.grid,
                     self.grid_size,
+                    self.grid_style,
                     32.0 / 1.27,
                     Point::new(bounds.width / 2.0, bounds.height / 2.0),
                 );
@@ -272,15 +358,16 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
-            if self.full_window_crosshair
+            if self.crosshair_mode != GerberCrosshairMode::None
             {
                 if let Some(position) = cursor.position_in(bounds)
                 {
-                    draw_full_window_crosshair(
+                    draw_crosshair(
                         &mut frame,
                         bounds,
                         position,
                         self.grid,
+                        self.crosshair_mode,
                     );
                 }
             }
@@ -305,6 +392,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 bounds,
                 self.grid,
                 self.grid_size,
+                self.grid_style,
                 scale,
                 world_to_screen(signex_gerber::Point { x: 0.0, y: 0.0 }),
             );
@@ -359,6 +447,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 self.highlighted_attribute,
                 highlighted_d_code,
                 self.selected_item,
+                self.selected_items,
                 layer_index,
                 self.sketch_flashes,
                 self.sketch_lines,
@@ -377,12 +466,18 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 measurement,
                 &world_to_screen,
                 self.grid,
+                self.measurement_annotation.as_deref(),
             );
         }
-        if let (Some(start), Some(end)) = (
-            state.zoom_selection_start,
-            state.zoom_selection_current,
-        )
+        let rectangular_selection = if state.zoom_selection_start.is_some()
+        {
+            (state.zoom_selection_start, state.zoom_selection_current)
+        }
+        else
+        {
+            (state.item_selection_start, state.item_selection_current)
+        };
+        if let (Some(start), Some(end)) = rectangular_selection
         {
             if let Some(selection) = normalized_screen_rectangle(start, end)
             {
@@ -398,15 +493,16 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
                 );
             }
         }
-        if self.full_window_crosshair
+        if self.crosshair_mode != GerberCrosshairMode::None
         {
             if let Some(position) = cursor.position_in(bounds)
             {
-                draw_full_window_crosshair(
+                draw_crosshair(
                     &mut frame,
                     bounds,
                     position,
                     self.grid,
+                    self.crosshair_mode,
                 );
             }
         }
@@ -425,6 +521,7 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
             mouse::Interaction::Grabbing
         }
         else if cursor.is_over(bounds)
+            && self.crosshair_mode != GerberCrosshairMode::None
         {
             mouse::Interaction::Crosshair
         }
@@ -435,32 +532,58 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_>
     }
 }
 
+pub(super) fn crosshair_segments(
+    bounds: Rectangle,
+    position: Point,
+    mode: GerberCrosshairMode,
+) -> Vec<(Point, Point)>
+{
+    match mode
+    {
+        GerberCrosshairMode::None => Vec::new(),
+        GerberCrosshairMode::Short => vec![
+            (
+                Point::new(position.x - 8.0, position.y),
+                Point::new(position.x + 8.0, position.y),
+            ),
+            (
+                Point::new(position.x, position.y - 8.0),
+                Point::new(position.x, position.y + 8.0),
+            ),
+        ],
+        GerberCrosshairMode::Full => vec![
+            (
+            Point::new(0.0, position.y),
+            Point::new(bounds.width, position.y),
+            ),
+            (
+                Point::new(position.x, 0.0),
+                Point::new(position.x, bounds.height),
+            ),
+        ],
+    }
+}
+
+#[cfg(test)]
 pub(super) fn full_window_crosshair_segments(
     bounds: Rectangle,
     position: Point,
 ) -> [(Point, Point); 2]
 {
-    [
-        (
-            Point::new(0.0, position.y),
-            Point::new(bounds.width, position.y),
-        ),
-        (
-            Point::new(position.x, 0.0),
-            Point::new(position.x, bounds.height),
-        ),
-    ]
+    let segments = crosshair_segments(bounds, position, GerberCrosshairMode::Full);
+    [segments[0], segments[1]]
 }
 
-pub(super) fn draw_full_window_crosshair(
+pub(super) fn draw_crosshair(
     frame: &mut canvas::Frame,
     bounds: Rectangle,
     position: Point,
     color: Color,
+    mode: GerberCrosshairMode,
 )
 {
     let color = Color { a: 0.72, ..color };
-    for (start, end) in full_window_crosshair_segments(bounds, position)
+    for (start, end) in crosshair_segments(bounds, position, mode)
     {
         frame.stroke(
             &canvas::Path::line(start, end),
@@ -476,6 +599,7 @@ pub(super) fn draw_grid(
     bounds: Rectangle,
     color: Color,
     grid_size: &GridSizePreset,
+    grid_style: GerberGridStyle,
     pixels_per_millimetre: f32,
     origin: Point,
 )
@@ -490,17 +614,82 @@ pub(super) fn draw_grid(
 
     match (x_spacing, y_spacing)
     {
-        (Some(x_spacing), Some(y_spacing)) => {
-            let mut x = origin.x.rem_euclid(x_spacing);
-            while x <= bounds.width
+        (Some(x_spacing), Some(y_spacing)) =>
+        {
+            match grid_style
             {
-                let mut y = origin.y.rem_euclid(y_spacing);
-                while y <= bounds.height
+                GerberGridStyle::Lines =>
                 {
-                    frame.fill(&canvas::Path::circle(Point::new(x, y), 0.75), dot_color);
-                    y += y_spacing;
+                    let mut x = origin.x.rem_euclid(x_spacing);
+                    while x <= bounds.width
+                    {
+                        frame.stroke(
+                            &canvas::Path::line(
+                                Point::new(x, 0.0),
+                                Point::new(x, bounds.height),
+                            ),
+                            canvas::Stroke::default()
+                                .with_color(dot_color)
+                                .with_width(1.0),
+                        );
+                        x += x_spacing;
+                    }
+                    let mut y = origin.y.rem_euclid(y_spacing);
+                    while y <= bounds.height
+                    {
+                        frame.stroke(
+                            &canvas::Path::line(
+                                Point::new(0.0, y),
+                                Point::new(bounds.width, y),
+                            ),
+                            canvas::Stroke::default()
+                                .with_color(dot_color)
+                                .with_width(1.0),
+                        );
+                        y += y_spacing;
+                    }
                 }
-                x += x_spacing;
+                GerberGridStyle::Dots | GerberGridStyle::SmallCrosses =>
+                {
+                    let mut x = origin.x.rem_euclid(x_spacing);
+                    while x <= bounds.width
+                    {
+                        let mut y = origin.y.rem_euclid(y_spacing);
+                        while y <= bounds.height
+                        {
+                            if grid_style == GerberGridStyle::SmallCrosses
+                            {
+                                frame.stroke(
+                                    &canvas::Path::line(
+                                        Point::new(x - 2.0, y),
+                                        Point::new(x + 2.0, y),
+                                    ),
+                                    canvas::Stroke::default()
+                                        .with_color(dot_color)
+                                        .with_width(1.0),
+                                );
+                                frame.stroke(
+                                    &canvas::Path::line(
+                                        Point::new(x, y - 2.0),
+                                        Point::new(x, y + 2.0),
+                                    ),
+                                    canvas::Stroke::default()
+                                        .with_color(dot_color)
+                                        .with_width(1.0),
+                                );
+                            }
+                            else
+                            {
+                                frame.fill(
+                                    &canvas::Path::circle(Point::new(x, y), 0.75),
+                                    dot_color,
+                                );
+                            }
+                            y += y_spacing;
+                        }
+                        x += x_spacing;
+                    }
+                }
             }
         }
         (Some(x_spacing), None) => {
@@ -662,6 +851,7 @@ pub(super) fn draw_layer(
     highlighted_attribute: Option<&GerberAttributeValue>,
     highlighted_d_code: Option<i32>,
     selected_item: Option<GerberItemSelection>,
+    selected_items: &[GerberItemSelection],
     layer_index: usize,
     sketch_flashes: bool,
     sketch_lines: bool,
@@ -710,13 +900,16 @@ pub(super) fn draw_layer(
             primitive,
             highlighted_d_code,
         );
-        let selected = selected_item == Some(GerberItemSelection {
+        let candidate = GerberItemSelection {
             layer_index,
             primitive_index,
-        });
+        };
+        let selected = selected_item == Some(candidate)
+            || selected_items.contains(&candidate);
         let dark_color = selected_primitive_color(
             dark_color,
             selected_item,
+            selected_items,
             layer_index,
             primitive_index,
         );

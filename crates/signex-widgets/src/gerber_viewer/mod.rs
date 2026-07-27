@@ -30,12 +30,15 @@ pub(crate) mod print;
 mod selection;
 mod shortcuts;
 pub(crate) mod styles;
+mod toolbar;
 mod view;
 
 #[path = "canvas.rs"]
 mod viewport;
 
-pub use display::{GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
+pub use display::{
+    GerberCrosshairMode, GerberDisplayUnit, GerberPageSize, GerberPrintLayout,
+};
 pub use grid::GridUnit;
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
 pub use measurement::GerberMeasurement;
@@ -65,15 +68,18 @@ pub(crate) use grid::{
 };
 use grid::{
     default_forced_opacity, default_inactive_layer_opacity,
-    load_grid_catalog, load_page_size, persist_page_size,
-    system_decimal_separator,
+    load_grid_catalog, load_grid_style, load_page_size, persist_page_size,
+    system_decimal_separator, GerberGridStyle,
 };
 use highlight::{
     attribute_highlight_color, component_highlight_color, d_code_highlight_color,
     net_highlight_color,
 };
 use measurement::draw_measurement;
-use selection::{hit_test_visible_item, selected_primitive_color};
+use selection::{
+    hit_test_visible_item, hit_test_visible_items_in_bounds,
+    selected_primitive_color,
+};
 
 const MAX_VIEWER_LAYERS: usize = 32;
 const CANVAS_MARGIN: f32 = 28.0;
@@ -83,6 +89,10 @@ const MAX_ZOOM: f32 = 30.0;
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/canvas.rs"]
 mod gerber_canvas_test_definitions;
+
+#[cfg(test)]
+#[path = "../../tests/gerber_viewer/toolbar.rs"]
+mod gerber_toolbar_test_definitions;
 
 #[cfg(test)]
 #[path = "../../tests/gerber_viewer/grid_state.rs"]
@@ -154,6 +164,9 @@ mod gerber_menu_test_definitions;
 
 #[cfg(test)]
 gerber_canvas_test_definitions::gerber_canvas_tests!();
+
+#[cfg(test)]
+gerber_toolbar_test_definitions::gerber_toolbar_tests!();
 
 #[cfg(test)]
 gerber_grid_state_test_definitions::gerber_grid_state_tests!();

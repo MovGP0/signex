@@ -160,12 +160,67 @@ macro_rules! gerber_selection_tests
                 };
 
                 assert_eq!(
-                    selected_primitive_color(base, Some(selection), 2, 4),
+                    selected_primitive_color(base, Some(selection), &[], 2, 4),
                     Color::from_rgb8(255, 235, 59)
                 );
                 assert_eq!(
-                    selected_primitive_color(base, Some(selection), 2, 3),
+                    selected_primitive_color(base, Some(selection), &[], 2, 3),
                     base
+                );
+            }
+
+            #[test]
+            fn rectangular_selection_returns_every_intersecting_visible_item()
+            {
+                let layers = vec![
+                    selectable_layer("visible.gbr", true),
+                    selectable_layer("hidden.gbr", false),
+                ];
+                let selections = hit_test_visible_items_in_bounds(
+                    &layers,
+                    Bounds {
+                        min: signex_gerber::Point { x: -2.0, y: -2.0 },
+                        max: signex_gerber::Point { x: 2.0, y: 2.0 },
+                    },
+                );
+
+                assert_eq!(
+                    selections,
+                    vec![
+                        GerberItemSelection {
+                            layer_index: 0,
+                            primitive_index: 0,
+                        },
+                        GerberItemSelection {
+                            layer_index: 0,
+                            primitive_index: 1,
+                        },
+                    ],
+                );
+            }
+
+            #[test]
+            fn region_selection_highlights_every_selected_primitive()
+            {
+                let base = Color::from_rgb8(244, 67, 54);
+                let selections = vec![
+                    GerberItemSelection {
+                        layer_index: 0,
+                        primitive_index: 0,
+                    },
+                    GerberItemSelection {
+                        layer_index: 0,
+                        primitive_index: 1,
+                    },
+                ];
+
+                assert_eq!(
+                    selected_primitive_color(base, None, &selections, 0, 1),
+                    Color::from_rgb8(255, 235, 59),
+                );
+                assert_eq!(
+                    selected_primitive_color(base, None, &selections, 1, 1),
+                    base,
                 );
             }
         }

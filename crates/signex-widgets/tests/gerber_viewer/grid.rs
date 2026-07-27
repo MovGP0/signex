@@ -191,12 +191,18 @@ macro_rules! gerber_grid_tests
         let path = directory.path().join("gerber_viewer.toml");
         let catalog = default_grid_catalog();
 
-        persist_settings_to(&path, &catalog, GerberPageSize::A3)
+        persist_settings_to(
+            &path,
+            &catalog,
+            GerberPageSize::A3,
+            GerberGridStyle::Lines,
+        )
             .expect("Gerber settings must persist");
         let loaded = load_settings_from(&path)
             .expect("persisted Gerber settings must load");
 
         assert_eq!(loaded.page_size.size, GerberPageSize::A3);
+        assert_eq!(loaded.grid_display.style, GerberGridStyle::Lines);
         assert_eq!(loaded.grid_sizes, catalog);
     }
         }

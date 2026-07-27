@@ -37,6 +37,23 @@ pub(crate) fn toolbar_strip(
     }
 }
 
+pub(crate) fn left_toolbar(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static
+{
+    let background = ti(tokens.toolbar_bg);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(background.into()),
+        border: Border {
+            width: 1.0,
+            radius: 0.0.into(),
+            color: border,
+        },
+        ..container::Style::default()
+    }
+}
+
 pub(super) fn status_bar(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static

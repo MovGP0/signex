@@ -12,6 +12,16 @@ impl GerberDisplayUnit
 {
     pub(super) const ALL: [Self; 3] = [Self::Inches, Self::Mils, Self::Millimetres];
 
+    pub fn next(self) -> Self
+    {
+        match self
+        {
+            Self::Millimetres => Self::Mils,
+            Self::Mils => Self::Inches,
+            Self::Inches => Self::Millimetres,
+        }
+    }
+
     pub(super) fn value_from_millimetres(self, value: f64) -> f64
     {
         match self
@@ -46,6 +56,41 @@ impl GerberDisplayUnit
         let value = self.value_from_millimetres(millimetres);
         let decimals = self.decimal_places();
         format!("{value:.decimals$}").replace('.', decimal_separator)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum GerberCrosshairMode
+{
+    None,
+    #[default]
+    Short,
+    Full,
+}
+
+impl GerberCrosshairMode
+{
+    pub fn next(self) -> Self
+    {
+        match self
+        {
+            Self::None => Self::Short,
+            Self::Short => Self::Full,
+            Self::Full => Self::None,
+        }
+    }
+}
+
+impl fmt::Display for GerberCrosshairMode
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        formatter.write_str(match self
+        {
+            Self::None => "none",
+            Self::Short => "short",
+            Self::Full => "full window",
+        })
     }
 }
 

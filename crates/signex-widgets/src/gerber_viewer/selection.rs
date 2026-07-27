@@ -15,9 +15,31 @@ pub struct GerberItemSelection
 
 impl GerberViewerState
 {
+    pub fn selection_tool_active(&self) -> bool
+    {
+        !self.measurement_active && !self.zoom_selection_active
+    }
+
+    pub fn activate_selection_tool(&mut self)
+    {
+        self.measurement_active = false;
+        self.zoom_selection_active = false;
+        if self.measurement.is_some_and(|measurement| measurement.end.is_none())
+        {
+            self.measurement = None;
+        }
+        self.status = "Selection tool active. Click an item or drag a rectangular region.".into();
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+    }
+
     pub fn selected_item(&self) -> Option<GerberItemSelection>
     {
         self.selected_item
+    }
+
+    pub fn selected_items(&self) -> &[GerberItemSelection]
+    {
+        &self.region_selection
     }
 
     pub fn set_selected_item(&mut self, selection: Option<GerberItemSelection>)
@@ -34,6 +56,7 @@ impl GerberViewerState
                 })
         });
         self.selected_item = selection;
+        self.region_selection.clear();
         self.status = selection.map_or_else(
             || "Rendered item selection cleared.".to_owned(),
             |selection|
@@ -48,22 +71,62 @@ impl GerberViewerState
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
     }
 
+    pub fn set_region_selection(&mut self, selections: Vec<GerberItemSelection>)
+    {
+        self.region_selection = selections
+            .into_iter()
+            .filter(|selection|
+            {
+                self.layers
+                    .get(selection.layer_index)
+                    .is_some_and(|layer|
+                    {
+                        layer.visible
+                            && selection.primitive_index
+                                < layer.layer.geometry.primitives.len()
+                    })
+            })
+            .collect();
+        self.selected_item = self.region_selection.first().copied();
+        self.status = if self.region_selection.is_empty()
+        {
+            "No rendered items intersect the selection region.".into()
+        }
+        else
+        {
+            format!("Selected {} rendered item(s).", self.region_selection.len())
+        };
+        self.redraw_generation = self.redraw_generation.wrapping_add(1);
+    }
+
     pub(in crate::gerber_viewer) fn retain_valid_selection(&mut self)
     {
-        let Some(selection) = self.selected_item else
+        self.region_selection.retain(|selection|
         {
-            return;
-        };
-        if self
-            .layers
-            .get(selection.layer_index)
-            .is_none_or(|layer|
-            {
-                selection.primitive_index
-                    >= layer.layer.geometry.primitives.len()
-            })
+            self.layers
+                .get(selection.layer_index)
+                .is_some_and(|layer|
+                {
+                    selection.primitive_index
+                        < layer.layer.geometry.primitives.len()
+                })
+        });
+        if self.selected_item.is_some_and(|selection|
         {
-            self.selected_item = None;
+            self.layers
+                .get(selection.layer_index)
+                .is_none_or(|layer|
+                {
+                    selection.primitive_index
+                        >= layer.layer.geometry.primitives.len()
+                })
+        })
+        {
+            self.selected_item = self.region_selection.first().copied();
+        }
+        else if self.selected_item.is_none()
+        {
+            self.selected_item = self.region_selection.first().copied();
         }
     }
 
@@ -72,41 +135,47 @@ impl GerberViewerState
         removed_layer_index: usize,
     )
     {
-        self.selected_item = self.selected_item.and_then(|selection|
+        let remap = |selection: GerberItemSelection|
         {
             if selection.layer_index == removed_layer_index
             {
-                None
+                return None;
             }
-            else
-            {
-                Some(GerberItemSelection {
-                    layer_index: if selection.layer_index > removed_layer_index
-                    {
-                        selection.layer_index - 1
-                    }
-                    else
-                    {
-                        selection.layer_index
-                    },
-                    primitive_index: selection.primitive_index,
-                })
-            }
-        });
+            Some(GerberItemSelection {
+                layer_index: if selection.layer_index > removed_layer_index
+                {
+                    selection.layer_index - 1
+                }
+                else
+                {
+                    selection.layer_index
+                },
+                primitive_index: selection.primitive_index,
+            })
+        };
+        self.selected_item = self.selected_item.and_then(remap);
+        self.region_selection = self
+            .region_selection
+            .iter()
+            .copied()
+            .filter_map(remap)
+            .collect();
     }
 }
 
 pub(super) fn selected_primitive_color(
     color: Color,
     selection: Option<GerberItemSelection>,
+    region_selection: &[GerberItemSelection],
     layer_index: usize,
     primitive_index: usize,
 ) -> Color
 {
-    if selection == Some(GerberItemSelection {
+    let candidate = GerberItemSelection {
         layer_index,
         primitive_index,
-    })
+    };
+    if selection == Some(candidate) || region_selection.contains(&candidate)
     {
         SELECTION_COLOR
     }
@@ -114,6 +183,36 @@ pub(super) fn selected_primitive_color(
     {
         color
     }
+}
+
+pub(super) fn hit_test_visible_items_in_bounds(
+    layers: &[ViewerLayer],
+    bounds: Bounds,
+) -> Vec<GerberItemSelection>
+{
+    layers
+        .iter()
+        .enumerate()
+        .filter(|(_, layer)| layer.visible)
+        .flat_map(|(layer_index, layer)|
+        {
+            layer
+                .layer
+                .geometry
+                .primitives
+                .iter()
+                .enumerate()
+                .filter_map(move |(primitive_index, primitive)|
+                {
+                    bounds_intersect(bounds, primitive_bounds(primitive)).then_some(
+                        GerberItemSelection {
+                            layer_index,
+                            primitive_index,
+                        },
+                    )
+                })
+        })
+        .collect()
 }
 
 pub(super) fn hit_test_visible_item(
@@ -196,6 +295,118 @@ fn primitive_contains(
         } =>
         {
             distance(point, *position) <= diameter / 2.0 + tolerance
+        }
+    }
+}
+
+fn bounds_intersect(first: Bounds, second: Bounds) -> bool
+{
+    first.min.x <= second.max.x
+        && first.max.x >= second.min.x
+        && first.min.y <= second.max.y
+        && first.max.y >= second.min.y
+}
+
+fn primitive_bounds(primitive: &GerberPrimitive) -> Bounds
+{
+    match primitive
+    {
+        GerberPrimitive::Stroke {
+            start,
+            end,
+            width,
+            ..
+        }
+        | GerberPrimitive::DrillSlot {
+            start,
+            end,
+            width,
+            ..
+        } =>
+        {
+            let radius = width / 2.0;
+            Bounds {
+                min: signex_gerber::Point {
+                    x: start.x.min(end.x) - radius,
+                    y: start.y.min(end.y) - radius,
+                },
+                max: signex_gerber::Point {
+                    x: start.x.max(end.x) + radius,
+                    y: start.y.max(end.y) + radius,
+                },
+            }
+        }
+        GerberPrimitive::Flash {
+            position,
+            aperture,
+            ..
+        } =>
+        {
+            let (half_width, half_height) = match aperture
+            {
+                ApertureShape::Circle { diameter }
+                | ApertureShape::Polygon { diameter, .. } =>
+                {
+                    (diameter / 2.0, diameter / 2.0)
+                }
+                ApertureShape::Rectangle { width, height }
+                | ApertureShape::Obround { width, height } =>
+                {
+                    (width / 2.0, height / 2.0)
+                }
+                ApertureShape::Macro { .. } =>
+                {
+                    let radius = aperture.maximum_extent() / 2.0;
+                    (radius, radius)
+                }
+            };
+            Bounds {
+                min: signex_gerber::Point {
+                    x: position.x - half_width,
+                    y: position.y - half_height,
+                },
+                max: signex_gerber::Point {
+                    x: position.x + half_width,
+                    y: position.y + half_height,
+                },
+            }
+        }
+        GerberPrimitive::Region { points, .. } =>
+        {
+            let mut min = signex_gerber::Point {
+                x: f64::INFINITY,
+                y: f64::INFINITY,
+            };
+            let mut max = signex_gerber::Point {
+                x: f64::NEG_INFINITY,
+                y: f64::NEG_INFINITY,
+            };
+            for point in points
+            {
+                min.x = min.x.min(point.x);
+                min.y = min.y.min(point.y);
+                max.x = max.x.max(point.x);
+                max.y = max.y.max(point.y);
+            }
+            Bounds { min, max }
+        }
+        GerberPrimitive::DrillHit {
+            position,
+            diameter,
+            ..
+        } =>
+        {
+            let radius = diameter / 2.0;
+            Bounds {
+                min: signex_gerber::Point {
+                    x: position.x - radius,
+                    y: position.y - radius,
+                },
+                max: signex_gerber::Point {
+                    x: position.x + radius,
+                    y: position.y + radius,
+                },
+            }
         }
     }
 }

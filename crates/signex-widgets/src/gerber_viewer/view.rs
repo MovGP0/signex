@@ -156,7 +156,7 @@ pub fn view<'a>(
             checkbox(state.polar_coordinates)
                 .label("Polar")
                 .on_toggle(GerberViewerMessage::TogglePolarCoordinates),
-            checkbox(state.full_window_crosshair)
+            checkbox(state.crosshair_mode == GerberCrosshairMode::Full)
                 .label("Full crosshair")
                 .on_toggle(GerberViewerMessage::ToggleFullWindowCrosshair),
             text(cursor_label)
@@ -475,11 +475,14 @@ pub fn view<'a>(
         background: canvas_bg,
         grid: state.grid_color,
         grid_visible: state.grid_visible,
-        full_window_crosshair: state.full_window_crosshair,
+        grid_style: state.grid_style,
+        crosshair_mode: state.crosshair_mode,
         page_size: state.page_size,
         zoom_selection_active: state.zoom_selection_active,
+        selection_active: state.selection_tool_active(),
         measurement_active: state.measurement_active(),
         measurement: state.measurement(),
+        measurement_annotation: state.measurement_annotation(),
         sketch_flashes: state.sketch_flashes,
         sketch_lines: state.sketch_lines,
         sketch_polygons: state.sketch_polygons,
@@ -500,6 +503,7 @@ pub fn view<'a>(
         highlighted_attribute: state.highlighted_attribute(),
         highlighted_d_code: state.highlighted_d_code(),
         selected_item: state.selected_item(),
+        selected_items: state.selected_items(),
         redraw_generation: state.redraw_generation,
         zoom: state.zoom,
         pan: state.pan,
@@ -590,7 +594,9 @@ pub fn view<'a>(
         menu_bar,
         toolbar,
         grid_toolbar,
-        content,
+        row![toolbar::view(state, tokens), content]
+            .width(Length::Fill)
+            .height(Length::Fill),
         status,
     ]
     .width(Length::Fill)

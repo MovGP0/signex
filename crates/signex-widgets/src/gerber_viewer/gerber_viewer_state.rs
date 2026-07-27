@@ -17,6 +17,7 @@ pub struct GerberViewerState
     pub status: String,
     pub redraw_generation: u64,
     pub(super) selected_item: Option<GerberItemSelection>,
+    pub(super) region_selection: Vec<GerberItemSelection>,
     pub zoom: f32,
     pub pan: iced::Vector,
     pub layer_manager_visible: bool,
@@ -26,6 +27,7 @@ pub struct GerberViewerState
     pub(crate) grid_catalog: Vec<GridSizePreset>,
     pub(crate) active_grid_index: usize,
     pub(super) grid_visible: bool,
+    pub(super) grid_style: GerberGridStyle,
     pub(super) grid_color: Color,
     pub(super) display_unit: GerberDisplayUnit,
     pub(super) cursor_world_position: Option<signex_gerber::Point>,
@@ -46,7 +48,7 @@ pub struct GerberViewerState
     pub(super) inactive_layer_opacity: f32,
     pub(super) mirrored: bool,
     pub(super) polar_coordinates: bool,
-    pub(super) full_window_crosshair: bool,
+    pub(super) crosshair_mode: GerberCrosshairMode,
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
     pub(super) highlighted_component: Option<String>,
@@ -99,6 +101,7 @@ impl Default for GerberViewerState
             status: "Open one or more Gerber files to begin.".into(),
             redraw_generation: 0,
             selected_item: None,
+            region_selection: Vec::new(),
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
@@ -108,6 +111,7 @@ impl Default for GerberViewerState
             grid_catalog,
             active_grid_index,
             grid_visible: true,
+            grid_style: load_grid_style(),
             grid_color,
             display_unit: GerberDisplayUnit::Millimetres,
             cursor_world_position: None,
@@ -128,7 +132,7 @@ impl Default for GerberViewerState
             inactive_layer_opacity: default_inactive_layer_opacity(),
             mirrored: false,
             polar_coordinates: false,
-            full_window_crosshair: false,
+            crosshair_mode: GerberCrosshairMode::default(),
             page_size: load_page_size(),
             zoom_selection_active: false,
             highlighted_component: None,
@@ -285,6 +289,7 @@ impl GerberViewerState
         self.zoom = 1.0;
         self.pan = iced::Vector::default();
         self.selected_item = None;
+        self.region_selection.clear();
         self.measurement_active = false;
         self.measurement = None;
         self.highlighted_component = None;
@@ -544,6 +549,12 @@ impl GerberViewerState
         self.display_unit = unit;
     }
 
+    pub fn cycle_display_unit(&mut self)
+    {
+        self.set_display_unit(self.display_unit.next());
+        self.status = format!("Display units: {}.", self.display_unit);
+    }
+
     pub fn set_cursor_world_position(
         &mut self,
         position: Option<signex_gerber::Point>,
@@ -559,11 +570,30 @@ impl GerberViewerState
 
     pub fn set_full_window_crosshair(&mut self, full_window: bool)
     {
-        if self.full_window_crosshair != full_window
+        let mode = if full_window
         {
-            self.full_window_crosshair = full_window;
-            self.redraw_generation = self.redraw_generation.wrapping_add(1);
+            GerberCrosshairMode::Full
         }
+        else
+        {
+            GerberCrosshairMode::None
+        };
+        self.set_crosshair_mode(mode);
+    }
+
+    pub fn set_crosshair_mode(&mut self, mode: GerberCrosshairMode)
+    {
+        if self.crosshair_mode != mode
+        {
+            self.crosshair_mode = mode;
+            self.redraw_generation = self.redraw_generation.wrapping_add(1);
+            self.status = format!("Crosshair: {mode}.");
+        }
+    }
+
+    pub fn cycle_crosshair_mode(&mut self)
+    {
+        self.set_crosshair_mode(self.crosshair_mode.next());
     }
 
     pub(super) fn active_grid(&self) -> &GridSizePreset
