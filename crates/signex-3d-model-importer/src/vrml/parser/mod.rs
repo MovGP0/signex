@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 /// A flat triangle mesh produced from a VRML IndexedFaceSet.
 #[derive(Debug, Default, Clone)]
 pub struct VrmlMesh {
@@ -16,8 +14,6 @@ pub struct VrmlMesh {
 enum Node {
     Transform {
         translation: [f32; 3],
-        #[allow(dead_code)]
-        rotation: [f32; 4], // axis-angle: [ax, ay, az, angle] — deferred to E3
         scale: [f32; 3],
         children: Vec<Node>,
     },
@@ -42,12 +38,11 @@ pub fn parse(
     line_offsets: &[usize],
 ) -> Result<Vec<VrmlMesh>, ParseError> {
     let mut parser = Parser::new(tokens, line_offsets);
-    parser.skip_vrml_header();
     let nodes = parser.parse_node_list()?;
     let mut meshes = Vec::new();
     let identity = Transform::identity();
     for node in &nodes {
-        collect_meshes(node, &identity, &HashMap::new(), &mut meshes);
+        collect_meshes(node, &identity, &mut meshes);
     }
     Ok(meshes)
 }
@@ -114,12 +109,7 @@ impl Transform {
 
 // ─── Mesh collection ──────────────────────────────────────────────────────────
 
-fn collect_meshes(
-    node: &Node,
-    parent_transform: &Transform,
-    def_map: &HashMap<String, Node>,
-    out: &mut Vec<VrmlMesh>,
-) {
+fn collect_meshes(node: &Node, parent_transform: &Transform, out: &mut Vec<VrmlMesh>) {
     match node {
         Node::Transform {
             translation,
@@ -129,12 +119,12 @@ fn collect_meshes(
         } => {
             let xf = Transform::compose_translation(parent_transform, *translation, *scale);
             for child in children {
-                collect_meshes(child, &xf, def_map, out);
+                collect_meshes(child, &xf, out);
             }
         }
         Node::Group { children } => {
             for child in children {
-                collect_meshes(child, parent_transform, def_map, out);
+                collect_meshes(child, parent_transform, out);
             }
         }
         Node::Shape {

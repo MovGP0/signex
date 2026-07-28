@@ -43,13 +43,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Skip the `#VRML V2.0 utf8` header line (already tokenized as words).
-    pub(super) fn skip_vrml_header(&mut self) {
-        // The header appears as tokens: "#VRML" "V2.0" "utf8" — but since `#`
-        // starts a comment and the lexer strips it, the first line comment is
-        // already dropped. Nothing to skip here.
-    }
-
     /// Parse zero or more top-level or child nodes until we hit RBrace / EOF.
     pub(super) fn parse_node_list(&mut self) -> Result<Vec<Node>, ParseError> {
         let mut nodes = Vec::new();
@@ -103,7 +96,6 @@ impl<'a> Parser<'a> {
     fn parse_transform(&mut self) -> Result<Node, ParseError> {
         self.expect_lbrace()?;
         let mut translation = [0.0f32; 3];
-        let mut rotation = [0.0f32, 1.0, 0.0, 0.0];
         let mut scale = [1.0f32; 3];
         let mut children = Vec::new();
 
@@ -127,10 +119,9 @@ impl<'a> Parser<'a> {
                     translation[2] = self.parse_f32()?;
                 }
                 "rotation" => {
-                    rotation[0] = self.parse_f32()?;
-                    rotation[1] = self.parse_f32()?;
-                    rotation[2] = self.parse_f32()?;
-                    rotation[3] = self.parse_f32()?;
+                    for _ in 0..4 {
+                        let _ = self.parse_f32()?;
+                    }
                 }
                 "scale" => {
                     scale[0] = self.parse_f32()?;
@@ -147,7 +138,6 @@ impl<'a> Parser<'a> {
         }
         Ok(Node::Transform {
             translation,
-            rotation,
             scale,
             children,
         })
