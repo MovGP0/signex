@@ -1,3 +1,8 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Tests for `Symbol::to_lib_symbol` (issue #365, part 1 of 2).
 //!
 //! Sibling of `to_lib_symbol`, not a child module of it — same

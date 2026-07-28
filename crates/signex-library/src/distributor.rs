@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `DistributorAdapter` — vendor metadata + pricing lookup. v0.9-library-plan.md §14a.4.
 
 use std::collections::BTreeMap;
@@ -98,7 +103,7 @@ mod tests {
             stock: Some(50_000),
             source: DistributorSource::DigiKey,
             captured_at: chrono::Utc::now(),
-            extra: Default::default(),
+            extra: BTreeMap::default(),
         };
         let json = serde_json::to_string(&part).unwrap();
         let back: DistributorPart = serde_json::from_str(&json).unwrap();

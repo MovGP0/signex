@@ -1,9 +1,15 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `LibraryAdapter` over the HTTP API exposed by `signex-library-server`.
 //!
 //! Synchronous facade for the trait. Row CRUD speaks to the
 //! `/tables` / `/rows` routes; primitive (`/symbols` / `/footprints`
 //! / `/sims`) wiring is unchanged because primitives stay
-//! file-shaped under the DBLib model.
+//! file-shaped under the `DBLib` model.
 //!
 //! Routes are addressed by a `library_id` query parameter — the
 //! adapter sources its own from `manifest().library.library_id`.
@@ -13,6 +19,7 @@
 //! `LocalGitAdapter` does — see TODO around the `audit_log` table
 //! below).
 
+use std::fmt::Write as _;
 use std::time::Duration;
 
 use serde::{Serialize, de::DeserializeOwned};
@@ -56,7 +63,7 @@ impl DatabaseAdapter {
             LibraryMode::Database { url, auth } => {
                 (url.trim_end_matches('/').to_string(), auth.clone())
             }
-            other => {
+            other @ LibraryMode::LocalGit => {
                 return Err(LibraryError::Backend(format!(
                     "DatabaseAdapter requires LibraryMode::Database, got {other:?}"
                 )));
@@ -145,11 +152,13 @@ impl DatabaseAdapter {
     }
 
     /// Borrow the configured base URL.
+    #[must_use]
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
 
     /// Borrow the holder identity (logged but never the bearer secret).
+    #[must_use]
     pub fn holder(&self) -> &str {
         &self.holder
     }
@@ -168,9 +177,11 @@ impl DatabaseAdapter {
         for b in s.bytes() {
             match b {
                 b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                    out.push(b as char)
+                    out.push(b as char);
                 }
-                _ => out.push_str(&format!("%{b:02X}")),
+                _ => {
+                    let _ = write!(out, "%{b:02X}");
+                }
             }
         }
         out

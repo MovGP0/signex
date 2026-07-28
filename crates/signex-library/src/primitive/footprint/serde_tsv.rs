@@ -1,10 +1,10 @@
 //! Pad TSV codec + token conversions for the footprint wire format.
 
-use super::*;
+use super::{ChamferedCorners, Drill, LayerId, PAD_TSV_COLUMNS, Pad, PadKind, PadShape, Polygon};
 
 // ---- Pad TSV codec --------------------------------------------------
 
-pub(super) fn pad_kind_token(k: PadKind) -> &'static str {
+pub(super) const fn pad_kind_token(k: PadKind) -> &'static str {
     match k {
         PadKind::Smd => "Smd",
         PadKind::Tht => "Tht",
@@ -48,8 +48,8 @@ fn fmt_opt_f64_fp(v: Option<f64>) -> String {
     v.map(fmt_f64_fp).unwrap_or_default()
 }
 
-pub(super) fn pad_shape_to_token(shape: &PadShape) -> Result<String, FootprintFileError> {
-    Ok(match shape {
+pub(super) fn pad_shape_to_token(shape: &PadShape) -> std::string::String {
+    match shape {
         PadShape::Round => "round".to_string(),
         PadShape::Rect => "rect".to_string(),
         PadShape::Oval => "oval".to_string(),
@@ -76,10 +76,10 @@ pub(super) fn pad_shape_to_token(shape: &PadShape) -> Result<String, FootprintFi
             }
             format!("custom:{}", parts.join("|"))
         }
-    })
+    }
 }
 
-fn bool_bit(b: bool) -> char {
+const fn bool_bit(b: bool) -> char {
     if b { '1' } else { '0' }
 }
 
@@ -152,7 +152,7 @@ fn layers_to_token(layers: &[LayerId]) -> Result<String, FootprintFileError> {
     }
     Ok(layers
         .iter()
-        .map(|l| l.as_str())
+        .map(super::pad::LayerId::as_str)
         .collect::<Vec<&str>>()
         .join("|"))
 }
@@ -182,7 +182,7 @@ fn parse_opt_f64_cell_fp(col: &'static str, s: &str) -> Result<Option<f64>, Foot
 }
 
 fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
-    let shape_cell = pad_shape_to_token(&pad.shape)?;
+    let shape_cell = pad_shape_to_token(&pad.shape);
     let layers_cell = layers_to_token(&pad.layers)?;
     let drill_diameter_cell = pad
         .drill
@@ -223,7 +223,7 @@ fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
 
 /// Encode a slice of pads as TSV — header row first, then one row
 /// per pad. Empty slice still emits the header row.
-pub(crate) fn pads_to_tsv(pads: &[Pad]) -> Result<String, FootprintFileError> {
+pub fn pads_to_tsv(pads: &[Pad]) -> Result<String, FootprintFileError> {
     let mut out = String::new();
     out.push_str(&PAD_TSV_COLUMNS.join("\t"));
     out.push('\n');
@@ -237,7 +237,7 @@ pub(crate) fn pads_to_tsv(pads: &[Pad]) -> Result<String, FootprintFileError> {
 /// Parse a `pads_tsv` payload back into `Vec<Pad>`. The first non-
 /// empty line is the header and must equal [`PAD_TSV_COLUMNS`]; each
 /// subsequent line is a pad row.
-pub(crate) fn pads_from_tsv(tsv: &str) -> Result<Vec<Pad>, FootprintFileError> {
+pub fn pads_from_tsv(tsv: &str) -> Result<Vec<Pad>, FootprintFileError> {
     let trimmed = tsv.trim_matches('\n');
     if trimmed.is_empty() {
         return Err(FootprintFileError::EmptyPadsTsv);

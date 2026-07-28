@@ -1,7 +1,12 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! OS keyring credential storage for distributor adapters.
 //!
 //! - Service name format: `signex-distributor-<provider>`
-//! - Used by Mouser (API key) and DigiKey (OAuth refresh token).
+//! - Used by Mouser (API key) and `DigiKey` (OAuth refresh token).
 //! - Tests gated by platform: Windows Credential Manager works; Linux/macOS
 //!   CI runners may lack a backend → callers must handle
 //!   `KeyringError::Backend` gracefully.
@@ -21,8 +26,8 @@ pub enum KeyringError {
 impl From<::keyring::Error> for KeyringError {
     fn from(e: ::keyring::Error) -> Self {
         match e {
-            ::keyring::Error::NoEntry => KeyringError::NotFound,
-            other => KeyringError::Backend(other.to_string()),
+            ::keyring::Error::NoEntry => Self::NotFound,
+            other => Self::Backend(other.to_string()),
         }
     }
 }
@@ -61,11 +66,13 @@ impl KeyringStore {
     }
 
     /// Service name as registered with the OS keychain.
+    #[must_use]
     pub fn service_name(&self) -> &str {
         &self.service
     }
 
     /// Username slot.
+    #[must_use]
     pub fn username(&self) -> &str {
         &self.username
     }
@@ -83,8 +90,7 @@ impl KeyringStore {
     /// Delete the entry. Idempotent: deleting an absent entry is `Ok`.
     pub fn delete(&self) -> Result<(), KeyringError> {
         match self.entry.delete_credential() {
-            Ok(()) => Ok(()),
-            Err(::keyring::Error::NoEntry) => Ok(()),
+            Ok(()) | Err(::keyring::Error::NoEntry) => Ok(()),
             Err(other) => Err(KeyringError::Backend(other.to_string())),
         }
     }

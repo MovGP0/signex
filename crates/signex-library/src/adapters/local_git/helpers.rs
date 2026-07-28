@@ -1,6 +1,18 @@
+#![expect(
+    clippy::write_with_newline,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Free helper functions for the local-git adapter.
 
-use super::*;
+use std::fmt::Write as _;
+
+use super::{
+    ComponentRow, FOOTPRINT_EXT, FOOTPRINTS_DIR, GITATTRIBUTES_FILE, HistoryEntry, LFS_EXTENSIONS,
+    LibraryError, LibraryMeta, LibraryRow, Manifest, Path, PathBuf, PrimitiveKind, SIM_EXT,
+    SIMS_DIR, SYMBOL_EXT, SYMBOLS_DIR, SnxlibManifest, TABLE_HEADER, fs, record_to_row,
+    row_to_record,
+};
 
 // ── Free helpers ───────────────────────────────────────────────────────────
 
@@ -17,10 +29,10 @@ pub(super) fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry
     let time =
         chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap_or_else(chrono::Utc::now);
     let raw = commit.message().unwrap_or("");
-    let (subject, body) = match raw.find("\n\n") {
-        Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
-        None => (raw.trim_end().to_string(), String::new()),
-    };
+    let (subject, body) = raw.find("\n\n").map_or_else(
+        || (raw.trim_end().to_string(), String::new()),
+        |i| (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
+    );
     HistoryEntry {
         sha: commit.id().to_string(),
         author_name: author.name().unwrap_or_default().to_string(),
@@ -113,8 +125,8 @@ pub(super) fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow,
 
 pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow, LibraryError> {
     let mut record = csv::StringRecord::new();
-    for col in TABLE_HEADER.iter() {
-        let val = row.cells.get(*col).map(String::as_str).unwrap_or("");
+    for col in TABLE_HEADER {
+        let val = row.cells.get(*col).map_or("", String::as_str);
         record.push_field(val);
     }
     record_to_row(&record)
@@ -167,7 +179,7 @@ pub(super) fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> 
          # Written at library-create time when LFS opt-in was selected.\n",
     );
     for ext in LFS_EXTENSIONS {
-        text.push_str(&format!("*.{ext} filter=lfs diff=lfs merge=lfs -text\n"));
+        let _ = write!(text, "*.{ext} filter=lfs diff=lfs merge=lfs -text\n");
     }
     fs::write(&path, text)?;
     Ok(())
@@ -198,7 +210,7 @@ pub(super) fn slugify(name: &str) -> String {
     }
 }
 
-pub(super) fn primitive_subdir(kind: PrimitiveKind) -> &'static str {
+pub(super) const fn primitive_subdir(kind: PrimitiveKind) -> &'static str {
     match kind {
         PrimitiveKind::Symbol => SYMBOLS_DIR,
         PrimitiveKind::Footprint => FOOTPRINTS_DIR,
@@ -206,7 +218,7 @@ pub(super) fn primitive_subdir(kind: PrimitiveKind) -> &'static str {
     }
 }
 
-pub(super) fn primitive_ext(kind: PrimitiveKind) -> &'static str {
+pub(super) const fn primitive_ext(kind: PrimitiveKind) -> &'static str {
     match kind {
         PrimitiveKind::Symbol => SYMBOL_EXT,
         PrimitiveKind::Footprint => FOOTPRINT_EXT,
@@ -214,7 +226,7 @@ pub(super) fn primitive_ext(kind: PrimitiveKind) -> &'static str {
     }
 }
 
-pub(super) fn primitive_kind_str(kind: PrimitiveKind) -> &'static str {
+pub(super) const fn primitive_kind_str(kind: PrimitiveKind) -> &'static str {
     match kind {
         PrimitiveKind::Symbol => "symbol",
         PrimitiveKind::Footprint => "footprint",

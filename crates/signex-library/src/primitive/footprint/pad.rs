@@ -1,10 +1,16 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    clippy::trivially_copy_pass_by_ref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad geometry types (layers, shapes, drills, chamfers) for the footprint primitive.
 
-use super::*;
+use super::{Deserialize, Serialize};
 
 /// PCB layer identifier — minimal subset surfaced by the library layer.
 ///
-/// The PCB editor (signex-types::LayerId) carries the full Altium taxonomy.
+/// The PCB editor (`signex-types::LayerId`) carries the full Altium taxonomy.
 /// This crate only needs to express which copper / mask / paste layers a pad
 /// participates in; we keep a string-typed wrapper rather than importing
 /// signex-types here so this crate stays leaf-level.
@@ -17,6 +23,7 @@ impl LayerId {
         Self(s.into())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -30,7 +37,7 @@ impl std::fmt::Display for LayerId {
 
 /// Pad mounting style.
 ///
-/// Variant names persist in PascalCase to preserve v1 / v2 fixture
+/// Variant names persist in `PascalCase` to preserve v1 / v2 fixture
 /// compatibility — adding `rename_all = "snake_case"` would break
 /// every existing footprint TOML.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -69,6 +76,7 @@ pub struct ChamferedCorners {
 }
 
 impl ChamferedCorners {
+    #[must_use]
     pub const fn all() -> Self {
         Self {
             top_left: true,
@@ -110,7 +118,8 @@ pub struct Polygon {
 }
 
 impl Polygon {
-    pub fn new(points: Vec<[f64; 2]>) -> Self {
+    #[must_use]
+    pub const fn new(points: Vec<[f64; 2]>) -> Self {
         Self { points }
     }
 }
@@ -245,6 +254,6 @@ fn is_false(v: &bool) -> bool {
 /// Helper for `#[serde(default = "...")]` on bool fields that should
 /// default to `true`. `bool::default()` is `false`, so this is needed
 /// for fields where omission means "yes / enabled".
-fn default_true_bool() -> bool {
+const fn default_true_bool() -> bool {
     true
 }

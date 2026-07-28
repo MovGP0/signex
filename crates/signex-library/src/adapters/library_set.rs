@@ -1,11 +1,17 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::use_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `LibrarySet` — a tiny resolver that composes any number of
 //! [`LibraryAdapter`] trait objects into a single lookup surface for
 //! cross-library [`PrimitiveRef`] resolution.
 //!
 //! Per `v0.9-snxlib-as-file-plan.md` §2 Stage B, the primary mount
-//! key is the `.snxlib` *file path* (not the library_id). The
-//! Components Panel (§5) presents the same library_id across
-//! Project / Installed / Global lists — a library_id can therefore
+//! key is the `.snxlib` *file path* (not the `library_id`). The
+//! Components Panel (§5) presents the same `library_id` across
+//! Project / Installed / Global lists — a `library_id` can therefore
 //! legitimately appear under multiple file paths in a single
 //! `LibrarySet`, so the duplicate-id check that used to gate
 //! mounting has moved out to the panel layer (where dedup happens
@@ -50,10 +56,10 @@ pub enum MountKey {
 
 impl MountKey {
     fn for_adapter(adapter: &dyn LibraryAdapter) -> Self {
-        match adapter.library_file_path() {
-            Some(p) => MountKey::Path(p.to_path_buf()),
-            None => MountKey::Id(adapter.library_id()),
-        }
+        adapter.library_file_path().map_or_else(
+            || MountKey::Id(adapter.library_id()),
+            |p| MountKey::Path(p.to_path_buf()),
+        )
     }
 }
 
@@ -67,6 +73,7 @@ pub struct LibrarySet {
 
 impl LibrarySet {
     /// Construct an empty `LibrarySet`.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -121,36 +128,42 @@ impl LibrarySet {
     }
 
     /// Number of mounted libraries.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.libs.len()
     }
 
     /// True if no libraries are mounted.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.libs.is_empty()
     }
 
     /// True if any mounted adapter exposes the given `library_id`.
+    #[must_use]
     pub fn contains(&self, library_id: Uuid) -> bool {
         self.find_key_for_id(library_id).is_some()
     }
 
     /// True if a file-backed adapter is mounted at `path`.
+    #[must_use]
     pub fn contains_path(&self, path: &Path) -> bool {
         self.libs.contains_key(&MountKey::Path(path.to_path_buf()))
     }
 
     /// Borrow the first mounted adapter exposing `library_id`, if any.
+    #[must_use]
     pub fn get(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
         let key = self.find_key_for_id(library_id)?;
-        self.libs.get(&key).map(|b| b.as_ref())
+        self.libs.get(&key).map(std::convert::AsRef::as_ref)
     }
 
     /// Borrow the file-backed adapter mounted at `path`, if any.
+    #[must_use]
     pub fn get_by_path(&self, path: &Path) -> Option<&dyn LibraryAdapter> {
         self.libs
             .get(&MountKey::Path(path.to_path_buf()))
-            .map(|b| b.as_ref())
+            .map(std::convert::AsRef::as_ref)
     }
 
     /// Iterate over `library_id`s of mounted libraries. Duplicates may
@@ -170,18 +183,21 @@ impl LibrarySet {
 
     /// Resolve a `PrimitiveRef` to the underlying [`Symbol`], if both the
     /// library and the primitive UUID exist.
+    #[must_use]
     pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Option<Symbol> {
         let lib = self.find_adapter_for_id(r.library_id)?;
         lib.get_symbol(r.uuid).ok()
     }
 
     /// Resolve a `PrimitiveRef` to the underlying [`Footprint`].
+    #[must_use]
     pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Option<Footprint> {
         let lib = self.find_adapter_for_id(r.library_id)?;
         lib.get_footprint(r.uuid).ok()
     }
 
     /// Resolve a `PrimitiveRef` to the underlying [`SimModel`].
+    #[must_use]
     pub fn resolve_sim(&self, r: &PrimitiveRef) -> Option<SimModel> {
         let lib = self.find_adapter_for_id(r.library_id)?;
         lib.get_sim(r.uuid).ok()
@@ -210,7 +226,7 @@ impl LibrarySet {
         self.libs
             .values()
             .find(|lib| lib.library_id() == library_id)
-            .map(|b| b.as_ref())
+            .map(std::convert::AsRef::as_ref)
     }
 
     fn find_key_for_id(&self, library_id: Uuid) -> Option<MountKey> {
@@ -483,10 +499,8 @@ mod tests {
         let second_uuid = second.uuid;
 
         let mut set = LibrarySet::new();
-        set.mount(Box::new(
-            FakeAdapter::new(lib_id).with_symbol(first.clone()),
-        ))
-        .unwrap();
+        set.mount(Box::new(FakeAdapter::new(lib_id).with_symbol(first)))
+            .unwrap();
         // remount under same mount key replaces the adapter and
         // returns the previous one so the caller can decide to drop it
         // or hand it elsewhere.

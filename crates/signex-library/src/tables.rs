@@ -1,6 +1,11 @@
-//! TSV reader/writer for component tables (Altium DBLib model).
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! TSV reader/writer for component tables (Altium `DBLib` model).
 //!
-//! Per `v0.9-refactor-2-plan.md` §2.4, every adapter (LocalGit, Database,
+//! Per `v0.9-refactor-2-plan.md` §2.4, every adapter (`LocalGit`, Database,
 //! future flavours) shares one column schema:
 //!
 //! ```text
@@ -20,6 +25,7 @@
 //! in [`crate::adapters::local_git::LocalGitAdapter`]. The unit
 //! tests here only exercise the TSV serialisation contract.
 
+use std::fmt::Write as _;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -78,7 +84,7 @@ pub struct TableSchema {
 impl TableSchema {
     /// The canonical row schema. Adapters use this so renderers can lay out
     /// columns without hard-coding the strings inline.
-    pub const ROW: TableSchema = TableSchema {
+    pub const ROW: Self = Self {
         columns: TABLE_HEADER,
     };
 }
@@ -193,7 +199,7 @@ pub fn update_row(path: &Path, row: &ComponentRow) -> Result<(), LibraryError> {
     let mut rows = read_table(path)?;
     let target = row.row_id;
     let mut updated = false;
-    for r in rows.iter_mut() {
+    for r in &mut rows {
         if r.row_id == target {
             *r = row.clone();
             updated = true;
@@ -230,7 +236,7 @@ fn datasheet_from_cell(s: &str) -> Result<DatasheetRef, LibraryError> {
     from_json_cell(s, "datasheet")
 }
 
-fn lifecycle_to_cell(s: LifecycleState) -> &'static str {
+const fn lifecycle_to_cell(s: LifecycleState) -> &'static str {
     match s {
         LifecycleState::Draft => "Draft",
         LifecycleState::InReview => "InReview",
@@ -255,11 +261,8 @@ fn lifecycle_from_cell(s: &str) -> Result<LifecycleState, LibraryError> {
     })
 }
 
-fn opt_primitive_to_cell(p: &Option<PrimitiveRef>) -> Result<String, LibraryError> {
-    match p {
-        None => Ok(String::new()),
-        Some(r) => json_cell(r),
-    }
+fn opt_primitive_to_cell(p: Option<&PrimitiveRef>) -> Result<String, LibraryError> {
+    p.map_or_else(|| Ok(String::new()), json_cell)
 }
 
 fn opt_primitive_from_cell(s: &str) -> Result<Option<PrimitiveRef>, LibraryError> {
@@ -283,7 +286,7 @@ fn timestamp_from_cell(s: &str) -> Result<DateTime<Utc>, LibraryError> {
 fn hash_to_cell(h: &[u8; 32]) -> String {
     let mut s = String::with_capacity(64);
     for b in h {
-        s.push_str(&format!("{b:02x}"));
+        let _ = write!(s, "{b:02x}");
     }
     s
 }
@@ -360,8 +363,8 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         datasheet_to_cell(&row.datasheet)?,
         lifecycle_to_cell(row.state).to_string(),
         json_cell(&row.symbol_ref)?,
-        opt_primitive_to_cell(&row.footprint_ref)?,
-        opt_primitive_to_cell(&row.sim_ref)?,
+        opt_primitive_to_cell(row.footprint_ref.as_ref())?,
+        opt_primitive_to_cell(row.sim_ref.as_ref())?,
         primary_mpn,
         alternates,
         supply,
@@ -679,7 +682,7 @@ mod tests {
     fn hash_round_trip_preserves_bytes() {
         let mut h = [0u8; 32];
         for (i, b) in h.iter_mut().enumerate() {
-            *b = i as u8;
+            *b = u8::try_from(i).unwrap_or(u8::MAX);
         }
         let s = hash_to_cell(&h);
         let back = hash_from_cell(&s).unwrap();

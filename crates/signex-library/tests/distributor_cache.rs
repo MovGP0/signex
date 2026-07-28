@@ -1,3 +1,9 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::unwrap_used,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Integration tests for `DistributorCache`. Cache round-trip tests
 //! must run **without network**.
 

@@ -1,4 +1,9 @@
 //! Integration tests for `KeyringStore`.
+
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests fail fast when fixture setup fails"
+)]
 //!
 //! Round-trip test gated by platform availability. Windows
 //! Credential Manager is available in tests; Linux/macOS CI runners

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Local + git storage adapter — `.snxlib` file backed by libgit2.
 //!
 //! Per `v0.9-snxlib-as-file-plan.md`, a Signex library on disk is a
@@ -264,7 +269,7 @@ impl LocalGitAdapter {
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
         index
-            .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+            .add_all(std::iter::once(&"."), git2::IndexAddOption::DEFAULT, None)
             .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
         index
             .write()
@@ -316,8 +321,7 @@ impl LocalGitAdapter {
         let ext_ok = p
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case(SNXLIB_EXT))
-            .unwrap_or(false);
+            .is_some_and(|e| e.eq_ignore_ascii_case(SNXLIB_EXT));
         if !ext_ok {
             return Err(LibraryError::Backend(format!(
                 "library path must end with `.{SNXLIB_EXT}`: {}",
@@ -344,7 +348,9 @@ mod adapter;
 mod helpers;
 mod primitives;
 
-use helpers::*;
+use helpers::{
+    file_name_str, identity_for_repo, parent_dir, synthesize_manifest, write_lfs_attributes,
+};
 
 #[cfg(test)]
 mod tests {
@@ -412,7 +418,7 @@ mod tests {
         .unwrap();
         let sym = fixture_symbol("R");
         let uuid = sym.uuid;
-        adapter.save_symbol(sym.clone(), "save R").unwrap();
+        adapter.save_symbol(sym, "save R").unwrap();
         let back = adapter.get_symbol(uuid).unwrap();
         assert_eq!(back.uuid, uuid);
         assert_eq!(back.name, "R");

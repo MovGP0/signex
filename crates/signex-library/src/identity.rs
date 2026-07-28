@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Stable row identifier — UUIDv7 for time-orderability. Newtype wraps
+/// Stable row identifier — `UUIDv7` for time-orderability. Newtype wraps
 /// `Uuid` so the type system can distinguish a `RowId` from a generic UUID
-/// used elsewhere (library_id, primitive uuid, etc).
+/// used elsewhere (`library_id`, primitive uuid, etc).
 ///
 /// Per `v0.9-refactor-2-plan.md` §6 step 1.10, this replaces the previous
 /// `ComponentId = Uuid` type alias from the v0.9-original layout.
@@ -12,18 +12,21 @@ use uuid::Uuid;
 pub struct RowId(pub Uuid);
 
 impl RowId {
-    /// Construct a new time-ordered RowId.
+    /// Construct a new time-ordered `RowId`.
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::now_v7())
     }
 
     /// Wrap an existing UUID — used when reading a row back from disk.
-    pub fn from_uuid(uuid: Uuid) -> Self {
+    #[must_use]
+    pub const fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
     }
 
     /// Borrow the underlying UUID.
-    pub fn as_uuid(&self) -> Uuid {
+    #[must_use]
+    pub const fn as_uuid(&self) -> Uuid {
         self.0
     }
 }
@@ -69,6 +72,7 @@ impl InternalPn {
         Self(s.into())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -101,6 +105,7 @@ impl Mpn {
         Self(s.into())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -119,11 +124,13 @@ impl ComponentClass {
         Self(s.into())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Default class — applied when the user hasn't picked one yet.
+    #[must_use]
     pub fn generic() -> Self {
         Self("generic".into())
     }

@@ -449,8 +449,7 @@ fn write_emits_canonical_row_order_by_row_id() {
     let zzzz_pos = s.find("zzzz\tLate").expect("zzzz row");
     assert!(
         aaaa_pos < mmmm_pos && mmmm_pos < zzzz_pos,
-        "expected canonical order {:?} but got: {s}",
-        expected_order
+        "expected canonical order {expected_order:?} but got: {s}"
     );
 
     // And the round-trip's rows are in canonical order too.
@@ -641,7 +640,7 @@ fn column_type_token_round_trip_all_variants() {
     for t in cases {
         let token = t.to_token();
         let back = ColumnType::parse_token(&token).unwrap();
-        assert_eq!(t, back, "round-trip failed for {:?}", t);
+        assert_eq!(t, back, "round-trip failed for {t:?}");
     }
 }
 

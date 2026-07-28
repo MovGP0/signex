@@ -1,4 +1,10 @@
 //! `DigiKey` adapter integration tests using wiremock.
+
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "integration tests fail fast when fixture setup or extraction fails"
+)]
 //!
 //! Two flavours:
 //! 1. Inline access token + mocked product-search endpoint — covers the

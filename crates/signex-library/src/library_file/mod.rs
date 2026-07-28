@@ -1,3 +1,9 @@
+#![expect(
+    clippy::derive_partial_eq_without_eq,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `LibraryFile` — on-disk representation of a `.snxlib` file.
 //!
 //! Per `v0.9-snxlib-as-file-plan.md` §1, a Signex component library is a
@@ -89,7 +95,7 @@ pub struct ClassEntry {
 
 /// `[library]` block — human-readable name + description. The `library_id`
 /// lives at the TOML root, not here.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibrarySection {
     pub name: String,
     #[serde(default)]
@@ -163,19 +169,20 @@ impl ColumnType {
     /// variants emit the bare type name; [`ColumnType::Enum`] emits
     /// `"enum:value1,value2,..."` so the wire format is one cell per
     /// row and human-readable in `git diff`.
+    #[must_use]
     pub fn to_token(&self) -> String {
         match self {
-            ColumnType::String => "string".into(),
-            ColumnType::Number => "number".into(),
-            ColumnType::Int => "int".into(),
-            ColumnType::Bool => "bool".into(),
-            ColumnType::Uuid => "uuid".into(),
-            ColumnType::Date => "date".into(),
-            ColumnType::DateTime => "datetime".into(),
-            ColumnType::Url => "url".into(),
-            ColumnType::Version => "version".into(),
-            ColumnType::Tags => "tags".into(),
-            ColumnType::Enum(values) => format!("enum:{}", values.join(",")),
+            Self::String => "string".into(),
+            Self::Number => "number".into(),
+            Self::Int => "int".into(),
+            Self::Bool => "bool".into(),
+            Self::Uuid => "uuid".into(),
+            Self::Date => "date".into(),
+            Self::DateTime => "datetime".into(),
+            Self::Url => "url".into(),
+            Self::Version => "version".into(),
+            Self::Tags => "tags".into(),
+            Self::Enum(values) => format!("enum:{}", values.join(",")),
         }
     }
 
@@ -187,19 +194,19 @@ impl ColumnType {
             if values.is_empty() || values.iter().any(String::is_empty) {
                 return Err(ColumnTypeParseError::EmptyEnum);
             }
-            return Ok(ColumnType::Enum(values));
+            return Ok(Self::Enum(values));
         }
         Ok(match s {
-            "string" => ColumnType::String,
-            "number" => ColumnType::Number,
-            "int" => ColumnType::Int,
-            "bool" => ColumnType::Bool,
-            "uuid" => ColumnType::Uuid,
-            "date" => ColumnType::Date,
-            "datetime" => ColumnType::DateTime,
-            "url" => ColumnType::Url,
-            "version" => ColumnType::Version,
-            "tags" => ColumnType::Tags,
+            "string" => Self::String,
+            "number" => Self::Number,
+            "int" => Self::Int,
+            "bool" => Self::Bool,
+            "uuid" => Self::Uuid,
+            "date" => Self::Date,
+            "datetime" => Self::DateTime,
+            "url" => Self::Url,
+            "version" => Self::Version,
+            "tags" => Self::Tags,
             other => return Err(ColumnTypeParseError::UnknownToken(other.to_string())),
         })
     }
@@ -223,13 +230,13 @@ impl Serialize for ColumnType {
 impl<'de> Deserialize<'de> for ColumnType {
     fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
         let s = String::deserialize(de)?;
-        ColumnType::parse_token(&s).map_err(serde::de::Error::custom)
+        Self::parse_token(&s).map_err(serde::de::Error::custom)
     }
 }
 
 /// One row inside a [`LibraryTable`]. Cell lookup is by column name —
 /// see [`LibraryTable::cell`] for a schema-aware accessor.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LibraryRow {
     pub cells: BTreeMap<String, String>,
 }
@@ -301,7 +308,7 @@ impl From<LibraryFileError> for LibraryError {
     /// channel so callers can `?` through `LibraryAdapter` methods without
     /// matching on the inner enum.
     fn from(value: LibraryFileError) -> Self {
-        LibraryError::Backend(value.to_string())
+        Self::Backend(value.to_string())
     }
 }
 

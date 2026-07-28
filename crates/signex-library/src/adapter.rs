@@ -1,9 +1,15 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `LibraryAdapter` — the trait every storage flavour implements.
 //!
 //! Per `v0.9-refactor-2-plan.md` §7, the trait is row-shaped: the legacy
 //! `get_component` / `get_revision` / `save_revision` methods are gone,
-//! replaced by table CRUD that targets [`ComponentRow`] (the DBLib model).
-//! Every adapter — LocalGit (TSV) or Database (JSONB) — answers the same
+//! replaced by table CRUD that targets [`ComponentRow`] (the `DBLib` model).
+//! Every adapter — `LocalGit` (TSV) or Database (JSONB) — answers the same
 //! row-oriented surface.
 
 use std::path::{Path, PathBuf};
@@ -47,7 +53,7 @@ pub enum FieldSet {
     Lifecycle,
 }
 
-/// A query into the library — partial match on internal_pn or mpn, plus facets.
+/// A query into the library — partial match on `internal_pn` or mpn, plus facets.
 #[derive(Clone, Debug, Default)]
 pub struct LibraryQuery {
     pub text: Option<String>,
@@ -132,7 +138,7 @@ pub struct HistoryEntry {
     pub deletions: u32,
 }
 
-/// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
+/// Storage backend abstraction. All flavours (`LocalGit`, Database, Plm)
 /// implement this.
 ///
 /// **Default impls:** every method has a `LibraryError::Backend("not impl")`
@@ -205,7 +211,7 @@ pub trait LibraryAdapter: Send + Sync {
     /// that don't support manifest mutation surface a `Backend`
     /// error; the UI should disable the create flow when this fails.
     /// `msg` is the commit message for storage backends that require
-    /// one (LocalGit). Returns `Conflict` when a table with the same
+    /// one (`LocalGit`). Returns `Conflict` when a table with the same
     /// name already exists.
     fn create_empty_table(&self, _name: &str, _msg: &str) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
@@ -314,9 +320,9 @@ pub trait LibraryAdapter: Send + Sync {
                 new_entry.key
             )));
         }
-        for c in classes.iter_mut() {
+        for c in &mut classes {
             if c.key == old_key {
-                *c = new_entry.clone();
+                *c = new_entry;
                 break;
             }
         }

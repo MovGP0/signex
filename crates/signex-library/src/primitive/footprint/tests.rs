@@ -153,7 +153,7 @@ fn step_attachment_round_trip() {
 #[test]
 fn footprint_file_toml_round_trip_empty() {
     let fp = Footprint::empty("SOIC-8");
-    let original = FootprintFile::from_footprint(fp.clone());
+    let original = FootprintFile::from_footprint(fp);
     let toml_text = original.to_toml_string().expect("serialise");
     let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
     assert_eq!(back.footprints.len(), 1);
@@ -244,7 +244,7 @@ fn pad_shape_token_round_trip_each_variant() {
         PadShape::Custom(Polygon::new(Vec::new())),
     ];
     for s in cases {
-        let token = pad_shape_to_token(&s).unwrap();
+        let token = pad_shape_to_token(&s);
         let back = pad_shape_from_token(&token).unwrap();
         assert_eq!(s, back, "round-trip failed via token {token:?}");
     }

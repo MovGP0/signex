@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `Footprint` primitive — PCB-side reusable shape.
 //!
 //! Per `v0.9-refactor-2-plan.md` §2.2, a `Footprint` carries:
@@ -20,6 +26,10 @@ use crate::param::ParamMap;
 mod pad;
 mod serde_tsv;
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "wire-format tests compare exact serialized fixture values"
+)]
 mod tests;
 
 pub use pad::*;
@@ -97,12 +107,7 @@ pub enum BodyShape {
 }
 
 impl BodyShape {
-    pub const ALL: &'static [BodyShape] = &[
-        BodyShape::Extrude,
-        BodyShape::Dome,
-        BodyShape::Cylinder,
-        BodyShape::Custom,
-    ];
+    pub const ALL: &'static [Self] = &[Self::Extrude, Self::Dome, Self::Cylinder, Self::Custom];
 }
 
 /// Embedded 3D body description. Lives on [`Footprint`] so two MPNs that share
@@ -231,7 +236,7 @@ pub struct FpCutout {
     pub through: bool,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -319,7 +324,7 @@ pub struct Footprint {
     /// Back silkscreen graphics (B.SilkS).
     #[serde(default)]
     pub silk_b: Vec<FpGraphic>,
-    /// Front fab outline (F.Fab) — drives the body_3d outline default.
+    /// Front fab outline (F.Fab) — drives the `body_3d` outline default.
     #[serde(default)]
     pub fab_f: Vec<FpGraphic>,
     /// Back fab outline (B.Fab).
@@ -411,28 +416,30 @@ pub enum ComponentType {
 }
 
 impl ComponentType {
-    pub const ALL: &'static [ComponentType] = &[
-        ComponentType::Standard,
-        ComponentType::StandardNoBom,
-        ComponentType::Mechanical,
-        ComponentType::Graphical,
-        ComponentType::NetTie,
-        ComponentType::NetTieInBom,
-        ComponentType::Jumper,
+    pub const ALL: &'static [Self] = &[
+        Self::Standard,
+        Self::StandardNoBom,
+        Self::Mechanical,
+        Self::Graphical,
+        Self::NetTie,
+        Self::NetTieInBom,
+        Self::Jumper,
     ];
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            ComponentType::Standard => "Standard",
-            ComponentType::StandardNoBom => "Standard (No BOM)",
-            ComponentType::Mechanical => "Mechanical",
-            ComponentType::Graphical => "Graphical",
-            ComponentType::NetTie => "Net Tie (No BOM)",
-            ComponentType::NetTieInBom => "Net Tie (in BOM)",
-            ComponentType::Jumper => "Jumper",
+            Self::Standard => "Standard",
+            Self::StandardNoBom => "Standard (No BOM)",
+            Self::Mechanical => "Mechanical",
+            Self::Graphical => "Graphical",
+            Self::NetTie => "Net Tie (No BOM)",
+            Self::NetTieInBom => "Net Tie (in BOM)",
+            Self::Jumper => "Jumper",
         }
     }
-    pub fn is_default(&self) -> bool {
-        matches!(self, ComponentType::Standard)
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        matches!(self, Self::Standard)
     }
 }
 
@@ -446,13 +453,13 @@ fn default_footprint_version() -> String {
     "0.0.1".to_string()
 }
 
-fn default_schema_v2() -> u32 {
+const fn default_schema_v2() -> u32 {
     2
 }
 
 /// Schema version emitted by `Footprint::empty()`. v3 (the current
-/// version) adds optional pour / keepout / cutout / v_score /
-/// mask_opening / mask_exclude / paste_aperture fields. v2 files load
+/// version) adds optional pour / keepout / cutout / `v_score` /
+/// `mask_opening` / `mask_exclude` / `paste_aperture` fields. v2 files load
 /// cleanly as v2 (the new fields default to empty Vecs); the version
 /// number is bumped only so consumers can see at a glance which fields
 /// the file may use.
@@ -599,6 +606,7 @@ struct FootprintWire {
 impl FootprintFile {
     /// Build a new container holding a single footprint — what the
     /// `Add New ▸ Footprint Library` flow seeds.
+    #[must_use]
     pub fn from_footprint(footprint: Footprint) -> Self {
         let now = Utc::now();
         Self {
@@ -663,7 +671,7 @@ impl FootprintFile {
                 height_mm: fw.height_mm,
             });
         }
-        Ok(FootprintFile {
+        Ok(Self {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
@@ -731,6 +739,7 @@ impl FootprintFile {
     }
 
     /// Locate a footprint by UUID within this file.
+    #[must_use]
     pub fn get_footprint(&self, uuid: Uuid) -> Option<&Footprint> {
         self.footprints.iter().find(|f| f.uuid == uuid)
     }

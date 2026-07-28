@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Tantivy-backed implementation of [`SearchIndex`].
 //!
 //! Schema:
@@ -17,7 +22,7 @@
 //!   numeric parameter key — see [`NUMERIC_PARAM_KEYS`]; supports `RangeQuery`)
 //!
 //! Tantivy 0.22 does **not** support range queries on JSON-field subpaths via
-//! the QueryParser, so each numeric parameter key gets its own typed f64
+//! the `QueryParser`, so each numeric parameter key gets its own typed f64
 //! column in the schema. Adding a new numeric param key requires extending
 //! [`NUMERIC_PARAM_KEYS`] and rebuilding the index from scratch (the schema
 //! check at [`TantivySearchIndex::open`] catches mismatches).
@@ -118,7 +123,7 @@ struct SchemaFields {
 }
 
 impl SchemaFields {
-    fn build() -> (Schema, SchemaFields) {
+    fn build() -> (Schema, Self) {
         let mut b = Schema::builder();
 
         let uuid = b.add_text_field("uuid", STRING | STORED);
@@ -162,7 +167,7 @@ impl SchemaFields {
         let schema = b.build();
         (
             schema,
-            SchemaFields {
+            Self {
                 uuid,
                 internal_pn,
                 mpn,
@@ -218,7 +223,7 @@ impl TantivySearchIndex {
             }
             existing
         } else {
-            Index::open_or_create(dir, schema.clone())?
+            Index::open_or_create(dir, schema)?
         };
 
         let reader = index
@@ -283,7 +288,7 @@ impl TantivySearchIndex {
 
     /// Add or replace the doc for a single row.
     ///
-    /// Full Tantivy rewiring for the DBLib model is deferred (see
+    /// Full Tantivy rewiring for the `DBLib` model is deferred (see
     /// `v0.9-refactor-2-plan.md` §17). This entry mirrors the original
     /// schema but reads from a [`ComponentRow`] directly instead of
     /// walking a `Revision` chain. The `head_major` / `head_minor`
@@ -359,6 +364,7 @@ impl TantivySearchIndex {
         }
 
         writer.add_document(doc)?;
+        drop(writer);
         Ok(())
     }
 
@@ -366,6 +372,7 @@ impl TantivySearchIndex {
     pub fn commit(&self) -> Result<(), TantivyIndexError> {
         let mut writer = self.writer()?;
         writer.commit()?;
+        drop(writer);
         // Pick up the new commit immediately.
         self.reader.reload()?;
         Ok(())
@@ -425,12 +432,10 @@ impl TantivySearchIndex {
         // sentinel as the empty branch above, preserving observable behaviour
         // while making the invariant invisible-to-the-compiler explicit.
         if clauses.len() == 1 {
-            let q = clauses
-                .into_iter()
-                .next()
-                .map(|(_, q)| q)
-                .unwrap_or_else(|| Box::new(AllQuery));
-            return Ok(q);
+            if let Some((_, query)) = clauses.into_iter().next() {
+                return Ok(query);
+            }
+            return Ok(Box::new(AllQuery));
         }
         Ok(Box::new(BooleanQuery::new(clauses)))
     }
@@ -553,9 +558,8 @@ impl TantivySearchIndex {
                     field: facet.field.clone(),
                     value: facet.value.clone(),
                     reason: format!(
-                        "ordering ops on parameters.{} need a registered numeric field — \
-                         add `{}` to NUMERIC_PARAM_KEYS",
-                        key, key
+                        "ordering ops on parameters.{key} need a registered numeric field — \
+                         add `{key}` to NUMERIC_PARAM_KEYS"
                     ),
                 });
             }
@@ -667,7 +671,7 @@ fn parse_f64(facet: &Facet) -> Result<f64, TantivyIndexError> {
         })
 }
 
-fn lifecycle_token(s: LifecycleState) -> &'static str {
+const fn lifecycle_token(s: LifecycleState) -> &'static str {
     match s {
         LifecycleState::Draft => "Draft",
         LifecycleState::InReview => "InReview",
@@ -691,7 +695,7 @@ fn parse_lifecycle_token(s: &str) -> Option<LifecycleState> {
 fn read_text(doc: &TantivyDocument, field: Field) -> Option<String> {
     doc.get_first(field)
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 fn read_u64(doc: &TantivyDocument, field: Field) -> Option<u64> {

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_panics_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! LCSC distributor adapter — anonymous, polite-throttled (1 req/s).
 //!
 //! - No auth (anonymous public catalogue endpoint).
@@ -15,6 +20,7 @@
 //! endpoint to obtain the canonical part record.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -48,6 +54,7 @@ pub struct LcscAdapter {
 
 impl LcscAdapter {
     /// Production constructor: default base URL, optional disk cache.
+    #[must_use]
     pub fn new(cache: Option<DistributorCache>) -> Self {
         Self {
             base_url: LCSC_DEFAULT_BASE.into(),
@@ -56,7 +63,7 @@ impl LcscAdapter {
             http: reqwest::blocking::Client::builder()
                 .user_agent("signex-library/0.9 (+https://signex.dev)")
                 .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+                .unwrap_or_else(|error| panic!("failed to build default HTTP client: {error}")),
         }
     }
 
@@ -69,7 +76,7 @@ impl LcscAdapter {
             http: reqwest::blocking::Client::builder()
                 .user_agent("signex-library/0.9 (+https://signex.dev)")
                 .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+                .unwrap_or_else(|error| panic!("failed to build default HTTP client: {error}")),
         }
     }
 
@@ -77,13 +84,21 @@ impl LcscAdapter {
     /// call. Records the current instant on exit so subsequent calls are
     /// rate-limited consistently across threads.
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
+        let mut guard = self
+            .throttle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(prev) = *guard {
             let elapsed = prev.elapsed();
             if elapsed < THROTTLE_INTERVAL {
                 drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
+                if let Some(delay) = THROTTLE_INTERVAL.checked_sub(elapsed) {
+                    std::thread::sleep(delay);
+                }
+                guard = self
+                    .throttle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
             }
         }
         *guard = Some(Instant::now());
@@ -216,7 +231,7 @@ fn urlencoding_minimal(s: &str) -> String {
             out.push(ch);
         } else {
             for b in ch.to_string().bytes() {
-                out.push_str(&format!("%{b:02X}"));
+                let _ = write!(out, "%{b:02X}");
             }
         }
     }

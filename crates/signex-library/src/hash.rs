@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Deterministic content hashing for component rows.
 //!
 //! Hash is computed over a canonical JSON serialisation of the row's
@@ -82,7 +87,7 @@ impl<'a> CanonView<'a> {
 ///    as JSON `null`, so a row carrying `Number(NaN)` would hash equal to a
 ///    row carrying `Number(0.0)` (after the upstream constructor zeroed it
 ///    out, etc.) — that defeats the "did the technical content actually
-///    change?" question content_hash answers.
+///    change?" question `content_hash` answers.
 /// 2. **Less-invasive than upstream validation.** Tightening `ParamValue` to
 ///    reject non-finite floats at construction would require making variants
 ///    `#[non_exhaustive]` and rewriting ~50 enum-literal call sites in

@@ -23,7 +23,7 @@ fn line(from: [f64; 2], to: [f64; 2]) -> ChainSegment {
 fn dist_sq(a: [f64; 2], b: [f64; 2]) -> f64 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];
-    dx * dx + dy * dy
+    dy.mul_add(dy, dx * dx)
 }
 
 /// Twice the signed polygon area (shoelace, standard math orientation —
@@ -34,7 +34,7 @@ fn signed_area_x2(ring: &[[f64; 2]]) -> f64 {
     for i in 0..n {
         let [x0, y0] = ring[i];
         let [x1, y1] = ring[(i + 1) % n];
-        sum += x0 * y1 - x1 * y0;
+        sum += x1.mul_add(-y0, x0 * y1);
     }
     sum
 }

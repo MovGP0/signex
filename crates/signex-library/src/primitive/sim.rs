@@ -1,3 +1,10 @@
+#![expect(
+    clippy::derive_partial_eq_without_eq,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `SimModel` primitive — SPICE / Verilog-A model body, reusable across MPNs.
 //!
 //! Per `v0.9-refactor-2-plan.md` §2.3, a `SimModel` carries the model
@@ -29,7 +36,7 @@ pub enum SimKind {
 }
 
 /// Reusable simulation model. Bound by `Component::sim_ref`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SimModel {
     pub uuid: Uuid,
     pub name: String,
@@ -73,18 +80,18 @@ impl SimModel {
     }
 }
 
-/// `.snxsim` container — Altium parity for SimModel storage. The
+/// `.snxsim` container — Altium parity for `SimModel` storage. The
 /// envelope mirrors [`crate::primitive::SymbolFile`] /
 /// [`crate::primitive::FootprintFile`] (file-level uuid + display
 /// name + array-of-tables payload). Today the convention is one
-/// SimModel per file; the Vec leaves room for multi-model SPICE
+/// `SimModel` per file; the Vec leaves room for multi-model SPICE
 /// libraries without a wire-format break.
 ///
 /// Wire format (v0.18.5): TOML manifest header + one `[[models]]`
 /// entry per `SimModel`. Each entry's `body` field is emitted as a
 /// `body = '''…'''` literal multi-line string so SPICE / Verilog-A
 /// source is line-diffable in git output. Everything else (kind
-/// enum, default_node_map, scalars) stays as inline TOML.
+/// enum, `default_node_map`, scalars) stays as inline TOML.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SimFile {
     /// Schema sentinel — current emitters write `"snxsim/v1"`.
@@ -139,6 +146,7 @@ struct SimModelWire {
 
 impl SimFile {
     /// Wrap a single `SimModel` into a one-element file envelope.
+    #[must_use]
     pub fn from_model(model: SimModel) -> Self {
         let now = Utc::now();
         Self {
@@ -182,7 +190,7 @@ impl SimFile {
                 updated: m.updated,
             })
             .collect();
-        Ok(SimFile {
+        Ok(Self {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
@@ -248,6 +256,7 @@ impl SimFile {
     }
 
     /// Locate a model by UUID within this file.
+    #[must_use]
     pub fn get_model(&self, uuid: Uuid) -> Option<&SimModel> {
         self.models.iter().find(|m| m.uuid == uuid)
     }

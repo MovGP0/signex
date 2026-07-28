@@ -1,4 +1,9 @@
 //! Integration tests for the v0.9-refactor-2 row-diff engine.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "golden tests fail fast when fixture setup or extraction fails"
+)]
 //!
 //! Per `v0.9-refactor-2-plan.md` §6 step 1.7, the diff is pure-ref +
 //! binding-field comparison over [`ComponentRow`] pairs. Geometry-level

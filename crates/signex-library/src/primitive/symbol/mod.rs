@@ -1,3 +1,10 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `Symbol` primitive — schematic-side reusable shape.
 //!
 //! Per `v0.9-refactor-2-plan.md` §2.1, a `Symbol` carries:
@@ -159,11 +166,11 @@ pub struct SymbolPin {
     pub part_number: u8,
 }
 
-fn default_visibility_true() -> bool {
+const fn default_visibility_true() -> bool {
     true
 }
 
-fn default_part_number() -> u8 {
+const fn default_part_number() -> u8 {
     1
 }
 
@@ -258,6 +265,7 @@ pub enum SymbolGraphicKind {
 /// handler (the tool that can hand this a raw, possibly-negative pair
 /// from a live drag). Lives here — signex-library must not depend on
 /// signex-app — with signex-app calling into it, not the reverse.
+#[must_use]
 pub fn normalize_arc_endpoints_deg(start_deg: f64, end_deg: f64) -> (f64, f64) {
     let (start_deg, end_deg) = if end_deg < start_deg {
         (end_deg, start_deg)
@@ -359,7 +367,7 @@ pub struct Symbol {
     pub local_pin_color: Option<[u8; 4]>,
     /// Semver-style revision string (`X.Y.Z`). Stage 14 of
     /// `v0.9-snxlib-as-file-plan.md`: every Symbol carries its own
-    /// version independent of the bound ComponentRow's version. In
+    /// version independent of the bound `ComponentRow`'s version. In
     /// `Personal` workflow mode every save patch-bumps automatically;
     /// in `Team` mode released symbols require an explicit bump
     /// dialog. Defaults to `"0.0.1"` for new symbols and old files
@@ -397,7 +405,7 @@ fn default_comment() -> String {
     "*".to_string()
 }
 
-fn default_part_count() -> u8 {
+const fn default_part_count() -> u8 {
     1
 }
 
@@ -429,7 +437,7 @@ impl Symbol {
     }
 }
 
-/// Multi-symbol `.snxsym` container — Altium SchLib parity. One file
+/// Multi-symbol `.snxsym` container — Altium `SchLib` parity. One file
 /// holds many symbols; each symbol still has its own UUID for
 /// `PrimitiveRef` resolution.
 ///
@@ -654,6 +662,7 @@ fn migrate_legacy_arc(kind: SymbolGraphicKind) -> SymbolGraphicKind {
 impl SymbolFile {
     /// Build a new container holding a single symbol — what the
     /// `Add New ▸ Symbol` flow seeds.
+    #[must_use]
     pub fn from_symbol(symbol: Symbol) -> Self {
         let now = Utc::now();
         Self {
@@ -667,6 +676,7 @@ impl SymbolFile {
     }
 
     /// Locate a symbol by UUID within this file.
+    #[must_use]
     pub fn get_symbol(&self, uuid: Uuid) -> Option<&Symbol> {
         self.symbols.iter().find(|s| s.uuid == uuid)
     }
@@ -753,7 +763,7 @@ impl SymbolFile {
                 updated: sw.updated,
             });
         }
-        Ok(SymbolFile {
+        Ok(Self {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
@@ -890,9 +900,17 @@ mod chain;
 mod chain_tests;
 mod serde_tsv;
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "symbol tests compare exact authored fixture geometry"
+)]
 mod tests;
 mod to_lib_symbol;
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "conversion tests compare exact authored fixture geometry"
+)]
 mod to_lib_symbol_tests;
 
 pub use chain::{

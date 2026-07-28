@@ -18,12 +18,14 @@ pub enum LifecycleState {
 
 impl LifecycleState {
     /// Whether new placements are allowed (UI may still gate).
-    pub fn placeable(self) -> bool {
+    #[must_use]
+    pub const fn placeable(self) -> bool {
         matches!(self, Self::Released | Self::Deprecated)
     }
 
     /// Whether a placement should warn the user.
-    pub fn warns_on_place(self) -> bool {
+    #[must_use]
+    pub const fn warns_on_place(self) -> bool {
         matches!(self, Self::Deprecated)
     }
 }

@@ -1,4 +1,11 @@
-//! DigiKey distributor adapter — OAuth2 PKCE scaffold.
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::return_self_not_must_use,
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! `DigiKey` distributor adapter — `OAuth2` PKCE scaffold.
 //!
 //! - Uses the `oauth2` crate (v5) for the authorization-code + PKCE flow.
 //! - Refresh token persisted in OS keyring under
@@ -7,7 +14,7 @@
 //!   mocked with `wiremock`. Live API tests are `#[ignore]`d.
 //!
 //! Public surface:
-//! - [`DigiKeyAuth`] — orchestrates the OAuth2 flow. The interactive
+//! - [`DigiKeyAuth`] — orchestrates the `OAuth2` flow. The interactive
 //!   "open browser, redirect, exchange code" handshake belongs in the UI;
 //!   the library just exposes:
 //!   * [`DigiKeyAuth::start_authorization()`] — produces the auth URL
@@ -40,7 +47,7 @@ use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 use crate::distributors::keyring::{KeyringError, KeyringStore};
 use crate::param::ParamMap;
 
-/// DigiKey production endpoints. Tests override these via `with_endpoints`.
+/// `DigiKey` production endpoints. Tests override these via `with_endpoints`.
 pub const DIGIKEY_AUTH_URL: &str = "https://api.digikey.com/v1/oauth2/authorize";
 pub const DIGIKEY_TOKEN_URL: &str = "https://api.digikey.com/v1/oauth2/token";
 pub const DIGIKEY_API_BASE: &str = "https://api.digikey.com";
@@ -70,17 +77,17 @@ pub enum DigiKeyAuthError {
 impl From<DigiKeyAuthError> for DistributorError {
     fn from(e: DigiKeyAuthError) -> Self {
         match e {
-            DigiKeyAuthError::NoRefreshToken => DistributorError::Auth(
+            DigiKeyAuthError::NoRefreshToken => Self::Auth(
                 "no DigiKey refresh token in keyring; run authorization flow first".into(),
             ),
             DigiKeyAuthError::Config(m)
             | DigiKeyAuthError::Request(m)
-            | DigiKeyAuthError::Keyring(m) => DistributorError::Auth(m),
+            | DigiKeyAuthError::Keyring(m) => Self::Auth(m),
         }
     }
 }
 
-/// Scaffolds the OAuth2 PKCE authorization-code flow.
+/// Scaffolds the `OAuth2` PKCE authorization-code flow.
 pub struct DigiKeyAuth {
     client: ConfiguredClient,
     keyring: KeyringStore,
@@ -92,7 +99,7 @@ pub struct DigiKeyAuth {
 }
 
 impl DigiKeyAuth {
-    /// Production constructor: real DigiKey endpoints, refresh token in
+    /// Production constructor: real `DigiKey` endpoints, refresh token in
     /// `signex-distributor-digikey/refresh`.
     pub fn new(
         client_id: impl Into<String>,
@@ -176,10 +183,10 @@ impl DigiKeyAuth {
     /// into the victim's keyring.
     ///
     /// We compare with `str::eq`. Constant-time comparison would be cleaner
-    /// in principle, but DigiKey's CSRF tokens are 128+ bits of entropy and
+    /// in principle, but `DigiKey`'s CSRF tokens are 128+ bits of entropy and
     /// the exchange is a one-shot per browser session — the timing
     /// side-channel surface is bounded to a single guess per OAuth flow,
-    /// well below the threshold where ConstantTime matters. Document this
+    /// well below the threshold where `ConstantTime` matters. Document this
     /// inline so future audits don't flag it.
     pub fn exchange_code(
         &self,
@@ -254,7 +261,7 @@ fn build_http_client() -> reqwest::blocking::Client {
         .user_agent("signex-library/0.9 (+https://signex.dev)")
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .expect("reqwest::blocking::Client::build is infallible with default opts")
+        .unwrap_or_else(|error| panic!("failed to build default HTTP client: {error}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +287,7 @@ enum AuthSource {
 
 impl DigiKeyAdapter {
     /// Production constructor.
+    #[must_use]
     pub fn new(auth: DigiKeyAuth, cache: Option<DistributorCache>) -> Self {
         Self {
             api_base: DIGIKEY_API_BASE.into(),
@@ -325,13 +333,21 @@ impl DigiKeyAdapter {
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
+        let mut guard = self
+            .throttle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(prev) = *guard {
             let elapsed = prev.elapsed();
             if elapsed < THROTTLE_INTERVAL {
                 drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
+                if let Some(delay) = THROTTLE_INTERVAL.checked_sub(elapsed) {
+                    std::thread::sleep(delay);
+                }
+                guard = self
+                    .throttle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
             }
         }
         *guard = Some(Instant::now());
@@ -415,7 +431,7 @@ impl DistributorAdapter for DigiKeyAdapter {
             .path()
             .rsplit('/')
             .find(|seg| !seg.is_empty())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let token = from_query.or(from_path).unwrap_or_default();
         if token.is_empty() {
             return Ok(None);

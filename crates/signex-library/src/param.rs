@@ -19,12 +19,13 @@ pub enum ParamValue {
 impl ParamValue {
     /// Render the value as a human-readable string. Used by the diff formatter
     /// and the parametric search index.
+    #[must_use]
     pub fn display(&self) -> String {
         match self {
-            ParamValue::Text(s) => s.clone(),
-            ParamValue::Number(n) => n.to_string(),
-            ParamValue::Bool(b) => b.to_string(),
-            ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
+            Self::Text(s) => s.clone(),
+            Self::Number(n) => n.to_string(),
+            Self::Bool(b) => b.to_string(),
+            Self::Measurement { value, unit } => format!("{value} {unit}"),
         }
     }
 }

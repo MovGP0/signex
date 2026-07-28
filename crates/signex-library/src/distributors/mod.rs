@@ -1,4 +1,4 @@
-//! Community distributor adapters (DigiKey, Mouser, LCSC, JLCPCB).
+//! Community distributor adapters (`DigiKey`, Mouser, LCSC, JLCPCB).
 //!
 //! Gated behind the `distributors-community` Cargo feature so the core
 //! library crate stays free of `reqwest`/`oauth2`/`keyring` when consumers

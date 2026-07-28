@@ -1,3 +1,10 @@
+#![expect(
+    clippy::derive_partial_eq_without_eq,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Parameter templates — class-typed schemas that constrain a component's
 //! `parameters` map.
 //!
@@ -35,7 +42,7 @@ pub enum ParamKind {
 }
 
 /// One parameter slot in a [`ParameterTemplate`].
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParamSlot {
     pub name: String,
     pub kind: ParamKind,
@@ -63,7 +70,7 @@ impl ParameterTemplate {
 }
 
 /// Why a parameter map fails to validate against its template.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TemplateViolation {
     /// A required parameter is missing.
     MissingRequired { name: String },
@@ -84,10 +91,10 @@ pub enum TemplateViolation {
 impl std::fmt::Display for TemplateViolation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TemplateViolation::MissingRequired { name } => {
+            Self::MissingRequired { name } => {
                 write!(f, "missing required parameter: {name}")
             }
-            TemplateViolation::WrongKind {
+            Self::WrongKind {
                 name,
                 expected,
                 found,
@@ -95,7 +102,7 @@ impl std::fmt::Display for TemplateViolation {
                 f,
                 "parameter {name} has wrong kind: expected {expected:?}, found {found:?}"
             ),
-            TemplateViolation::WrongUnit {
+            Self::WrongUnit {
                 name,
                 expected,
                 found,
@@ -129,11 +136,13 @@ const BUILTIN_GENERIC: &str = include_str!("../templates-builtin/generic.toml");
 
 impl TemplateRegistry {
     /// Empty registry — no templates resolved. Mostly useful for tests.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Registry seeded with the five bundled built-ins.
+    #[must_use]
     pub fn new_with_builtins() -> Self {
         let mut r = Self::default();
         for text in [
@@ -145,7 +154,8 @@ impl TemplateRegistry {
         ] {
             // The bundled TOML is part of the crate source — a parse failure
             // here is a build-time bug, not runtime input.
-            let t: ParameterTemplate = toml::from_str(text).expect("bundled template parses");
+            let t: ParameterTemplate = toml::from_str(text)
+                .unwrap_or_else(|error| panic!("bundled template must parse: {error}"));
             r.global.insert(t.class.clone(), t);
         }
         r
@@ -165,6 +175,7 @@ impl TemplateRegistry {
     /// 1. `per_lib[(library_id, class)]`,
     /// 2. `global[class]`,
     /// 3. `None` (no template; validation trivially passes).
+    #[must_use]
     pub fn resolve(&self, library_id: Uuid, class: &str) -> Option<&ParameterTemplate> {
         if let Some(t) = self.per_lib.get(&(library_id, class.to_string())) {
             return Some(t);
@@ -174,6 +185,7 @@ impl TemplateRegistry {
 
     /// Validate a parameter map against its class template (looked up via
     /// `library_id` + `class`). Empty result = pass.
+    #[must_use]
     pub fn validate_params(
         &self,
         library_id: Uuid,
@@ -202,7 +214,7 @@ impl TemplateRegistry {
     }
 }
 
-fn kind_of(v: &ParamValue) -> ParamKind {
+const fn kind_of(v: &ParamValue) -> ParamKind {
     match v {
         ParamValue::Text(_) => ParamKind::Text,
         ParamValue::Number(_) => ParamKind::Number,

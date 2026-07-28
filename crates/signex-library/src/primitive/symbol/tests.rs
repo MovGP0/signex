@@ -66,9 +66,9 @@ fn symbol_json_roundtrip() {
 fn symbol_file_upsert_replaces_matching_uuid() {
     let original = Symbol::empty("FIRST");
     let mut file = SymbolFile::from_symbol(original.clone());
-    let mut updated = original.clone();
+    let mut updated = original;
     updated.name = "FIRST_RENAMED".into();
-    assert!(file.upsert(updated.clone()));
+    assert!(file.upsert(updated));
     assert_eq!(file.symbols.len(), 1);
     assert_eq!(file.symbols[0].name, "FIRST_RENAMED");
 
@@ -85,7 +85,7 @@ fn symbol_file_toml_round_trip_empty_symbol() {
     // `Symbol::empty` is fully empty — this exercises the
     // header-only TSV path.
     let s = Symbol::empty("Test");
-    let original = SymbolFile::from_symbol(s.clone());
+    let original = SymbolFile::from_symbol(s);
     let toml_text = original.to_toml_string().expect("serialise");
     let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
     assert_eq!(back.symbols.len(), 1);
@@ -124,7 +124,7 @@ fn symbol_file_from_bytes_rejects_empty_payload() {
     }
 }
 
-/// All-fields round-trip — every SymbolPin field gets a non-default
+/// All-fields round-trip — every `SymbolPin` field gets a non-default
 /// value so the TSV cell encoders / decoders are exercised end-to-end.
 #[test]
 fn symbol_file_round_trip_with_full_pin_payload() {

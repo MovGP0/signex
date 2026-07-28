@@ -1,4 +1,9 @@
-//! Where-used reverse index — keyed by `RowId` for the DBLib model.
+#![expect(
+    clippy::map_unwrap_or,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Where-used reverse index — keyed by `RowId` for the `DBLib` model.
 //!
 //! Pure data structure. The consumer (signex-app) pushes references in via
 //! `ingest_sheet` whenever a sheet is opened or saved, and drops a project's
@@ -29,7 +34,7 @@ use crate::primitive::PrimitiveRef;
 ///
 /// Per the v0.9-refactor-2 model, rows have no per-row version chain —
 /// schematic instances reference their library row by `row_id` only. The
-/// historical change log lives in `git log` (LocalGit) or the audit table
+/// historical change log lives in `git log` (`LocalGit`) or the audit table
 /// (Database) and is surfaced separately.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UseSite {
@@ -80,6 +85,7 @@ pub struct WhereUsedIndex {
 
 impl WhereUsedIndex {
     /// Construct an empty index.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -117,7 +123,7 @@ impl WhereUsedIndex {
     }
 
     /// Rebuild the `primitive_to_rows` reverse index from a row scan
-    /// (`(table_name, row)` tuples — table_name is currently unused but
+    /// (`(table_name, row)` tuples — `table_name` is currently unused but
     /// kept on the API so future per-table filters don't change the
     /// signature).
     ///
@@ -161,15 +167,17 @@ impl WhereUsedIndex {
 
     /// All rows that reference the given primitive. Returned slice is empty
     /// when the primitive isn't referenced.
+    #[must_use]
     pub fn rows_for_primitive(&self, r: &PrimitiveRef) -> &[RowId] {
         self.primitive_to_rows
             .get(r)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[])
     }
 
     /// Find every site where `row_id` is used. Returned order is
     /// unspecified — callers should sort if they need determinism.
+    #[must_use]
     pub fn where_used(&self, row_id: RowId) -> Vec<UseSite> {
         let mut sites = Vec::new();
         for (project_path, sheets) in &self.by_project {

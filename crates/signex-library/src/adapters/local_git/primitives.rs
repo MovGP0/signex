@@ -1,7 +1,20 @@
+#![expect(
+    clippy::significant_drop_tightening,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Primitive read/write + git-commit inherent methods on `LocalGitAdapter`.
 
-use super::helpers::*;
-use super::*;
+use super::helpers::{
+    file_name_str, identity_for_repo, library_row_to_component, primitive_ext, primitive_kind_str,
+    primitive_subdir, slugify, validate_legacy_header,
+};
+use super::{
+    ComponentRow, DeserializeOwned, LibraryError, LibraryFile, LocalGitAdapter, Path, PathBuf,
+    PrimitiveKind, PrimitiveSummary, SYMBOL_EXT, Serialize, SimFile, SimModel, Symbol, SymbolFile,
+    Uuid, fs,
+};
 
 impl LocalGitAdapter {
     fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
@@ -193,7 +206,10 @@ impl LocalGitAdapter {
         // calling `index().add_path()` race on `.git/index.lock`; the
         // loser would surface as a `git add: error` failure to the
         // user despite no real conflict.
-        let _git_guard = self.git_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _git_guard = self
+            .git_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
@@ -339,41 +355,38 @@ impl LocalGitAdapter {
 
     pub(super) fn save_symbol_in_container(
         &self,
-        sym: Symbol,
+        sym: &Symbol,
         message: &str,
     ) -> Result<(), LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 
-        let target_path = match self.locate_symbol_file(sym.uuid)? {
-            Some((path, mut file)) => {
-                if !file.upsert(sym.clone()) {
-                    file.symbols.push(sym.clone());
-                    file.updated = chrono::Utc::now();
-                }
-                // v0.18.4 — emit TOML envelope.
-                let text = file
-                    .to_toml_string()
-                    .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                // HI-6: atomic write — the symbol container is a TOML+TSV
-                // envelope holding every symbol; an in-place truncate by
-                // `fs::write` would destroy them all on a crash mid-save.
-                signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
-                path
+        let target_path = if let Some((path, mut file)) = self.locate_symbol_file(sym.uuid)? {
+            if !file.upsert(sym.clone()) {
+                file.symbols.push(sym.clone());
+                file.updated = chrono::Utc::now();
             }
-            None => {
-                let file = SymbolFile::from_symbol(sym.clone());
-                let path = self.fresh_symbol_file_path(&dir, &file)?;
-                // v0.18.4 — emit TOML envelope.
-                let text = file
-                    .to_toml_string()
-                    .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                // HI-6: atomic write — the symbol container is a TOML+TSV
-                // envelope holding every symbol; an in-place truncate by
-                // `fs::write` would destroy them all on a crash mid-save.
-                signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
-                path
-            }
+            // v0.18.4 — emit TOML envelope.
+            let text = file
+                .to_toml_string()
+                .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
+            // HI-6: atomic write — the symbol container is a TOML+TSV
+            // envelope holding every symbol; an in-place truncate by
+            // `fs::write` would destroy them all on a crash mid-save.
+            signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+            path
+        } else {
+            let file = SymbolFile::from_symbol(sym.clone());
+            let path = self.fresh_symbol_file_path(&dir, &file);
+            // v0.18.4 — emit TOML envelope.
+            let text = file
+                .to_toml_string()
+                .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
+            // HI-6: atomic write — the symbol container is a TOML+TSV
+            // envelope holding every symbol; an in-place truncate by
+            // `fs::write` would destroy them all on a crash mid-save.
+            signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+            path
         };
 
         let rel_path = target_path
@@ -402,11 +415,7 @@ impl LocalGitAdapter {
         Ok(None)
     }
 
-    fn fresh_symbol_file_path(
-        &self,
-        dir: &Path,
-        file: &SymbolFile,
-    ) -> Result<PathBuf, LibraryError> {
+    fn fresh_symbol_file_path(&self, dir: &Path, file: &SymbolFile) -> std::path::PathBuf {
         let raw = if !file.display_name.is_empty() {
             file.display_name.as_str()
         } else if let Some(first) = file.symbols.first() {
@@ -417,10 +426,10 @@ impl LocalGitAdapter {
         let slug = slugify(raw);
         let candidate = dir.join(format!("{slug}.{SYMBOL_EXT}"));
         if !candidate.exists() {
-            return Ok(candidate);
+            return candidate;
         }
         // Collision — fall back to the file uuid which is guaranteed unique.
-        Ok(dir.join(format!("{}.{SYMBOL_EXT}", file.file_uuid)))
+        dir.join(format!("{}.{SYMBOL_EXT}", file.file_uuid))
     }
 
     pub(super) fn list_primitive_summaries<T>(

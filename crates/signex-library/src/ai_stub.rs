@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::manual_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Heuristic pinout extractor — datasheet PDF → guessed pin list.
 //!
 //! Per v0.9-library-plan.md §11.3 the **real** LLM-based symbol synthesis is deferred
@@ -48,6 +54,7 @@ pub struct PinoutGuess {
 /// Returns an empty pin list with `confidence < 0.3` when:
 /// * the PDF parser fails to extract any text;
 /// * the extracted text contains no recognisable pin-table rows.
+#[must_use]
 pub fn extract_pinout(pdf_bytes: &[u8]) -> PinoutGuess {
     let text = match pdf_extract::extract_text_from_mem(pdf_bytes) {
         Ok(t) => t,
@@ -57,6 +64,7 @@ pub fn extract_pinout(pdf_bytes: &[u8]) -> PinoutGuess {
 }
 
 /// Pure-text variant — split out for unit-testing without a real PDF.
+#[must_use]
 pub fn extract_pinout_from_text(text: &str) -> PinoutGuess {
     let mut pins = Vec::new();
     let mut seen_numbers = std::collections::HashSet::new();
@@ -86,7 +94,7 @@ fn parse_pin_row(line: &str) -> Option<PinGuess> {
     let caps = re.captures(line.trim())?;
     let number = caps.get(1)?.as_str().to_string();
     let name = caps.get(2)?.as_str().to_string();
-    let rest = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+    let rest = caps.get(3).map_or("", |m| m.as_str());
 
     // Reject obvious chatter — a real pin row has a SHORT name (≤ 12 chars)
     // and a number that looks like a pin id (digits, optional letter prefix).
@@ -216,7 +224,7 @@ fn pin_row_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(r"^([A-Z]?\d{1,3})\s+([A-Za-z][A-Za-z0-9+\-_/]{0,11})\s+(.{1,80})$")
-            .expect("static pin-row regex must compile")
+            .unwrap_or_else(|error| panic!("static pin-row regex must compile: {error}"))
     })
 }
 

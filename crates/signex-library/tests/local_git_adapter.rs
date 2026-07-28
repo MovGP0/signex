@@ -1,3 +1,9 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::expect_used,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Integration tests for the local + git library adapter.
 //!
 //! Per `v0.9-refactor-2-plan.md` §7, this exercise covers both flows the
@@ -459,9 +465,7 @@ fn library_set_resolves_across_two_local_libs() {
     // Footprint only lives in B — a ref into A would be unresolved.
     let fp_b = fixture_footprint("SOIC-8");
     let fp_b_uuid = fp_b.uuid;
-    adapter_b
-        .save_footprint(fp_b, "soic-8 in B")
-        .unwrap();
+    adapter_b.save_footprint(fp_b, "soic-8 in B").unwrap();
 
     let mut set = LibrarySet::new();
     set.mount(Box::new(adapter_a)).unwrap();
@@ -860,9 +864,7 @@ fn cascade_team_mode_unreleased_row_auto_bumps() {
     row.version = "0.0.5".into();
     row.released = false;
     let row_id = RowId::from_uuid(row.row_id);
-    adapter
-        .insert_row("opamps", row, "bind draft row")
-        .unwrap();
+    adapter.insert_row("opamps", row, "bind draft row").unwrap();
 
     let mut sym2 = sym;
     sym2.version = "1.0.1".into();

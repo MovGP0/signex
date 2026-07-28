@@ -1,5 +1,10 @@
 //! Mouser adapter integration tests using wiremock.
 
+#![expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "integration tests fail fast when fixture setup or extraction fails"
+)]
 #![cfg(feature = "distributors-community")]
 
 use std::future::Future;

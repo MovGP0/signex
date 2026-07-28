@@ -1,3 +1,11 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::naive_bytecount,
+    clippy::write_with_newline,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Project-scoped git adapter — local version control for `.snxprj`
 //! and its sibling design files (`.snxsch`, `.snxpcb`, `.snxmat`,
 //! `.snxnet`, `.snxbom`, `.snxout`).
@@ -24,7 +32,7 @@
 //! Failure surfaces as a non-modal status-bar warning — the user's
 //! data is on disk regardless of whether git captures it.
 //!
-//! Public surface (mirrors the v0.22 PROJECT_GIT_PLAN.md spec):
+//! Public surface (mirrors the v0.22 `PROJECT_GIT_PLAN.md` spec):
 //! - [`LocalGitProjectAdapter::open_or_init`]
 //! - [`LocalGitProjectAdapter::commit_path`]
 //! - [`LocalGitProjectAdapter::commit_external_change`]
@@ -35,6 +43,7 @@
 //! that mutates `.git/index`. Mirrors the
 //! [`local_git::LocalGitAdapter`] HI-11 fix.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -72,14 +81,14 @@ impl LocalGitProjectAdapter {
             )));
         }
         let dot_git = project_root.join(".git");
-        if !dot_git.exists() {
-            git2::Repository::init(&project_root)
-                .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-        } else {
+        if dot_git.exists() {
             // Probe — fail early if the path exists but isn't a real
             // repo (e.g. a stray file named `.git`).
             git2::Repository::open(&project_root)
                 .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        } else {
+            git2::Repository::init(&project_root)
+                .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
         }
         Ok(Self {
             project_root,
@@ -115,7 +124,10 @@ impl LocalGitProjectAdapter {
         // mid-commit can't corrupt the lock state in a way that
         // matters for the next caller (libgit2's index re-validates
         // on each open).
-        let _guard = self.git_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self
+            .git_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo)?;
@@ -243,12 +255,10 @@ impl LocalGitProjectAdapter {
         // pathological hangs; if more matches exist they'll surface
         // on a subsequent call with a higher `limit`.
         let max_visited = limit.saturating_mul(10).max(limit);
-        let mut visited = 0usize;
-        for oid_res in walk {
+        for (visited, oid_res) in walk.enumerate() {
             if entries.len() >= limit || visited >= max_visited {
                 break;
             }
-            visited += 1;
             let oid =
                 oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
             let commit = repo
@@ -257,11 +267,9 @@ impl LocalGitProjectAdapter {
             // Diff against the first parent (or empty tree for the
             // root commit). If `rel_path` is touched, include the
             // commit + populate diff stats.
-            let stats = commit_diff_stats_for_path(&repo, &commit, &rel_str)?;
-            if stats.is_none() {
+            let Some(stats) = commit_diff_stats_for_path(&repo, &commit, &rel_str)? else {
                 continue;
-            }
-            let stats = stats.unwrap();
+            };
             entries.push(history_entry_from_commit(&commit, stats));
         }
         Ok(entries)
@@ -354,11 +362,11 @@ impl LocalGitProjectAdapter {
             "snxsch", "snxpcb", "snxprj", "snxmat", "snxnet", "snxbom", "snxout", "snxsym",
             "snxfpt", "snxlib", "snxmod",
         ] {
-            text.push_str(&format!("*.{ext}\ttext eol=lf\n"));
+            let _ = write!(text, "*.{ext}\ttext eol=lf\n");
         }
         text.push_str("\n# Binary attachments — git shouldn't diff or merge them.\n");
         for ext in ["step", "stp", "wrl", "iges", "png", "jpg", "jpeg", "pdf"] {
-            text.push_str(&format!("*.{ext}\tbinary\n"));
+            let _ = write!(text, "*.{ext}\tbinary\n");
         }
         if use_lfs {
             text.push_str("\n# 3D models opt-in via Git LFS so the working tree doesn't bloat.\n");
@@ -401,7 +409,8 @@ fn commit_diff_stats_for_path(
         let blob = repo
             .find_blob(entry.id())
             .map_err(|e| LibraryError::Backend(format!("git find blob: {e}")))?;
-        let additions = blob.content().iter().filter(|&&b| b == b'\n').count() as u32;
+        let additions = u32::try_from(blob.content().iter().filter(|&&b| b == b'\n').count())
+            .unwrap_or(u32::MAX);
         return Ok(Some(CommitPathStats {
             files_changed: vec![rel_str.to_string()],
             additions,
@@ -427,8 +436,8 @@ fn commit_diff_stats_for_path(
         .map_err(|e| LibraryError::Backend(format!("git diff stats: {e}")))?;
     Ok(Some(CommitPathStats {
         files_changed: vec![rel_str.to_string()],
-        additions: stats.insertions() as u32,
-        deletions: stats.deletions() as u32,
+        additions: u32::try_from(stats.insertions()).unwrap_or(u32::MAX),
+        deletions: u32::try_from(stats.deletions()).unwrap_or(u32::MAX),
     }))
 }
 
@@ -441,14 +450,14 @@ fn history_entry_from_commit(commit: &git2::Commit<'_>, stats: CommitPathStats) 
         .single()
         .unwrap_or_else(chrono::Utc::now);
     let full = commit.message().unwrap_or_default();
-    let (subject, body) = match full.find('\n') {
-        Some(i) => {
+    let (subject, body) = full.find('\n').map_or_else(
+        || (full.to_string(), String::new()),
+        |i| {
             let s = &full[..i];
             let rest = full[i + 1..].trim_start_matches('\n').to_string();
             (s.to_string(), rest)
-        }
-        None => (full.to_string(), String::new()),
-    };
+        },
+    );
     let parent_shas: Vec<String> = commit.parent_ids().map(|o| o.to_string()).collect();
     HistoryEntry {
         sha: commit.id().to_string(),
@@ -529,7 +538,7 @@ fn identity_for_repo(repo: &git2::Repository) -> Result<(String, String), Librar
         let host = std::env::var("HOSTNAME")
             .or_else(|_| std::env::var("COMPUTERNAME"))
             .unwrap_or_else(|_| "localhost".to_string());
-        format!("{}@{}", name, host)
+        format!("{name}@{host}")
     });
     Ok((name, email))
 }

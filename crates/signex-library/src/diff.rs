@@ -1,3 +1,9 @@
+#![expect(
+    clippy::derive_partial_eq_without_eq,
+    clippy::struct_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pure-data diff between two rows of the same component table.
 //!
 //! Per `v0.9-refactor-2-plan.md` §6 step 1.7, the diff now operates on
@@ -46,14 +52,14 @@ pub struct RowDiff {
     pub lifecycle_detail: LifecycleDiff,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ParameterDiff {
     pub added: Vec<String>,
     pub removed: Vec<String>,
     pub changed: Vec<(String, String, String)>, // key, old, new
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PinMapDiff {
     pub added: Vec<PinPadOverride>,
     pub removed: Vec<PinPadOverride>,
@@ -61,13 +67,13 @@ pub struct PinMapDiff {
 }
 
 /// Identity-keyed diff over a list — `String` keys (e.g. `manufacturer:mpn`).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListDiff {
     pub added: Vec<String>,
     pub removed: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LifecycleDiff {
     pub from: Option<LifecycleState>,
     pub to: Option<LifecycleState>,
@@ -91,7 +97,8 @@ pub enum BumpKind {
 /// Decide whether the change between two rows is a `Minor` or `Major`
 /// bump. Per the plan, any change to a primitive ref or pin-map override
 /// is a major bump.
-pub fn auto_bump_kind(diff: &RowDiff) -> BumpKind {
+#[must_use]
+pub const fn auto_bump_kind(diff: &RowDiff) -> BumpKind {
     if diff.symbol_changed || diff.footprint_changed || diff.sim_changed || diff.pin_map_changed {
         BumpKind::Major
     } else {
@@ -100,6 +107,7 @@ pub fn auto_bump_kind(diff: &RowDiff) -> BumpKind {
 }
 
 /// Compute the diff from `a` to `b`.
+#[must_use]
 pub fn diff_rows(a: &ComponentRow, b: &ComponentRow) -> RowDiff {
     let parameters = diff_parameters(&a.parameters, &b.parameters);
     let pin_map = diff_pin_map(&a.pin_map_overrides, &b.pin_map_overrides);
@@ -189,7 +197,7 @@ fn diff_pin_map(a: &[PinPadOverride], b: &[PinPadOverride]) -> PinMapDiff {
         match a_map.get(k) {
             None => added.push(PinPadOverride::new(*k, *v)),
             Some(av) if av != v => {
-                changed.push(((*k).to_string(), (*av).to_string(), (*v).to_string()))
+                changed.push(((*k).to_string(), (*av).to_string(), (*v).to_string()));
             }
             _ => {}
         }

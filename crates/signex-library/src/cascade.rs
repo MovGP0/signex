@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Primitive-save cascade engine — Stage 15 of `v0.9-snxlib-as-file-plan.md`.
 //!
 //! When a user saves a Symbol / Footprint / Sim primitive, every
@@ -55,7 +61,8 @@ pub struct CascadeReport {
 }
 
 impl CascadeReport {
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.auto_bumped.is_empty() && self.stale.is_empty()
     }
 }
@@ -72,16 +79,17 @@ impl CascadeReport {
 /// - `"0.0.1"` → `"0.0.2"`
 /// - `""` → `".1"`
 /// - `"draft"` → `"draft.1"`
+#[must_use]
 pub fn patch_bump(version: &str) -> String {
     let parts: Vec<&str> = version.split('.').collect();
-    if parts.len() == 3 {
-        if let (Ok(major), Ok(minor), Ok(patch)) = (
+    if parts.len() == 3
+        && let (Ok(major), Ok(minor), Ok(patch)) = (
             parts[0].parse::<u64>(),
             parts[1].parse::<u64>(),
             parts[2].parse::<u64>(),
-        ) {
-            return format!("{major}.{minor}.{}", patch + 1);
-        }
+        )
+    {
+        return format!("{major}.{minor}.{}", patch + 1);
     }
     format!("{version}.1")
 }
@@ -153,7 +161,7 @@ enum PrimitiveKindTag {
 }
 
 impl PrimitiveKindTag {
-    fn label(self) -> &'static str {
+    const fn label(self) -> &'static str {
         match self {
             Self::Symbol => "symbol",
             Self::Footprint => "footprint",

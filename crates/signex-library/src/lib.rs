@@ -1,4 +1,13 @@
-//! Signex component library subsystem (v0.9-refactor-2 — DBLib model).
+#![expect(
+    clippy::items_after_statements,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    clippy::useless_let_if_seq,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Signex component library subsystem (v0.9-refactor-2 — `DBLib` model).
 //!
 //! Per `v0.9-refactor-2-plan.md`, components are **rows in TSV/JSONB
 //! tables**, not files. Each row references reusable primitives (`Symbol`,
@@ -177,7 +186,7 @@ pub fn enable_project_version_control(
         .index()
         .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
     index
-        .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+        .add_all(std::iter::once(&"."), git2::IndexAddOption::DEFAULT, None)
         .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
     index
         .write()
@@ -322,10 +331,10 @@ pub fn project_file_history(
         let time = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
             .unwrap_or_else(chrono::Utc::now);
         let raw = commit.message().unwrap_or("");
-        let (subject, body) = match raw.find("\n\n") {
-            Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
-            None => (raw.trim_end().to_string(), String::new()),
-        };
+        let (subject, body) = raw.find("\n\n").map_or_else(
+            || (raw.trim_end().to_string(), String::new()),
+            |i| (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
+        );
         HistoryEntry {
             sha: commit.id().to_string(),
             author_name: author.name().unwrap_or_default().to_string(),

@@ -1,6 +1,15 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `.snxlib` TOML+TSV parse / write codec for `LibraryFile`.
 
-use super::*;
+use super::{
+    BTreeMap, ClassEntry, ColumnType, Deserialize, FORMAT_TOKEN, HashSet, LibraryFile,
+    LibraryFileError, LibraryMode, LibraryRow, LibrarySection, LibraryTable, SnxlibManifest,
+    UsersConfig, Uuid, WorkflowConfig,
+};
 
 impl LibraryFile {
     /// Parse a `.snxlib` TOML document. Validates the format token, then
@@ -48,7 +57,7 @@ impl LibraryFile {
             for ctype_col in body.column_types.keys() {
                 if !table.columns.iter().any(|c| c == ctype_col) {
                     return Err(LibraryFileError::ColumnTypeForUnknownColumn {
-                        table: name.clone(),
+                        table: name,
                         column: ctype_col.clone(),
                     });
                 }
@@ -57,7 +66,7 @@ impl LibraryFile {
             tables.insert(name, table);
         }
 
-        Ok(LibraryFile {
+        Ok(Self {
             manifest: SnxlibManifest {
                 format: raw.format,
                 library_id: raw.library_id,
@@ -94,7 +103,7 @@ impl LibraryFile {
             }
             for (idx, row) in table.rows.iter().enumerate() {
                 for column in &table.columns {
-                    let cell = row.cells.get(column).map(String::as_str).unwrap_or("");
+                    let cell = row.cells.get(column).map_or("", String::as_str);
                     if cell.contains('\t') || cell.contains('\n') {
                         return Err(LibraryFileError::DisallowedControlInCell {
                             table: name.clone(),
@@ -236,16 +245,8 @@ fn serialize_tsv(table: &LibraryTable) -> String {
     let mut order: Vec<usize> = (0..table.rows.len()).collect();
     if has_row_id {
         order.sort_by(|&a, &b| {
-            let ra = table.rows[a]
-                .cells
-                .get("row_id")
-                .map(String::as_str)
-                .unwrap_or("");
-            let rb = table.rows[b]
-                .cells
-                .get("row_id")
-                .map(String::as_str)
-                .unwrap_or("");
+            let ra = table.rows[a].cells.get("row_id").map_or("", String::as_str);
+            let rb = table.rows[b].cells.get("row_id").map_or("", String::as_str);
             ra.cmp(rb)
         });
     }

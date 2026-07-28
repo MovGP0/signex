@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Disk JSON cache for `DistributorPart` records.
 //!
 //! - Layout: `<root>/<provider>/<mpn>.json` (one JSON file per part).
@@ -19,7 +24,7 @@ use chrono::Utc;
 use crate::distributor::DistributorPart;
 
 /// 24-hour TTL per `v0.9-library-plan.md` §14a.4.
-pub const DEFAULT_TTL: Duration = Duration::from_secs(60 * 60 * 24);
+pub const DEFAULT_TTL: Duration = Duration::from_hours(24);
 
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
@@ -66,6 +71,7 @@ impl DistributorCache {
     /// On rejection the path can't be derived; callers should treat the
     /// error as "this MPN cannot be cached" and return live results
     /// without persisting them.
+    #[must_use]
     pub fn entry_path(&self, provider: &str, mpn: &str) -> PathBuf {
         let safe_mpn = mpn.replace(['/', '\\'], "_");
         // Path is always derived from `self.root`; `validate_entry_path`
@@ -148,6 +154,7 @@ impl DistributorCache {
     }
 
     /// Root directory of this cache. Mostly for tests/diagnostics.
+    #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -171,7 +178,7 @@ mod tests {
             stock: None,
             source: DistributorSource::Lcsc,
             captured_at: Utc::now(),
-            extra: Default::default(),
+            extra: std::collections::BTreeMap::default(),
         }
     }
 

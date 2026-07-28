@@ -1,7 +1,20 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::significant_drop_tightening,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `LibraryAdapter` trait implementation for `LocalGitAdapter`.
 
-use super::helpers::*;
-use super::*;
+use super::helpers::{
+    LEGACY_ROW_ID_COL, commit_to_history_entry, commit_touches_path, component_to_library_row,
+    legacy_columns, validate_legacy_header,
+};
+use super::{
+    ComponentRow, Footprint, HistoryEntry, InternalPn, LibraryAdapter, LibraryError, LibraryFile,
+    LibraryTable, LocalGitAdapter, Manifest, Path, PathBuf, PrimitiveKind, PrimitiveSummary, RowId,
+    SimModel, Symbol, Uuid,
+};
 
 impl LibraryAdapter for LocalGitAdapter {
     fn manifest(&self) -> &Manifest {
@@ -72,7 +85,11 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
+                let Some(entry) = lf.tables.remove(&old_owned) else {
+                    return Err(LibraryError::NotFound(format!(
+                        "table {old_owned:?} not found"
+                    )));
+                };
                 lf.tables.insert(new_owned, entry);
                 Ok(())
             },
@@ -201,9 +218,9 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
+                for c in &mut lf.manifest.classes {
                     if c.key == owned_old {
-                        *c = new_entry.clone();
+                        *c = new_entry;
                         break;
                     }
                 }
@@ -330,15 +347,17 @@ impl LibraryAdapter for LocalGitAdapter {
                 let target = entry.rows.iter_mut().find(|r| {
                     r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_s.as_str())
                 });
-                match target {
-                    Some(slot) => {
+                target.map_or_else(
+                    || {
+                        Err(LibraryError::NotFound(format!(
+                            "row {row_id} in table {table_owned}"
+                        )))
+                    },
+                    |slot| {
                         *slot = lib_row;
                         Ok(())
-                    }
-                    None => Err(LibraryError::NotFound(format!(
-                        "row {row_id} in table {table_owned}"
-                    ))),
-                }
+                    },
+                )
             },
             msg,
             &fallback,
@@ -390,7 +409,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
         let uuid = sym.uuid;
         let new_version = sym.version.clone();
-        self.save_symbol_in_container(sym, message)?;
+        self.save_symbol_in_container(&sym, message)?;
         // Stage 15 cascade: propagate the new symbol version to bound
         // ComponentRows. Personal mode silently auto-bumps everything;
         // Team mode auto-bumps non-released rows + leaves released

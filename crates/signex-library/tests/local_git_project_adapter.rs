@@ -1,4 +1,9 @@
 //! v0.22 Phase 8.1 — `LocalGitProjectAdapter` integration tests.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "integration tests fail fast when fixture setup or extraction fails"
+)]
 //!
 //! Mirrors `local_git_adapter.rs`'s 9-scenario coverage at the
 //! project-scope level. Each test creates a tempdir representing a

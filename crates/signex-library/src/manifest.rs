@@ -1,5 +1,11 @@
+#![expect(
+    clippy::derive_partial_eq_without_eq,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `library.toml` schema for `*.snxlib/` directories. Mirrors v0.9-library-plan.md §13
-//! and `v0.9-refactor-2-plan.md` §3 (Altium DBLib model).
+//! and `v0.9-refactor-2-plan.md` §3 (Altium `DBLib` model).
 //!
 //! Adds the `[[tables]]` config section per `v0.9-refactor-2-plan.md` §6
 //! step 1.5: a class with no override gets its own table (`<class>s.tsv`).
@@ -23,7 +29,7 @@ pub struct Manifest {
     pub tables: Vec<TableConfig>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryMeta {
     pub name: String,
     pub library_id: uuid::Uuid,
@@ -31,7 +37,7 @@ pub struct LibraryMeta {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LibraryMode {
     #[default]
@@ -42,7 +48,7 @@ pub enum LibraryMode {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowConfig {
     /// Per `v0.9-snxlib-as-file-plan.md` §3.6, library workflow features
     /// scale with this mode: `Personal` hides released-flag /
@@ -79,7 +85,7 @@ pub enum WorkflowMode {
     Enterprise,
 }
 
-fn default_reviewers_required() -> u32 {
+const fn default_reviewers_required() -> u32 {
     1
 }
 fn default_auto_promote() -> String {
@@ -112,13 +118,13 @@ fn default_role() -> String {
     "Designer".into()
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserEntry {
     pub display_name: String,
     pub roles: Vec<String>,
 }
 
-/// Optional `[[tables]]` override block — Altium DBLib parity.
+/// Optional `[[tables]]` override block — Altium `DBLib` parity.
 ///
 /// Per `v0.9-refactor-2-plan.md` §3:
 /// - The default is class → `<class>s.tsv` (mechanical pluralisation).
@@ -147,6 +153,7 @@ impl Manifest {
     }
 
     /// Configured `[[tables]]` overrides, in declaration order.
+    #[must_use]
     pub fn tables(&self) -> &[TableConfig] {
         &self.tables
     }
@@ -158,6 +165,7 @@ impl Manifest {
     /// 2. Otherwise default-pluralise: `"resistor"` → `"resistors"`.
     ///    The plural is mechanical (`s` suffix); irregulars need an explicit
     ///    override.
+    #[must_use]
     pub fn table_for_class(&self, class: &str) -> String {
         for cfg in &self.tables {
             if cfg.classes.iter().any(|c| c == class) {
@@ -251,7 +259,7 @@ auth = "@signex-keychain:alplab-libserver"
                 assert_eq!(url, "https://lib.alplab.example/api");
                 assert_eq!(auth, "@signex-keychain:alplab-libserver");
             }
-            _ => panic!("expected database mode"),
+            LibraryMode::LocalGit => panic!("expected database mode"),
         }
     }
 

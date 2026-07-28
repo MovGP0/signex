@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Mouser distributor adapter — API-key auth from OS keyring.
 //!
 //! - API key stored in OS keyring under service name
@@ -64,7 +70,7 @@ impl MouserAdapter {
             http: reqwest::blocking::Client::builder()
                 .user_agent("signex-library/0.9 (+https://signex.dev)")
                 .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+                .unwrap_or_else(|error| panic!("failed to build default HTTP client: {error}")),
             auth: AuthSource::Keyring(KeyringStore::for_provider("mouser", "default")?),
         })
     }
@@ -82,19 +88,27 @@ impl MouserAdapter {
             http: reqwest::blocking::Client::builder()
                 .user_agent("signex-library/0.9 (+https://signex.dev)")
                 .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+                .unwrap_or_else(|error| panic!("failed to build default HTTP client: {error}")),
             auth: AuthSource::Inline(api_key.into()),
         }
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
+        let mut guard = self
+            .throttle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(prev) = *guard {
             let elapsed = prev.elapsed();
             if elapsed < THROTTLE_INTERVAL {
                 drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
+                if let Some(delay) = THROTTLE_INTERVAL.checked_sub(elapsed) {
+                    std::thread::sleep(delay);
+                }
+                guard = self
+                    .throttle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
             }
         }
         *guard = Some(Instant::now());
@@ -195,7 +209,7 @@ impl DistributorAdapter for MouserAdapter {
             .path()
             .rsplit('/')
             .find(|seg| !seg.is_empty())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let token = from_query.or(from_path).unwrap_or_default();
         if token.is_empty() {
             return Ok(None);

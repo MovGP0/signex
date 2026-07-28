@@ -1,4 +1,9 @@
 //! Integration tests for `signex_library::project_file_history`.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "integration tests fail fast when fixture setup or extraction fails"
+)]
 //!
 //! Mirrors the in-adapter `LocalGitAdapter::history` tests but
 //! exercises the public helper used by `signex-app`'s right-dock

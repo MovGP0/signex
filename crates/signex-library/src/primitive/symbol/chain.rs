@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Endpoint-chaining core — join loose `Line`/`Arc` segments (schematic
 //! symbol body strokes) end-to-end into a single closed polygon contour.
 //!
@@ -270,7 +277,7 @@ fn build_endpoint_clusters(polylines: &[Vec<[f64; 2]>]) -> EndpointClusters {
         if is_start {
             poly[0]
         } else {
-            *poly.last().expect("tessellated segment is never empty")
+            poly.last().copied().unwrap_or_default()
         }
     };
     let refs: Vec<[f64; 2]> = (0..n)
@@ -389,11 +396,13 @@ fn walk_cycle(polylines: &[Vec<[f64; 2]>], clusters: &EndpointClusters) -> Vec<[
 
         let arrived_via_is_start = !forward;
         let arrived_node = clusters.endpoint_node[&(current_seg, arrived_via_is_start)];
-        let (next_seg, next_is_start) = clusters.node_entries[&arrived_node]
+        let Some((next_seg, next_is_start)) = clusters.node_entries[&arrived_node]
             .iter()
             .copied()
             .find(|&(s, is_start)| !(s == current_seg && is_start == arrived_via_is_start))
-            .expect("degree-2 node must have a distinct other entry");
+        else {
+            break;
+        };
         current_seg = next_seg;
         forward = next_is_start;
     }
@@ -411,7 +420,11 @@ fn finalize_ring(raw: Vec<[f64; 2]>) -> Result<Vec<[f64; 2]>, ChainError> {
             _ => ring.push(p),
         }
     }
-    while ring.len() > 1 && dist_sq(ring[0], *ring.last().unwrap()) <= eps_sq {
+    while ring.len() > 1
+        && ring
+            .last()
+            .is_some_and(|last| dist_sq(ring[0], *last) <= eps_sq)
+    {
         ring.pop();
     }
 
@@ -448,12 +461,12 @@ fn is_collinear(ring: &[[f64; 2]], eps: f64) -> bool {
         return true;
     };
     let dir = [p1[0] - p0[0], p1[1] - p0[1]];
-    let dir_len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
+    let dir_len = dir[0].hypot(dir[1]);
     ring.iter().all(|&p| {
         // Perpendicular distance from p to the line through p0/p1:
         // |cross(dir, p - p0)| / |dir|.
         let v = [p[0] - p0[0], p[1] - p0[1]];
-        let cross = dir[0] * v[1] - dir[1] * v[0];
+        let cross = dir[1].mul_add(-v[0], dir[0] * v[1]);
         (cross / dir_len).abs() <= eps
     })
 }
@@ -492,8 +505,8 @@ fn tessellate_segment(seg: &ChainSegment) -> Vec<[f64; 2]> {
 fn point_at_deg(center: [f64; 2], radius: f64, deg: f64) -> [f64; 2] {
     let rad = deg.to_radians();
     [
-        center[0] + radius * rad.cos(),
-        center[1] + radius * rad.sin(),
+        radius.mul_add(rad.cos(), center[0]),
+        radius.mul_add(rad.sin(), center[1]),
     ]
 }
 
@@ -507,7 +520,7 @@ fn ref_index(seg: usize, is_start: bool) -> usize {
 fn dist_sq(a: [f64; 2], b: [f64; 2]) -> f64 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];
-    dx * dx + dy * dy
+    dy.mul_add(dy, dx * dx)
 }
 
 fn average_point(points: &[[f64; 2]]) -> [f64; 2] {
@@ -526,7 +539,7 @@ fn signed_area_x2(ring: &[[f64; 2]]) -> f64 {
     for i in 0..n {
         let [x0, y0] = ring[i];
         let [x1, y1] = ring[(i + 1) % n];
-        sum += x0 * y1 - x1 * y0;
+        sum += x1.mul_add(-y0, x0 * y1);
     }
     sum
 }

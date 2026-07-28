@@ -137,7 +137,7 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
 /// this match lives in the crate that defines it, so it stays exhaustive
 /// with no wildcard arm — a future variant added to the enum fails this
 /// match at compile time instead of silently falling through.
-fn pin_rotation_deg(orientation: PinOrientation) -> f64 {
+const fn pin_rotation_deg(orientation: PinOrientation) -> f64 {
     match orientation {
         PinOrientation::Right => 0.0,
         PinOrientation::Up => 90.0,
@@ -155,7 +155,7 @@ fn pin_rotation_deg(orientation: PinOrientation) -> f64 {
 /// match lives in the crate that defines it, so it stays exhaustive with
 /// no wildcard arm — a future variant fails this match at compile time
 /// instead of silently defaulting.
-fn pin_direction(source: PinDirection) -> SchematicPinDirection {
+const fn pin_direction(source: PinDirection) -> SchematicPinDirection {
     match source {
         PinDirection::Input => SchematicPinDirection::Input,
         PinDirection::Output => SchematicPinDirection::Output,
@@ -190,9 +190,8 @@ fn pin_direction(source: PinDirection) -> SchematicPinDirection {
 /// match lives in the crate that defines it, so it stays exhaustive with
 /// no wildcard arm — a future glyph fails this match at compile time
 /// instead of silently degrading.
-fn pin_shape_style(outside_edge_symbol: PinSymbolKind) -> PinShapeStyle {
+const fn pin_shape_style(outside_edge_symbol: PinSymbolKind) -> PinShapeStyle {
     match outside_edge_symbol {
-        PinSymbolKind::None => PinShapeStyle::Plain,
         PinSymbolKind::Dot => PinShapeStyle::InvertedBubble,
         PinSymbolKind::ClockEdge => PinShapeStyle::ClockTriangle,
         // Chevron markers carry the same active-low/active-high SEMANTIC
@@ -208,7 +207,8 @@ fn pin_shape_style(outside_edge_symbol: PinSymbolKind) -> PinShapeStyle {
         // (`OpenDrainLow`/`OpenDrainHigh`/`ThreeStatable`), so the glyph
         // itself safely degrades to `Plain` rather than picking an
         // unrelated shape.
-        PinSymbolKind::Analog
+        PinSymbolKind::None
+        | PinSymbolKind::Analog
         | PinSymbolKind::Digital
         | PinSymbolKind::ShiftRight
         | PinSymbolKind::ShiftLeft
@@ -231,7 +231,7 @@ fn lib_graphic_from(graphic: &SymbolGraphic) -> LibGraphic {
     }
 }
 
-fn fill_type(fill: Option<[u8; 4]>) -> FillType {
+const fn fill_type(fill: Option<[u8; 4]>) -> FillType {
     // `FillType` is flag-only (`None` / `Outline` / `Background`) with no
     // colour channel, so the RGBA value itself is dropped here — comment
     // the loss rather than inventing a colour field `FillType` doesn't
@@ -250,8 +250,8 @@ fn fill_type(fill: Option<[u8; 4]>) -> FillType {
 fn point_at_deg(center: [f64; 2], radius: f64, deg: f64) -> Point {
     let rad = deg.to_radians();
     Point::new(
-        center[0] + radius * rad.cos(),
-        center[1] + radius * rad.sin(),
+        radius.mul_add(rad.cos(), center[0]),
+        radius.mul_add(rad.sin(), center[1]),
     )
 }
 

@@ -1,8 +1,13 @@
-//! `ComponentRow` — one row of a component table (Altium DBLib model).
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! `ComponentRow` — one row of a component table (Altium `DBLib` model).
 //!
 //! Per `v0.9-refactor-2-plan.md` §2.1, a "component" is no longer a file
 //! holding a chain of revisions. It's a single row inside a category table
-//! (`tables/<name>.tsv` for LocalGit; one record in `component_rows` for the
+//! (`tables/<name>.tsv` for `LocalGit`; one record in `component_rows` for the
 //! database backend). Symbols, footprints, and sim models stay as standalone
 //! editable primitive files referenced by `(library_id, uuid)` tuples.
 //!
@@ -22,7 +27,7 @@ use crate::param::ParamMap;
 use crate::primitive::PrimitiveRef;
 
 /// Reference to a datasheet — either a remote URL or a hash-pinned local PDF.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DatasheetRef {
     Url { url: String },
@@ -75,7 +80,7 @@ impl PinPadOverride {
 /// time — only `PlmReserved::default()` round-trips through `tables::write_table`.
 /// Non-default payloads cause `LibraryError::Backend("...")`. v3.0 will add
 /// dedicated columns and full round-trip.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlmReserved {
     #[serde(default)]
     pub plm_part_id: Option<String>,
@@ -85,16 +90,16 @@ pub struct PlmReserved {
     pub compliance: BTreeMap<String, String>,
 }
 
-/// One row inside a component table — Altium DBLib model.
+/// One row inside a component table — Altium `DBLib` model.
 ///
 /// Per `v0.9-refactor-2-plan.md` §2.1, a row carries the binding metadata
 /// for a manufacturer part: which primitives (symbol/footprint/sim) it
 /// points at, the parametric data, the supply chain, and the lifecycle
-/// state. The schema is identical across LocalGit (TSV columns) and
+/// state. The schema is identical across `LocalGit` (TSV columns) and
 /// Database (JSONB payload) backends — one wire format, two storage
 /// flavours.
 ///
-/// Past versions of a row are read from `git log` (LocalGit) or the
+/// Past versions of a row are read from `git log` (`LocalGit`) or the
 /// audit trail (Database); there is no per-row revision chain anymore.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ComponentRow {

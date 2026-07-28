@@ -27,7 +27,7 @@ pub enum AlternateStatus {
 }
 
 /// One manufacturer part — primary or alternate.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManufacturerPart {
     pub manufacturer: String,
     pub mpn: String,
@@ -53,9 +53,9 @@ impl ManufacturerPart {
 /// Lifted onto `Revision` directly per the refactor plan. Pricing snapshots
 /// (the live cache that `DistributorAdapter` populates) stay in
 /// `distributor.rs` and are referenced by mpn rather than embedded here.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DistributorListing {
-    /// Distributor name — "DigiKey", "Mouser", "LCSC", etc.
+    /// Distributor name — "`DigiKey`", "Mouser", "LCSC", etc.
     pub distributor: String,
     /// Distributor SKU / part number (their internal identifier).
     pub sku: String,

@@ -1,3 +1,10 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! JLCPCB adapter integration tests using wiremock.
 
 #![cfg(feature = "distributors-community")]

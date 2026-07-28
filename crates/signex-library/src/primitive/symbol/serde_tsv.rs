@@ -1,10 +1,12 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
-use super::*;
+use super::{
+    PIN_TSV_COLUMNS, PinDirection, PinOrientation, PinSymbolKind, SymbolFileError, SymbolPin,
+};
 
 // ---- Pin TSV codec --------------------------------------------------
 
-pub(super) fn pin_direction_token(d: PinDirection) -> &'static str {
+pub(super) const fn pin_direction_token(d: PinDirection) -> &'static str {
     match d {
         PinDirection::Input => "Input",
         PinDirection::Output => "Output",
@@ -40,7 +42,7 @@ pub(super) fn pin_direction_from_token(s: &str) -> Result<PinDirection, SymbolFi
     })
 }
 
-pub(super) fn pin_orientation_token(o: PinOrientation) -> &'static str {
+pub(super) const fn pin_orientation_token(o: PinOrientation) -> &'static str {
     match o {
         PinOrientation::Up => "Up",
         PinOrientation::Down => "Down",
@@ -64,7 +66,7 @@ pub(super) fn pin_orientation_from_token(s: &str) -> Result<PinOrientation, Symb
     })
 }
 
-pub(super) fn pin_symbol_kind_token(k: PinSymbolKind) -> &'static str {
+pub(super) const fn pin_symbol_kind_token(k: PinSymbolKind) -> &'static str {
     match k {
         PinSymbolKind::None => "None",
         PinSymbolKind::Dot => "Dot",
@@ -199,7 +201,7 @@ fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
 /// Encode a slice of pins as TSV — header row first, then one row
 /// per pin. Empty slice still emits the header row so the round-trip
 /// produces a parseable block.
-pub(crate) fn pins_to_tsv(pins: &[SymbolPin]) -> Result<String, SymbolFileError> {
+pub fn pins_to_tsv(pins: &[SymbolPin]) -> Result<String, SymbolFileError> {
     let mut out = String::new();
     out.push_str(&PIN_TSV_COLUMNS.join("\t"));
     out.push('\n');
@@ -213,7 +215,7 @@ pub(crate) fn pins_to_tsv(pins: &[SymbolPin]) -> Result<String, SymbolFileError>
 /// Parse a `pins_tsv` payload back into `Vec<SymbolPin>`. The first
 /// non-empty line is the header and must equal [`PIN_TSV_COLUMNS`];
 /// each subsequent line is a pin row.
-pub(crate) fn pins_from_tsv(tsv: &str) -> Result<Vec<SymbolPin>, SymbolFileError> {
+pub fn pins_from_tsv(tsv: &str) -> Result<Vec<SymbolPin>, SymbolFileError> {
     let trimmed = tsv.trim_matches('\n');
     if trimmed.is_empty() {
         return Err(SymbolFileError::EmptyPinsTsv);

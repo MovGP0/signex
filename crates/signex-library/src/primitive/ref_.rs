@@ -22,7 +22,8 @@ pub struct PrimitiveRef {
 }
 
 impl PrimitiveRef {
-    pub fn new(library_id: Uuid, uuid: Uuid) -> Self {
+    #[must_use]
+    pub const fn new(library_id: Uuid, uuid: Uuid) -> Self {
         Self { library_id, uuid }
     }
 }

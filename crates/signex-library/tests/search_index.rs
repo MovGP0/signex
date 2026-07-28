@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Acceptance tests for `TantivySearchIndex`.
 //!
 //! The full Tantivy rewrite for the `DBLib` model is deferred (see
@@ -99,9 +105,8 @@ fn fixture_corpus() -> Vec<ComponentRow> {
             params.insert("dielectric".into(), ParamValue::Text((*dielec).into()));
             params.insert("package".into(), ParamValue::Text((*pkg).into()));
             let pn = format!("C_FILLER_{:03}", i * 4 + rep);
-            let desc = format!(
-                "Generic ceramic capacitor {pkg} package, {dielec} dielectric, {v} V"
-            );
+            let desc =
+                format!("Generic ceramic capacitor {pkg} package, {dielec} dielectric, {v} V");
             out.push(fresh_row(
                 &pn,
                 &format!("CAP{}", i * 4 + rep),
