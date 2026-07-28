@@ -37,14 +37,14 @@ impl Engine {
             mode,
             AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
         ) {
-            for symbol in self.document.symbols.iter_mut() {
+            for symbol in &mut self.document.symbols {
                 if !is_designator_target(symbol) {
                     continue;
                 }
                 let prefix: String = symbol
                     .reference
                     .chars()
-                    .take_while(|c| c.is_ascii_alphabetic())
+                    .take_while(char::is_ascii_alphabetic)
                     .collect();
                 if !prefix.is_empty() {
                     symbol.reference = format!("{prefix}?");
@@ -69,7 +69,7 @@ impl Engine {
             let prefix: String = symbol
                 .reference
                 .chars()
-                .take_while(|c| c.is_ascii_alphabetic())
+                .take_while(char::is_ascii_alphabetic)
                 .collect();
             if prefix.is_empty() {
                 continue;
@@ -112,7 +112,7 @@ impl Engine {
             let prefix: String = symbol
                 .reference
                 .chars()
-                .take_while(|c| c.is_ascii_alphabetic())
+                .take_while(char::is_ascii_alphabetic)
                 .collect();
             if prefix.is_empty() {
                 continue;

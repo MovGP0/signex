@@ -5,20 +5,22 @@ use crate::patch::PatchPair;
 
 use super::Engine;
 
-pub(super) const MAX_HISTORY_ENTRIES: usize = 100;
+pub const MAX_HISTORY_ENTRIES: usize = 100;
 
 #[derive(Debug)]
-pub(super) struct HistoryEntry {
+pub struct HistoryEntry {
     pub snapshot: SchematicSheet,
     pub patch_pair: PatchPair,
 }
 
 impl Engine {
-    pub fn can_undo(&self) -> bool {
+    #[must_use]
+    pub const fn can_undo(&self) -> bool {
         !self.history.is_empty()
     }
 
-    pub fn can_redo(&self) -> bool {
+    #[must_use]
+    pub const fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 

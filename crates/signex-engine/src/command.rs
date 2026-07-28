@@ -111,7 +111,7 @@ pub enum Command {
         symbol_id: Uuid,
         footprint: String,
     },
-    /// Change the lib_id reference of a symbol — used by the power-port Style
+    /// Change the `lib_id` reference of a symbol — used by the power-port Style
     /// dropdown to pick a new variant (Bar / Arrow / Wave / Circle / GND …).
     UpdateSymbolLibId {
         symbol_id: Uuid,
@@ -163,7 +163,7 @@ pub enum Command {
     PlaceSchDrawing {
         drawing: signex_types::schematic::SchDrawing,
     },
-    /// Replace an existing SchDrawing by uuid — used by the drawing
+    /// Replace an existing `SchDrawing` by uuid — used by the drawing
     /// properties panel for per-field edits (angle, radius, vertex
     /// coords, fill, width).
     UpdateSchDrawing {
@@ -189,7 +189,7 @@ pub enum Command {
     },
     /// Absolute positioning of a single symbol. Used by the Properties
     /// panel's future X/Y edit fields and by scripted moves; distinct from
-    /// MoveSelection which takes a delta.
+    /// `MoveSelection` which takes a delta.
     MoveSymbolAbsolute {
         symbol_id: Uuid,
         x: f64,
@@ -242,37 +242,38 @@ pub enum AnnotateMode {
 }
 
 impl Command {
-    pub fn kind(&self) -> CommandKind {
+    #[must_use]
+    pub const fn kind(&self) -> CommandKind {
         match self {
-            Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
-            Command::MoveSelection { .. } => CommandKind::MoveSelection,
-            Command::RotateSelection { .. } => CommandKind::RotateSelection,
-            Command::MirrorSelection { .. } => CommandKind::MirrorSelection,
-            Command::DeleteSelection { .. } => CommandKind::DeleteSelection,
-            Command::UpdateText { .. } => CommandKind::UpdateText,
-            Command::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
-            Command::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
-            Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
-            Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
-            Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
-            Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
-            Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
-            Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
-            Command::PlaceBus { .. } => CommandKind::PlaceBus,
-            Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
-            Command::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
-            Command::PlaceJunction { .. } => CommandKind::PlaceJunction,
-            Command::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
-            Command::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
-            Command::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
-            Command::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
-            Command::UpdateSchDrawing { .. } => CommandKind::UpdateSchDrawing,
-            Command::UpdateChildSheetStyle { .. } => CommandKind::UpdateChildSheetStyle,
-            Command::AnnotateAll { .. } => CommandKind::AnnotateAll,
-            Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
-            Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
-            Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
-            Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
+            Self::ReplaceDocument { .. } => CommandKind::ReplaceDocument,
+            Self::MoveSelection { .. } => CommandKind::MoveSelection,
+            Self::RotateSelection { .. } => CommandKind::RotateSelection,
+            Self::MirrorSelection { .. } => CommandKind::MirrorSelection,
+            Self::DeleteSelection { .. } => CommandKind::DeleteSelection,
+            Self::UpdateText { .. } => CommandKind::UpdateText,
+            Self::UpdateLabelProps { .. } => CommandKind::UpdateLabelProps,
+            Self::SetSymbolRotation { .. } => CommandKind::SetSymbolRotation,
+            Self::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
+            Self::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
+            Self::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
+            Self::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
+            Self::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
+            Self::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
+            Self::PlaceBus { .. } => CommandKind::PlaceBus,
+            Self::PlaceLabel { .. } => CommandKind::PlaceLabel,
+            Self::PlaceSymbol { .. } => CommandKind::PlaceSymbol,
+            Self::PlaceJunction { .. } => CommandKind::PlaceJunction,
+            Self::PlaceNoConnect { .. } => CommandKind::PlaceNoConnect,
+            Self::PlaceBusEntry { .. } => CommandKind::PlaceBusEntry,
+            Self::PlaceTextNote { .. } => CommandKind::PlaceTextNote,
+            Self::PlaceSchDrawing { .. } => CommandKind::PlaceSchDrawing,
+            Self::UpdateSchDrawing { .. } => CommandKind::UpdateSchDrawing,
+            Self::UpdateChildSheetStyle { .. } => CommandKind::UpdateChildSheetStyle,
+            Self::AnnotateAll { .. } => CommandKind::AnnotateAll,
+            Self::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
+            Self::ReorderObjects { .. } => CommandKind::ReorderObjects,
+            Self::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
+            Self::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }
 }

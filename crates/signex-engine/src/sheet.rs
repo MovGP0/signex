@@ -7,6 +7,7 @@ use super::Engine;
 impl Engine {
     /// Returns the ports this sheet exposes to a parent hierarchical symbol.
     /// Hierarchical labels have precedence over global labels with the same name.
+    #[must_use]
     pub fn collect_exposed_sheet_ports(&self) -> Vec<SheetPort> {
         let mut ports: std::collections::BTreeMap<String, (u8, String)> =
             std::collections::BTreeMap::new();
@@ -42,7 +43,7 @@ impl Engine {
 // Sheet-pin helpers (used by sheet.rs and transform.rs)
 // ---------------------------------------------------------------------------
 
-fn port_label_priority(label_type: LabelType) -> Option<u8> {
+const fn port_label_priority(label_type: LabelType) -> Option<u8> {
     match label_type {
         LabelType::Hierarchical => Some(0),
         LabelType::Global => Some(1),
@@ -50,7 +51,7 @@ fn port_label_priority(label_type: LabelType) -> Option<u8> {
     }
 }
 
-pub(crate) fn normalize_sheet_pin_direction(direction_or_shape: &str) -> &'static str {
+pub fn normalize_sheet_pin_direction(direction_or_shape: &str) -> &'static str {
     let normalized = direction_or_shape.trim().to_ascii_lowercase();
     match normalized.as_str() {
         "input" => "input",
@@ -65,7 +66,7 @@ pub(crate) fn normalize_sheet_pin_direction(direction_or_shape: &str) -> &'stati
 fn pin_anchor_for_direction(child: &ChildSheet, direction: &str, slot: usize) -> (f64, f64, f64) {
     let y_min = child.position.y + GRID_MM;
     let y_max = (child.position.y + child.size.1 - GRID_MM).max(y_min);
-    let y = (y_min + GRID_MM * slot as f64).clamp(y_min, y_max);
+    let y = GRID_MM.mul_add(slot as f64, y_min).clamp(y_min, y_max);
     if direction == "output" {
         (child.position.x + child.size.0, y, 180.0)
     } else {
@@ -73,7 +74,7 @@ fn pin_anchor_for_direction(child: &ChildSheet, direction: &str, slot: usize) ->
     }
 }
 
-pub(crate) fn lock_sheet_pin_to_child_edge(
+pub fn lock_sheet_pin_to_child_edge(
     pin: &mut SheetPin,
     dx: f64,
     dy: f64,
@@ -151,7 +152,7 @@ fn same_sheet_pin(lhs: &SheetPin, rhs: &SheetPin) -> bool {
         && lhs.user_moved == rhs.user_moved
 }
 
-pub(crate) fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
+pub fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -> bool {
     let before = child.pins.clone();
     let mut existing = std::mem::take(&mut child.pins);
     let mut next_pins = Vec::new();

@@ -1,6 +1,6 @@
 //! `Engine::exec_structure` — see `exec/mod.rs`.
 
-use crate::*;
+use crate::{Engine, SchematicSheet, Command, CommandResult, EngineError, PatchPair, SemanticPatch, DocumentPatch, sheet};
 
 impl Engine {
     pub(crate) fn exec_structure(
@@ -19,7 +19,7 @@ impl Engine {
                     | SchDrawing::Polyline { uuid, .. } => *uuid,
                 };
                 let mut changed = false;
-                for d in self.document.drawings.iter_mut() {
+                for d in &mut self.document.drawings {
                     let u = match d {
                         SchDrawing::Line { uuid, .. }
                         | SchDrawing::Rect { uuid, .. }
@@ -28,7 +28,7 @@ impl Engine {
                         | SchDrawing::Polyline { uuid, .. } => *uuid,
                     };
                     if u == target_uuid {
-                        *d = drawing.clone();
+                        *d = drawing;
                         changed = true;
                         break;
                     }
@@ -106,7 +106,7 @@ impl Engine {
                     mode,
                     AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
                 ) {
-                    for symbol in self.document.symbols.iter_mut() {
+                    for symbol in &mut self.document.symbols {
                         if !is_designator_target(symbol) {
                             continue;
                         }
@@ -114,7 +114,7 @@ impl Engine {
                         let prefix: String = symbol
                             .reference
                             .chars()
-                            .take_while(|c| c.is_ascii_alphabetic())
+                            .take_while(char::is_ascii_alphabetic)
                             .collect();
                         if !prefix.is_empty() {
                             symbol.reference = format!("{prefix}?");
@@ -142,7 +142,7 @@ impl Engine {
                     let prefix: String = symbol
                         .reference
                         .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
+                        .take_while(char::is_ascii_alphabetic)
                         .collect();
                     if prefix.is_empty() {
                         continue;
@@ -186,7 +186,7 @@ impl Engine {
                     let prefix: String = symbol
                         .reference
                         .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
+                        .take_while(char::is_ascii_alphabetic)
                         .collect();
                     if prefix.is_empty() {
                         continue;

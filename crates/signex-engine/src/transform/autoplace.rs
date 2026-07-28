@@ -1,6 +1,6 @@
 //! Field autoplace algorithm (reference/value text placement).
 
-use super::*;
+use super::SchematicSheet;
 
 // ---------------------------------------------------------------------------
 // Field autoplace (v0.12 cleanroom rewrite — Wave 2.5)
@@ -33,7 +33,7 @@ use super::*;
 /// `pub(crate)` until a real caller lands; flip to `pub` when signex-app
 /// wires it into the "Re-autoplace all fields" command.
 #[allow(dead_code)]
-pub(crate) fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
+pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
     let lib_symbols = document.lib_symbols.clone();
     let snapshot = document.clone();
     for symbol in &mut document.symbols {
@@ -111,7 +111,7 @@ pub(super) fn autoplace_fields(
         }
         let rad = p.pin.rotation.to_radians();
         let (sx, sy) = (p.pin.position.x, p.pin.position.y);
-        let (ex, ey) = (sx + p.pin.length * rad.cos(), sy + p.pin.length * rad.sin());
+        let (ex, ey) = (p.pin.length.mul_add(rad.cos(), sx), p.pin.length.mul_add(rad.sin(), sy));
         for (lx, ly) in [(sx, sy), (ex, ey)] {
             let (wx, wy) = transform_local_point(symbol, lx, ly);
             extend(&mut outer_bbox, wx, wy);
@@ -166,8 +166,7 @@ pub(super) fn autoplace_fields(
     let chosen = scored
         .iter()
         .min_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
-        .map(|(s, _, _)| *s)
-        .unwrap_or(Side::Bottom);
+        .map_or(Side::Bottom, |(s, _, _)| *s);
 
     // 5. Collect visible fields, anchor + justify per chosen side.
     let mut fields: Vec<&mut signex_types::schematic::TextProp> = Vec::new();
@@ -196,19 +195,19 @@ pub(super) fn autoplace_fields(
         Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
         Side::Top => (
             cx,
-            min_y - margin - (n - 1.0) * line_height,
+            (n - 1.0).mul_add(-line_height, min_y - margin),
             HAlign::Center,
             VAlign::Bottom,
         ),
         Side::Left => (
             min_x - margin,
-            cy - (n - 1.0) * line_height * 0.5,
+            ((n - 1.0) * line_height).mul_add(-0.5, cy),
             HAlign::Right,
             VAlign::Center,
         ),
         Side::Right => (
             max_x + margin,
-            cy - (n - 1.0) * line_height * 0.5,
+            ((n - 1.0) * line_height).mul_add(-0.5, cy),
             HAlign::Left,
             VAlign::Center,
         ),
@@ -226,7 +225,7 @@ pub(super) fn autoplace_fields(
 
     for (i, prop) in fields.iter_mut().enumerate() {
         prop.position.x = anchor_x;
-        prop.position.y = anchor_y_first + i as f64 * line_height;
+        prop.position.y = (i as f64).mul_add(line_height, anchor_y_first);
         prop.justify_h = justify_h;
         prop.justify_v = justify_v;
         prop.rotation = field_rotation;
@@ -286,7 +285,7 @@ fn anchor_obstacle_count(
     document: &signex_types::schematic::SchematicSheet,
 ) -> u32 {
     let r2 = ANCHOR_AVOID_RADIUS_MM * ANCHOR_AVOID_RADIUS_MM;
-    let close = |x: f64, y: f64| (x - ax).powi(2) + (y - ay).powi(2) < r2;
+    let close = |x: f64, y: f64| (y - ay).mul_add(y - ay, (x - ax).powi(2)) < r2;
     let mut n = 0u32;
     for w in &document.wires {
         if close(w.start.x, w.start.y) || close(w.end.x, w.end.y) {
@@ -315,18 +314,18 @@ fn point_on_wire_interior(
     let (px, py) = (point.x, point.y);
     let (abx, aby) = (bx - ax, by - ay);
     let (apx, apy) = (px - ax, py - ay);
-    let len_sq = abx * abx + aby * aby;
+    let len_sq = aby.mul_add(aby, abx * abx);
 
     if len_sq < tolerance * tolerance {
         return false;
     }
 
-    let cross = abx * apy - aby * apx;
+    let cross = aby.mul_add(-apx, abx * apy);
     if (cross * cross) > tolerance * tolerance * len_sq {
         return false;
     }
 
-    let t = (apx * abx + apy * aby) / len_sq;
+    let t = apy.mul_add(aby, apx * abx) / len_sq;
     let margin = tolerance / len_sq.sqrt();
     t > margin && t < 1.0 - margin
 }
@@ -379,7 +378,7 @@ fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic
 /// Call with `wire` already present in `document`. Any command that creates or
 /// moves wire geometry must route through here; reconciling only the placement
 /// path leaves drag / rotate / mirror minting junction-less Ts (issue #402).
-pub(crate) fn junctions_for_wire(
+pub fn junctions_for_wire(
     wire: &signex_types::schematic::Wire,
     document: &SchematicSheet,
     tolerance: f64,
@@ -404,7 +403,7 @@ pub(crate) fn junctions_for_wire(
 /// that as disconnected (issue #107), so the connection was silently lost
 /// (issue #402). `document` may already contain the new wire; a wire endpoint
 /// can never sit on its own interior, so no self-exclusion is needed.
-pub(crate) fn junctions_under_new_wire(
+pub fn junctions_under_new_wire(
     wire: &signex_types::schematic::Wire,
     document: &SchematicSheet,
     tolerance: f64,
@@ -460,7 +459,7 @@ fn wire_endpoint_count(
 /// look "still honoured" once an unrelated wire is later dragged to merely
 /// cross the same point — silently merging two nets the user never
 /// connected (issue #422).
-pub(crate) fn wire_meeting_justifies_junction(
+pub fn wire_meeting_justifies_junction(
     point: signex_types::schematic::Point,
     document: &SchematicSheet,
     tolerance: f64,
@@ -478,7 +477,7 @@ pub(crate) fn wire_meeting_justifies_junction(
     (on_wire_interior || endpoint_count >= 3) && junction_is_honoured(point, document)
 }
 
-pub(crate) fn needed_junction(
+pub fn needed_junction(
     point: signex_types::schematic::Point,
     document: &SchematicSheet,
     tolerance: f64,

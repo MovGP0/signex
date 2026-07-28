@@ -33,11 +33,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(document: SchematicSheet) -> Result<Self, EngineError> {
+    pub const fn new(document: SchematicSheet) -> Result<Self, EngineError> {
         Self::new_with_path(document, None)
     }
 
-    pub fn new_with_path(
+    pub const fn new_with_path(
         document: SchematicSheet,
         path: Option<PathBuf>,
     ) -> Result<Self, EngineError> {
@@ -127,10 +127,12 @@ impl Engine {
         }
     }
 
-    pub fn document(&self) -> &SchematicSheet {
+    #[must_use]
+    pub const fn document(&self) -> &SchematicSheet {
         &self.document
     }
 
+    #[must_use]
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
     }

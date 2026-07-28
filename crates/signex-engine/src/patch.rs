@@ -14,7 +14,7 @@ pub enum SemanticPatch {
     SheetPinsReconciled,
     /// MD-11: a `SchDrawing::*` (line/rect/circle/arc/polyline) was
     /// edited. Distinct from `TextUpdated` so consumers branching on
-    /// "did the user change a TextProp" don't take the wrong reflow
+    /// "did the user change a `TextProp`" don't take the wrong reflow
     /// path when geometry changed instead.
     DrawingMutated,
     /// MD-11: a child-sheet (or similar container) had a non-text
@@ -42,15 +42,18 @@ impl DocumentPatch {
     pub const PAPER: Self = Self(1 << 11);
     pub const FULL: Self = Self(u16::MAX);
 
-    pub fn contains(self, other: Self) -> bool {
+    #[must_use]
+    pub const fn contains(self, other: Self) -> bool {
         (self.0 & other.0) == other.0
     }
 
-    pub fn intersects(self, other: Self) -> bool {
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
         (self.0 & other.0) != 0
     }
 
-    pub fn from_selected_kind(kind: SelectedKind) -> Self {
+    #[must_use]
+    pub const fn from_selected_kind(kind: SelectedKind) -> Self {
         match kind {
             SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
                 Self::SYMBOLS
@@ -68,6 +71,7 @@ impl DocumentPatch {
         }
     }
 
+    #[must_use]
     pub fn from_selected_items(items: &[SelectedItem]) -> Self {
         let mut patch = Self::NONE;
         for item in items {
@@ -109,14 +113,16 @@ pub struct CommandResult {
 }
 
 impl CommandResult {
-    pub fn changed(patch_pair: PatchPair) -> Self {
+    #[must_use]
+    pub const fn changed(patch_pair: PatchPair) -> Self {
         Self {
             changed: true,
             patch_pair: Some(patch_pair),
         }
     }
 
-    pub fn unchanged() -> Self {
+    #[must_use]
+    pub const fn unchanged() -> Self {
         Self {
             changed: false,
             patch_pair: None,

@@ -209,7 +209,7 @@ impl Engine {
                 .symbols
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
+                .is_some_and(|symbol| {
                     symbol.position.x += dx;
                     symbol.position.y += dy;
                     if let Some(ref mut ref_text) = symbol.ref_text {
@@ -221,84 +221,77 @@ impl Engine {
                         val_text.position.y += dy;
                     }
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::Wire => self
                 .document
                 .wires
                 .iter_mut()
                 .find(|wire| wire.uuid == item.uuid)
-                .map(|wire| {
+                .is_some_and(|wire| {
                     wire.start.x += dx;
                     wire.start.y += dy;
                     wire.end.x += dx;
                     wire.end.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::Bus => self
                 .document
                 .buses
                 .iter_mut()
                 .find(|bus| bus.uuid == item.uuid)
-                .map(|bus| {
+                .is_some_and(|bus| {
                     bus.start.x += dx;
                     bus.start.y += dy;
                     bus.end.x += dx;
                     bus.end.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::Label => self
                 .document
                 .labels
                 .iter_mut()
                 .find(|label| label.uuid == item.uuid)
-                .map(|label| {
+                .is_some_and(|label| {
                     label.position.x += dx;
                     label.position.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::Junction => self
                 .document
                 .junctions
                 .iter_mut()
                 .find(|junction| junction.uuid == item.uuid)
-                .map(|junction| {
+                .is_some_and(|junction| {
                     junction.position.x += dx;
                     junction.position.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::NoConnect => self
                 .document
                 .no_connects
                 .iter_mut()
                 .find(|no_connect| no_connect.uuid == item.uuid)
-                .map(|no_connect| {
+                .is_some_and(|no_connect| {
                     no_connect.position.x += dx;
                     no_connect.position.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::TextNote => self
                 .document
                 .text_notes
                 .iter_mut()
                 .find(|text_note| text_note.uuid == item.uuid)
-                .map(|text_note| {
+                .is_some_and(|text_note| {
                     text_note.position.x += dx;
                     text_note.position.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::ChildSheet => self
                 .document
                 .child_sheets
                 .iter_mut()
                 .find(|child_sheet| child_sheet.uuid == item.uuid)
-                .map(|child_sheet| {
+                .is_some_and(|child_sheet| {
                     child_sheet.position.x += dx;
                     child_sheet.position.y += dy;
                     for sheet_pin in &mut child_sheet.pins {
@@ -306,8 +299,7 @@ impl Engine {
                         sheet_pin.position.y += dy;
                     }
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::SheetPin => {
                 for child_idx in 0..self.document.child_sheets.len() {
                     if let Some(pin_idx) = self.document.child_sheets[child_idx]
@@ -332,18 +324,17 @@ impl Engine {
                 .bus_entries
                 .iter_mut()
                 .find(|bus_entry| bus_entry.uuid == item.uuid)
-                .map(|bus_entry| {
+                .is_some_and(|bus_entry| {
                     bus_entry.position.x += dx;
                     bus_entry.position.y += dy;
                     true
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::SymbolRefField => self
                 .document
                 .symbols
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
+                .is_some_and(|symbol| {
                     if let Some(ref mut ref_text) = symbol.ref_text {
                         ref_text.position.x += dx;
                         ref_text.position.y += dy;
@@ -351,14 +342,13 @@ impl Engine {
                     } else {
                         false
                     }
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::SymbolValField => self
                 .document
                 .symbols
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
+                .is_some_and(|symbol| {
                     if let Some(ref mut val_text) = symbol.val_text {
                         val_text.position.x += dx;
                         val_text.position.y += dy;
@@ -366,14 +356,13 @@ impl Engine {
                     } else {
                         false
                     }
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::Drawing => self
                 .document
                 .drawings
                 .iter_mut()
                 .find(|d| drawing_uuid(d) == item.uuid)
-                .map(|d| {
+                .is_some_and(|d| {
                     match d {
                         SchDrawing::Line { start, end, .. } => {
                             start.x += dx;
@@ -409,8 +398,7 @@ impl Engine {
                         }
                     }
                     true
-                })
-                .unwrap_or(false),
+                }),
         }
     }
 
@@ -423,21 +411,20 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|symbol| symbol.uuid == item.uuid)
-                    .map(|symbol| {
+                    .is_some_and(|symbol| {
                         symbol.rotation = normalize_degrees(symbol.rotation + angle_degrees);
                         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
                             autoplace_fields(symbol, lib, &document_snapshot);
                         }
                         true
                     })
-                    .unwrap_or(false)
             }
             SelectedKind::SymbolRefField => self
                 .document
                 .symbols
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
+                .is_some_and(|symbol| {
                     if let Some(ref mut ref_text) = symbol.ref_text {
                         ref_text.rotation = normalize_degrees(ref_text.rotation + angle_degrees);
                         // Manual field rotation marks the symbol as
@@ -449,14 +436,13 @@ impl Engine {
                     } else {
                         false
                     }
-                })
-                .unwrap_or(false),
+                }),
             SelectedKind::SymbolValField => self
                 .document
                 .symbols
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
+                .is_some_and(|symbol| {
                     if let Some(ref mut val_text) = symbol.val_text {
                         val_text.rotation = normalize_degrees(val_text.rotation + angle_degrees);
                         symbol.fields_autoplaced = false;
@@ -465,8 +451,7 @@ impl Engine {
                     } else {
                         false
                     }
-                })
-                .unwrap_or(false),
+                }),
             _ => false,
         }
     }
@@ -480,7 +465,7 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|symbol| symbol.uuid == item.uuid)
-                    .map(|symbol| {
+                    .is_some_and(|symbol| {
                         match axis {
                             MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
                             MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
@@ -490,7 +475,6 @@ impl Engine {
                         }
                         true
                     })
-                    .unwrap_or(false)
             }
             _ => false,
         }
@@ -514,7 +498,7 @@ use autoplace::autoplace_fields;
 /// enum variant, not on a common struct field) — shared by
 /// `contains_selected_item`, `remove_selected_item` and
 /// `move_selected_item` so the five-variant match lives in one place.
-fn drawing_uuid(d: &SchDrawing) -> uuid::Uuid {
+const fn drawing_uuid(d: &SchDrawing) -> uuid::Uuid {
     match d {
         SchDrawing::Line { uuid, .. }
         | SchDrawing::Rect { uuid, .. }

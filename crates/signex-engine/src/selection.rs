@@ -40,15 +40,18 @@ pub struct SelectionDetails {
 // ---------------------------------------------------------------------------
 
 impl Engine {
+    #[must_use]
     pub fn has_selected_items(&self, items: &[SelectedItem]) -> bool {
         items.iter().any(|item| self.contains_selected_item(item))
     }
 
+    #[must_use]
     pub fn selection_is_single_symbol(&self, items: &[SelectedItem]) -> bool {
         matches!(items, [item] if item.kind == SelectedKind::Symbol
             && self.contains_selected_item(item))
     }
 
+    #[must_use]
     pub fn collect_selection_clipboard(&self, items: &[SelectedItem]) -> ClipboardSelection {
         let mut clipboard = ClipboardSelection::default();
 
@@ -109,6 +112,7 @@ impl Engine {
         clipboard
     }
 
+    #[must_use]
     pub fn selection_anchors(&self, items: &[SelectedItem]) -> Vec<SelectionAnchor> {
         let mut anchors = Vec::new();
 
@@ -155,13 +159,13 @@ impl Engine {
                     .wires
                     .iter()
                     .find(|w| w.uuid == item.uuid)
-                    .map(|w| ((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0)),
+                    .map(|w| (f64::midpoint(w.start.x, w.end.x), f64::midpoint(w.start.y, w.end.y))),
                 SelectedKind::Bus => self
                     .document
                     .buses
                     .iter()
                     .find(|b| b.uuid == item.uuid)
-                    .map(|b| ((b.start.x + b.end.x) / 2.0, (b.start.y + b.end.y) / 2.0)),
+                    .map(|b| (f64::midpoint(b.start.x, b.end.x), f64::midpoint(b.start.y, b.end.y))),
                 _ => None,
             };
 
@@ -178,6 +182,7 @@ impl Engine {
         anchors
     }
 
+    #[must_use]
     pub fn describe_single_selection(&self, items: &[SelectedItem]) -> Option<SelectionDetails> {
         let [item] = items else {
             return None;
@@ -251,7 +256,7 @@ impl Engine {
                 let wire = self.document.wires.iter().find(|w| w.uuid == item.uuid)?;
                 let dx = wire.end.x - wire.start.x;
                 let dy = wire.end.y - wire.start.y;
-                let len = (dx * dx + dy * dy).sqrt();
+                let len = dx.hypot(dy);
                 info.push(("Type".into(), "Wire".into()));
                 info.push((
                     "Start".into(),
@@ -261,7 +266,7 @@ impl Engine {
                     "End".into(),
                     format!("{:.2}, {:.2}", wire.end.x, wire.end.y),
                 ));
-                info.push(("Length".into(), format!("{:.2} mm", len)));
+                info.push(("Length".into(), format!("{len:.2} mm")));
             }
             SelectedKind::Label => {
                 let label = self.document.labels.iter().find(|l| l.uuid == item.uuid)?;
@@ -598,7 +603,7 @@ enum ClipboardSlot {
     TextNote,
 }
 
-fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
+const fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
     match kind {
         SelectedKind::Wire => Some(ClipboardSlot::Wire),
         SelectedKind::Bus => Some(ClipboardSlot::Bus),
@@ -616,7 +621,7 @@ fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
     }
 }
 
-fn clipboard_can_carry(kind: SelectedKind) -> bool {
+const fn clipboard_can_carry(kind: SelectedKind) -> bool {
     clipboard_slot(kind).is_some()
 }
 
@@ -627,6 +632,7 @@ fn clipboard_can_carry(kind: SelectedKind) -> bool {
 /// the clipboard to restore it — a silent destroy, not a no-op (#341:
 /// sheet clipboard support itself is out of scope, but Cut must not desync
 /// from what Copy can actually carry).
+#[must_use]
 pub fn partition_cuttable(items: &[SelectedItem]) -> (Vec<SelectedItem>, Vec<SelectedItem>) {
     items
         .iter()

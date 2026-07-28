@@ -1,6 +1,6 @@
 //! `Engine::exec_edits` — see `exec/mod.rs`.
 
-use crate::*;
+use crate::{command, Engine, SchematicSheet, Command, CommandResult, EngineError, PatchPair, SemanticPatch, DocumentPatch, TextTarget};
 
 impl Engine {
     pub(crate) fn exec_edits(
@@ -36,57 +36,53 @@ impl Engine {
                         .labels
                         .iter_mut()
                         .find(|label| label.uuid == uuid)
-                        .map(|label| {
+                        .is_some_and(|label| {
                             if label.text == value {
                                 false
                             } else {
                                 label.text = value;
                                 true
                             }
-                        })
-                        .unwrap_or(false),
+                        }),
                     TextTarget::TextNote(uuid) => self
                         .document
                         .text_notes
                         .iter_mut()
                         .find(|text_note| text_note.uuid == uuid)
-                        .map(|text_note| {
+                        .is_some_and(|text_note| {
                             if text_note.text == value {
                                 false
                             } else {
                                 text_note.text = value;
                                 true
                             }
-                        })
-                        .unwrap_or(false),
+                        }),
                     TextTarget::SymbolReference(uuid) => self
                         .document
                         .symbols
                         .iter_mut()
                         .find(|symbol| symbol.uuid == uuid)
-                        .map(|symbol| {
+                        .is_some_and(|symbol| {
                             if symbol.reference == value {
                                 false
                             } else {
                                 symbol.reference = value;
                                 true
                             }
-                        })
-                        .unwrap_or(false),
+                        }),
                     TextTarget::SymbolValue(uuid) => self
                         .document
                         .symbols
                         .iter_mut()
                         .find(|symbol| symbol.uuid == uuid)
-                        .map(|symbol| {
+                        .is_some_and(|symbol| {
                             if symbol.value == value {
                                 false
                             } else {
                                 symbol.value = value;
                                 true
                             }
-                        })
-                        .unwrap_or(false),
+                        }),
                 };
 
                 if !changed {
@@ -113,7 +109,7 @@ impl Engine {
                     .labels
                     .iter_mut()
                     .find(|l| l.uuid == label_id)
-                    .map(|l| {
+                    .is_some_and(|l| {
                         let mut any = false;
                         if let Some(fs) = font_size_mm
                             && (l.font_size - fs).abs() > 1e-6
@@ -134,8 +130,7 @@ impl Engine {
                             any = true;
                         }
                         any
-                    })
-                    .unwrap_or(false);
+                    });
 
                 if !changed {
                     return Ok(CommandResult::unchanged());
@@ -159,15 +154,14 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|s| s.uuid == symbol_id)
-                    .map(|s| {
+                    .is_some_and(|s| {
                         if (s.rotation - rotation_degrees).abs() < 1e-6 {
                             false
                         } else {
                             s.rotation = rotation_degrees;
                             true
                         }
-                    })
-                    .unwrap_or(false);
+                    });
 
                 if !changed {
                     return Ok(CommandResult::unchanged());
@@ -193,7 +187,7 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|s| s.uuid == symbol_id)
-                    .map(|s| {
+                    .is_some_and(|s| {
                         let tp = match field {
                             SymbolTextField::Reference => s.ref_text.as_mut(),
                             SymbolTextField::Value => s.val_text.as_mut(),
@@ -206,8 +200,7 @@ impl Engine {
                         } else {
                             false
                         }
-                    })
-                    .unwrap_or(false);
+                    });
 
                 if !changed {
                     return Ok(CommandResult::unchanged());
@@ -228,15 +221,14 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|s| s.uuid == symbol_id)
-                    .map(|s| {
+                    .is_some_and(|s| {
                         if s.lib_id == lib_id {
                             false
                         } else {
                             s.lib_id = lib_id;
                             true
                         }
-                    })
-                    .unwrap_or(false);
+                    });
 
                 if !changed {
                     return Ok(CommandResult::unchanged());
@@ -260,15 +252,14 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|symbol| symbol.uuid == symbol_id)
-                    .map(|symbol| {
+                    .is_some_and(|symbol| {
                         if symbol.footprint == footprint {
                             false
                         } else {
                             symbol.footprint = footprint;
                             true
                         }
-                    })
-                    .unwrap_or(false);
+                    });
 
                 if !changed {
                     return Ok(CommandResult::unchanged());
@@ -301,7 +292,7 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|s| s.uuid == symbol_id)
-                    .map(|symbol| {
+                    .is_some_and(|symbol| {
                         if value.is_empty() {
                             symbol.fields.remove(&key).is_some()
                         } else if symbol.fields.get(&key) == Some(&value) {
@@ -310,8 +301,7 @@ impl Engine {
                             symbol.fields.insert(key, value);
                             true
                         }
-                    })
-                    .unwrap_or(false);
+                    });
                 if !changed {
                     return Ok(CommandResult::unchanged());
                 }
@@ -333,7 +323,7 @@ impl Engine {
                     .symbols
                     .iter_mut()
                     .find(|symbol| symbol.uuid == symbol_id)
-                    .map(|symbol| {
+                    .is_some_and(|symbol| {
                         let changed = symbol.reference != reference
                             || symbol.value != value
                             || symbol.footprint != footprint;
@@ -345,8 +335,7 @@ impl Engine {
                         }
 
                         changed
-                    })
-                    .unwrap_or(false);
+                    });
 
                 if !changed {
                     return Ok(CommandResult::unchanged());

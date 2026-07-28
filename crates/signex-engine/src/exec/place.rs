@@ -1,6 +1,6 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
-use crate::*;
+use crate::{Engine, DocumentPatch, SchematicSheet, Command, CommandResult, EngineError, PatchPair, SemanticPatch};
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 impl Engine {
