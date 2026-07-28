@@ -21,7 +21,7 @@ const EPS: f64 = 1e-10;
 // AST builder helpers
 // ---------------------------------------------------------------------
 
-fn lit_mm(v: f64) -> ExprNode {
+const fn lit_mm(v: f64) -> ExprNode {
     ExprNode::Literal(Quantity::length(v))
 }
 
@@ -29,7 +29,7 @@ const fn lit(v: f64, u: Unit) -> ExprNode {
     ExprNode::Literal(Quantity { value: v, unit: u })
 }
 
-fn lit_count(v: f64) -> ExprNode {
+const fn lit_count(v: f64) -> ExprNode {
     ExprNode::Literal(Quantity::count(v))
 }
 

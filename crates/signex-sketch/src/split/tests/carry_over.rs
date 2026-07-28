@@ -95,10 +95,10 @@ fn bake_attributes_and_flags_carry_onto_both_halves() {
 
 /// BLOCKER 1 repro. Before the fix, `build_split_entities` cloned the
 /// retired Line's ENTIRE attribute set onto BOTH halves. That's right
-/// for a PER-SEGMENT attr (silk, v_score — each independently true of
+/// for a PER-SEGMENT attr (silk, `v_score` — each independently true of
 /// the segment it lands on) but wrong for a CLOSED-PROFILE SEED attr
-/// (courtyard, mask_opening, mask_exclude, paste_aperture, pour,
-/// keepout, board_cutout): the bake traces the WHOLE loop from ANY
+/// (courtyard, `mask_opening`, `mask_exclude`, `paste_aperture`, pour,
+/// keepout, `board_cutout)`: the bake traces the WHOLE loop from ANY
 /// entity carrying the attr, so two carriers on one loop emit the
 /// region twice (two identical `FpPour`, two routed `FpCutout` on the
 /// same board slot, ...). Exactly one entity on the loop — `line_a` —

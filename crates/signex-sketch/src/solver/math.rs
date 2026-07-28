@@ -230,7 +230,7 @@ mod tests {
     const EPS: f64 = 1e-12;
 
     fn approx_eq(a: f64, b: f64, eps: f64) -> bool {
-        (a - b).abs() <= eps + eps * b.abs()
+        (a - b).abs() <= eps.mul_add(b.abs(), eps)
     }
 
     // ─── 2D vector primitives ───
@@ -276,7 +276,7 @@ mod tests {
         let a = PI - 0.01;
         let b = -PI + 0.01;
         assert!(
-            approx_eq(wrap_to_pi(b - a), -PI + 0.02 + 2.0 * PI - 0.0, 1e-3)
+            approx_eq(wrap_to_pi(b - a), 2.0f64.mul_add(PI, -PI + 0.02) - 0.0, 1e-3)
                 || (wrap_to_pi(b - a)).abs() < 0.02 + EPS
         );
     }

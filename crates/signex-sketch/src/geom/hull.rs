@@ -159,7 +159,7 @@ mod tests {
     fn hexagon_round_trip() {
         let pts: Vec<Point2> = (0..6)
             .map(|i| {
-                let t = i as f64 / 6.0 * std::f64::consts::TAU;
+                let t = f64::from(i) / 6.0 * std::f64::consts::TAU;
                 Point2::new(t.cos(), t.sin())
             })
             .collect();

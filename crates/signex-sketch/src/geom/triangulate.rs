@@ -369,7 +369,7 @@ mod tests {
             .iter()
             .map(|&[a, b, c]| {
                 let (a, b, c) = (pts[a], pts[b], pts[c]);
-                ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0
+                (c.x - a.x).mul_add(-(b.y - a.y), (b.x - a.x) * (c.y - a.y)).abs() / 2.0
             })
             .sum();
 
@@ -383,7 +383,7 @@ mod tests {
     fn convex_pentagon_emits_three_triangles() {
         let pts: Vec<Point2> = (0..5)
             .map(|i| {
-                let t = i as f64 / 5.0 * std::f64::consts::TAU + std::f64::consts::FRAC_PI_2;
+                let t = (f64::from(i) / 5.0).mul_add(std::f64::consts::TAU, std::f64::consts::FRAC_PI_2);
                 Point2::new(t.cos(), t.sin())
             })
             .collect();

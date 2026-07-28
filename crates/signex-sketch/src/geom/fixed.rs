@@ -129,7 +129,7 @@ mod tests {
         // Signed area of unit square in world mm = 1; doubled in
         // fixed-point = 2 * SCALE * SCALE.
         let area2x = signed_area_2x(&sq);
-        let expected = 2_i128 * (SCALE as i128) * (SCALE as i128);
+        let expected = 2_i128 * i128::from(SCALE) * i128::from(SCALE);
         assert_eq!(area2x, expected);
     }
 

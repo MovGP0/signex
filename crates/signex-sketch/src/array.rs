@@ -25,7 +25,7 @@ impl Default for ArrayId {
 /// Each replica inherits attributes (`PadAttr` etc.) from `source`, with
 /// per-instance overrides applied by the bake pipeline (number from
 /// `numbering`, position from the array geometry).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Array {
     pub id: ArrayId,
     #[serde(flatten)]

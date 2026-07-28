@@ -14,7 +14,7 @@ fn make_plane() -> Plane {
     }
 }
 
-fn point(plane: PlaneId, id: SketchEntityId, x: f64, y: f64) -> Entity {
+const fn point(plane: PlaneId, id: SketchEntityId, x: f64, y: f64) -> Entity {
     Entity::new(id, plane, EntityKind::Point { x, y })
 }
 

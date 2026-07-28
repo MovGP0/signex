@@ -223,8 +223,7 @@ mod tests {
         for e in expected {
             assert!(
                 out.iter().any(|o| close(*o, e, 1e-9)),
-                "missing expected corner {:?} in {out:?}",
-                e
+                "missing expected corner {e:?} in {out:?}"
             );
         }
     }
@@ -246,7 +245,7 @@ mod tests {
         for v in &out {
             let min_d = corners
                 .iter()
-                .map(|c| ((v.x - c.x).powi(2) + (v.y - c.y).powi(2)).sqrt())
+                .map(|c| (v.x - c.x).hypot(v.y - c.y))
                 .fold(f64::INFINITY, f64::min);
             assert!(
                 (min_d - 0.5).abs() < 1e-6,
@@ -267,8 +266,7 @@ mod tests {
         for e in expected {
             assert!(
                 out.iter().any(|o| close(*o, e, 1e-9)),
-                "missing expected corner {:?} in {out:?}",
-                e
+                "missing expected corner {e:?} in {out:?}"
             );
         }
     }
@@ -284,8 +282,7 @@ mod tests {
         for e in expected {
             assert!(
                 out.iter().any(|o| close(*o, e, 1e-9)),
-                "missing expected corner {:?} in {out:?}",
-                e
+                "missing expected corner {e:?} in {out:?}"
             );
         }
     }
