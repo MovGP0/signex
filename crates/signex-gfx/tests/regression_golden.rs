@@ -73,7 +73,7 @@ enum GoldenStage {
 }
 
 impl GoldenStage {
-    fn as_runtime(self) -> CompositeStage {
+    const fn as_runtime(self) -> CompositeStage {
         match self {
             Self::Grid => CompositeStage::Grid,
             Self::Geometry => CompositeStage::Geometry,
