@@ -113,20 +113,22 @@ pub struct Point {
 }
 
 impl Point {
-    pub const ZERO: Point = Point { x: 0.0, y: 0.0 };
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 
+    #[must_use]
     pub const fn new(x: f64, y: f64) -> Self {
-        Point { x, y }
+        Self { x, y }
     }
 }
 
 impl Default for Point {
     fn default() -> Self {
-        Point::ZERO
+        Self::ZERO
     }
 }
 
 /// Circle through three non-collinear points — converts the Signex
+///
 /// (start, mid, end) arc storage into (center, radius) for rendering,
 /// hit-testing, and the properties-panel arc editor. Returns `None` when
 /// `a`, `b`, `c` are (numerically) collinear, i.e. no finite circumcircle
@@ -140,20 +142,25 @@ impl Default for Point {
 /// "still solvable" threshold — `d` only needs to be far enough from exact
 /// zero that dividing by it doesn't blow up, and schematic coordinates are
 /// small enough (mm-scale) that `1e-9` was rejecting perfectly good arcs.
+#[must_use]
 pub fn circumcircle(a: Point, b: Point, c: Point) -> Option<(f64, f64, f64)> {
-    let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    let d = 2.0
+        * c.x
+            .mul_add(a.y - b.y, b.x.mul_add(c.y - a.y, a.x * (b.y - c.y)));
     if d.abs() < 1e-12 {
         return None;
     }
-    let ux = ((a.x * a.x + a.y * a.y) * (b.y - c.y)
-        + (b.x * b.x + b.y * b.y) * (c.y - a.y)
-        + (c.x * c.x + c.y * c.y) * (a.y - b.y))
-        / d;
-    let uy = ((a.x * a.x + a.y * a.y) * (c.x - b.x)
-        + (b.x * b.x + b.y * b.y) * (a.x - c.x)
-        + (c.x * c.x + c.y * c.y) * (b.x - a.x))
-        / d;
-    let radius = ((a.x - ux).powi(2) + (a.y - uy).powi(2)).sqrt();
+    let ux = c.y.mul_add(c.y, c.x * c.x).mul_add(
+        a.y - b.y,
+        b.y.mul_add(b.y, b.x * b.x)
+            .mul_add(c.y - a.y, a.y.mul_add(a.y, a.x * a.x) * (b.y - c.y)),
+    ) / d;
+    let uy = c.y.mul_add(c.y, c.x * c.x).mul_add(
+        b.x - a.x,
+        b.y.mul_add(b.y, b.x * b.x)
+            .mul_add(a.x - c.x, a.y.mul_add(a.y, a.x * a.x) * (c.x - b.x)),
+    ) / d;
+    let radius = (a.x - ux).hypot(a.y - uy);
     Some((ux, uy, radius))
 }
 
@@ -191,6 +198,10 @@ mod circumcircle_tests {
     /// the canonical `1e-12` threshold, but was silently treated as
     /// degenerate by the three call sites that used `1e-9`.
     #[test]
+    #[expect(
+        clippy::many_single_char_names,
+        reason = "the regression mirrors conventional circumcircle formula notation"
+    )]
     fn solves_near_collinear_triangle_in_the_drifted_epsilon_band() {
         let a = Point::new(0.0, 0.0);
         let c = Point::new(2.0, 0.0);
@@ -198,7 +209,9 @@ mod circumcircle_tests {
         //   = 2*(0 + 0 + 2*(0 - b.y)) = -4*b.y
         // Solve for a b.y that puts |d| strictly inside (1e-12, 1e-9).
         let b = Point::new(1.0, 2e-10);
-        let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+        let d = 2.0
+            * c.x
+                .mul_add(a.y - b.y, b.x.mul_add(c.y - a.y, a.x * (b.y - c.y)));
         assert!(
             d.abs() > 1e-12 && d.abs() < 1e-9,
             "test setup must land in the drifted-epsilon band, got |d|={}",
@@ -251,7 +264,8 @@ pub struct SymbolTransform {
 impl SymbolTransform {
     /// Build from a placed `Symbol`.
     #[inline]
-    pub fn from_symbol(symbol: &Symbol) -> Self {
+    #[must_use]
+    pub const fn from_symbol(symbol: &Symbol) -> Self {
         Self {
             origin: symbol.position,
             rotation_deg: symbol.rotation,
@@ -268,8 +282,8 @@ impl SymbolTransform {
         let rad = -self.rotation_deg.to_radians();
         let cos = rad.cos();
         let sin = rad.sin();
-        let mut rx = x * cos - y * sin;
-        let mut ry = x * sin + y * cos;
+        let mut rx = y.mul_add(-sin, x * cos);
+        let mut ry = y.mul_add(cos, x * sin);
         if self.mirror_y {
             rx = -rx;
         }
@@ -478,10 +492,14 @@ pub struct LibPin {
     pub pin: Pin,
 }
 
-fn default_body_style() -> u32 {
+const fn default_body_style() -> u32 {
     1
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the booleans mirror independent library-symbol format flags"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
@@ -519,7 +537,7 @@ pub struct LibSymbol {
     pub pin_name_offset: f64,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -631,6 +649,10 @@ pub struct Pin {
 // Symbol instance
 // ---------------------------------------------------------------------------
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the booleans mirror independent schematic-symbol format flags"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Symbol {
     pub uuid: Uuid,
@@ -713,7 +735,7 @@ pub struct Symbol {
     pub library_version: String,
 }
 
-fn default_unit() -> u32 {
+const fn default_unit() -> u32 {
     1
 }
 

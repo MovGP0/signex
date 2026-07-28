@@ -12,7 +12,7 @@
 use super::extras::{JunctionExtras, SymbolExtras};
 use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
 use super::units::{mm_to_nm, nm_to_mm};
-use super::*;
+use super::{FormatError, SnxTable};
 use crate::schematic::{HAlign, Junction, Label, LabelType, Point, Symbol, VAlign, Wire};
 use uuid::Uuid;
 
@@ -57,7 +57,7 @@ impl SnxTable for SchComponentRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(SchComponentRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             ref_des: values[1].to_string(),
             library: values[2].to_string(),
@@ -108,7 +108,7 @@ impl SnxTable for SchWireRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(SchWireRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             net: values[1].to_string(),
             start_x: parse_i64(values[2], block, row, "start_x")?,
@@ -144,7 +144,7 @@ impl SnxTable for SchJunctionRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(SchJunctionRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             pos_x: parse_i64(values[1], block, row, "pos_x")?,
             pos_y: parse_i64(values[2], block, row, "pos_y")?,
@@ -200,7 +200,7 @@ impl SnxTable for SchLabelRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(SchLabelRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             text: values[1].to_string(),
             pos_x: parse_i64(values[2], block, row, "pos_x")?,
@@ -219,7 +219,7 @@ impl SnxTable for SchLabelRow {
 // Enum string codecs
 // ---------------------------------------------------------------------------
 
-fn label_kind_str(t: LabelType) -> &'static str {
+const fn label_kind_str(t: LabelType) -> &'static str {
     match t {
         LabelType::Net => "local",
         LabelType::Global => "global",
@@ -237,7 +237,7 @@ fn parse_label_kind(s: &str) -> LabelType {
     }
 }
 
-fn halign_str(a: HAlign) -> &'static str {
+const fn halign_str(a: HAlign) -> &'static str {
     match a {
         HAlign::Left => "left",
         HAlign::Center => "center",
@@ -253,7 +253,7 @@ fn parse_halign(s: &str) -> HAlign {
     }
 }
 
-fn valign_str(a: VAlign) -> &'static str {
+const fn valign_str(a: VAlign) -> &'static str {
     match a {
         VAlign::Top => "top",
         VAlign::Center => "center",
@@ -345,6 +345,10 @@ pub(in crate::format) fn wire_to_row(w: &Wire) -> SchWireRow {
     }
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "row adapters consistently take ownership of decoded wire rows"
+)]
 pub(in crate::format) fn row_to_wire(row: SchWireRow) -> Wire {
     Wire {
         uuid: row.uuid,
@@ -369,6 +373,10 @@ pub(in crate::format) fn junction_to_row(j: &Junction) -> SchJunctionRow {
     }
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "row adapters consistently take ownership of decoded wire rows"
+)]
 pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExtras) -> Junction {
     Junction {
         uuid: row.uuid,

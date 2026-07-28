@@ -19,7 +19,7 @@ pub struct SchematicProperty {
     pub show_name: Option<bool>,
     #[serde(default)]
     pub do_not_autoplace: Option<bool>,
-    /// Standard 10 property-level variant values: variant_name -> value.
+    /// Standard 10 property-level variant values: `variant_name` -> value.
     #[serde(default)]
     pub variant_overrides: BTreeMap<String, String>,
 }

@@ -51,13 +51,13 @@ pub const PCB_DEFAULT_GRAPHIC_WIDTH_MM: f64 = 0.1;
 /// Default pad size (width and height) in mm (1.0 mm = ~39 mil).
 pub const PCB_DEFAULT_PAD_SIZE_MM: f64 = 1.0;
 
-/// Default PCB text / fp_text font size in mm (1.0 mm = ~39 mil).
+/// Default PCB text / `fp_text` font size in mm (1.0 mm = ~39 mil).
 pub const PCB_DEFAULT_TEXT_SIZE_MM: f64 = 1.0;
 
 /// Stroke thickness for PCB text in mm (0.15 mm = ~6 mil).
 pub const PCB_TEXT_THICKNESS_MM: f64 = 0.15;
 
-/// Vertical offset for auto-placed Reference / Value fp_text in mm (2.0 mm = ~79 mil).
+/// Vertical offset for auto-placed Reference / Value `fp_text` in mm (2.0 mm = ~79 mil).
 pub const PCB_FP_TEXT_OFFSET_MM: f64 = 2.0;
 
 // ---------------------------------------------------------------------------
@@ -271,7 +271,7 @@ pub struct Via {
     pub via_type: ViaType,
 }
 
-fn default_via_type() -> ViaType {
+const fn default_via_type() -> ViaType {
     ViaType::Through
 }
 

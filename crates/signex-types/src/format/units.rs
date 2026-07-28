@@ -23,6 +23,11 @@ const NM_PER_MM: f64 = 1.0e6;
 /// rather than panicking — that surfaces a non-finite value as the
 /// largest representable coordinate, which is visibly wrong instead of
 /// silently corrupt.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "the conversion clamps to i64 bounds before rounding millimetres to nanometres"
+)]
 pub(in crate::format) fn mm_to_nm(mm: f64) -> i64 {
     let scaled = (mm * NM_PER_MM).round();
     if scaled.is_nan() {
@@ -37,6 +42,10 @@ pub(in crate::format) fn mm_to_nm(mm: f64) -> i64 {
     scaled as i64
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "nanometre coordinates are intentionally converted to the f64 millimetre domain"
+)]
 pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {
     (nm as f64) * MM_PER_NM
 }

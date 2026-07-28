@@ -67,7 +67,8 @@ pub enum LayerKind {
 // ---------------------------------------------------------------------------
 
 impl SignexLayer {
-    pub fn kind(self) -> LayerKind {
+    #[must_use]
+    pub const fn kind(self) -> LayerKind {
         match self {
             Self::TopCopper | Self::BottomCopper | Self::InnerCopper(_) => LayerKind::Copper,
             Self::TopSilk | Self::BottomSilk => LayerKind::Silk,
@@ -84,6 +85,7 @@ impl SignexLayer {
 
     /// Display label for the Signex UI per `docs/UX_REFERENCE_ALTIUM.md`
     /// and `reference_altium_layer_naming` memory note.
+    #[must_use]
     pub fn altium_label(self) -> String {
         match self {
             Self::TopCopper => "Top Layer".into(),
@@ -109,7 +111,7 @@ impl SignexLayer {
     /// Iterate the canonical fixed-set layers in stable display order.
     /// Excludes the parameterised variants (`InnerCopper`, `Mechanical`,
     /// `User`); callers iterating those provide their own indices.
-    pub fn all() -> impl Iterator<Item = SignexLayer> {
+    pub fn all() -> impl Iterator<Item = Self> {
         [
             Self::TopCopper,
             Self::BottomCopper,

@@ -127,6 +127,11 @@ pub trait SnxTable: Sized {
 
     /// Parse a row of cell strings (length matches [`SnxTable::columns`]).
     /// Implementations report parse failures via [`FormatError::TsvFieldParse`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FormatError`] when a cell cannot be decoded into the
+    /// row's domain type.
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError>;
 }
 
@@ -154,6 +159,7 @@ pub struct SnxSchematic {
 
 impl SnxSchematic {
     /// Wrap a `SchematicSheet` for serialisation as the current format version.
+    #[must_use]
     pub fn new(sheet: SchematicSheet) -> Self {
         Self {
             format: SNXSCH_FORMAT_V1.to_string(),
@@ -162,6 +168,10 @@ impl SnxSchematic {
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FormatError`] when the schematic cannot be serialized.
     pub fn write_string(&self) -> Result<String, FormatError> {
         let mut out = String::new();
 
@@ -253,6 +263,11 @@ impl SnxSchematic {
     }
 
     /// Parse a TOML+TSV string from disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FormatError`] when the document version, TOML envelope,
+    /// TSV blocks, or field values are invalid.
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         // Stage 1: deserialise the document into the raw envelope —
         // manifest header + bulk blocks + extras.
@@ -327,7 +342,7 @@ impl SnxSchematic {
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
         };
 
-        Ok(SnxSchematic {
+        Ok(Self {
             format: raw.format,
             sheet,
         })
@@ -405,6 +420,7 @@ pub struct SnxPcb {
 
 impl SnxPcb {
     /// Wrap a `PcbBoard` for serialisation as the current format version.
+    #[must_use]
     pub fn new(board: PcbBoard) -> Self {
         Self {
             format: SNXPCB_FORMAT_V1.to_string(),
@@ -413,6 +429,14 @@ impl SnxPcb {
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FormatError`] when the PCB cannot be serialized.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "serialization is kept as one ordered pass over the on-disk sections"
+    )]
     pub fn write_string(&self) -> Result<String, FormatError> {
         let mut out = String::new();
 
@@ -542,6 +566,11 @@ impl SnxPcb {
     }
 
     /// Parse a TOML+TSV string from disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FormatError`] when the document version, TOML envelope,
+    /// TSV blocks, or field values are invalid.
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         let raw: PcbRaw = toml::from_str(input)?;
 
@@ -628,7 +657,7 @@ impl SnxPcb {
                     .into_iter()
                     .enumerate()
                     .map(|(i, name)| crate::pcb::LayerDef {
-                        id: i as u8,
+                        id: u8::try_from(i).map_or(u8::MAX, |id| id),
                         name,
                         layer_type: String::new(),
                     })
@@ -655,7 +684,7 @@ impl SnxPcb {
             texts: board_extras.texts,
         };
 
-        Ok(SnxPcb {
+        Ok(Self {
             format: raw.format,
             board,
         })

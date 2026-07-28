@@ -71,6 +71,7 @@ pub struct ExpressionEvalContext<'a> {
 /// Format: `unnamed-<sheet>:<ref>:<pin>`. Picks the lexicographically-
 /// smallest `(refdes, pin)` for determinism. Sheet defaults to empty
 /// string when the caller doesn't have a sheet context.
+#[must_use]
 pub fn auto_net_name(sheet: &str, pins: &[(String, String)]) -> Option<String> {
     pins.iter()
         .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
@@ -96,6 +97,7 @@ pub fn auto_net_name(sheet: &str, pins: &[(String, String)]) -> Option<String> {
 /// - `NET_NAME(<pin>)`
 ///
 /// Unresolved expressions are preserved verbatim to avoid destructive output.
+#[must_use]
 pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> String {
     if input.is_empty() {
         return String::new();
@@ -195,6 +197,7 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
 /// handle nested formatting (e.g. `**_~OE~_**` produces a Bold segment
 /// containing the literal text `_~OE~_`). Use whichever decoration
 /// matters most semantically.
+#[must_use]
 pub fn parse_signex_markup(input: &str) -> Vec<RichSegment> {
     if input.is_empty() {
         return vec![];
@@ -709,6 +712,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::literal_string_with_formatting_args,
+        reason = "braces are Signex expression syntax in this parser test"
+    )]
     fn evaluates_refdes_and_at_variables() {
         let mut at = HashMap::new();
         at.insert("Comment".to_string(), "Decoupling".to_string());

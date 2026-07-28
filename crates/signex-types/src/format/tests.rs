@@ -37,8 +37,8 @@ fn empty_sheet() -> SchematicSheet {
         bus_entries: vec![],
         drawings: vec![],
         no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
+        title_block: std::collections::HashMap::default(),
+        lib_symbols: std::collections::HashMap::default(),
     }
 }
 
@@ -114,8 +114,8 @@ fn label_with_text(text: &str) -> Label {
         label_type: LType::Net,
         shape: String::new(),
         font_size: 1.27,
-        justify: Default::default(),
-        justify_v: Default::default(),
+        justify: HAlign::default(),
+        justify_v: VAlign::default(),
     }
 }
 
@@ -245,9 +245,9 @@ fn sample_symbol() -> Symbol {
         on_board: true,
         exclude_from_sim: false,
         locked: false,
-        fields: Default::default(),
+        fields: std::collections::HashMap::default(),
         custom_properties: Vec::new(),
-        pin_uuids: Default::default(),
+        pin_uuids: std::collections::HashMap::default(),
         library_id: None,
         row_id: None,
         library_version: String::new(),
@@ -340,7 +340,7 @@ fn snxsch_round_trip_with_data() {
     assert!((back.sheet.wires[1].end.y - 40.0).abs() < 1e-6);
 
     assert_eq!(back.sheet.junctions.len(), 1);
-    assert_eq!(back.sheet.junctions[0].diameter, 0.5);
+    assert!((back.sheet.junctions[0].diameter - 0.5).abs() < f64::EPSILON);
     assert!(
         back.sheet.junctions[0].minted,
         "minted provenance must survive the extras round-trip"
@@ -400,6 +400,10 @@ fn snxsch_without_junction_extras_defaults_to_user_placed() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the round-trip fixture intentionally builds one representative PCB"
+)]
 fn snxpcb_round_trip_with_data() {
     let mut board = empty_board();
 
@@ -549,8 +553,8 @@ fn tsv_writer_pads_columns_for_legibility() {
         },
         SchJunctionRow {
             uuid: Uuid::nil(),
-            pos_x: 30000000,
-            pos_y: 40000000,
+            pos_x: 30_000_000,
+            pos_y: 40_000_000,
             diameter: 0.5,
         },
     ];
@@ -564,7 +568,7 @@ fn tsv_writer_pads_columns_for_legibility() {
     let parsed: Vec<SchJunctionRow> = parse_tsv_block("sheets.junctions", &body).unwrap();
     assert_eq!(parsed.len(), 2);
     assert_eq!(parsed[0].pos_x, 100);
-    assert_eq!(parsed[1].pos_x, 30000000);
+    assert_eq!(parsed[1].pos_x, 30_000_000);
 }
 
 #[test]
@@ -587,14 +591,14 @@ fn integer_nanometre_coords_survive_round_trip() {
     let mut sheet = empty_sheet();
     let mut sym = sample_symbol();
     sym.position = SchPoint {
-        x: 50.800001,
-        y: 25.400002,
+        x: 50.800_001,
+        y: 25.400_002,
     };
     sheet.symbols.push(sym);
     let s = SnxSchematic::new(sheet).write_string().unwrap();
     let back = SnxSchematic::parse(&s).unwrap();
     // expect rounding to nearest nanometre
-    assert!((back.sheet.symbols[0].position.x - 50.800001).abs() <= 1e-6);
+    assert!((back.sheet.symbols[0].position.x - 50.800_001).abs() <= 1e-6);
 }
 
 #[test]

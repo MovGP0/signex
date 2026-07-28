@@ -63,6 +63,7 @@ pub struct Terminal {
 }
 
 /// A logical net: a set of electrically-connected terminals derived from the
+///
 /// schematic (wires + junctions + labels + pins). `id` is a build-time stable
 /// number (also usable as the PCB net number); `name` comes from the
 /// highest-priority label on the net, or is auto-assigned when unlabelled.
@@ -85,6 +86,7 @@ pub struct Net {
 }
 
 /// The authoritative netlist: every net derived from a schematic. This is the
+///
 /// single connectivity source the net-flood UI, the ratsnest, PCB net
 /// assignment, and the netlist exporter are meant to read — replacing the
 /// ad-hoc union-find copies scattered across the app (ADR-0001 A3.1).

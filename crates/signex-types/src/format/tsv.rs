@@ -10,7 +10,9 @@
 //! quoting rules are byte-for-byte unchanged (a wrong byte here makes a
 //! schematic unreloadable, #96).
 
-use super::*;
+use super::{FormatError, SnxTable};
+use std::fmt::Write as _;
+
 use uuid::Uuid;
 
 /// Encode a single TSV cell. Empty strings emit `""` so column
@@ -124,7 +126,7 @@ pub(in crate::format) fn escape_tsv_body_for_toml(body: &str) -> String {
             '\r' => out.push_str("\\r"),
             '\n' | '\t' => out.push(ch),
             c if (c as u32) < 0x20 || c as u32 == 0x7F => {
-                out.push_str(&format!("\\u{:04X}", c as u32));
+                let _ = write!(out, "\\u{:04X}", u32::from(c));
             }
             _ => out.push(ch),
         }
@@ -153,20 +155,17 @@ fn split_row(line: &str) -> Vec<String> {
                 }
                 in_quotes = false;
             }
-            i += 1;
         } else if c == '"' {
             buf.push(c);
             in_quotes = true;
-            i += 1;
         } else if c.is_whitespace() {
             if !buf.is_empty() {
                 cells.push(std::mem::take(&mut buf));
             }
-            i += 1;
         } else {
             buf.push(c);
-            i += 1;
         }
+        i += 1;
     }
     if !buf.is_empty() {
         cells.push(buf);
@@ -233,6 +232,11 @@ pub fn write_tsv_block<R: SnxTable>(rows: &[R]) -> String {
 
 /// Parse a TSV block: validate the header against `R::columns()`,
 /// then parse each data row through `R::from_row`.
+///
+/// # Errors
+///
+/// Returns [`FormatError`] when the block is empty, its header or row
+/// width is invalid, or a row cannot be decoded.
 pub fn parse_tsv_block<R: SnxTable>(block: &str, content: &str) -> Result<Vec<R>, FormatError> {
     // Strip the leading/trailing newlines TOML's literal multi-line
     // string padding adds, but preserve interior newlines.
@@ -354,6 +358,11 @@ pub(in crate::format) fn parse_uuid(
 /// the gap between them. Use the real cast bound and route non-finite
 /// inputs through `format!("{f}")` (which produces `"NaN"` / `"inf"`
 /// — visible at parse time rather than silently corrupted).
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "the integral fast path checks finiteness, fractional content, and i64 bounds first"
+)]
 pub(in crate::format) fn format_f64(f: f64) -> String {
     if f == 0.0 {
         return "0".to_string();
@@ -370,7 +379,7 @@ pub(in crate::format) fn format_f64(f: f64) -> String {
 
 pub(in crate::format) fn write_tsv_section<R: SnxTable>(out: &mut String, name: &str, rows: &[R]) {
     let body = write_tsv_block(rows);
-    out.push_str(&format!("\n[{name}]\n"));
+    let _ = write!(out, "\n[{name}]\n");
     out.push_str("content = \"\"\"\n");
     out.push_str(&escape_tsv_body_for_toml(&body));
     out.push_str("\"\"\"\n");

@@ -21,6 +21,7 @@ pub struct Vec2d {
 impl Vec2d {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 
+    #[must_use]
     pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
@@ -40,6 +41,7 @@ impl Pose2d {
         rotation_rad: 0.0,
     };
 
+    #[must_use]
     pub const fn new(origin: Vec2d, rotation_rad: f64) -> Self {
         Self {
             origin,
@@ -197,9 +199,10 @@ impl Mat3 {
         let mut out = [[0.0; 3]; 3];
         for (r, row) in out.iter_mut().enumerate() {
             for (c, cell) in row.iter_mut().enumerate() {
-                *cell = self.m[r][0] * rhs.m[0][c]
-                    + self.m[r][1] * rhs.m[1][c]
-                    + self.m[r][2] * rhs.m[2][c];
+                *cell = self.m[r][2].mul_add(
+                    rhs.m[2][c],
+                    self.m[r][1].mul_add(rhs.m[1][c], self.m[r][0] * rhs.m[0][c]),
+                );
             }
         }
         Self { m: out }
@@ -207,13 +210,13 @@ impl Mat3 {
 
     fn transform_point(self, p: Vec2d) -> Vec2d {
         Vec2d::new(
-            self.m[0][0] * p.x + self.m[0][1] * p.y + self.m[0][2],
-            self.m[1][0] * p.x + self.m[1][1] * p.y + self.m[1][2],
+            self.m[0][1].mul_add(p.y, self.m[0][0] * p.x) + self.m[0][2],
+            self.m[1][1].mul_add(p.y, self.m[1][0] * p.x) + self.m[1][2],
         )
     }
 }
 
-fn translation_matrix(v: Vec2d) -> Mat3 {
+const fn translation_matrix(v: Vec2d) -> Mat3 {
     Mat3 {
         m: [[1.0, 0.0, v.x], [0.0, 1.0, v.y], [0.0, 0.0, 1.0]],
     }
@@ -238,8 +241,8 @@ fn inverse_pose_matrix(pose: Pose2d) -> Mat3 {
     // Inverse of rigid transform T*R is R^T * T^-1.
     Mat3 {
         m: [
-            [c, s, -(c * pose.origin.x + s * pose.origin.y)],
-            [-s, c, -(-s * pose.origin.x + c * pose.origin.y)],
+            [c, s, -s.mul_add(pose.origin.y, c * pose.origin.x)],
+            [-s, c, -c.mul_add(pose.origin.y, -s * pose.origin.x)],
             [0.0, 0.0, 1.0],
         ],
     }

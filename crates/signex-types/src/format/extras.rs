@@ -41,16 +41,20 @@ pub(in crate::format) struct JunctionExtras {
 }
 
 impl JunctionExtras {
-    pub(in crate::format) fn is_default(&self) -> bool {
+    pub(in crate::format) const fn is_default(&self) -> bool {
         !self.minted
     }
 
-    pub(in crate::format) fn from_junction(j: &Junction) -> Self {
-        JunctionExtras { minted: j.minted }
+    pub(in crate::format) const fn from_junction(j: &Junction) -> Self {
+        Self { minted: j.minted }
     }
 }
 
 /// Per-symbol auxiliary fields that don't fit into [`SchComponentRow`].
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the booleans mirror independent fields in the persisted symbol schema"
+)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(in crate::format) struct SymbolExtras {
     #[serde(default)]
@@ -117,7 +121,7 @@ impl SymbolExtras {
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
-        SymbolExtras {
+        Self {
             footprint: s.footprint.clone(),
             datasheet: s.datasheet.clone(),
             mirror_x: s.mirror_x,
@@ -190,7 +194,7 @@ impl SheetExtras {
     }
 
     pub(in crate::format) fn from_sheet(s: &SchematicSheet) -> Self {
-        SheetExtras {
+        Self {
             child_sheets: s.child_sheets.clone(),
             no_connects: s.no_connects.clone(),
             text_notes: s.text_notes.clone(),
@@ -212,11 +216,11 @@ impl SheetExtras {
     }
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
-fn default_unit() -> u32 {
+const fn default_unit() -> u32 {
     1
 }
 
@@ -254,7 +258,7 @@ impl PcbExtras {
                 }
             }
         }
-        PcbExtras {
+        Self {
             footprints,
             pads,
             outline: board.outline.clone(),
@@ -277,7 +281,7 @@ pub(in crate::format) struct FootprintExtras {
 }
 
 impl FootprintExtras {
-    pub(in crate::format) fn is_default(&self) -> bool {
+    pub(in crate::format) const fn is_default(&self) -> bool {
         self.footprint_id.is_empty()
             && !self.locked
             && self.graphics.is_empty()
@@ -285,7 +289,7 @@ impl FootprintExtras {
     }
 
     pub(in crate::format) fn from_footprint(fp: &Footprint) -> Self {
-        FootprintExtras {
+        Self {
             footprint_id: fp.footprint_id.clone(),
             locked: fp.locked,
             graphics: fp.graphics.clone(),
@@ -301,12 +305,12 @@ pub(in crate::format) struct PadExtras {
 }
 
 impl PadExtras {
-    pub(in crate::format) fn is_default(&self) -> bool {
+    pub(in crate::format) const fn is_default(&self) -> bool {
         self.drill_shape.is_empty()
     }
 
     pub(in crate::format) fn from_pad(pad: &Pad) -> Self {
-        PadExtras {
+        Self {
             drill_shape: pad
                 .drill
                 .as_ref()

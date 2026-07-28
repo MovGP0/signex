@@ -23,6 +23,7 @@ pub enum DocumentType {
 // ---------------------------------------------------------------------------
 
 /// How a [`LibraryEntry`] resolves on disk. Project-local libraries live
+///
 /// under the project directory and use a relative path; shared / global
 /// libraries live elsewhere on the user's machine and use an absolute
 /// path. Drives the auto-mount path resolution at project-open time.
@@ -44,7 +45,7 @@ pub enum LibraryEntryKind {
 ///
 /// See `docs/internal/docs/v0.9-library-plan.md` for the data-model
 /// rationale.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryEntry {
     /// On-disk location. Relative to the project dir for
     /// [`LibraryEntryKind::ProjectLocal`]; absolute for the others.
@@ -132,6 +133,7 @@ impl ProjectData {
     /// local entries are joined against `dir`; shared/global entries
     /// are returned as-is. Used by both the auto-mount loop and the
     /// project-tree renderer.
+    #[must_use]
     pub fn resolve_library_path(&self, entry: &LibraryEntry) -> PathBuf {
         match entry.kind {
             LibraryEntryKind::ProjectLocal => PathBuf::from(&self.dir).join(&entry.path),
@@ -328,6 +330,11 @@ pub enum ProjectError {
 /// Community. Users running Standard projects use the optional
 /// `signex-standard-import` GPL-3.0 companion tool to convert their files
 /// first.
+///
+/// # Errors
+///
+/// Returns [`ProjectError`] when the extension is unsupported, the file
+/// cannot be read, or its JSON content is corrupt.
 pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     let ext = path
         .extension()
@@ -339,7 +346,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         return Err(ProjectError::UnsupportedExtension(ext));
     }
 
-    let dir = path.parent().unwrap_or(Path::new("."));
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let project_name = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -353,9 +360,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         path: path.display().to_string(),
         source,
     })?;
-    let trimmed = std::str::from_utf8(&bytes)
-        .map(|s| s.trim_start())
-        .unwrap_or("");
+    let trimmed = std::str::from_utf8(&bytes).map_or("", str::trim_start);
     if trimmed.starts_with('{') {
         // The file is meant to be JSON. If it parses, use it. If it does
         // NOT, return an error instead of falling through to the
@@ -377,30 +382,29 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
 
     // Non-JSON legacy/empty marker — directory-driven probe (the
     // original pre-JSON behaviour).
-    let snx_sch_name = format!("{}.snxsch", project_name);
+    let snx_sch_name = format!("{project_name}.snxsch");
     let schematic_root = if dir.join(&snx_sch_name).exists() {
         Some(snx_sch_name)
     } else {
         None
     };
 
-    let snx_pcb_name = format!("{}.snxpcb", project_name);
+    let snx_pcb_name = format!("{project_name}.snxpcb");
     let pcb_file = if dir.join(&snx_pcb_name).exists() {
         Some(snx_pcb_name)
     } else {
         None
     };
 
-    let sheets = match &schematic_root {
-        Some(root_name) => vec![SheetEntry {
+    let sheets = schematic_root.as_ref().map_or_else(Vec::new, |root_name| {
+        vec![SheetEntry {
             name: project_name.clone(),
             filename: root_name.clone(),
             symbols_count: 0,
             wires_count: 0,
             labels_count: 0,
-        }],
-        None => Vec::new(),
-    };
+        }]
+    });
 
     Ok(ProjectData {
         name: project_name,
@@ -423,6 +427,10 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
 /// the workspace's index of sheets/PCB/libraries/variants, so a crash
 /// mid-write must never truncate it to a partial file — that would
 /// silently drop the project's contents on the next open.
+///
+/// # Errors
+///
+/// Returns [`ProjectError`] when serialization or the atomic write fails.
 pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
     let json = serde_json::to_vec_pretty(data).map_err(|err| ProjectError::Io {
         path: path.display().to_string(),

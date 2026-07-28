@@ -62,6 +62,11 @@ fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
 
 /// Atomically write `bytes` to `path`. Creates parent directories
 /// (if any) as a side effect — matches `std::fs::write` ergonomics.
+///
+/// # Errors
+///
+/// Returns an I/O error when directory creation, writing, syncing, or
+/// replacing the destination fails.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()

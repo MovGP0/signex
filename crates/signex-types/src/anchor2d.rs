@@ -44,6 +44,7 @@ pub struct Transform2D {
 
 impl Transform2D {
     /// Construct from raw components.
+    #[must_use]
     pub const fn new(
         pivot_world: Vec2d,
         local_offset: Vec2d,
@@ -66,6 +67,7 @@ impl Transform2D {
     /// - `(1, 1)` = top-right corner  (Y-up convention)
     ///
     /// The pivot is placed at the anchor point.
+    #[must_use]
     pub fn from_origin_anchor(
         origin_world: Vec2d,
         anchor_frac: Vec2d,
@@ -108,8 +110,8 @@ impl Transform2D {
         // Local vector from pivot to anchor point:
         //   local = local_offset + anchor_frac * size
         let local = Vec2d::new(
-            self.local_offset.x + anchor_frac.x * self.size.x,
-            self.local_offset.y + anchor_frac.y * self.size.y,
+            anchor_frac.x.mul_add(self.size.x, self.local_offset.x),
+            anchor_frac.y.mul_add(self.size.y, self.local_offset.y),
         );
         let rotated = rotate_vec(local, self.rotation_rad);
         Vec2d::new(
@@ -143,8 +145,8 @@ impl Transform2D {
         let px = self.pivot_world.x;
         let py = self.pivot_world.y;
         [
-            [c, -s, c * lx - s * ly + px],
-            [s, c, s * lx + c * ly + py],
+            [c, -s, s.mul_add(-ly, c * lx) + px],
+            [s, c, c.mul_add(ly, s * lx) + py],
             [0.0, 0.0, 1.0],
         ]
     }
@@ -154,8 +156,8 @@ impl Transform2D {
     pub fn transform_point(&self, local: Vec2d) -> Vec2d {
         let m = self.to_matrix();
         Vec2d::new(
-            m[0][0] * local.x + m[0][1] * local.y + m[0][2],
-            m[1][0] * local.x + m[1][1] * local.y + m[1][2],
+            m[0][1].mul_add(local.y, m[0][0] * local.x) + m[0][2],
+            m[1][1].mul_add(local.y, m[1][0] * local.x) + m[1][2],
         )
     }
 
@@ -201,7 +203,7 @@ pub fn rotate_vec(v: Vec2d, angle_rad: f64) -> Vec2d {
     }
     let c = angle_rad.cos();
     let s = angle_rad.sin();
-    Vec2d::new(c * v.x - s * v.y, s * v.x + c * v.y)
+    Vec2d::new(s.mul_add(-v.y, c * v.x), c.mul_add(v.y, s * v.x))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

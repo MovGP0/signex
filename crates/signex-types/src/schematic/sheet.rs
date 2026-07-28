@@ -1,6 +1,9 @@
 //! Placed schematic-sheet elements and the sheet container.
 
-use super::*;
+use super::{
+    Deserialize, FillType, HAlign, HashMap, LabelType, LibSymbol, Point, Serialize, SheetInstance,
+    Symbol, Uuid, VAlign,
+};
 
 // ---------------------------------------------------------------------------
 
@@ -51,7 +54,7 @@ pub struct Label {
     pub justify_v: VAlign,
 }
 
-fn default_label_v_align() -> VAlign {
+const fn default_label_v_align() -> VAlign {
     VAlign::Bottom
 }
 
@@ -141,10 +144,11 @@ pub struct ChildSheet {
 // ---------------------------------------------------------------------------
 
 /// Optional RGBA override for an individual `SchDrawing`. `None` means
+///
 /// "use the theme's default drawing colour" — the renderer falls back to
 /// `CanvasColors.outline`. Stored per-drawing so users can recolour
 /// individual shapes without disturbing the sheet theme.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StrokeColor {
     pub r: u8,
     pub g: u8,
@@ -290,7 +294,8 @@ pub struct SelectedItem {
 }
 
 impl SelectedItem {
-    pub fn new(uuid: Uuid, kind: SelectedKind) -> Self {
+    #[must_use]
+    pub const fn new(uuid: Uuid, kind: SelectedKind) -> Self {
         Self { uuid, kind }
     }
 }
@@ -309,7 +314,8 @@ pub struct Aabb {
 }
 
 impl Aabb {
-    pub fn new(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
+    #[must_use]
+    pub const fn new(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
         Self {
             min_x: x1.min(x2),
             min_y: y1.min(y2),
@@ -318,10 +324,12 @@ impl Aabb {
         }
     }
 
+    #[must_use]
     pub fn contains(&self, x: f64, y: f64) -> bool {
         x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
     }
 
+    #[must_use]
     pub fn expand(&self, margin: f64) -> Self {
         Self {
             min_x: self.min_x - margin,
@@ -331,7 +339,8 @@ impl Aabb {
         }
     }
 
-    pub fn union(&self, other: &Aabb) -> Self {
+    #[must_use]
+    pub const fn union(&self, other: &Self) -> Self {
         Self {
             min_x: self.min_x.min(other.min_x),
             min_y: self.min_y.min(other.min_y),
@@ -340,10 +349,12 @@ impl Aabb {
         }
     }
 
+    #[must_use]
     pub fn width(&self) -> f64 {
         self.max_x - self.min_x
     }
 
+    #[must_use]
     pub fn height(&self) -> f64 {
         self.max_y - self.min_y
     }
@@ -351,19 +362,20 @@ impl Aabb {
 
 impl SchematicSheet {
     /// Compute the bounding box of all elements in the sheet.
+    #[must_use]
     pub fn content_bounds(&self) -> Option<Aabb> {
         let mut aabb: Option<Aabb> = None;
 
         let mut extend = |x: f64, y: f64| {
-            aabb = Some(match aabb {
-                Some(a) => Aabb {
+            aabb = Some(aabb.map_or_else(
+                || Aabb::new(x, y, x, y),
+                |a| Aabb {
                     min_x: a.min_x.min(x),
                     min_y: a.min_y.min(y),
                     max_x: a.max_x.max(x),
                     max_y: a.max_y.max(y),
                 },
-                None => Aabb::new(x, y, x, y),
-            });
+            ));
         };
 
         for s in &self.symbols {
@@ -400,16 +412,17 @@ impl SchematicSheet {
 }
 
 /// Distance from a point to a line segment.
+#[must_use]
 pub fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     let dx = bx - ax;
     let dy = by - ay;
-    let len_sq = dx * dx + dy * dy;
+    let len_sq = dy.mul_add(dy, dx * dx);
     if len_sq < 1e-12 {
-        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+        return (px - ax).hypot(py - ay);
     }
-    let t = ((px - ax) * dx + (py - ay) * dy) / len_sq;
+    let t = (py - ay).mul_add(dy, (px - ax) * dx) / len_sq;
     let t = t.clamp(0.0, 1.0);
     let proj_x = ax + t * dx;
     let proj_y = ay + t * dy;
-    ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
+    (px - proj_x).hypot(py - proj_y)
 }

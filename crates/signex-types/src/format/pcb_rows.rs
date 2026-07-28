@@ -12,7 +12,7 @@
 use super::extras::{FootprintExtras, PadExtras};
 use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
 use super::units::{mm_to_nm, nm_to_mm};
-use super::*;
+use super::{FormatError, SnxTable};
 use crate::pcb::{
     DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, Via, ViaType,
 };
@@ -52,7 +52,7 @@ impl SnxTable for PcbFootprintRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(PcbFootprintRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             ref_des: values[1].to_string(),
             library: values[2].to_string(),
@@ -126,7 +126,7 @@ impl SnxTable for PcbPadRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(PcbPadRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             footprint_ref: values[1].to_string(),
             pin: values[2].to_string(),
@@ -153,7 +153,7 @@ impl SnxTable for PcbPadRow {
 }
 
 /// Bulk row for one [`Segment`] in the `[tracks]` block.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PcbTrackRow {
     pub uuid: Uuid,
     pub net: u32,
@@ -186,7 +186,7 @@ impl SnxTable for PcbTrackRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(PcbTrackRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             net: values[1].parse().map_err(|e: std::num::ParseIntError| {
                 FormatError::TsvFieldParse {
@@ -207,7 +207,7 @@ impl SnxTable for PcbTrackRow {
 }
 
 /// Bulk row for one [`Via`] in the `[vias]` block.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PcbViaRow {
     pub uuid: Uuid,
     pub net: u32,
@@ -240,7 +240,7 @@ impl SnxTable for PcbViaRow {
     }
 
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(PcbViaRow {
+        Ok(Self {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             net: values[1].parse().map_err(|e: std::num::ParseIntError| {
                 FormatError::TsvFieldParse {
@@ -264,7 +264,7 @@ impl SnxTable for PcbViaRow {
 // Enum string codecs
 // ---------------------------------------------------------------------------
 
-fn pad_type_str(t: PadType) -> &'static str {
+const fn pad_type_str(t: PadType) -> &'static str {
     match t {
         PadType::Thru => "thru",
         PadType::Smd => "smd",
@@ -282,7 +282,7 @@ fn parse_pad_type(s: &str) -> PadType {
     }
 }
 
-fn pad_shape_str(s: PadShape) -> &'static str {
+const fn pad_shape_str(s: PadShape) -> &'static str {
     match s {
         PadShape::Circle => "circle",
         PadShape::Rect => "rect",
@@ -304,7 +304,7 @@ fn parse_pad_shape(s: &str) -> PadShape {
     }
 }
 
-fn via_type_str(t: ViaType) -> &'static str {
+const fn via_type_str(t: ViaType) -> &'static str {
     match t {
         ViaType::Through => "through",
         ViaType::Blind => "blind",
@@ -359,10 +359,10 @@ pub(in crate::format) fn row_to_footprint(
         uuid: row.uuid,
         reference: row.ref_des,
         value: row.value,
-        footprint_id: if !extras.footprint_id.is_empty() {
-            extras.footprint_id
-        } else {
+        footprint_id: if extras.footprint_id.is_empty() {
             row.library
+        } else {
+            extras.footprint_id
         },
         position: PcbPoint {
             x: nm_to_mm(row.pos_x),
@@ -378,16 +378,11 @@ pub(in crate::format) fn row_to_footprint(
 }
 
 pub(in crate::format) fn pad_to_row(pad: &Pad, footprint_ref: &str) -> PcbPadRow {
-    let drill_nm = pad
-        .drill
-        .as_ref()
-        .map(|d| mm_to_nm(d.diameter))
-        .unwrap_or(0);
+    let drill_nm = pad.drill.as_ref().map_or(0, |d| mm_to_nm(d.diameter));
     let (net_number, net_name) = pad
         .net
         .as_ref()
-        .map(|n| (n.number, n.name.clone()))
-        .unwrap_or((0, String::new()));
+        .map_or((0, String::new()), |n| (n.number, n.name.clone()));
     PcbPadRow {
         uuid: pad.uuid,
         footprint_ref: footprint_ref.to_string(),
@@ -486,6 +481,10 @@ pub(in crate::format) fn via_to_row(v: &Via) -> PcbViaRow {
     }
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "row adapters consistently take ownership of decoded wire rows"
+)]
 pub(in crate::format) fn row_to_via(row: PcbViaRow) -> Via {
     Via {
         uuid: row.uuid,

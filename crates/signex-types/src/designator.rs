@@ -56,6 +56,7 @@ fn compare_text_runs(a: &[u8], b: &[u8]) -> Ordering {
 /// just the first. Equal-under-the-rule inputs fall back to a byte compare so
 /// the result is a total order (required by `sort_by`) and `R01` still differs
 /// from `R1`.
+#[must_use]
 pub fn compare_references(a: &str, b: &str) -> Ordering {
     let mut left = a.as_bytes();
     let mut right = b.as_bytes();

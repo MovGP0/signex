@@ -25,10 +25,10 @@ pub enum Unit {
 impl fmt::Display for Unit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Unit::Mm => write!(f, "mm"),
-            Unit::Mil => write!(f, "mil"),
-            Unit::Inch => write!(f, "in"),
-            Unit::Micrometer => write!(f, "um"),
+            Self::Mm => write!(f, "mm"),
+            Self::Mil => write!(f, "mil"),
+            Self::Inch => write!(f, "in"),
+            Self::Micrometer => write!(f, "um"),
         }
     }
 }

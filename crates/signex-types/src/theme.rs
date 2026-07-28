@@ -38,11 +38,13 @@ pub struct Color {
 }
 
 impl Color {
+    #[must_use]
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
     }
 
     /// Parse "#RRGGBB" or "#RRGGBBAA" hex string.
+    #[must_use]
     pub fn from_hex(hex: &str) -> Self {
         let hex = hex.trim_start_matches('#');
         let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
@@ -74,35 +76,36 @@ pub enum ThemeId {
     GitHubDark,
     SolarizedLight,
     Nord,
-    /// User-defined custom theme (data stored externally in CustomThemeFile).
+    /// User-defined custom theme (data stored externally in `CustomThemeFile`).
     Custom,
 }
 
 impl ThemeId {
     /// All built-in themes (excludes Custom).
-    pub const BUILTINS: &[ThemeId] = &[
-        ThemeId::Signex,
-        ThemeId::Alplab,
-        ThemeId::VsCodeDark,
-        ThemeId::CatppuccinMocha,
-        ThemeId::GitHubDark,
-        ThemeId::SolarizedLight,
-        ThemeId::Nord,
+    pub const BUILTINS: &[Self] = &[
+        Self::Signex,
+        Self::Alplab,
+        Self::VsCodeDark,
+        Self::CatppuccinMocha,
+        Self::GitHubDark,
+        Self::SolarizedLight,
+        Self::Nord,
     ];
 
     #[deprecated = "Use ThemeId::BUILTINS; ThemeId::ALL now includes Custom"]
-    pub const ALL: &[ThemeId] = Self::BUILTINS;
+    pub const ALL: &[Self] = Self::BUILTINS;
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            ThemeId::CatppuccinMocha => "Catppuccin Mocha",
-            ThemeId::VsCodeDark => "VS Code Dark",
-            ThemeId::Signex => "Signex",
-            ThemeId::Alplab => "Alp Lab",
-            ThemeId::GitHubDark => "GitHub Dark",
-            ThemeId::SolarizedLight => "Solarized Light",
-            ThemeId::Nord => "Nord",
-            ThemeId::Custom => "Custom",
+            Self::CatppuccinMocha => "Catppuccin Mocha",
+            Self::VsCodeDark => "VS Code Dark",
+            Self::Signex => "Signex",
+            Self::Alplab => "Alp Lab",
+            Self::GitHubDark => "GitHub Dark",
+            Self::SolarizedLight => "Solarized Light",
+            Self::Nord => "Nord",
+            Self::Custom => "Custom",
         }
     }
 }
@@ -452,30 +455,29 @@ const NORD_CANVAS: CanvasColors = CanvasColors {
 // Public accessors
 // ---------------------------------------------------------------------------
 
-pub fn theme_tokens(id: ThemeId) -> ThemeTokens {
+#[must_use]
+pub const fn theme_tokens(id: ThemeId) -> ThemeTokens {
     match id {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_TOKENS,
         ThemeId::VsCodeDark => VSCODE_DARK_TOKENS,
-        ThemeId::Signex => SIGNEX_TOKENS,
+        ThemeId::Signex | ThemeId::Custom => SIGNEX_TOKENS,
         ThemeId::Alplab => ALPLAB_TOKENS,
         ThemeId::GitHubDark => GITHUB_DARK_TOKENS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_TOKENS,
         ThemeId::Nord => NORD_TOKENS,
-        ThemeId::Custom => SIGNEX_TOKENS, // caller must use CustomThemeFile directly
     }
 }
 
-pub fn canvas_colors(id: ThemeId) -> CanvasColors {
+#[must_use]
+pub const fn canvas_colors(id: ThemeId) -> CanvasColors {
     match id {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_CANVAS,
         ThemeId::VsCodeDark => VSCODE_DARK_CANVAS,
-        ThemeId::Signex => SIGNEX_CANVAS,
+        ThemeId::Signex | ThemeId::Alplab | ThemeId::Custom => SIGNEX_CANVAS,
         // Alp Lab reuses the Altium-style cream schematic palette; only
         // the chrome accent differs.
-        ThemeId::Alplab => SIGNEX_CANVAS,
         ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
         ThemeId::Nord => NORD_CANVAS,
-        ThemeId::Custom => SIGNEX_CANVAS, // caller must use CustomThemeFile directly
     }
 }
