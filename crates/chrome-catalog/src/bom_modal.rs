@@ -8,7 +8,7 @@ use crate::catalog::Message;
 use crate::icon::x_handle;
 use crate::theme;
 
-pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     const MODAL_WIDTH: f32 = 1100.0;
     const MODAL_HEIGHT: f32 = 660.0;
     const HEADER_HEIGHT: f32 = 28.0;

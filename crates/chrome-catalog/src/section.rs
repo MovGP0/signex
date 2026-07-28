@@ -5,7 +5,7 @@ use signex_types::theme::ThemeTokens;
 use crate::catalog::Message;
 use crate::theme;
 
-pub(crate) fn view<'a>(
+pub fn view<'a>(
     title: &'static str,
     tokens: &ThemeTokens,
     body: Element<'a, Message>,

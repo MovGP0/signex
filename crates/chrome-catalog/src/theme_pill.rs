@@ -5,7 +5,7 @@ use signex_types::theme::{ThemeId, ThemeTokens};
 use crate::catalog::Message;
 use crate::theme;
 
-pub(crate) fn view<'a>(
+pub fn view<'a>(
     theme_id: ThemeId,
     is_selected: bool,
     tokens: &ThemeTokens,

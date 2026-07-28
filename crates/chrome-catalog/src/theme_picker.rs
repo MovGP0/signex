@@ -6,7 +6,7 @@ use crate::catalog::Message;
 use crate::theme;
 use crate::theme_pill;
 
-pub(crate) fn view<'a>(selected_theme: ThemeId, tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn view<'a>(selected_theme: ThemeId, tokens: &ThemeTokens) -> Element<'a, Message> {
     let toolbar_bg = theme::color(tokens.toolbar_bg);
     let text_color = theme::color(tokens.text);
     let mut pills: Row<'a, Message> = Row::new().spacing(6);

@@ -6,7 +6,7 @@ use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 use crate::catalog::Message;
 use crate::theme;
 
-pub(crate) fn document_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn document_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let tabs_row = Row::new()
         .spacing(0)
         .push(tab(
@@ -39,7 +39,7 @@ pub(crate) fn document_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     strip_with_baseline(tabs_row, AccentPosition::Bottom, tokens)
 }
 
-pub(crate) fn state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let mut tabs: Row<'a, Message> = Row::new().spacing(0);
     for (label, active, dragging, hovered, last) in [
         ("Inactive", false, false, false, false),
@@ -61,7 +61,7 @@ pub(crate) fn state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     strip_with_baseline(tabs, AccentPosition::Bottom, tokens)
 }
 
-pub(crate) fn panel_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn panel_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let mut tabs: Row<'a, Message> = Row::new().spacing(0);
     for (index, label) in [
         "Components",

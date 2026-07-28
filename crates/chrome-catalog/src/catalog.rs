@@ -7,7 +7,7 @@ use signex_widgets::passive_calculator::{CalculatorControl, CalculatorMessage};
 
 use crate::{bom_modal, modal_card, project_tree, section, tabs, theme, theme_picker};
 
-pub(crate) fn run() -> iced::Result {
+pub fn run() -> iced::Result {
     iced::application(Catalog::new, Catalog::update, Catalog::view)
         .title("Signex Chrome Catalog")
         .theme(|state: &Catalog| state.iced_theme())
@@ -22,7 +22,7 @@ struct Catalog {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum Message {
+pub enum Message {
     SelectTheme(ThemeId),
     PassiveCalculator(CalculatorMessage),
 }
@@ -46,7 +46,7 @@ impl Catalog {
         }
     }
 
-    fn iced_theme(&self) -> Theme {
+    const fn iced_theme(&self) -> Theme {
         match self.theme {
             ThemeId::SolarizedLight => Theme::Light,
             _ => Theme::Dark,

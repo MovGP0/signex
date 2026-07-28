@@ -6,7 +6,7 @@ use crate::catalog::Message;
 use crate::icon::x_handle;
 use crate::theme;
 
-pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     const HEADER_HEIGHT: f32 = 28.0;
     const CLOSE_WIDTH: f32 = 46.0;
     const ICON_SIZE: f32 = 14.0;

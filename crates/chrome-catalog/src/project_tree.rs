@@ -5,7 +5,7 @@ use signex_types::theme::ThemeTokens;
 use crate::catalog::Message;
 use crate::theme;
 
-pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let mut rows: Column<'a, Message> = Column::new().spacing(2);
     for (label, open, dirty, active) in [
         ("clean.standard_sch", false, false, false),
