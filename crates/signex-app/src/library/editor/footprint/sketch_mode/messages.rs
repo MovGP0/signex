@@ -1,3 +1,9 @@
+#![expect(
+    clippy::large_enum_variant,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Phase 5.5 — `SketchEdit` / `SketchModeMsg` enums consumed by the
 //! solve-on-edit dispatcher and emitted by the Phase 6 UI shell.
 //!
@@ -58,7 +64,7 @@ pub enum SketchEdit {
 /// The active drawing tool inside Sketch mode. The Phase 6 UI's
 /// tool palette emits `SetTool(...)` to switch the active tool;
 /// the canvas uses this to interpret pointer events. The placeholder
-/// list maps to the SKETCH_MODE_v0.13_PLAN.md §6.3 spec.
+/// list maps to the `SKETCH_MODE_v0.13_PLAN.md` §6.3 spec.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ActiveTool {
     /// No tool active — pointer pans / selects only.
@@ -96,7 +102,7 @@ pub enum ToolEvent {
 /// Top-level sketch-mode message routed by the iced `update` path.
 #[derive(Debug, Clone)]
 pub enum SketchModeMsg {
-    /// One atomic edit to the underlying SketchData.
+    /// One atomic edit to the underlying `SketchData`.
     Edit(SketchEdit),
     /// Switch the active drawing tool.
     ToolChanged(ActiveTool),

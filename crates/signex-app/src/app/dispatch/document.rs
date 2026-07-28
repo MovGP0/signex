@@ -1,6 +1,13 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{BomPreviewMsg, EditMsg, ExportMsg, FileMsg, Message, PrintPreviewMsg, Signex};
 
 impl Signex {
     /// Edit-command message handler (namespaced family, ADR-0001 D3).
@@ -227,10 +234,10 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::ColumnHoverExit(idx) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
-                    if p.column_hover == Some(idx) {
-                        p.column_hover = None;
-                    }
+                if let Some(p) = self.document_state.bom_preview.as_mut()
+                    && p.column_hover == Some(idx)
+                {
+                    p.column_hover = None;
                 }
                 self.finish_update()
             }
@@ -244,7 +251,7 @@ impl Signex {
                         match p.options.columns.get(idx) {
                             Some(BomColumn::Name) => 140.0,
                             Some(BomColumn::Description) => 220.0,
-                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
+                            Some(BomColumn::Designator | BomColumn::Reference) => 220.0,
                             Some(BomColumn::Value) => 110.0,
                             Some(BomColumn::Footprint) => 140.0,
                             Some(BomColumn::LibRef) => 160.0,

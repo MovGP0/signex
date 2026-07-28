@@ -1,10 +1,15 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Open-tree-document + tree-path resolution for the project-navigation dock.
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::Signex;
 use anyhow::{Context, Result};
 
 impl Signex {
@@ -37,8 +42,7 @@ impl Signex {
                 e.path
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .map(|n| n == raw_label)
-                    .unwrap_or(false)
+                    .is_some_and(|n| n == raw_label)
             })?;
             return Some(project.data.resolve_library_path(entry));
         }
@@ -80,16 +84,16 @@ impl Signex {
         // (#54)
         let project_idx = *tree_path
             .first()
-            .with_context(|| format!("project tree path was empty for {}", filename))?;
+            .with_context(|| format!("project tree path was empty for {filename}"))?;
         let loaded = self
             .document_state
             .projects
             .get(project_idx)
-            .with_context(|| format!("resolve project for {}", filename))?;
+            .with_context(|| format!("resolve project for {filename}"))?;
         let project_dir = loaded
             .path
             .parent()
-            .with_context(|| format!("resolve project directory for {}", filename))?
+            .with_context(|| format!("resolve project directory for {filename}"))?
             .to_path_buf();
 
         // F21 follow-up — `.snxlib` library entries can live outside
@@ -118,8 +122,7 @@ impl Signex {
                         .path
                         .file_name()
                         .and_then(|s| s.to_str())
-                        .map(|n| n == filename)
-                        .unwrap_or(false)
+                        .is_some_and(|n| n == filename)
                 })
                 .with_context(|| {
                     format!(

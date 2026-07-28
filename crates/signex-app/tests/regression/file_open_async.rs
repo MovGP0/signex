@@ -1,3 +1,9 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::doc_lazy_continuation,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! #99 — schematic/PCB file-open read+parse is async.
 //!
 //! `open_schematic_file` / `open_pcb_file` used to `fs::read_to_string`

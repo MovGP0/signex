@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use crate::keymap::{
     AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutBinding,
     ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
@@ -15,7 +21,8 @@ pub struct KeymapEditorModel {
 }
 
 impl KeymapEditorModel {
-    pub fn new(profiles: ShortcutProfileSet) -> Self {
+    #[must_use]
+    pub const fn new(profiles: ShortcutProfileSet) -> Self {
         Self {
             profiles,
             trigger_drafts: BTreeMap::new(),
@@ -27,6 +34,7 @@ impl KeymapEditorModel {
         Ok(Self::new(ShortcutProfileSet::built_ins()?))
     }
 
+    #[must_use]
     pub fn profiles(&self) -> Vec<KeymapEditorProfile> {
         self.profiles
             .profiles()
@@ -40,6 +48,7 @@ impl KeymapEditorModel {
             .collect()
     }
 
+    #[must_use]
     pub fn rows(&self) -> Vec<KeymapEditorRow> {
         let active = self.profiles.active_profile();
         let source = match active.kind {
@@ -68,12 +77,11 @@ impl KeymapEditorModel {
                         .is_none_or(|key| !self.invalid_trigger_drafts.contains(key));
                     KeymapEditorRow {
                         command,
-                        group: metadata
-                            .map(|metadata| metadata.group)
-                            .unwrap_or(CommandGroup::General),
-                        category: metadata
-                            .map(|metadata| metadata.category.to_string())
-                            .unwrap_or_else(|| "uncategorized".to_string()),
+                        group: metadata.map_or(CommandGroup::General, |metadata| metadata.group),
+                        category: metadata.map_or_else(
+                            || "uncategorized".to_string(),
+                            |metadata| metadata.category.to_string(),
+                        ),
                         label: metadata
                             .map(|metadata| metadata.label.to_string())
                             .or_else(|| binding.action.command().map(fallback_label))
@@ -92,6 +100,7 @@ impl KeymapEditorModel {
     /// [`Self::rows`] filtered by a case-insensitive search query against
     /// each row's label, command id or trigger text. An empty query
     /// returns every row.
+    #[must_use]
     pub fn filtered_rows(&self, query: &str) -> Vec<KeymapEditorRow> {
         self.rows()
             .into_iter()
@@ -133,18 +142,22 @@ impl KeymapEditorModel {
         Ok(())
     }
 
+    #[must_use]
     pub fn active_profile(&self) -> &ShortcutProfile {
         self.profiles.active_profile()
     }
 
-    pub fn profile_set(&self) -> &ShortcutProfileSet {
+    #[must_use]
+    pub const fn profile_set(&self) -> &ShortcutProfileSet {
         &self.profiles
     }
 
+    #[must_use]
     pub fn active_keymap(&self) -> CompiledKeymap {
         self.profiles.compile_active()
     }
 
+    #[must_use]
     pub fn active_profile_is_custom(&self) -> bool {
         self.profiles.active_profile().kind == ShortcutProfileKind::Custom
     }
@@ -179,6 +192,7 @@ impl KeymapEditorModel {
         Ok(())
     }
 
+    #[must_use]
     pub fn has_invalid_trigger_drafts(&self) -> bool {
         !self.invalid_trigger_drafts.is_empty()
     }
@@ -189,14 +203,17 @@ impl KeymapEditorModel {
     /// including an edit retyped back to the original, which compares
     /// clean); an *invalid* draft counts as dirty on its own because it is
     /// pending user input that Save refuses to commit.
+    #[must_use]
     pub fn differs_from(&self, live: &ShortcutProfileSet) -> bool {
         self.profiles != *live || !self.invalid_trigger_drafts.is_empty()
     }
 
+    #[must_use]
     pub fn active_conflicts(&self) -> Vec<BindingConflict> {
         self.active_keymap().conflicts()
     }
 
+    #[must_use]
     pub fn into_profiles(self) -> ShortcutProfileSet {
         self.profiles
     }
@@ -256,6 +273,7 @@ impl KeymapEditorRow {
     /// Case-insensitive substring match on the row's label, command id or
     /// current trigger text. An empty (or whitespace-only) query matches
     /// every row. Never panics — safe on empty / odd input.
+    #[must_use]
     pub fn matches_query(&self, query: &str) -> bool {
         let needle = query.trim().to_lowercase();
         if needle.is_empty() {
@@ -282,8 +300,9 @@ pub enum KeymapEditorSource {
 impl From<ShortcutProfile> for KeymapEditorModel {
     fn from(profile: ShortcutProfile) -> Self {
         let active = profile.id.clone();
-        let profiles = ShortcutProfileSet::new([profile], active)
-            .expect("single-profile editor model uses its profile as active");
+        let profiles = ShortcutProfileSet::new([profile], active).unwrap_or_else(|error| {
+            panic!("single-profile editor model must use its profile as active: {error}")
+        });
         Self::new(profiles)
     }
 }

@@ -1,3 +1,12 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::items_after_statements,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Floating detached-modal body builders — move-selection, net-colour
 //! palette, parameter manager, and custom colour picker — plus the shared
 //! modal close button.
@@ -6,7 +15,9 @@
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{
+    Element, Message, MoveSelectionMsg, NetColorMsg, ParameterManagerMsg, Signex, WindowMsg,
+};
 
 impl Signex {
     /// Altium-style Move Selection dialog. Two numeric inputs plus
@@ -51,7 +62,7 @@ impl Signex {
 
         let body = container(
             column![
-                text(format!("{} item(s) selected", selection_count))
+                text(format!("{selection_count} item(s) selected"))
                     .size(11)
                     .color(text_muted),
                 Space::new().height(12),
@@ -164,7 +175,7 @@ impl Signex {
     }
 
     /// Altium F5 Net Color palette — list of net labels with a per-net
-    /// color picker. Ships with a 10-swatch palette; a full ColorPicker
+    /// color picker. Ships with a 10-swatch palette; a full `ColorPicker`
     /// widget can replace it later without changing the message contract.
     pub(super) fn view_net_color_palette_body(&self) -> Element<'_, Message> {
         use iced::widget::{Space, button, column, container, row, scrollable, text};
@@ -329,8 +340,8 @@ impl Signex {
     /// Altium-style Parameter Manager — a scrolling table listing every
     /// placed symbol with columns for reference / value / footprint and
     /// a "Parameter" column that reveals the union of custom fields
-    /// across the design. Each cell is a text_input so the user can edit
-    /// values inline. Changes route through Command::SetSymbolField so
+    /// across the design. Each cell is a `text_input` so the user can edit
+    /// values inline. Changes route through `Command::SetSymbolField` so
     /// undo/redo / dirty-flagging behaves.
     pub(super) fn view_parameter_manager_body(&self) -> Element<'_, Message> {
         use iced::widget::{Space, column, container, row, scrollable, text, text_input};

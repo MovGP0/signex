@@ -1,3 +1,11 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::missing_errors_doc,
+    clippy::return_self_not_must_use,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::path::PathBuf;
 
 use iced::Point;
@@ -52,38 +60,43 @@ pub enum TabKind {
 
 impl TabKind {
     #[allow(dead_code)]
-    pub fn is_component_editor(&self) -> bool {
-        matches!(self, TabKind::ComponentEditor(_))
+    #[must_use]
+    pub const fn is_component_editor(&self) -> bool {
+        matches!(self, Self::ComponentEditor(_))
     }
 
-    pub fn as_component_editor(&self) -> Option<&ComponentEditorTab> {
+    #[must_use]
+    pub const fn as_component_editor(&self) -> Option<&ComponentEditorTab> {
         match self {
-            TabKind::ComponentEditor(c) => Some(c),
+            Self::ComponentEditor(c) => Some(c),
             _ => None,
         }
     }
 
     /// `Some(path)` if this tab is a standalone Symbol editor.
-    pub fn as_symbol_editor(&self) -> Option<&PathBuf> {
+    #[must_use]
+    pub const fn as_symbol_editor(&self) -> Option<&PathBuf> {
         match self {
-            TabKind::SymbolEditor(p) => Some(p),
+            Self::SymbolEditor(p) => Some(p),
             _ => None,
         }
     }
 
     /// `Some(path)` if this tab is a standalone Footprint editor.
-    pub fn as_footprint_editor(&self) -> Option<&PathBuf> {
+    #[must_use]
+    pub const fn as_footprint_editor(&self) -> Option<&PathBuf> {
         match self {
-            TabKind::FootprintEditor(p) => Some(p),
+            Self::FootprintEditor(p) => Some(p),
             _ => None,
         }
     }
 
     /// `Some(path)` if this tab is a Library Browser. The path is the
     /// `.snxlib` directory the browser is bound to.
-    pub fn as_library_browser(&self) -> Option<&PathBuf> {
+    #[must_use]
+    pub const fn as_library_browser(&self) -> Option<&PathBuf> {
         match self {
-            TabKind::LibraryBrowser(p) => Some(p),
+            Self::LibraryBrowser(p) => Some(p),
             _ => None,
         }
     }
@@ -98,11 +111,12 @@ pub enum DrawMode {
 }
 
 impl DrawMode {
-    pub fn next(self) -> Self {
+    #[must_use]
+    pub const fn next(self) -> Self {
         match self {
-            DrawMode::Ortho90 => DrawMode::Angle45,
-            DrawMode::Angle45 => DrawMode::FreeAngle,
-            DrawMode::FreeAngle => DrawMode::Ortho90,
+            Self::Ortho90 => Self::Angle45,
+            Self::Angle45 => Self::FreeAngle,
+            Self::FreeAngle => Self::Ortho90,
         }
     }
 }
@@ -116,7 +130,13 @@ pub struct SchematicTabSession {
 }
 
 impl SchematicTabSession {
-    pub fn new(engine: signex_engine::Engine, title: String, path: PathBuf, dirty: bool) -> Self {
+    #[must_use]
+    pub const fn new(
+        engine: signex_engine::Engine,
+        title: String,
+        path: PathBuf,
+        dirty: bool,
+    ) -> Self {
         Self {
             title,
             path,
@@ -125,7 +145,7 @@ impl SchematicTabSession {
         }
     }
 
-    pub fn set_dirty(&mut self, dirty: bool) {
+    pub const fn set_dirty(&mut self, dirty: bool) {
         self.dirty = dirty;
     }
 
@@ -138,15 +158,16 @@ impl SchematicTabSession {
 
     pub fn save_as(&mut self, path: PathBuf) -> Result<(), signex_engine::EngineError> {
         self.engine.save_as(&path)?;
-        self.title = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Schematic".to_string());
+        self.title = path.file_stem().map_or_else(
+            || "Schematic".to_string(),
+            |stem| stem.to_string_lossy().to_string(),
+        );
         self.path = path;
         self.dirty = false;
         Ok(())
     }
 
+    #[must_use]
     pub fn into_parts(self) -> (signex_engine::Engine, String, PathBuf, bool) {
         (self.engine, self.title, self.path, self.dirty)
     }
@@ -165,7 +186,8 @@ pub enum TabDocument {
 
 impl TabDocument {
     #[allow(dead_code)]
-    pub fn as_pcb(&self) -> Option<&PcbBoard> {
+    #[must_use]
+    pub const fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
             Self::Pcb(board) => Some(board),
         }
@@ -186,7 +208,7 @@ pub struct TabInfo {
     pub project_id: Option<super::state::ProjectId>,
     /// What kind of document this tab is hosting. Schematic / PCB
     /// tabs continue to use `path` for engine + dirty-paths bookkeeping;
-    /// ComponentEditor tabs carry the `(library_path, table, row_id)`
+    /// `ComponentEditor` tabs carry the `(library_path, table, row_id)`
     /// triple that resolves into `LibraryState.editors`.
     pub kind: TabKind,
 }
@@ -211,6 +233,7 @@ pub enum LocalColorSlot {
 }
 
 /// Transient open-state for a placed graphic's fill colour-picker.
+///
 /// `idx` is the graphic's index in the active symbol; `advanced` is
 /// `true` once the user expanded the inline palette into the HSV / RGB
 /// overlay. UI-only — never serialized, never snapshotted for undo.
@@ -221,6 +244,7 @@ pub struct GraphicFillPicker {
 }
 
 /// Transient open-state for a symbol-level local-colour picker.
+///
 /// `slot` selects Fills / Lines / Pins; `advanced` is `true` once the
 /// user expanded into the HSV / RGB overlay. UI-only — never
 /// serialized, never snapshotted for undo.
@@ -263,7 +287,7 @@ pub struct SymbolEditorState {
     /// outside the canvas. Per-tab — tracking the cursor is
     /// inherently a single-canvas concept.
     pub cursor_mm: Option<(f64, f64)>,
-    /// v0.13 — SchLib selection filter. Per-kind selectable flags
+    /// v0.13 — `SchLib` selection filter. Per-kind selectable flags
     /// gate which entities the canvas hit-tester considers. Mirrors
     /// the footprint editor's `selection_filter`.
     pub selection_filter: crate::library::editor::symbol::state::SymbolSelectionFilter,
@@ -330,6 +354,7 @@ impl SymbolEditorState {
     /// Build a fresh standalone editor state from a `SymbolFile`
     /// container loaded off disk. `path` is the `.snxsym` file the
     /// user opened. The editor opens on the first symbol in the file.
+    #[must_use]
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         let mut state = Self {
             path,
@@ -464,6 +489,7 @@ impl FootprintEditorState {
     /// user opened. The editor opens on the first footprint in the
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
+    #[must_use]
     pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
         let active_idx = 0;
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
@@ -572,7 +598,7 @@ impl FootprintEditorState {
     /// `ui_state.snap_enabled` so opening a `.snxfpt` while the user
     /// has the global snap toggle off doesn't surprise them with snap
     /// suddenly back on. Call sites pass `!ui_state.snap_enabled`.
-    pub fn with_global_snap_disabled(mut self, disabled: bool) -> Self {
+    pub const fn with_global_snap_disabled(mut self, disabled: bool) -> Self {
         self.state.global_snap_disabled = disabled;
         self
     }
@@ -664,19 +690,19 @@ pub enum Tool {
 impl std::fmt::Display for Tool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tool::Select => write!(f, "Select"),
-            Tool::Wire => write!(f, "Draw Wire"),
-            Tool::Bus => write!(f, "Draw Bus"),
-            Tool::Label => write!(f, "Place Label"),
-            Tool::Component => write!(f, "Place Component"),
-            Tool::Text => write!(f, "Place Text"),
-            Tool::NoConnect => write!(f, "Place No Connect"),
-            Tool::BusEntry => write!(f, "Place Bus Entry"),
-            Tool::Line => write!(f, "Draw Line"),
-            Tool::Rectangle => write!(f, "Draw Rectangle"),
-            Tool::Circle => write!(f, "Draw Circle"),
-            Tool::Arc => write!(f, "Draw Arc"),
-            Tool::Polyline => write!(f, "Draw Polygon"),
+            Self::Select => write!(f, "Select"),
+            Self::Wire => write!(f, "Draw Wire"),
+            Self::Bus => write!(f, "Draw Bus"),
+            Self::Label => write!(f, "Place Label"),
+            Self::Component => write!(f, "Place Component"),
+            Self::Text => write!(f, "Place Text"),
+            Self::NoConnect => write!(f, "Place No Connect"),
+            Self::BusEntry => write!(f, "Place Bus Entry"),
+            Self::Line => write!(f, "Draw Line"),
+            Self::Rectangle => write!(f, "Draw Rectangle"),
+            Self::Circle => write!(f, "Draw Circle"),
+            Self::Arc => write!(f, "Draw Arc"),
+            Self::Polyline => write!(f, "Draw Polygon"),
         }
     }
 }

@@ -111,7 +111,7 @@ fn fixture_row(pn: &str) -> ComponentRow {
     }
 }
 
-/// LifecycleFilter Released-only mode keeps `Released` rows and
+/// `LifecycleFilter` Released-only mode keeps `Released` rows and
 /// drops every other state — guards plan §6's "preferred only"
 /// pivot from drifting back to "active + preferred".
 #[test]

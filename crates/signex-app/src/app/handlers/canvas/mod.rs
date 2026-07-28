@@ -1,7 +1,15 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 use signex_types::coord::Unit;
 
-use super::super::*;
+use super::super::{CanvasEvent, Message, Signex, selection_request};
 
 mod clicked;
 mod double_clicked;
@@ -10,41 +18,40 @@ mod layout_drag;
 mod tests;
 
 /// Default stroke width applied when the user hasn't edited the
-/// pre_placement Width value yet. Standard's "default line width"
+/// `pre_placement` Width value yet. Standard's "default line width"
 /// is ~0.15 mm in schematics; showing 0 in the properties panel
 /// used to confuse users because the line was still visible
 /// (renderer substitutes its own default for 0).
 const DEFAULT_SHAPE_STROKE_MM: f64 = 0.15;
 
 /// Read the shape width + fill defaults out of the current
-/// pre_placement slot (TAB-configured) so shape tools pick up the
+/// `pre_placement` slot (TAB-configured) so shape tools pick up the
 /// user's Width/Fill edits when committing the next click.
 fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
-    doc.panel_ctx
-        .pre_placement
-        .as_ref()
-        .map(|pp| {
+    doc.panel_ctx.pre_placement.as_ref().map_or(
+        (
+            DEFAULT_SHAPE_STROKE_MM,
+            signex_types::schematic::FillType::None,
+        ),
+        |pp| {
             let w = if pp.shape_width_mm > 0.0 {
                 pp.shape_width_mm
             } else {
                 DEFAULT_SHAPE_STROKE_MM
             };
             (w, pp.shape_fill)
-        })
-        .unwrap_or((
-            DEFAULT_SHAPE_STROKE_MM,
-            signex_types::schematic::FillType::None,
-        ))
+        },
+    )
 }
 
 impl Signex {
     pub(crate) fn handle_canvas_interaction_event(&mut self, event: CanvasEvent) -> Task<Message> {
         match event {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
-                self.ui_state.cursor_x = x as f64;
-                self.ui_state.cursor_y = y as f64;
+                self.ui_state.cursor_x = f64::from(x);
+                self.ui_state.cursor_y = f64::from(y);
                 self.ui_state.zoom = zoom_pct;
                 // Hover detection: fast hit-test against the active
                 // schematic snapshot so the tooltip overlay (in
@@ -59,7 +66,11 @@ impl Signex {
                     .active_canvas()
                     .active_snapshot()
                     .and_then(|snap| {
-                        crate::schematic_runtime::hit_test::hit_test(snap, x as f64, y as f64)
+                        crate::schematic_runtime::hit_test::hit_test(
+                            snap,
+                            f64::from(x),
+                            f64::from(y),
+                        )
                     })
                     .and_then(|hit| {
                         matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
@@ -98,10 +109,13 @@ impl Signex {
                 let sampled = if let Some(pts) = self.ui_state.lasso_polygon.as_mut()
                     && let Some(&last) = pts.last()
                 {
-                    let dx = x as f64 - last.x;
-                    let dy = y as f64 - last.y;
-                    if (dx * dx + dy * dy).sqrt() >= sample_min_mm {
-                        pts.push(signex_types::schematic::Point::new(x as f64, y as f64));
+                    let dx = f64::from(x) - last.x;
+                    let dy = f64::from(y) - last.y;
+                    if dx.hypot(dy) >= sample_min_mm {
+                        pts.push(signex_types::schematic::Point::new(
+                            f64::from(x),
+                            f64::from(y),
+                        ));
                         true
                     } else {
                         false
@@ -123,7 +137,7 @@ impl Signex {
                 // off-grid origin; users expect the endpoint to be on-grid
                 // like Standard/Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
-                    let gs = self.ui_state.grid_size_mm as f64;
+                    let gs = f64::from(self.ui_state.grid_size_mm);
                     let primary = self
                         .interaction_state
                         .canvas
@@ -301,16 +315,15 @@ impl Signex {
             });
         match parse_result {
             Ok(sheet) => {
-                let title = path
-                    .file_stem()
-                    .map(|stem| stem.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "Schematic".to_string());
+                let title = path.file_stem().map_or_else(
+                    || "Schematic".to_string(),
+                    |stem| stem.to_string_lossy().to_string(),
+                );
                 self.open_schematic_tab(path, title, sheet);
             }
             Err(error) => {
                 crate::diagnostics::log_info(format!(
-                    "Failed to open child-sheet schematic from double-click: {}",
-                    error
+                    "Failed to open child-sheet schematic from double-click: {error}"
                 ));
             }
         }

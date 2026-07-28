@@ -1,10 +1,16 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! BOM preview — the Properties sidebar (General / Columns tabs) plus the
 //! grouping / format / toggle / variant / column control rows it consumes.
 //! Extracted from `dialogs/bom.rs` (ADR-0001, issue #164) as pure code
 //! motion — the child-push order inside every row/column is preserved
 //! byte-for-byte, so the rendered sidebar is pixel-identical.
 
-use super::super::*;
+use super::super::{BomPreviewMsg, Message, Signex};
 use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 

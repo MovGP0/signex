@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_engine::TextTarget;

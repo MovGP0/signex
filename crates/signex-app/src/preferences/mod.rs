@@ -1,3 +1,10 @@
+#![expect(
+    clippy::implicit_hasher,
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Preferences dialog — Altium-style modal with left navigation + right content.
 //!
 //! Opened via Tools > Preferences (or keyboard shortcut).
@@ -60,36 +67,38 @@ pub enum PrefNav {
 }
 
 impl PrefNav {
-    pub const ALL: &'static [PrefNav] = &[
-        PrefNav::Appearance,
-        PrefNav::Keyboard,
-        PrefNav::Erc,
-        PrefNav::LibraryDistributors,
-        PrefNav::ComponentClasses,
+    pub const ALL: &'static [Self] = &[
+        Self::Appearance,
+        Self::Keyboard,
+        Self::Erc,
+        Self::LibraryDistributors,
+        Self::ComponentClasses,
     ];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PrefNav::Appearance => "Appearance",
-            PrefNav::Keyboard => "Keyboard Shortcuts",
-            PrefNav::Erc => "Electrical Rules",
-            PrefNav::LibraryDistributors => "Distributor APIs",
+            Self::Appearance => "Appearance",
+            Self::Keyboard => "Keyboard Shortcuts",
+            Self::Erc => "Electrical Rules",
+            Self::LibraryDistributors => "Distributor APIs",
             // Now a *seed* pane — the actual class registry is
             // per-library inside each `.snxlib`'s manifest. This
             // list is what every newly-created library gets seeded
             // with, so users can establish a personal taxonomy
             // baseline once and have new libraries inherit it.
-            PrefNav::ComponentClasses => "Default Component Classes",
+            Self::ComponentClasses => "Default Component Classes",
         }
     }
 
-    pub fn group(self) -> &'static str {
+    #[must_use]
+    pub const fn group(self) -> &'static str {
         match self {
-            PrefNav::Appearance => "System",
-            PrefNav::Keyboard => "System",
-            PrefNav::Erc => "Validation",
-            PrefNav::LibraryDistributors => "Library",
-            PrefNav::ComponentClasses => "Library",
+            Self::Appearance => "System",
+            Self::Keyboard => "System",
+            Self::Erc => "Validation",
+            Self::LibraryDistributors => "Library",
+            Self::ComponentClasses => "Library",
         }
     }
 }
@@ -231,6 +240,7 @@ const FOOTER_H: f32 = 44.0;
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
 #[allow(clippy::too_many_arguments)]
+#[must_use]
 pub fn view<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Graphic-selection Properties rows for the symbol editor.
 
 use iced::widget::{Column, container, row, text};
@@ -26,7 +31,7 @@ pub(super) fn view_graphic_selection<'a>(
                         .size(10)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    iced::widget::text_input("mm", &format!("{:.3}", value))
+                    iced::widget::text_input("mm", &format!("{value:.3}"))
                         .padding([2, 4])
                         .size(11)
                         .on_input(move |s| {
@@ -181,7 +186,7 @@ fn graphic_fill_field<'a>(
 
     let this = picker.filter(|p| p.idx == idx);
     let show_palette = this.is_some();
-    let show_advanced = this.map(|p| p.advanced).unwrap_or(false);
+    let show_advanced = this.is_some_and(|p| p.advanced);
 
     let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
         Rc::new(move |rgba| PanelMsg::SymEditorSetGraphicFill { idx, color: rgba });

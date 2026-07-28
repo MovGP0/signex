@@ -1,3 +1,8 @@
+#![expect(
+    clippy::items_after_statements,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Per-tool left-press gesture arms — the sequence of "try to handle
 //! this click" guards that the primary-press classifier walks in
 //! order (lasso, touching-line, round-pad handle, sketch point / line
@@ -49,7 +54,7 @@ impl FootprintCanvas<'_> {
 
     /// v0.27 — Touching Line intercept. First click stashes the start
     /// point; second click commits by publishing
-    /// FootprintTouchingLineCommit, the dispatcher walks pads +
+    /// `FootprintTouchingLineCommit`, the dispatcher walks pads +
     /// selects everything the segment intersects.
     pub(in crate::library::editor::footprint::canvas) fn try_touching_line_click(
         &self,
@@ -84,7 +89,7 @@ impl FootprintCanvas<'_> {
 
     /// v0.27 — Sketch mode + Select tool: hit-test the east-edge cyan
     /// diameter handle of any Round pad before the generic Point-snap.
-    /// The handle is drawn at (pad.position + (pad.size_x/2, 0)) with
+    /// The handle is drawn at (pad.position + (`pad.size_x/2`, 0)) with
     /// a 4 px radius, so allow a 6 px hit slop.
     pub(in crate::library::editor::footprint::canvas) fn try_round_handle_grab(
         &self,
@@ -126,7 +131,7 @@ impl FootprintCanvas<'_> {
     }
 
     /// #361 — "Drag Track End" endpoint-biased segment grab. While the
-    /// DragTrackEnd tool is armed (Place ▸ Drag Track End), a left-press
+    /// `DragTrackEnd` tool is armed (Place ▸ Drag Track End), a left-press
     /// anywhere on a sketch `Line` grabs that line's NEARER endpoint and
     /// arms the existing Point-drag path — so the endpoint follows the
     /// cursor with the solver live, regardless of the 12 px point-snap
@@ -192,7 +197,7 @@ impl FootprintCanvas<'_> {
         // (mirrors `try_sketch_line_grab`). Only Lines carry a draggable
         // "track end"; arcs / circles are out of scope for #361.
         const LINE_HIT_TOL_PX: f32 = 10.0;
-        let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+        let tol_mm = f64::from(LINE_HIT_TOL_PX / cstate.scale.max(1.0));
         let mut best_line: Option<(
             f64,
             signex_sketch::id::SketchEntityId,
@@ -204,14 +209,14 @@ impl FootprintCanvas<'_> {
             {
                 let dx = b.0 - a.0;
                 let dy = b.1 - a.1;
-                let llen2 = dx * dx + dy * dy;
+                let llen2 = dy.mul_add(dy, dx * dx);
                 if llen2 <= 1e-12 {
                     continue;
                 }
-                let t = (((world.0 - a.0) * dx + (world.1 - a.1) * dy) / llen2).clamp(0.0, 1.0);
+                let t = ((world.1 - a.1).mul_add(dy, (world.0 - a.0) * dx) / llen2).clamp(0.0, 1.0);
                 let px = a.0 + t * dx;
                 let py = a.1 + t * dy;
-                let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                let d2 = (py - world.1).mul_add(py - world.1, (px - world.0).powi(2));
                 if d2 <= tol_mm * tol_mm && best_line.as_ref().is_none_or(|(b2, ..)| d2 < *b2) {
                     best_line = Some((d2, start, end));
                 }
@@ -221,7 +226,7 @@ impl FootprintCanvas<'_> {
         // equidistant press resolves to `start` deterministically.
         let (_, start, end) = best_line?;
         let (sp, ep) = (pos_of(start)?, pos_of(end)?);
-        let d2 = |p: (f64, f64)| (p.0 - world.0).powi(2) + (p.1 - world.1).powi(2);
+        let d2 = |p: (f64, f64)| (p.0 - world.0).mul_add(p.0 - world.0, (p.1 - world.1).powi(2));
         let nearer = if d2(ep) < d2(sp) { end } else { start };
 
         // Arm the existing Point-drag path — identical to
@@ -313,7 +318,7 @@ impl FootprintCanvas<'_> {
             && let Some(sketch_ref) = self.sketch
         {
             const LINE_HIT_TOL_PX: f32 = 10.0;
-            let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+            let tol_mm = f64::from(LINE_HIT_TOL_PX / cstate.scale.max(1.0));
             let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId)> = None;
             let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
                 if let Some(solve) = self.state.last_solve.as_ref()
@@ -341,15 +346,15 @@ impl FootprintCanvas<'_> {
                 {
                     let dx = b.0 - a.0;
                     let dy = b.1 - a.1;
-                    let llen2 = dx * dx + dy * dy;
+                    let llen2 = dy.mul_add(dy, dx * dx);
                     if llen2 <= 1e-12 {
                         continue;
                     }
-                    let t = ((world.0 - a.0) * dx + (world.1 - a.1) * dy) / llen2;
+                    let t = (world.1 - a.1).mul_add(dy, (world.0 - a.0) * dx) / llen2;
                     let tc = t.clamp(0.0, 1.0);
                     let px = a.0 + tc * dx;
                     let py = a.1 + tc * dy;
-                    let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                    let d2 = (px - world.0).mul_add(px - world.0, (py - world.1).powi(2));
                     if d2 <= tol_mm * tol_mm && best_line.as_ref().is_none_or(|(b2, _)| d2 < *b2) {
                         best_line = Some((d2, ent.id));
                     }
@@ -389,7 +394,7 @@ impl FootprintCanvas<'_> {
     /// v0.27 — Fusion-style "click the fill, select the closed shape."
     /// Only in Sketch mode + Select tool, and only when the
     /// Point-snap path missed. Walks the same closed-loop adjacency
-    /// the fill renderer uses and dispatches a SelectMany carrying
+    /// the fill renderer uses and dispatches a `SelectMany` carrying
     /// every Line + Point in the loop.
     pub(in crate::library::editor::footprint::canvas) fn try_closed_loop_select(
         &self,
@@ -433,61 +438,62 @@ impl FootprintCanvas<'_> {
         cursor_pos: Point,
         world: (f64, f64),
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if matches!(self.state.mode, EditorMode::Normal) && self.state.selection_filter.pads {
-            if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
-                let pad = &self.state.pads[pad_idx];
-                // v0.27 — defensively clear any stale rubber-band
-                // anchor from a prior gesture so the pad drag doesn't
-                // render alongside a phantom selection box.
-                cstate.box_select_anchor_screen = None;
-                cstate.box_select_current_screen = None;
-                cstate.drag = Some(DragState {
-                    pad_idx,
-                    sketch_point: None,
-                    sketch_line: None,
-                    grab_offset_mm: (world.0 - pad.position_mm.0, world.1 - pad.position_mm.1),
-                    last_world: world,
-                    press_screen: cursor_pos,
-                    moved: false,
-                });
-                // v0.27 — Altium-parity modifier handling on the
-                // pad-hit branch. Ctrl/Cmd toggles the pad in/out of
-                // the multi-select set; Shift extends without removal;
-                // bare click replaces the selection.
-                let cmd = cstate.current_modifiers.command();
-                let shift = cstate.current_modifiers.shift();
-                let select_msg = if cmd || shift {
-                    let mut current: Vec<usize> = self.state.selected_pad.into_iter().collect();
-                    current.extend(self.state.selected_pads_extra.iter().copied());
-                    if cmd {
-                        if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
-                            current.remove(pos);
-                        } else {
-                            current.push(pad_idx);
-                        }
-                    } else if !current.contains(&pad_idx) {
+        if matches!(self.state.mode, EditorMode::Normal)
+            && self.state.selection_filter.pads
+            && let Some(pad_idx) = self.state.pad_at(world.0, world.1)
+        {
+            let pad = &self.state.pads[pad_idx];
+            // v0.27 — defensively clear any stale rubber-band
+            // anchor from a prior gesture so the pad drag doesn't
+            // render alongside a phantom selection box.
+            cstate.box_select_anchor_screen = None;
+            cstate.box_select_current_screen = None;
+            cstate.drag = Some(DragState {
+                pad_idx,
+                sketch_point: None,
+                sketch_line: None,
+                grab_offset_mm: (world.0 - pad.position_mm.0, world.1 - pad.position_mm.1),
+                last_world: world,
+                press_screen: cursor_pos,
+                moved: false,
+            });
+            // v0.27 — Altium-parity modifier handling on the
+            // pad-hit branch. Ctrl/Cmd toggles the pad in/out of
+            // the multi-select set; Shift extends without removal;
+            // bare click replaces the selection.
+            let cmd = cstate.current_modifiers.command();
+            let shift = cstate.current_modifiers.shift();
+            let select_msg = if cmd || shift {
+                let mut current: Vec<usize> = self.state.selected_pad.into_iter().collect();
+                current.extend(self.state.selected_pads_extra.iter().copied());
+                if cmd {
+                    if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
+                        current.remove(pos);
+                    } else {
                         current.push(pad_idx);
                     }
-                    EditorMsg::Footprint(FootprintEditorMsg::SelectPads(current))
-                } else {
-                    EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx)))
-                };
-                return Some(
-                    canvas::Action::publish(LibraryMessage::EditorEvent {
-                        library_path: self.address.library_path.clone(),
-                        table: self.address.table.clone(),
-                        row_id: self.address.row_id,
-                        msg: select_msg,
-                    })
-                    .and_capture(),
-                );
-            }
+                } else if !current.contains(&pad_idx) {
+                    current.push(pad_idx);
+                }
+                EditorMsg::Footprint(FootprintEditorMsg::SelectPads(current))
+            } else {
+                EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx)))
+            };
+            return Some(
+                canvas::Action::publish(LibraryMessage::EditorEvent {
+                    library_path: self.address.library_path.clone(),
+                    table: self.address.table.clone(),
+                    row_id: self.address.row_id,
+                    msg: select_msg,
+                })
+                .and_capture(),
+            );
         }
         None
     }
 
     /// v0.18.18/v0.21 — Silk-front graphic hit, filter-gated per kind.
-    /// Maps each FpGraphicKind to its matching `selection_filter.*`
+    /// Maps each `FpGraphicKind` to its matching `selection_filter.*`
     /// bit so the user can disable Tracks / Arcs / Texts / Regions /
     /// Fills independently.
     pub(in crate::library::editor::footprint::canvas) fn try_silk_select(
@@ -497,7 +503,7 @@ impl FootprintCanvas<'_> {
     ) -> Option<canvas::Action<LibraryMessage>> {
         if matches!(self.state.mode, EditorMode::Normal) && self.state.pads_tool == PadsTool::Select
         {
-            let tolerance = 4.0_f64 / (cstate.scale.max(1.0) as f64);
+            let tolerance = 4.0_f64 / f64::from(cstate.scale.max(1.0));
             if let Some(silk_idx) = silk_f_hit_at(self.silk_f, world.0, world.1, tolerance) {
                 use signex_library::primitive::footprint::FpGraphicKind;
                 let g = &self.silk_f[silk_idx];

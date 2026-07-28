@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Command palette — fuzzy-search peek that fronts the chrome strip.
 //!
 //! VS Code-style Ctrl+Shift+P entry. Three sources feed one flat catalog:
@@ -30,11 +37,11 @@ pub const MAX_RESULTS: usize = 10;
 
 #[derive(Debug, Clone, Default)]
 pub struct CommandPaletteState {
-    /// Dropdown open flag. The text_input is always rendered (it's the
+    /// Dropdown open flag. The `text_input` is always rendered (it's the
     /// chrome-strip search bar); this gates whether the result list
     /// shows. Open implies the input is also focused.
     pub open: bool,
-    /// Live query text — echoed on every text_input change.
+    /// Live query text — echoed on every `text_input` change.
     pub query: String,
     /// Highlighted row in the result list (0-based, clamped to results
     /// at render time).
@@ -156,8 +163,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
                 .path
                 .file_name()
                 .and_then(|s| s.to_str())
-                .map(str::to_string)
-                .unwrap_or_else(|| abs.display().to_string());
+                .map_or_else(|| abs.display().to_string(), str::to_string);
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label,
@@ -175,6 +181,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
 /// is better). Empty query passes everything through with a baseline
 /// rank that prefers Commands > Symbols > Files. The caller can
 /// truncate to `MAX_RESULTS`.
+#[must_use]
 pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> {
     if query.trim().is_empty() {
         // No query → show the catalog in source-priority order so the
@@ -295,8 +302,8 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
 /// User-facing label for every menu action that's worth surfacing in
 /// the palette. Order influences the empty-query default ranking via
 /// `rank_results`'s stable secondary sort on index — keep frequently-
-/// used items near the top. NoOp / passive headers are excluded.
-fn menu_command_table() -> &'static [(&'static str, MenuMessage)] {
+/// used items near the top. `NoOp` / passive headers are excluded.
+const fn menu_command_table() -> &'static [(&'static str, MenuMessage)] {
     &[
         // File
         ("New Project", MenuMessage::NewProject),

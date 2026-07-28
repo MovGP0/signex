@@ -1,11 +1,21 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::manual_unwrap_or_default,
+    clippy::match_same_arms,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::*;
+use super::{Message, NetColorMsg, ParameterManagerMsg, Signex, Tool, WindowMsg, state};
 
 mod command_palette;
 mod document;
 mod keymap;
-pub(crate) mod library;
+pub mod library;
 mod overlay;
 mod passive_calculator;
 mod text_edit;
@@ -85,15 +95,13 @@ impl Signex {
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.shape_width_mm)
-                        .unwrap_or(0.0);
+                        .map_or(0.0, |pp| pp.shape_width_mm);
                     let pp_fill = self
                         .document_state
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.shape_fill)
-                        .unwrap_or(signex_types::schematic::FillType::None);
+                        .map_or(signex_types::schematic::FillType::None, |pp| pp.shape_fill);
                     let pts = std::mem::take(&mut self.interaction_state.polyline_points);
                     let drawing = signex_types::schematic::SchDrawing::Polyline {
                         uuid: uuid::Uuid::new_v4(),
@@ -337,7 +345,7 @@ impl Signex {
                         WindowKind::DetachedModal(modal) => match modal {
                             ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
                             ModalId::AnnotateResetConfirm => {
-                                self.ui_state.annotate_reset_confirm = false
+                                self.ui_state.annotate_reset_confirm = false;
                             }
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => {
@@ -360,10 +368,10 @@ impl Signex {
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
-                                self.ui_state.net_color_palette_open = false
+                                self.ui_state.net_color_palette_open = false;
                             }
                             ModalId::ParameterManager => {
-                                self.ui_state.parameter_manager_open = false
+                                self.ui_state.parameter_manager_open = false;
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
@@ -543,10 +551,10 @@ impl Signex {
                 // path silently no-ops on borderless windows after
                 // the first attempt.
                 let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind {
-                        if *m == modal {
-                            return Some(*id);
-                        }
+                    if let super::state::WindowKind::DetachedModal(m) = kind
+                        && *m == modal
+                    {
+                        return Some(*id);
                     }
                     None
                 });
@@ -641,7 +649,7 @@ impl Signex {
                 // the empty string while the user types.
                 let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
-                let v = parsed as f32 / 255.0;
+                let v = f32::from(parsed) / 255.0;
                 match chan {
                     super::contracts::Channel::R => draft.r = v,
                     super::contracts::Channel::G => draft.g = v,

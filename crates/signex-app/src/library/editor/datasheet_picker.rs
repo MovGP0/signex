@@ -1,4 +1,9 @@
-//! Datasheet tab — small pick_list + value control bound to
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Datasheet tab — small `pick_list` + value control bound to
 //! `state.row.datasheet`. Standalone Component-Preview tab per
 //! `v0.9-refactor-2-plan.md` §11.5.
 //!
@@ -18,7 +23,7 @@ use signex_widgets::theme_ext;
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 
-/// Mode picker entries — drives both the visible pick_list and the
+/// Mode picker entries — drives both the visible `pick_list` and the
 /// inline message routing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DatasheetMode {
@@ -27,15 +32,16 @@ pub enum DatasheetMode {
 }
 
 impl DatasheetMode {
-    pub const ALL: [DatasheetMode; 2] = [DatasheetMode::Url, DatasheetMode::PinnedPdf];
+    pub const ALL: [Self; 2] = [Self::Url, Self::PinnedPdf];
 
     /// Derive the display mode from the current `DatasheetRef`. None
     /// of the options is "no datasheet" — that's the URL mode with an
     /// empty buffer.
-    pub fn from_ref(r: Option<&DatasheetRef>) -> Self {
+    #[must_use]
+    pub const fn from_ref(r: Option<&DatasheetRef>) -> Self {
         match r {
-            Some(DatasheetRef::HashPinned { .. }) => DatasheetMode::PinnedPdf,
-            _ => DatasheetMode::Url,
+            Some(DatasheetRef::HashPinned { .. }) => Self::PinnedPdf,
+            _ => Self::Url,
         }
     }
 }
@@ -43,8 +49,8 @@ impl DatasheetMode {
 impl std::fmt::Display for DatasheetMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            DatasheetMode::Url => "URL",
-            DatasheetMode::PinnedPdf => "Pinned PDF",
+            Self::Url => "URL",
+            Self::PinnedPdf => "Pinned PDF",
         })
     }
 }
@@ -81,8 +87,8 @@ pub fn view<'a>(
     .align_y(iced::Alignment::Center);
 
     let value_row: Element<'a, LibraryMessage> = match mode {
-        DatasheetMode::Url => view_url_input(datasheet, address.clone()),
-        DatasheetMode::PinnedPdf => view_pinned_input(datasheet, tokens, address.clone()),
+        DatasheetMode::Url => view_url_input(datasheet, address),
+        DatasheetMode::PinnedPdf => view_pinned_input(datasheet, tokens, address),
     };
 
     column![
@@ -108,10 +114,10 @@ pub fn view<'a>(
 // Per-mode rows
 // ─────────────────────────────────────────────────────────────────────
 
-fn view_url_input<'a>(
-    datasheet: Option<&'a DatasheetRef>,
+fn view_url_input(
+    datasheet: Option<&DatasheetRef>,
     address: EditorAddress,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let url_value = match datasheet {
         Some(DatasheetRef::Url { url }) => url.clone(),
         _ => String::new(),

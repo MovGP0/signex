@@ -1,6 +1,15 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::match_same_arms,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad-stack 3D preview (CPU iso-projected) + tab strip + Choice
-//! enums (PadShapeChoice / HoleShapeChoice / ExpansionMode) used by
-//! the pick_list rows in `pad_form`.
+//! enums (`PadShapeChoice` / `HoleShapeChoice` / `ExpansionMode`) used by
+//! the `pick_list` rows in `pad_form`.
 
 use iced::widget::{container, row, text};
 use iced::{Color, Length, Theme};
@@ -52,8 +61,8 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             // (Altium default); using 8% of pad width keeps it
             // proportional across pad sizes.
             let mask_outset_mm: f64 = pad_w.max(pad_h) * 0.08;
-            let mask_w = pad_w + 2.0 * mask_outset_mm;
-            let mask_h = pad_h + 2.0 * mask_outset_mm;
+            let mask_w = 2.0f64.mul_add(mask_outset_mm, pad_w);
+            let mask_h = 2.0f64.mul_add(mask_outset_mm, pad_h);
             // v0.27 — tighter stack ratios. The v0.25 substrate_gap
             // = 25% of pad width made the stack look like two
             // separate floating layers rather than a cohesive pad.
@@ -78,17 +87,19 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             // screen units: width = (mask_w + mask_h) * cos30, height
             // = (mask_w + mask_h) * sin30 + total_thickness.
             let proj_w = ((mask_w + mask_h) as f32) * cos30;
-            let proj_h = ((mask_w + mask_h) as f32) * sin30
-                + (copper_thickness_mm + mask_thickness_mm + substrate_gap_mm) as f32;
+            let proj_h = ((mask_w + mask_h) as f32).mul_add(
+                sin30,
+                (copper_thickness_mm + mask_thickness_mm + substrate_gap_mm) as f32,
+            );
             let scale =
                 ((bounds.width * 0.75 / proj_w).min(bounds.height * 0.75 / proj_h)).max(2.0);
             let cx = bounds.width / 2.0;
-            let cy = bounds.height / 2.0 + bounds.height * 0.10; // shift down slightly
+            let cy = bounds.height.mul_add(0.10, bounds.height / 2.0); // shift down slightly
 
             // Project (x, y, z) world → screen.
             let project = move |x: f32, y: f32, z: f32| -> iced::Point {
                 let sx = (x - y) * cos30 * scale;
-                let sy = -((x + y) * sin30 + z) * scale;
+                let sy = -(x + y).mul_add(sin30, z) * scale;
                 iced::Point::new(cx + sx, cy + sy)
             };
 
@@ -141,7 +152,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                         pts.push((inner_w, -hh));
                         // SE arc: center (inner_w, -inner_h), -π/2 → 0
                         for i in 1..=arc_n {
-                            let t = -FRAC_PI_2 + (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            let t = (i as f32 / arc_n as f32).mul_add(FRAC_PI_2, -FRAC_PI_2);
                             pts.push((inner_w + r * t.cos(), -inner_h + r * t.sin()));
                         }
                         // East edge: (hw, -inner_h) → (hw, inner_h)
@@ -155,14 +166,14 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                         pts.push((-inner_w, hh));
                         // NW arc: center (-inner_w, inner_h), π/2 → π
                         for i in 1..=arc_n {
-                            let t = FRAC_PI_2 + (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            let t = (i as f32 / arc_n as f32).mul_add(FRAC_PI_2, FRAC_PI_2);
                             pts.push((-inner_w + r * t.cos(), inner_h + r * t.sin()));
                         }
                         // West edge: (-hw, inner_h) → (-hw, -inner_h)
                         pts.push((-hw, -inner_h));
                         // SW arc: center (-inner_w, -inner_h), π → 3π/2
                         for i in 1..=arc_n {
-                            let t = PI + (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            let t = (i as f32 / arc_n as f32).mul_add(FRAC_PI_2, PI);
                             pts.push((-inner_w + r * t.cos(), -inner_h + r * t.sin()));
                         }
                         let _ = segments;
@@ -295,7 +306,10 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             // mask top would block the view of the silver inner
             // wall AND the copper''s hole would look like a
             // step-up onto a solid blue disc.
-            if let Some(d) = self.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64) {
+            if let Some(d) = self
+                .drill_diameter_mm
+                .filter(|d| *d > f64::from(f32::EPSILON))
+            {
                 let hr = (d / 2.0) as f32;
                 let n = mask_top_pts.len();
                 let inner_mask_top_pts: Vec<iced::Point> = (0..n)
@@ -342,7 +356,10 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             // the ring as quads between outer + inner perimeters
             // sampled at the same theta angles. SMD pads (no drill)
             // keep the simple solid-disc fill.
-            if let Some(d) = self.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64) {
+            if let Some(d) = self
+                .drill_diameter_mm
+                .filter(|d| *d > f64::from(f32::EPSILON))
+            {
                 let hr = (d / 2.0) as f32;
                 let n = cu_top_pts.len();
                 // Sample the hole perimeter at the SAME N angular
@@ -396,7 +413,10 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             // back half of the disc, leaving only the front half
             // visible as dark — matches Altium''s pad-stack preview
             // (silver-dominated cylinder, dark crescent at the bottom).
-            if let Some(d) = self.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64) {
+            if let Some(d) = self
+                .drill_diameter_mm
+                .filter(|d| *d > f64::from(f32::EPSILON))
+            {
                 let hr = (d / 2.0) as f32;
                 let void_color = iced::Color::from_rgba8(0x14, 0x14, 0x14, 1.0);
                 let wall_silver = iced::Color::from_rgba8(0xC8, 0xC8, 0xC8, 1.0);
@@ -417,16 +437,16 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                 let mut wall_poly: Vec<iced::Point> = Vec::with_capacity(2 * (arc_segments + 1));
                 // Top BACK arc (z = copper_z_top), forward order:
                 for i in 0..=arc_segments {
-                    let t = -std::f32::consts::FRAC_PI_4
-                        + (i as f32 / arc_segments as f32) * std::f32::consts::PI;
+                    let t = (i as f32 / arc_segments as f32)
+                        .mul_add(std::f32::consts::PI, -std::f32::consts::FRAC_PI_4);
                     wall_poly.push(project(hr * t.cos(), hr * t.sin(), copper_z_top));
                 }
                 // Bottom BACK arc (z = mask_z_bot), REVERSE order so the
                 // polygon closes as a racetrack with implicit vertical
                 // tangents at the left + right extents.
                 for i in 0..=arc_segments {
-                    let t = 3.0 * std::f32::consts::FRAC_PI_4
-                        - (i as f32 / arc_segments as f32) * std::f32::consts::PI;
+                    let t = (i as f32 / arc_segments as f32)
+                        .mul_add(-std::f32::consts::PI, 3.0 * std::f32::consts::FRAC_PI_4);
                     wall_poly.push(project(hr * t.cos(), hr * t.sin(), mask_z_bot));
                 }
                 fill_poly(&mut frame, &wall_poly, wall_silver);
@@ -541,45 +561,43 @@ pub(super) enum PadShapeChoice {
 }
 
 impl PadShapeChoice {
-    pub(super) const ALL: &'static [PadShapeChoice] = &[
-        PadShapeChoice::Round,
-        PadShapeChoice::Rectangular,
-        PadShapeChoice::Octagonal,
-        PadShapeChoice::RoundedRectangle,
-        PadShapeChoice::ChamferedRectangle,
-        PadShapeChoice::Donut,
+    pub(super) const ALL: &'static [Self] = &[
+        Self::Round,
+        Self::Rectangular,
+        Self::Octagonal,
+        Self::RoundedRectangle,
+        Self::ChamferedRectangle,
+        Self::Donut,
     ];
 
-    pub(super) fn from_lib(s: &signex_library::PadShape) -> Self {
+    pub(super) const fn from_lib(s: &signex_library::PadShape) -> Self {
         match s {
-            signex_library::PadShape::Round => PadShapeChoice::Round,
-            signex_library::PadShape::Rect => PadShapeChoice::Rectangular,
-            signex_library::PadShape::RoundRect { .. } => PadShapeChoice::RoundedRectangle,
-            signex_library::PadShape::Chamfered { .. } => PadShapeChoice::ChamferedRectangle,
+            signex_library::PadShape::Round => Self::Round,
+            signex_library::PadShape::Rect => Self::Rectangular,
+            signex_library::PadShape::RoundRect { .. } => Self::RoundedRectangle,
+            signex_library::PadShape::Chamfered { .. } => Self::ChamferedRectangle,
             // Oval / Custom / Octagonal / Donut have no 1:1 schema
             // home today; collapse to Round so the picker stays
             // consistent. Custom Shape is intentionally absent — use
             // sketch mode for freeform geometry.
-            _ => PadShapeChoice::Round,
+            _ => Self::Round,
         }
     }
-    pub(super) fn to_lib(self) -> signex_library::PadShape {
+    pub(super) const fn to_lib(self) -> signex_library::PadShape {
         use signex_library::primitive::footprint::ChamferedCorners;
         match self {
-            PadShapeChoice::Round => signex_library::PadShape::Round,
-            PadShapeChoice::Rectangular => signex_library::PadShape::Rect,
-            PadShapeChoice::RoundedRectangle => {
-                signex_library::PadShape::RoundRect { radius_ratio: 0.25 }
-            }
-            PadShapeChoice::ChamferedRectangle => signex_library::PadShape::Chamfered {
+            Self::Round => signex_library::PadShape::Round,
+            Self::Rectangular => signex_library::PadShape::Rect,
+            Self::RoundedRectangle => signex_library::PadShape::RoundRect { radius_ratio: 0.25 },
+            Self::ChamferedRectangle => signex_library::PadShape::Chamfered {
                 chamfer_ratio: 0.25,
                 corners: ChamferedCorners::all(),
             },
             // v0.21 schema follow-up: native Octagonal + Donut. Until
             // then Round is the closest mappable shape (Donut's
             // hole comes from the drill anyway).
-            PadShapeChoice::Octagonal => signex_library::PadShape::Round,
-            PadShapeChoice::Donut => signex_library::PadShape::Round,
+            Self::Octagonal => signex_library::PadShape::Round,
+            Self::Donut => signex_library::PadShape::Round,
         }
     }
 }
@@ -587,12 +605,12 @@ impl PadShapeChoice {
 impl std::fmt::Display for PadShapeChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            PadShapeChoice::Round => "Round",
-            PadShapeChoice::Rectangular => "Rectangular",
-            PadShapeChoice::Octagonal => "Octagonal",
-            PadShapeChoice::RoundedRectangle => "Rounded Rectangle",
-            PadShapeChoice::ChamferedRectangle => "Chamfered Rectangle",
-            PadShapeChoice::Donut => "Donut",
+            Self::Round => "Round",
+            Self::Rectangular => "Rectangular",
+            Self::Octagonal => "Octagonal",
+            Self::RoundedRectangle => "Rounded Rectangle",
+            Self::ChamferedRectangle => "Chamfered Rectangle",
+            Self::Donut => "Donut",
         })
     }
 }
@@ -606,15 +624,14 @@ pub(super) enum HoleShapeChoice {
 }
 
 impl HoleShapeChoice {
-    pub(super) const ALL: &'static [HoleShapeChoice] =
-        &[HoleShapeChoice::Round, HoleShapeChoice::Slot];
+    pub(super) const ALL: &'static [Self] = &[Self::Round, Self::Slot];
 }
 
 impl std::fmt::Display for HoleShapeChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            HoleShapeChoice::Round => "Round",
-            HoleShapeChoice::Slot => "Slot",
+            Self::Round => "Round",
+            Self::Slot => "Slot",
         })
     }
 }
@@ -630,14 +647,14 @@ pub(super) enum ExpansionMode {
 }
 
 impl ExpansionMode {
-    pub(super) const ALL: &'static [ExpansionMode] = &[ExpansionMode::Rule, ExpansionMode::Manual];
+    pub(super) const ALL: &'static [Self] = &[Self::Rule, Self::Manual];
 }
 
 impl std::fmt::Display for ExpansionMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            ExpansionMode::Rule => "Rule Expansion",
-            ExpansionMode::Manual => "Manual",
+            Self::Rule => "Rule Expansion",
+            Self::Manual => "Manual",
         })
     }
 }

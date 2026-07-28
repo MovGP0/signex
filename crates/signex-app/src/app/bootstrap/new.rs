@@ -1,7 +1,17 @@
+#![expect(
+    clippy::missing_panics_doc,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `Signex::new` — initial application state + boot Task. Split from
 //! `app/bootstrap.rs` as pure code motion.
 
-use super::super::*;
+use super::super::{
+    DocumentState, DrawMode, InteractionState, Message, Signex, Task, ThemeId, Tool, UiState, Unit,
+    WindowMsg, helpers,
+};
 
 use crate::canvas::SchematicCanvas;
 use crate::dock::{DockArea, PanelPosition};
@@ -14,19 +24,18 @@ impl Signex {
         // defaults: Projects + Components + Signal on the left,
         // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
-        let mut dock = match crate::fonts::read_dock_layout() {
-            Some(saved) => saved,
-            None => {
-                let mut d = DockArea::new();
-                d.add_panel(PanelPosition::Left, PanelKind::Projects);
-                d.add_panel(PanelPosition::Left, PanelKind::Components);
-                d.add_panel(PanelPosition::Left, PanelKind::Library);
-                d.add_panel(PanelPosition::Left, PanelKind::Signal);
-                d.add_panel(PanelPosition::Right, PanelKind::Properties);
-                d.add_panel(PanelPosition::Right, PanelKind::Messages);
-                d.add_panel(PanelPosition::Bottom, PanelKind::Erc);
-                d
-            }
+        let mut dock = if let Some(saved) = crate::fonts::read_dock_layout() {
+            saved
+        } else {
+            let mut d = DockArea::new();
+            d.add_panel(PanelPosition::Left, PanelKind::Projects);
+            d.add_panel(PanelPosition::Left, PanelKind::Components);
+            d.add_panel(PanelPosition::Left, PanelKind::Library);
+            d.add_panel(PanelPosition::Left, PanelKind::Signal);
+            d.add_panel(PanelPosition::Right, PanelKind::Properties);
+            d.add_panel(PanelPosition::Right, PanelKind::Messages);
+            d.add_panel(PanelPosition::Bottom, PanelKind::Erc);
+            d
         };
         // Silence unused-mut when read_dock_layout returns Some.
         let _ = &mut dock;
@@ -58,8 +67,9 @@ impl Signex {
         // Classic built-ins (which must always parse). The active
         // profile is compiled once here into a fast lookup table.
         let keymap_profiles = crate::keymap::load_profile_set().unwrap_or_else(|_| {
-            crate::keymap::ShortcutProfileSet::built_ins()
-                .expect("bundled keyboard shortcut profiles must parse")
+            crate::keymap::ShortcutProfileSet::built_ins().unwrap_or_else(|error| {
+                panic!("bundled keyboard shortcut profiles must parse: {error}")
+            })
         });
         let active_keymap = keymap_profiles.compile_active();
         // Working copy for the Preferences ▸ Keyboard Shortcuts pane.

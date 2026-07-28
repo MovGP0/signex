@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Right-click canvas context menu (VIEW) for the symbol editor.
 //!
 //! Mirrors `library::editor::footprint::context_menu`'s mounting
@@ -137,7 +142,7 @@ fn leaf_entry(row: SymbolMenuRow, path: &Path, indented: bool) -> DropdownEntry<
     // `submenu_header_entry` by `flatten` before reaching here.
     let inner = row
         .msg
-        .expect("leaf row (no submenu) always carries a message");
+        .unwrap_or_else(|| unreachable!("leaf rows always carry a message"));
     let action = wrap(path, SymbolEditorMsg::ContextMenuAction(Box::new(inner)));
     DropdownEntry::Item(DropdownItem::new(label, action).disabled(!row.enabled))
 }

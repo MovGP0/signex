@@ -1,4 +1,10 @@
-use super::super::*;
+#![expect(
+    clippy::trivially_copy_pass_by_ref,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{CanvasState, Message, SchematicCanvas, canvas};
 
 impl SchematicCanvas {
     /// Track Ctrl/Shift modifier state for multi-select.

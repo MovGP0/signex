@@ -20,7 +20,7 @@ pub(super) fn set_primary_mpn(state: &mut ComponentPreviewState, value: String) 
 }
 
 /// Set the primary part's lifecycle status.
-pub(super) fn set_primary_status(
+pub(super) const fn set_primary_status(
     state: &mut ComponentPreviewState,
     value: signex_library::AlternateStatus,
 ) {

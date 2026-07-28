@@ -1,6 +1,16 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library panels -- SCH Library, Footprint Library and row detail.
 
-use super::*;
+use super::{
+    Border, Column, Element, Length, PanelContext, PanelMsg, Space, Theme, ThemeTokens, button,
+    container, part_tree_row, row, scrollable, text, theme_ext, thin_sep,
+};
 use iced::widget::column;
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -89,23 +99,21 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // to. Walk `sym.path` ancestors looking for the first directory
     // ending in `.snxlib`; fall back to just the filename when the
     // file lives outside any library.
-    let symbol_file = sym
-        .path
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "<untitled>".to_string());
+    let symbol_file = sym.path.file_name().map_or_else(
+        || "<untitled>".to_string(),
+        |s| s.to_string_lossy().into_owned(),
+    );
     let library_stem: Option<String> = sym
         .path
         .ancestors()
         .find(|p| {
             p.extension()
                 .and_then(|e| e.to_str())
-                .map(|e| e.eq_ignore_ascii_case("snxlib"))
-                .unwrap_or(false)
+                .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"))
         })
         .and_then(|p| p.file_stem())
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let breadcrumb = match library_stem {
         Some(lib) => format!(
             "{}  ›  {}  ({} symbols)",

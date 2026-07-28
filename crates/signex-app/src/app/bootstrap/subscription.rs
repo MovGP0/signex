@@ -1,7 +1,18 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::struct_excessive_bools,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `Signex::subscription` — keyboard / window / tick event wiring.
 //! Split from `app/bootstrap.rs` as pure code motion.
 
-use super::super::*;
+use super::super::{
+    AnnotateMsg, CommandPaletteMsg, ContextMenuMsg, EnableVersionControlMsg, ErcMsg, MenuMessage,
+    Message, OverlayMsg, PreferencesMsg, RemoveMsg, RenameMsg, Signex, UiMsg, WindowMsg,
+    selection_request,
+};
 
 use crate::keymap::KeyStroke;
 use iced::Subscription;
@@ -55,7 +66,7 @@ impl OpenOverlays {
     /// command palette and the keymap chord recorder are absent on
     /// purpose: both swallow keyboard input wholesale before the Esc
     /// ladder is reached, and are handled in the closure.
-    fn escape_message(self) -> Option<Message> {
+    const fn escape_message(self) -> Option<Message> {
         if self.find_replace_open {
             return Some(Message::FindReplaceMsg(
                 crate::find_replace::FindReplaceMsg::Close,
@@ -155,15 +166,11 @@ impl Signex {
                         // pending chord buffer is left untouched (it is
                         // only advanced by the resolver, which we skip).
                         if keymap_recorder_open {
-                            return KeyStroke::from_iced(&key, m)
-                                .map(|stroke| {
-                                    Message::Preferences(PreferencesMsg::Inner(
-                                        crate::preferences::PrefMsg::KeymapRecorderKeyPressed(
-                                            stroke,
-                                        ),
-                                    ))
-                                })
-                                .unwrap_or(Message::Noop);
+                            return KeyStroke::from_iced(&key, m).map_or(Message::Noop, |stroke| {
+                                Message::Preferences(PreferencesMsg::Inner(
+                                    crate::preferences::PrefMsg::KeymapRecorderKeyPressed(stroke),
+                                ))
+                            });
                         }
                         // Command palette captures most input while open so
                         // typing into the search field doesn't fire tool
@@ -258,9 +265,9 @@ impl Signex {
                             // lives in `UiState` (sound across windows). A
                             // stroke iced can't express as a `KeyStroke`
                             // (e.g. a bare modifier press) is ignored here.
-                            _ => KeyStroke::from_iced(&key, m)
-                                .map(|stroke| Message::Ui(UiMsg::KeymapStroke(stroke)))
-                                .unwrap_or(Message::Noop),
+                            _ => KeyStroke::from_iced(&key, m).map_or(Message::Noop, |stroke| {
+                                Message::Ui(UiMsg::KeymapStroke(stroke))
+                            }),
                         }
                     }
                     _ => Message::Noop,

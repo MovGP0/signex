@@ -1,6 +1,12 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::or_fun_call,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dock-layout preference IO. Split from `fonts.rs`.
 
-use super::*;
+use super::{prefs_path, write_pref_atomic};
 
 /// Persist the list of dock panels per region + their active index
 /// so the next session reopens with the same layout.
@@ -37,8 +43,9 @@ pub fn write_dock_layout(dock: &crate::dock::DockArea) {
     }
 }
 
-/// Rebuild a DockArea from persisted JSON. Returns None when no saved
+/// Rebuild a `DockArea` from persisted JSON. Returns None when no saved
 /// layout exists so the caller can fall back to the default seed.
+#[must_use]
 pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
     let path = prefs_path();
     let bytes = std::fs::read(&path).ok()?;
@@ -64,7 +71,7 @@ pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
         }
         // Collapsed flag: run ToggleRegion once via the dock API so
         // the mutation path stays authoritative.
-        if let Some(c) = region.get("collapsed").and_then(|v| v.as_bool())
+        if let Some(c) = region.get("collapsed").and_then(serde_json::Value::as_bool)
             && c
         {
             dock.update(crate::dock::DockMessage::ToggleCollapse(pos));
@@ -73,8 +80,12 @@ pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
     Some(dock)
 }
 
-fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
-    use crate::panels::PanelKind::*;
+const fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
+    use crate::panels::PanelKind::{
+        BomStudio, Components, Drc, Erc, Favorites, Filter, FootprintLibrary, History, LayerStack,
+        Library, Messages, Navigator, NetClasses, OutputJobs, Projects, Properties, SchFilter,
+        SchLibrary, SchList, Signal, Snippets, Todo, Variants, Wiki,
+    };
     match k {
         Projects => "projects",
         Components => "components",
@@ -104,7 +115,11 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
 }
 
 fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
-    use crate::panels::PanelKind::*;
+    use crate::panels::PanelKind::{
+        BomStudio, Components, Drc, Erc, Favorites, Filter, FootprintLibrary, History, LayerStack,
+        Library, Messages, Navigator, NetClasses, OutputJobs, Projects, Properties, SchFilter,
+        SchLibrary, SchList, Signal, Snippets, Todo, Variants, Wiki,
+    };
     Some(match s {
         "projects" => Projects,
         "components" => Components,

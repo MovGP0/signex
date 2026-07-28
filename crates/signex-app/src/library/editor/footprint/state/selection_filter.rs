@@ -1,3 +1,9 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.18.13 — Altium-style Selection Filter (12 togglable kinds).
 //!
 //! v0.27 — also home for the rubber-band selection mode (Inside /
@@ -17,11 +23,12 @@ pub enum FpSelectionMode {
 }
 
 impl FpSelectionMode {
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            FpSelectionMode::Inside => "Inside Area",
-            FpSelectionMode::Touching => "Touching Rectangle",
-            FpSelectionMode::Outside => "Outside Area",
+            Self::Inside => "Inside Area",
+            Self::Touching => "Touching Rectangle",
+            Self::Outside => "Outside Area",
         }
     }
 }
@@ -86,7 +93,7 @@ pub enum SelectionFilterKind {
 
 impl SelectionFilterKind {
     /// Altium's 10 user-visible pill kinds in display order.
-    pub const ALTIUM_PILLS: &'static [SelectionFilterKind] = &[
+    pub const ALTIUM_PILLS: &'static [Self] = &[
         Self::Bodies3d,
         Self::Keepouts,
         Self::Tracks,
@@ -102,7 +109,7 @@ impl SelectionFilterKind {
     /// All 12 kinds in canonical (declaration) order — used to build
     /// `SelectionFilter::enabled_kinds` and to validate footprint
     /// filter presets.
-    pub const ALL: [SelectionFilterKind; 12] = [
+    pub const ALL: [Self; 12] = [
         Self::Bodies3d,
         Self::Keepouts,
         Self::Tracks,
@@ -117,7 +124,8 @@ impl SelectionFilterKind {
         Self::Cutouts,
     ];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Bodies3d => "3D Bodies",
             Self::Keepouts => "Keepouts",
@@ -136,7 +144,8 @@ impl SelectionFilterKind {
 }
 
 impl SelectionFilter {
-    pub fn get(&self, kind: SelectionFilterKind) -> bool {
+    #[must_use]
+    pub const fn get(&self, kind: SelectionFilterKind) -> bool {
         match kind {
             SelectionFilterKind::Pads => self.pads,
             SelectionFilterKind::Tracks => self.tracks,
@@ -153,7 +162,7 @@ impl SelectionFilter {
         }
     }
 
-    pub fn toggle(&mut self, kind: SelectionFilterKind) {
+    pub const fn toggle(&mut self, kind: SelectionFilterKind) {
         match kind {
             SelectionFilterKind::Pads => self.pads = !self.pads,
             SelectionFilterKind::Tracks => self.tracks = !self.tracks,
@@ -172,7 +181,7 @@ impl SelectionFilter {
 
     /// v0.14 — set every kind on or off at once. Backs the Filter
     /// dropdown's "All - On / All - Off" toggle.
-    pub fn set_all(&mut self, on: bool) {
+    pub const fn set_all(&mut self, on: bool) {
         *self = Self {
             pads: on,
             tracks: on,
@@ -190,7 +199,7 @@ impl SelectionFilter {
     }
 
     /// v0.14 — set a single kind's flag. Mirrors `get`'s match arms.
-    pub fn set(&mut self, kind: SelectionFilterKind, on: bool) {
+    pub const fn set(&mut self, kind: SelectionFilterKind, on: bool) {
         match kind {
             SelectionFilterKind::Pads => self.pads = on,
             SelectionFilterKind::Tracks => self.tracks = on,
@@ -219,6 +228,7 @@ impl SelectionFilter {
     /// v0.14 — enabled kinds in canonical `SelectionFilterKind::ALL`
     /// order. Inverse of `apply_kinds`; used to capture a preset from
     /// the current filter state.
+    #[must_use]
     pub fn enabled_kinds(&self) -> Vec<SelectionFilterKind> {
         SelectionFilterKind::ALL
             .iter()
@@ -237,11 +247,11 @@ mod tests {
         let mut f = SelectionFilter::default();
         f.set_all(false);
         for k in SelectionFilterKind::ALTIUM_PILLS {
-            assert!(!f.get(*k), "{:?} should be off", k);
+            assert!(!f.get(*k), "{k:?} should be off");
         }
         f.set_all(true);
         for k in SelectionFilterKind::ALTIUM_PILLS {
-            assert!(f.get(*k), "{:?} should be on", k);
+            assert!(f.get(*k), "{k:?} should be on");
         }
     }
 

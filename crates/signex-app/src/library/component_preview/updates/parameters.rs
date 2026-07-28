@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Parameter edits for a Component Preview row.
 //!
 //! Text and boolean parameters commit immediately; numeric and
@@ -27,14 +32,14 @@ pub(super) fn set_number_buf(state: &mut ComponentPreviewState, name: String, bu
 /// Commit a numeric parameter from its edit buffer, ignoring a buffer
 /// that does not parse as `f64`.
 pub(super) fn commit_number(state: &mut ComponentPreviewState, name: String) {
-    if let Some(buf) = state.params_edit_buf.get(&name).cloned() {
-        if let Ok(value) = buf.trim().parse::<f64>() {
-            state
-                .row
-                .parameters
-                .insert(name, signex_library::ParamValue::Number(value));
-            state.dirty = true;
-        }
+    if let Some(buf) = state.params_edit_buf.get(&name).cloned()
+        && let Ok(value) = buf.trim().parse::<f64>()
+    {
+        state
+            .row
+            .parameters
+            .insert(name, signex_library::ParamValue::Number(value));
+        state.dirty = true;
     }
 }
 
@@ -46,14 +51,14 @@ pub(super) fn set_measurement_buf(state: &mut ComponentPreviewState, name: Strin
 /// Commit a measurement parameter (value + unit) from its edit buffer,
 /// ignoring a buffer that does not parse as `f64`.
 pub(super) fn commit_measurement(state: &mut ComponentPreviewState, name: String, unit: String) {
-    if let Some(buf) = state.params_edit_buf.get(&name).cloned() {
-        if let Ok(value) = buf.trim().parse::<f64>() {
-            state.row.parameters.insert(
-                name,
-                signex_library::ParamValue::Measurement { value, unit },
-            );
-            state.dirty = true;
-        }
+    if let Some(buf) = state.params_edit_buf.get(&name).cloned()
+        && let Ok(value) = buf.trim().parse::<f64>()
+    {
+        state.row.parameters.insert(
+            name,
+            signex_library::ParamValue::Measurement { value, unit },
+        );
+        state.dirty = true;
     }
 }
 

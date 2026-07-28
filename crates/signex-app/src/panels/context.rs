@@ -1,6 +1,15 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Shared panel view-context (`PanelContext`) rendered by the panels.
 
-use super::*;
+use super::{
+    CollapsedSections, DrawingFieldId, ErcDiagnosticEntry, FootprintEditorPanelContext,
+    LibraryRowDetail, LibrarySymbolEntry, PageFormatMode, PageOrigin, PrePlacementData,
+    ProjectPanelInfo, SheetColor, SymbolEditorPanelContext, ThemeTokens, TreeNode, Unit, history,
+};
 
 pub struct PanelContext {
     /// Multi-project workspace — one entry per `LoadedProject`. Every
@@ -18,7 +27,7 @@ pub struct PanelContext {
     pub lib_symbol_count: usize,
     /// Library symbol names for Components panel.
     pub lib_symbol_names: Vec<String>,
-    /// Placed symbols: (reference, value, footprint, lib_id).
+    /// Placed symbols: (reference, value, footprint, `lib_id`).
     pub placed_symbols: Vec<(String, String, String, String)>,
     pub tokens: ThemeTokens,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
@@ -54,11 +63,11 @@ pub struct PanelContext {
     pub active_library: Option<String>,
     /// Browser entries from the selected library or aggregated catalog.
     pub library_symbols: Vec<LibrarySymbolEntry>,
-    /// Selected component lib_id.
+    /// Selected component `lib_id`.
     pub selected_component: Option<String>,
-    /// (pin_number, pin_name, pin_type) for the selected component.
+    /// (`pin_number`, `pin_name`, `pin_type`) for the selected component.
     pub selected_pins: Vec<(String, String, String)>,
-    /// Full LibSymbol data for canvas preview.
+    /// Full `LibSymbol` data for canvas preview.
     pub selected_lib_symbol: Option<signex_types::schematic::LibSymbol>,
     /// Height in px for the Components list section (details gets the rest).
     pub components_split: f32,
@@ -86,18 +95,18 @@ pub struct PanelContext {
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
     /// Transient numeric-input buffers for the drawing properties
-    /// panel — keyed on DrawingFieldId. Keeps half-typed strings
+    /// panel — keyed on `DrawingFieldId`. Keeps half-typed strings
     /// ("", "-", "2.") alive between rerenders so fields can be
     /// fully erased and retyped. Reset when selection changes.
     pub drawing_edit_buf: std::collections::HashMap<DrawingFieldId, String>,
-    /// UUID that owns the current drawing_edit_buf. When
+    /// UUID that owns the current `drawing_edit_buf`. When
     /// `selected_uuid` changes the handler clears the buffer.
     pub drawing_edit_buf_for: Option<uuid::Uuid>,
-    /// The live SchDrawing matching `selected_uuid` when a single
+    /// The live `SchDrawing` matching `selected_uuid` when a single
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
-    /// The live ChildSheet matching `selected_uuid` when a single
+    /// The live `ChildSheet` matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
     pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
@@ -108,10 +117,10 @@ pub struct PanelContext {
     /// currently-selected child sheet.
     pub child_sheet_fill_picker_open: bool,
     /// Whether the user expanded the border picker into the full
-    /// HSV / RGB ColorPicker (vs the default preset palette).
+    /// HSV / RGB `ColorPicker` (vs the default preset palette).
     pub child_sheet_border_advanced_open: bool,
     /// Whether the user expanded the fill picker into the full
-    /// HSV / RGB ColorPicker (vs the default preset palette).
+    /// HSV / RGB `ColorPicker` (vs the default preset palette).
     pub child_sheet_fill_advanced_open: bool,
     /// Transient text-input buffer for the child sheet's stroke-width
     /// numeric field. `None` means "show the live value formatted";
@@ -123,7 +132,7 @@ pub struct PanelContext {
     pub collapsed_sections: CollapsedSections,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
-    /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
+    /// Current diagnostics level resolved from `SIGNEX_LOG` / `RUST_LOG`.
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
     pub erc_diagnostics: Vec<ErcDiagnosticEntry>,
     /// Focused ERC diagnostic index used by prev/next navigation arrows.
@@ -153,9 +162,9 @@ pub struct PanelContext {
     pub margin_horizontal: u32,
     /// Page coordinate origin.
     pub page_origin: PageOrigin,
-    /// Custom paper width in mm (only used when page_format_mode == Custom).
+    /// Custom paper width in mm (only used when `page_format_mode` == Custom).
     pub custom_paper_w_mm: f32,
-    /// Custom paper height in mm (only used when page_format_mode == Custom).
+    /// Custom paper height in mm (only used when `page_format_mode` == Custom).
     pub custom_paper_h_mm: f32,
     /// Sheet background colour.
     pub sheet_color: SheetColor,

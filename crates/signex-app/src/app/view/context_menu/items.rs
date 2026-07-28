@@ -11,7 +11,10 @@
 //! chrome (icon column, label, shortcut, hover, disabled greying), so the
 //! hand-built row buttons that used to live here are gone.
 
-use super::*;
+use super::{
+    ContextAction, ContextMenuMsg, ContextSubmenu, Length, Message, SUBMENU_ARROW,
+    SUBMENU_ARROW_SIZE, Signex,
+};
 
 use iced::widget::svg::Handle;
 use signex_types::theme::ThemeTokens;
@@ -65,7 +68,7 @@ pub(super) fn dd_disabled(
         label: label.to_string(),
         icon,
         checked: false,
-        shortcut: right.map(|s| s.to_string()),
+        shortcut: right.map(std::string::ToString::to_string),
         disabled: true,
         on_press: None,
     })
@@ -91,7 +94,7 @@ pub(super) fn save_entry(enabled: bool) -> DropdownEntry<Message> {
 /// Submenu launcher row (`Place ›`, `Align ›`, `Add New to Project ›`).
 ///
 /// This is the one context-menu row the shared widget can't express as a
-/// plain `Item`: it needs `mouse_area` on_enter/on_exit so the 200 ms
+/// plain `Item`: it needs `mouse_area` `on_enter/on_exit` so the 200 ms
 /// hover timer (`ContextMenuMsg::SubmenuTickHover`) can open the flyout
 /// without a click, plus an active-state highlight so the user can see
 /// which submenu is open. It therefore rides the widget's `Custom`

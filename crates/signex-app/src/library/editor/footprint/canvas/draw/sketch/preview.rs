@@ -1,3 +1,20 @@
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::doc_lazy_continuation,
+    clippy::items_after_statements,
+    clippy::manual_let_else,
+    clippy::many_single_char_names,
+    clippy::match_same_arms,
+    clippy::similar_names,
+    clippy::suboptimal_flops,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Live ghost preview for the multi-click sketch drawing tools — the
 //! dashed rubber-band shape, the Fusion-style dimension pills, and the
 //! modeless numeric placement-input overlay.
@@ -43,8 +60,8 @@ fn draw_dim_pill_styled(frame: &mut canvas::Frame, centre: Point, label: &str, f
     let glyph_w = 6.5_f32;
     let pad_x = 5.0_f32;
     let pad_y = 2.0_f32;
-    let body_w = glyph_w * (label.chars().count() as f32) + pad_x * 2.0;
-    let body_h = 14.0_f32 + pad_y * 2.0;
+    let body_w = pad_x.mul_add(2.0, glyph_w * (label.chars().count() as f32));
+    let body_h = pad_y.mul_add(2.0, 14.0_f32);
     let plate_origin = Point::new(centre.x - body_w / 2.0, centre.y - body_h / 2.0);
     // Focused field: bluish plate + bright accent border so the eye
     // lands on the input Tab currently targets. Inactive field: the
@@ -122,15 +139,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
     }
 
     let resolve_point = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some((x, y)) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some((x, y));
-            }
+            )
+        {
+            return Some((x, y));
         }
         sketch
             .entities
@@ -150,7 +167,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
     let dashed = |frame: &mut canvas::Frame, p0: Point, p1: Point| {
         let dx = p1.x - p0.x;
         let dy = p1.y - p0.y;
-        let len = (dx * dx + dy * dy).sqrt();
+        let len = dx.hypot(dy);
         if len <= 0.5 {
             return;
         }
@@ -159,8 +176,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
         for i in (0..n).step_by(2) {
             let t0 = i as f32 / n as f32;
             let t1 = ((i + 1) as f32 / n as f32).min(1.0);
-            let q0 = Point::new(p0.x + dx * t0, p0.y + dy * t0);
-            let q1 = Point::new(p0.x + dx * t1, p0.y + dy * t1);
+            let q0 = Point::new(dx.mul_add(t0, p0.x), dy.mul_add(t0, p0.y));
+            let q1 = Point::new(dx.mul_add(t1, p0.x), dy.mul_add(t1, p0.y));
             frame.stroke(&Path::line(q0, q1), stroke);
         }
     };
@@ -196,14 +213,14 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             // preview and the committed segment always agree.
             let dxw = cursor.0 - first_world.0;
             let dyw = cursor.1 - first_world.1;
-            let cursor_len = (dxw * dxw + dyw * dyw).sqrt();
+            let cursor_len = dxw.hypot(dyw);
             let cursor_ang = if cursor_len > 1e-9 {
                 dyw.atan2(dxw)
             } else {
                 0.0
             };
             let eff_len = typed_len.unwrap_or(cursor_len);
-            let eff_ang = typed_ang.map(f64::to_radians).unwrap_or(cursor_ang);
+            let eff_ang = typed_ang.map_or(cursor_ang, f64::to_radians);
             // Effective endpoint = first + (eff_len @ eff_ang). Draw the
             // ghost to THIS point (not the raw cursor) so a typed
             // length/angle visibly snaps the rubber-band into place.
@@ -219,10 +236,10 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             // (so keystrokes never get reformatted mid-type — see
             // reference_erasable_numeric_input) and the live computed
             // value otherwise. The Tab-focused field is highlighted.
-            let mid = Point::new((p0.x + p_end.x) / 2.0, (p0.y + p_end.y) / 2.0);
+            let mid = Point::new(f32::midpoint(p0.x, p_end.x), f32::midpoint(p0.y, p_end.y));
             let sdx = p_end.x - p0.x;
             let sdy = p_end.y - p0.y;
-            let seg = (sdx * sdx + sdy * sdy).sqrt().max(1.0);
+            let seg = sdx.hypot(sdy).max(1.0);
             let nx = -sdy / seg;
             let ny = sdx / seg;
             let len_pos = Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
@@ -267,8 +284,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 .filter(|v| *v > 0.0);
             let sx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sy = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
-            let ex = typed_w.map(|w| first_world.0 + sx * w).unwrap_or(cursor.0);
-            let ey = typed_h.map(|h| first_world.1 + sy * h).unwrap_or(cursor.1);
+            let ex = typed_w.map_or(cursor.0, |w| first_world.0 + sx * w);
+            let ey = typed_h.map_or(cursor.1, |h| first_world.1 + sy * h);
             let p0 = cstate.world_to_screen(first_world);
             let p2 = cstate.world_to_screen((ex, ey));
             let p1 = Point::new(p2.x, p0.y);
@@ -283,8 +300,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let focused = state.placement_input.as_ref().map(|p| p.kind);
             let width_eff = (ex - first_world.0).abs();
             let height_eff = (ey - first_world.1).abs();
-            let top_mid = Point::new((p0.x + p1.x) / 2.0, p0.y - 18.0);
-            let left_mid = Point::new(p0.x - 18.0, (p0.y + p3.y) / 2.0);
+            let top_mid = Point::new(f32::midpoint(p0.x, p1.x), p0.y - 18.0);
+            let left_mid = Point::new(p0.x - 18.0, f32::midpoint(p0.y, p3.y));
             let w_text = match w_buf {
                 Some(b) if !b.is_empty() => format!("{b} mm"),
                 _ => format!("{width_eff:.3} mm"),
@@ -328,12 +345,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 .filter(|v| *v > 0.0);
             let sgnx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sgny = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
-            let cx_corner = typed_w
-                .map(|w| first_world.0 + sgnx * w)
-                .unwrap_or(cursor.0);
-            let cy_corner = typed_h
-                .map(|h| first_world.1 + sgny * h)
-                .unwrap_or(cursor.1);
+            let cx_corner = typed_w.map_or(cursor.0, |w| first_world.0 + sgnx * w);
+            let cy_corner = typed_h.map_or(cursor.1, |h| first_world.1 + sgny * h);
             let x0 = first_world.0.min(cx_corner);
             let y0 = first_world.1.min(cy_corner);
             let x1 = first_world.0.max(cx_corner);
@@ -384,15 +397,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 let mut prev = cstate.world_to_screen(s_world);
                 for i in 1..=segs {
                     if i % 2 == 0 {
-                        let t = (i as f64) / (segs as f64);
-                        let a = a0 + delta * t;
+                        let t = f64::from(i) / f64::from(segs);
+                        let a = delta.mul_add(t, a0);
                         let p = (c_world.0 + r * a.cos(), c_world.1 + r * a.sin());
                         let q = cstate.world_to_screen(p);
                         frame.stroke(&Path::line(prev, q), stroke);
                         prev = q;
                     } else {
-                        let t = (i as f64) / (segs as f64);
-                        let a = a0 + delta * t;
+                        let t = f64::from(i) / f64::from(segs);
+                        let a = delta.mul_add(t, a0);
                         let p = (c_world.0 + r * a.cos(), c_world.1 + r * a.sin());
                         prev = cstate.world_to_screen(p);
                     }
@@ -406,8 +419,14 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let corner_screen = cstate.world_to_screen((cx_corner, cy_corner));
             let width_eff = (cx_corner - first_world.0).abs();
             let height_eff = (cy_corner - first_world.1).abs();
-            let top_mid = Point::new((p0_screen.x + corner_screen.x) / 2.0, p0_screen.y - 18.0);
-            let left_mid = Point::new(p0_screen.x - 18.0, (p0_screen.y + corner_screen.y) / 2.0);
+            let top_mid = Point::new(
+                f32::midpoint(p0_screen.x, corner_screen.x),
+                p0_screen.y - 18.0,
+            );
+            let left_mid = Point::new(
+                p0_screen.x - 18.0,
+                f32::midpoint(p0_screen.y, corner_screen.y),
+            );
             let w_text = match w_buf {
                 Some(b) if !b.is_empty() => format!("{b} mm"),
                 _ => format!("{width_eff:.3} mm"),
@@ -445,7 +464,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 return;
             };
             let c_screen = cstate.world_to_screen(c_world);
-            let r_world = ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
+            let r_world = (cursor.0 - c_world.0).hypot(cursor.1 - c_world.1);
             let r_screen = (r_world as f32) * cstate.scale;
             // Approximate dashed circle with 32-segment polyline.
             let segments = 32;
@@ -468,18 +487,18 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             dashed(frame, c_screen, cursor_screen);
             // v0.27 — radius pill near the cursor.
             let mid = Point::new(
-                (c_screen.x + cursor_screen.x) / 2.0,
-                (c_screen.y + cursor_screen.y) / 2.0,
+                f32::midpoint(c_screen.x, cursor_screen.x),
+                f32::midpoint(c_screen.y, cursor_screen.y),
             );
             // Perpendicular offset so the pill sits beside the
             // radial guide, not on top of it.
             let dx_s = cursor_screen.x - c_screen.x;
             let dy_s = cursor_screen.y - c_screen.y;
-            let len_s = (dx_s * dx_s + dy_s * dy_s).sqrt().max(1.0);
+            let len_s = dx_s.hypot(dy_s).max(1.0);
             let nx = -dy_s / len_s;
             let ny = dx_s / len_s;
             let label = Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
-            draw_dim_pill(frame, label, &format!("r {:.3} mm", r_world));
+            draw_dim_pill(frame, label, &format!("r {r_world:.3} mm"));
         }
         ToolPending::ArcCenter { center } => {
             // Centre placed; cursor will become the start point. Show
@@ -490,18 +509,18 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let c_screen = cstate.world_to_screen(c_world);
             dashed(frame, c_screen, cursor_screen);
             // v0.27 — radius pill on the radial midpoint.
-            let r_world = ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
+            let r_world = (cursor.0 - c_world.0).hypot(cursor.1 - c_world.1);
             let mid = Point::new(
-                (c_screen.x + cursor_screen.x) / 2.0,
-                (c_screen.y + cursor_screen.y) / 2.0,
+                f32::midpoint(c_screen.x, cursor_screen.x),
+                f32::midpoint(c_screen.y, cursor_screen.y),
             );
             let dx_s = cursor_screen.x - c_screen.x;
             let dy_s = cursor_screen.y - c_screen.y;
-            let len_s = (dx_s * dx_s + dy_s * dy_s).sqrt().max(1.0);
+            let len_s = dx_s.hypot(dy_s).max(1.0);
             let nx = -dy_s / len_s;
             let ny = dx_s / len_s;
             let label = Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
-            draw_dim_pill(frame, label, &format!("r {:.3} mm", r_world));
+            draw_dim_pill(frame, label, &format!("r {r_world:.3} mm"));
         }
         ToolPending::ArcStart { center, start } => {
             // Centre + start placed; cursor will become the end. Draw
@@ -513,8 +532,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 return;
             };
             let c_screen = cstate.world_to_screen(c_world);
-            let r_world =
-                ((s_world.0 - c_world.0).powi(2) + (s_world.1 - c_world.1).powi(2)).sqrt();
+            let r_world = (s_world.0 - c_world.0).hypot(s_world.1 - c_world.1);
             let r_screen = (r_world as f32) * cstate.scale;
             let start_angle = (s_world.1 - c_world.1).atan2(s_world.0 - c_world.0) as f32;
             let end_angle = (cursor.1 - c_world.1).atan2(cursor.0 - c_world.0) as f32;
@@ -527,8 +545,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             for i in (0..segments).step_by(2) {
                 let t0 = i as f32 / segments as f32;
                 let t1 = (i + 1) as f32 / segments as f32;
-                let a0 = start_angle + delta * t0;
-                let a1 = start_angle + delta * t1;
+                let a0 = delta.mul_add(t0, start_angle);
+                let a1 = delta.mul_add(t1, start_angle);
                 let q0 = Point::new(
                     c_screen.x + r_screen * a0.cos(),
                     c_screen.y + r_screen * a0.sin(),
@@ -546,9 +564,9 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             // v0.27 — sweep angle pill (deg). Radius is fixed by
             // the start endpoint so we surface the sweep, which is
             // what changes as the cursor moves.
-            let sweep_deg = (delta.to_degrees().rem_euclid(360.0)) as f64;
+            let sweep_deg = f64::from(delta.to_degrees().rem_euclid(360.0));
             let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
-            draw_dim_pill(frame, label, &format!("{:.1} deg", sweep_deg));
+            draw_dim_pill(frame, label, &format!("{sweep_deg:.1} deg"));
         }
         // #467 — Edge Arc, start placed. Cursor previews where `end`
         // will land; a plain dashed segment, since there's no
@@ -572,55 +590,52 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 return;
             };
             use signex_types::schematic::{Point as SchPoint, circumcircle};
-            match circumcircle(
+            if let Some((cx, cy, r)) = circumcircle(
                 SchPoint::new(s_world.0, s_world.1),
                 SchPoint::new(cursor.0, cursor.1),
                 SchPoint::new(e_world.0, e_world.1),
             ) {
-                Some((cx, cy, r)) => {
-                    use signex_sketch::geom::{Sign, orient2d};
-                    let sweep_ccw = match orient2d(s_world.into(), cursor.into(), e_world.into()) {
-                        Sign::Negative => false,
-                        Sign::Positive | Sign::Zero => true,
-                    };
-                    let c_screen = cstate.world_to_screen((cx, cy));
-                    let r_screen = (r as f32) * cstate.scale;
-                    let start_angle = (s_world.1 - cy).atan2(s_world.0 - cx) as f32;
-                    let end_angle = (e_world.1 - cy).atan2(e_world.0 - cx) as f32;
-                    let mut delta = end_angle - start_angle;
-                    if sweep_ccw {
-                        while delta < 0.0 {
-                            delta += std::f32::consts::TAU;
-                        }
-                    } else {
-                        while delta > 0.0 {
-                            delta -= std::f32::consts::TAU;
-                        }
+                use signex_sketch::geom::{Sign, orient2d};
+                let sweep_ccw = match orient2d(s_world.into(), cursor.into(), e_world.into()) {
+                    Sign::Negative => false,
+                    Sign::Positive | Sign::Zero => true,
+                };
+                let c_screen = cstate.world_to_screen((cx, cy));
+                let r_screen = (r as f32) * cstate.scale;
+                let start_angle = (s_world.1 - cy).atan2(s_world.0 - cx) as f32;
+                let end_angle = (e_world.1 - cy).atan2(e_world.0 - cx) as f32;
+                let mut delta = end_angle - start_angle;
+                if sweep_ccw {
+                    while delta < 0.0 {
+                        delta += std::f32::consts::TAU;
                     }
-                    let segments = 32;
-                    for i in (0..segments).step_by(2) {
-                        let t0 = i as f32 / segments as f32;
-                        let t1 = (i + 1) as f32 / segments as f32;
-                        let a0 = start_angle + delta * t0;
-                        let a1 = start_angle + delta * t1;
-                        let q0 = Point::new(
-                            c_screen.x + r_screen * a0.cos(),
-                            c_screen.y + r_screen * a0.sin(),
-                        );
-                        let q1 = Point::new(
-                            c_screen.x + r_screen * a1.cos(),
-                            c_screen.y + r_screen * a1.sin(),
-                        );
-                        frame.stroke(&Path::line(q0, q1), stroke);
+                } else {
+                    while delta > 0.0 {
+                        delta -= std::f32::consts::TAU;
                     }
-                    let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
-                    draw_dim_pill(frame, label, &format!("r {:.3} mm", r));
                 }
-                None => {
-                    let s_screen = cstate.world_to_screen(s_world);
-                    let e_screen = cstate.world_to_screen(e_world);
-                    dashed(frame, s_screen, e_screen);
+                let segments = 32;
+                for i in (0..segments).step_by(2) {
+                    let t0 = i as f32 / segments as f32;
+                    let t1 = (i + 1) as f32 / segments as f32;
+                    let a0 = start_angle + delta * t0;
+                    let a1 = start_angle + delta * t1;
+                    let q0 = Point::new(
+                        c_screen.x + r_screen * a0.cos(),
+                        c_screen.y + r_screen * a0.sin(),
+                    );
+                    let q1 = Point::new(
+                        c_screen.x + r_screen * a1.cos(),
+                        c_screen.y + r_screen * a1.sin(),
+                    );
+                    frame.stroke(&Path::line(q0, q1), stroke);
                 }
+                let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
+                draw_dim_pill(frame, label, &format!("r {:.3} mm", r));
+            } else {
+                let s_screen = cstate.world_to_screen(s_world);
+                let e_screen = cstate.world_to_screen(e_world);
+                dashed(frame, s_screen, e_screen);
             }
         }
         // v0.23 — Polar centre re-pick has no preview shape; the
@@ -655,7 +670,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                     // Line direction (line_other -> first).
                     let lx = first_world.0 - line_other.0;
                     let ly = first_world.1 - line_other.1;
-                    let llen_sq = lx * lx + ly * ly;
+                    let llen_sq = ly.mul_add(ly, lx * lx);
                     if llen_sq <= 1e-12 {
                         dashed(frame, p0, cursor_screen);
                         return;
@@ -667,8 +682,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                     // Solve for the centre (see dispatcher comment).
                     let dx = first_world.0 - cursor.0;
                     let dy = first_world.1 - cursor.1;
-                    let denom = 2.0 * (dx * nx + dy * ny);
-                    let chord_sq = dx * dx + dy * dy;
+                    let denom = 2.0 * dy.mul_add(ny, dx * nx);
+                    let chord_sq = dy.mul_add(dy, dx * dx);
                     if denom.abs() <= 1e-9 || chord_sq <= 1e-9 {
                         // Cursor on the tangent line — preview the
                         // straight segment until the cursor pulls off
@@ -683,7 +698,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                     // sides should match within solver tolerance).
                     let rx = first_world.0 - cx;
                     let ry = first_world.1 - cy;
-                    let r_world = (rx * rx + ry * ry).sqrt();
+                    let r_world = rx.hypot(ry);
                     if r_world <= 1e-9 {
                         dashed(frame, p0, cursor_screen);
                         return;
@@ -691,7 +706,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                     // Sweep direction — match the dispatcher's logic.
                     let ex = cursor.0 - first_world.0;
                     let ey = cursor.1 - first_world.1;
-                    let sweep_ccw = lx * ey - ly * ex >= 0.0;
+                    let sweep_ccw = ly.mul_add(-ex, lx * ey) >= 0.0;
                     // Stroke the dashed arc.
                     let c_screen = cstate.world_to_screen((cx, cy));
                     let r_screen = (r_world as f32) * cstate.scale;
@@ -772,8 +787,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
         let glyph_w = 6.5_f32;
         let pad_x = 5.0_f32;
         let pad_y = 3.0_f32;
-        let body_w = glyph_w * (body.chars().count() as f32) + pad_x * 2.0;
-        let body_h = 16.0_f32 + pad_y * 2.0;
+        let body_w = pad_x.mul_add(2.0, glyph_w * (body.chars().count() as f32));
+        let body_h = pad_y.mul_add(2.0, 16.0_f32);
         let plate_origin = Point::new(origin.x - pad_x, origin.y - pad_y);
         // Background plate.
         frame.fill_rectangle(

@@ -1,4 +1,10 @@
-//! DigiKey OAuth2 PKCE handshake — UI side.
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! `DigiKey` `OAuth2` PKCE handshake — UI side.
 //!
 //! Flow:
 //! - "Connect via OAuth" → `DigiKeyAuth::start_authorization` → open
@@ -17,7 +23,7 @@
 //! parallel async branch in `signex-library`.
 //!
 //! Configuration:
-//! - DigiKey client_id / client_secret are read from the environment
+//! - `DigiKey` `client_id` / `client_secret` are read from the environment
 //!   (`SIGNEX_DIGIKEY_CLIENT_ID` / `SIGNEX_DIGIKEY_CLIENT_SECRET`).
 //!   Unit tests use a wiremock server, so the constants are never
 //!   committed to source.
@@ -35,9 +41,9 @@ use std::time::Duration;
 
 use signex_library::distributors::digikey::{DigiKeyAuth, DigiKeyAuthError};
 
-/// Environment variable that holds the DigiKey OAuth client_id.
+/// Environment variable that holds the `DigiKey` OAuth `client_id`.
 pub const ENV_CLIENT_ID: &str = "SIGNEX_DIGIKEY_CLIENT_ID";
-/// Environment variable that holds the DigiKey OAuth client_secret.
+/// Environment variable that holds the `DigiKey` OAuth `client_secret`.
 pub const ENV_CLIENT_SECRET: &str = "SIGNEX_DIGIKEY_CLIENT_SECRET";
 
 /// Outcome of the OAuth handshake. Returned via the iced `Task` that
@@ -67,6 +73,7 @@ pub struct CancelHandle {
 }
 
 impl CancelHandle {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             flag: Arc::new(AtomicBool::new(false)),
@@ -76,7 +83,7 @@ impl CancelHandle {
     /// Wrap an existing flag — used by the dispatcher so the UI can
     /// hold the same `AtomicBool` it later mutates from the Cancel
     /// button.
-    pub fn from_flag(flag: Arc<AtomicBool>) -> Self {
+    pub const fn from_flag(flag: Arc<AtomicBool>) -> Self {
         Self { flag }
     }
 
@@ -118,11 +125,12 @@ fn bind_callback_listener() -> Result<(TcpListener, String), std::io::Error> {
 /// wraps this in `Task::perform` over `tokio::task::spawn_blocking`).
 ///
 /// `auth_url_endpoint` / `token_url_endpoint` let tests redirect at a
-/// wiremock instance; production callers pass the DigiKey constants
+/// wiremock instance; production callers pass the `DigiKey` constants
 /// from `signex-library`.
 ///
 /// The function is split so the `cargo test` path can drive it end-
 /// to-end against wiremock without needing a real browser.
+#[must_use]
 pub fn run_blocking(
     client_id: String,
     client_secret: String,
@@ -178,7 +186,7 @@ pub fn run_blocking(
         };
     }
 
-    let timeout = Duration::from_secs(5 * 60); // 5 minutes
+    let timeout = Duration::from_mins(5); // 5 minutes
     let started = std::time::Instant::now();
     loop {
         if cancel.is_cancelled() {
@@ -315,7 +323,7 @@ fn url_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn hex_digit(b: u8) -> Option<u8> {
+const fn hex_digit(b: u8) -> Option<u8> {
     match b {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
@@ -324,9 +332,10 @@ fn hex_digit(b: u8) -> Option<u8> {
     }
 }
 
-/// Read environment-supplied DigiKey credentials. Returns empty
-/// strings when unset — the caller treats empty client_id as "not
+/// Read environment-supplied `DigiKey` credentials. Returns empty
+/// strings when unset — the caller treats empty `client_id` as "not
 /// configured" and surfaces a clear failure.
+#[must_use]
 pub fn read_env_credentials() -> (String, String) {
     let id = std::env::var(ENV_CLIENT_ID).unwrap_or_default();
     let secret = std::env::var(ENV_CLIENT_SECRET).unwrap_or_default();

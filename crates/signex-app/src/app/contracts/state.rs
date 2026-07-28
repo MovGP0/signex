@@ -1,3 +1,9 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Context actions + modal/dialog state structs.
 
 /// R / G / B channel selector for the custom net-colour picker inputs.
@@ -116,6 +122,7 @@ pub struct ProjectTreeContextMenuState {
 }
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.
+///
 /// Opens only when the user closes a project that has at least one
 /// entry in `DocumentState.dirty_paths` rooted in the project's
 /// directory; the modal lists every dirty file by filename so the
@@ -138,6 +145,7 @@ pub struct ProjectCloseConfirmState {
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
+///
 /// Opens when the user requests app exit (chrome ✕, File ▸ Exit,
 /// Alt+F4) while `DocumentState.dirty_paths` is non-empty. Lists
 /// every dirty file across the whole workspace so the user sees what
@@ -245,7 +253,7 @@ pub enum ProjectTreeAction {
     AddExistingToProject(Vec<usize>),
     /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
     /// dialog scoped to the project directory; the result writes a
-    /// blank `.snxsch`, registers it as a SheetEntry, marks the
+    /// blank `.snxsch`, registers it as a `SheetEntry`, marks the
     /// project dirty, and refreshes the tree (no tab opens).
     AddNewSchematic(Vec<usize>),
     /// project-root → Add New ▸ Symbol Library. Save-As dialog
@@ -332,10 +340,10 @@ pub struct EnableVersionControlState {
     pub project_path: std::path::PathBuf,
     /// Working tree root the new repo will live at. For projects
     /// this is the `.snxprj` parent; for libraries the `.snxlib`
-    /// parent (i.e. the library's root_dir).
+    /// parent (i.e. the library's `root_dir`).
     pub project_dir: std::path::PathBuf,
     /// Display name for the modal header. Project: project name.
-    /// Library: filename stem of the `.snxlib` (e.g. "MyLib").
+    /// Library: filename stem of the `.snxlib` (e.g. "`MyLib`").
     pub project_name: String,
     /// Per-entry tracking picker — tickable rows for each top-level
     /// schematic / pcb / library (project scope) or each top-level

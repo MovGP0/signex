@@ -1,10 +1,16 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Project-level context-menu actions for the project-navigation dock —
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::{ErcMsg, Message, Signex};
 
 impl Signex {
     pub(crate) fn open_project_options_dialog(&mut self, tree_path: Vec<usize>) {
@@ -56,8 +62,7 @@ impl Signex {
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .map(|t| t.project_id == Some(project_id))
-            .unwrap_or(false);
+            .is_some_and(|t| t.project_id == Some(project_id));
         let open_task = if !active_belongs && let Some(root) = schematic_root {
             let path = project_dir.join(&root);
             if path.exists() {

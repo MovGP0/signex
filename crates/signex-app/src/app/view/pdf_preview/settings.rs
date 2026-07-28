@@ -1,8 +1,13 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! PDF Settings tab and its section builders (files / structure /
 //! additional) — methods of the shared `Signex` view impl, split from
 //! `view/pdf_preview.rs` as pure code motion.
 
-use super::super::*;
+use super::super::{Element, Length, Message, PrintPreviewMsg, Signex};
 
 impl Signex {
     /// Settings tab — stitches the three section helpers below into a

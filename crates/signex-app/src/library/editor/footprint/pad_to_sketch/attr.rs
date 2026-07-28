@@ -1,3 +1,11 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::match_same_arms,
+    clippy::match_wildcard_for_single_variants,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pure mappers between the editor's `EditorPad` and sketch attribute
 //! types, plus the small string / plane helpers shared by the mint
 //! and solve modules.
@@ -131,7 +139,7 @@ pub(super) fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
 }
 
 /// Build a sketch-side `PadAttr` from an `EditorPad`. Carries number /
-/// kind / side / shape + size expressions + drill spec. Other PadAttr
+/// kind / side / shape + size expressions + drill spec. Other `PadAttr`
 /// fields default; the v0.22 mirror path overwrites them.
 pub(super) fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
     // v0.18.12.1 — carry `drill_diameter_mm` into the sketch PadAttr.
@@ -165,7 +173,7 @@ pub(super) fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
     }
 }
 
-pub(super) fn map_kind(k: LibPadKind) -> SkPadKind {
+pub(super) const fn map_kind(k: LibPadKind) -> SkPadKind {
     match k {
         LibPadKind::Smd => SkPadKind::Smd,
         LibPadKind::Tht => SkPadKind::Tht,

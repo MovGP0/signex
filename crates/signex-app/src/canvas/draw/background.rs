@@ -1,4 +1,9 @@
-use super::super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{CanvasState, Rectangle, Renderer, SchematicCanvas, canvas, grid};
 
 impl SchematicCanvas {
     /// Layer 1 — background fill, paper rectangle + border, and grid dots.

@@ -1,6 +1,14 @@
+#![expect(
+    clippy::doc_lazy_continuation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Panel message type -- the `PanelMsg` enum every panel surface emits.
 
-use super::*;
+use super::{
+    ArrayParamField, DrawingFieldId, GraphicFieldId, KeepoutKindFlag, NumberingSchemeKindUi,
+    PageFormatMode, PageOrigin, SheetColor, SnapOptionFlag, TreeMsg, Unit,
+};
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
@@ -16,7 +24,7 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
-    /// v0.16.2 — Properties-panel Role pick_list emit. Routed
+    /// v0.16.2 — Properties-panel Role `pick_list` emit. Routed
     /// through the dock handler which forwards to
     /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchSetRole }`
     /// keyed on the active footprint editor tab.
@@ -54,7 +62,7 @@ pub enum PanelMsg {
     /// parsed value into `editor.state.next_pad_defaults` (or the
     /// matching sub-struct) so the next `add_pad_at` picks it up.
     /// String-typed inputs preserve the per-field typing buffer
-    /// behaviour we use for size_x / size_y / rotation.
+    /// behaviour we use for `size_x` / `size_y` / rotation.
     FpEditorSetNextPadShape(signex_library::PadShape),
     FpEditorSetNextPadKind(signex_library::PadKind),
     FpEditorSetNextPadDrillDiameter(String),
@@ -258,7 +266,7 @@ pub enum PanelMsg {
         value: bool,
     },
     /// v0.21 — Sketch-mode pad attribute edits. Mutate the `PadAttr`
-    /// on the selected sketch entity (identified by SketchEntityId)
+    /// on the selected sketch entity (identified by `SketchEntityId`)
     /// and re-run solve+bake. Mirrors the new pad fields surfaced in
     /// Pads-mode but addressed by the sketch entity rather than the
     /// flat-pad index.
@@ -362,7 +370,7 @@ pub enum PanelMsg {
     /// resolve the bound parameter name, writes `value` into
     /// `sketch.parameters[parameter_name]`, then dispatches a sketch
     /// `ForceRebuild` so the solver re-runs and every entity bound to
-    /// that parameter (e.g. all 4 corner Arcs of a RoundRect) updates
+    /// that parameter (e.g. all 4 corner Arcs of a `RoundRect`) updates
     /// in lockstep.
     FpEditorEditPadShapeParam {
         pad_idx: usize,
@@ -380,7 +388,7 @@ pub enum PanelMsg {
     },
     /// v0.22 Phase D6 — Mirror of `FpEditorEditPadInSketch` going the
     /// other direction. From a sketch entity carrying a `PadAttr`,
-    /// switch to Pads mode and select the EditorPad whose
+    /// switch to Pads mode and select the `EditorPad` whose
     /// `sketch_entity_id` matches this id. No-op when no pad has
     /// this entity as its backing point.
     FpEditorEditSketchPadInPads {
@@ -457,7 +465,7 @@ pub enum PanelMsg {
         value: String,
     },
     /// v0.23 — Switch the numbering scheme on an array. The handler
-    /// preserves the existing inner fields when possible (LinearIncrement
+    /// preserves the existing inner fields when possible (`LinearIncrement`
     /// keeps prior start/step exprs; flipping to Explicit clears the
     /// names list).
     FpEditorSetArrayNumberingScheme {
@@ -465,7 +473,7 @@ pub enum PanelMsg {
         scheme: NumberingSchemeKindUi,
     },
     /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
-    /// array's numbering is BgaRowCol; ignored for Linear / Explicit.
+    /// array's numbering is `BgaRowCol`; ignored for Linear / Explicit.
     FpEditorSetBgaSkipLetters {
         array_id: signex_sketch::array::ArrayId,
         value: bool,
@@ -608,7 +616,7 @@ pub enum PanelMsg {
     /// Focus next ERC diagnostic row in the global list.
     FocusNextErcDiagnostic,
     /// User clicked the Quick Fix chip on an ERC violation row. Routes
-    /// to a per-rule handler — UnusedPin places a NoConnect at the
+    /// to a per-rule handler — `UnusedPin` places a `NoConnect` at the
     /// pin, every other rule falls back to "zoom + select" (same as
     /// clicking the row body).
     ErcQuickFix(usize),
@@ -635,9 +643,9 @@ pub enum PanelMsg {
     EditSymbolValue(uuid::Uuid, String),
     /// Edit a symbol's footprint (committed on submit).
     EditSymbolFootprint(uuid::Uuid, String),
-    /// Toggle a symbol's mirror_x.
+    /// Toggle a symbol's `mirror_x`.
     ToggleSymbolMirrorX(uuid::Uuid),
-    /// Toggle a symbol's mirror_y.
+    /// Toggle a symbol's `mirror_y`.
     ToggleSymbolMirrorY(uuid::Uuid),
     /// Toggle a symbol's locked state.
     ToggleSymbolLocked(uuid::Uuid),
@@ -647,9 +655,9 @@ pub enum PanelMsg {
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
     EditSymbolValueFontSizePt(uuid::Uuid, u32),
-    /// Change the lib_id of a symbol (used by power-port Style dropdown).
+    /// Change the `lib_id` of a symbol (used by power-port Style dropdown).
     EditSymbolLibId(uuid::Uuid, String),
-    /// Swap a power-port's style: change lib_id and preserve visual direction
+    /// Swap a power-port's style: change `lib_id` and preserve visual direction
     /// by setting rotation accordingly.
     EditPowerPortStyle {
         symbol_id: uuid::Uuid,
@@ -732,7 +740,7 @@ pub enum PanelMsg {
     },
     /// SCH Library panel — click on a row in the Pins sub-list.
     /// Selects the pin on the canvas (Properties panel switches
-    /// to pin-mode automatically via the next refresh_panel_ctx).
+    /// to pin-mode automatically via the next `refresh_panel_ctx`).
     SymEditorSelectPin(usize),
     /// Properties panel — edit a pin's free-text Description.
     SymEditorSetPinDescription {
@@ -880,10 +888,10 @@ pub enum PanelMsg {
     /// symbol — the file would be empty otherwise.
     SchLibraryDeleteSymbol(usize),
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
-    /// Numeric text_input keystroke for a drawing field. The string
-    /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /
+    /// Numeric `text_input` keystroke for a drawing field. The string
+    /// is stored verbatim in `panel_ctx.drawing_edit_buf` so empty /
     /// partial input survives between frames; the handler parses
-    /// best-effort and fires UpdateDrawingEdit when the value is a
+    /// best-effort and fires `UpdateDrawingEdit` when the value is a
     /// valid f64.
     DrawingFieldTyping(DrawingFieldId, String),
     /// Open / close the border-colour picker overlay for a child sheet.
@@ -891,7 +899,7 @@ pub enum PanelMsg {
     /// Open / close the fill-colour picker overlay for a child sheet.
     ToggleChildSheetFillPicker(uuid::Uuid),
     /// Expand the currently-open child-sheet picker dropdown into the
-    /// full HSV / RGB ColorPicker overlay. `is_border` selects which
+    /// full HSV / RGB `ColorPicker` overlay. `is_border` selects which
     /// channel (border vs fill).
     OpenChildSheetAdvancedPicker(uuid::Uuid, bool),
     /// Cancel the currently-open child-sheet colour picker without

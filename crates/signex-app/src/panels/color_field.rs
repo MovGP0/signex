@@ -1,3 +1,12 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::index_refutable_slice,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Reusable colour-selection field — one swatch button that expands
 //! into an inline preset palette (6×2 grid) plus a `Custom…` button
 //! that opens the `iced_aw` HSV / RGB `ColorPicker` overlay.
@@ -92,16 +101,14 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         on_clear,
     } = props;
 
-    let preview_color = current
-        .map(|c| {
-            Color::from_rgba(
-                c[0] as f32 / 255.0,
-                c[1] as f32 / 255.0,
-                c[2] as f32 / 255.0,
-                c[3] as f32 / 255.0,
-            )
-        })
-        .unwrap_or(Color::from_rgba(0.5, 0.5, 0.5, 0.4));
+    let preview_color = current.map_or(Color::from_rgba(0.5, 0.5, 0.5, 0.4), |c| {
+        Color::from_rgba(
+            f32::from(c[0]) / 255.0,
+            f32::from(c[1]) / 255.0,
+            f32::from(c[2]) / 255.0,
+            f32::from(c[3]) / 255.0,
+        )
+    });
     let label_text = if let Some(c) = current {
         format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])
     } else {
@@ -186,9 +193,9 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         let mut r: Row<'a, M> = Row::new().spacing(4);
         for (_name, rgb) in chunk {
             let c = Color::from_rgb(
-                rgb[0] as f32 / 255.0,
-                rgb[1] as f32 / 255.0,
-                rgb[2] as f32 / 255.0,
+                f32::from(rgb[0]) / 255.0,
+                f32::from(rgb[1]) / 255.0,
+                f32::from(rgb[2]) / 255.0,
             );
             let rgba = [rgb[0], rgb[1], rgb[2], 255];
             let on_pick_cell = Rc::clone(&on_pick);

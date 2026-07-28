@@ -1,8 +1,14 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Annotate + duplicate-designator reset handlers. Split from `handlers/erc.rs`.
 
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{Message, Signex};
 
 impl Signex {
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
@@ -38,7 +44,7 @@ impl Signex {
         for refstr in &all_existing {
             let prefix: String = refstr
                 .chars()
-                .take_while(|c| c.is_ascii_alphabetic())
+                .take_while(char::is_ascii_alphabetic)
                 .collect();
             if prefix.is_empty() {
                 continue;
@@ -88,7 +94,7 @@ impl Signex {
                 let result = self.document_state.engines.get_mut(path).map(|engine| {
                     engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
                 });
-                if let Some(Ok(true)) = result {
+                if matches!(result, Some(Ok(true))) {
                     if let Some(tab) = self.document_state.tabs.get_mut(tab_idx) {
                         tab.dirty = true;
                     }
@@ -123,8 +129,7 @@ impl Signex {
         }
         if disk_touched > 0 {
             crate::diagnostics::log_info(format!(
-                "Annotate: wrote {} unopened sheet file(s) to disk",
-                disk_touched,
+                "Annotate: wrote {disk_touched} unopened sheet file(s) to disk",
             ));
         }
         // Force a render + panel refresh as if a command had fired.
@@ -239,7 +244,7 @@ impl Signex {
             dupes: &HashSet<String>,
         ) -> bool {
             let mut changed = false;
-            for sym in sheet.symbols.iter_mut() {
+            for sym in &mut sheet.symbols {
                 if sym.is_power || sym.reference.starts_with('#') {
                     continue;
                 }
@@ -247,7 +252,7 @@ impl Signex {
                     let prefix: String = sym
                         .reference
                         .chars()
-                        .take_while(|c| c.is_ascii_alphabetic())
+                        .take_while(char::is_ascii_alphabetic)
                         .collect();
                     if !prefix.is_empty() {
                         sym.reference = format!("{prefix}?");
@@ -299,7 +304,7 @@ impl Signex {
                     false
                 }
             });
-            if let Some(true) = applied {
+            if applied == Some(true) {
                 if let Some(tab) = self.document_state.tabs.get_mut(idx) {
                     tab.dirty = true;
                 }
@@ -326,7 +331,7 @@ impl Signex {
             };
             engine.set_path(Some(path.clone()));
             match engine.save() {
-                Ok(_) => {
+                Ok(()) => {
                     resets += 1;
                     self.document_state.dirty_paths.remove(&path);
                 }

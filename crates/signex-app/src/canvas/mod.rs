@@ -1,3 +1,13 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::match_same_arms,
+    clippy::pub_underscore_fields,
+    clippy::struct_excessive_bools,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
 //! Uses `iced::widget::canvas::Program` with a 3-layer cache:
@@ -70,7 +80,7 @@ pub struct SchematicCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
     pub overlay_cache: canvas::Cache,
-    /// Camera state when content_cache was last built — used to compute offset delta.
+    /// Camera state when `content_cache` was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     /// Camera state as of the most recent draw, updated every frame including
     /// mid-pan. Overlays positioned relative to world coordinates (inline text
@@ -86,8 +96,8 @@ pub struct SchematicCanvas {
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
-    /// Pending fit target to transfer to CanvasState.
-    /// Uses Cell so canvas::Program::update (&self) can consume it.
+    /// Pending fit target to transfer to `CanvasState`.
+    /// Uses Cell so `canvas::Program::update` (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
     /// Wire-in-progress points for rubber-band preview.
     pub wire_preview: Vec<signex_types::schematic::Point>,
@@ -139,16 +149,16 @@ pub struct SchematicCanvas {
     /// committed vertices + rubber-band to the cursor without
     /// reaching into app state.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
-    /// In-flight 3-click arc (start, mid) while Tool::Arc is active.
+    /// In-flight 3-click arc (start, mid) while `Tool::Arc` is active.
     /// Mirrors `interaction_state.arc_points` for the preview draw.
     pub arc_points: Vec<signex_types::schematic::Point>,
-    /// In-flight polyline vertices while Tool::Polyline is active.
+    /// In-flight polyline vertices while `Tool::Polyline` is active.
     /// Mirrors `interaction_state.polyline_points`.
     pub polyline_points: Vec<signex_types::schematic::Point>,
-    /// When the BringToFrontOf / SendToBackOf picker is armed, show
+    /// When the `BringToFrontOf` / `SendToBackOf` picker is armed, show
     /// the gray-X placement cursor so the user knows the next click
     /// is a reference pick, not a selection. Synced from
-    /// `ui_state.reorder_picker.is_some()` at the top of each view().
+    /// `ui_state.reorder_picker.is_some()` at the top of each `view()`.
     pub reorder_picker_armed: bool,
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
@@ -183,15 +193,26 @@ pub enum ErcMarkerSeverity {
     Info,
 }
 
+impl Default for SchematicCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SchematicCanvas {
-    pub fn active_render_cache(&self) -> Option<&crate::schematic_runtime::SchematicRenderCache> {
+    pub const fn active_render_cache(
+        &self,
+    ) -> Option<&crate::schematic_runtime::SchematicRenderCache> {
         self.render_cache.as_ref()
     }
 
     pub fn active_snapshot(&self) -> Option<&crate::schematic_runtime::SchematicRenderSnapshot> {
-        self.render_cache.as_ref().map(|cache| cache.snapshot())
+        self.render_cache
+            .as_ref()
+            .map(super::schematic_runtime::SchematicRenderCache::snapshot)
     }
 
+    #[must_use]
     pub fn new() -> Self {
         let default_colors =
             signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
@@ -244,8 +265,8 @@ impl SchematicCanvas {
         }
     }
 
-    /// Compute the "focus" uuid set when auto_focus is on — members of
-    /// the current selection. Returns None when auto_focus is off; the
+    /// Compute the "focus" uuid set when `auto_focus` is on — members of
+    /// the current selection. Returns None when `auto_focus` is off; the
     /// renderer then draws every item at full alpha.
     fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
         if !self.auto_focus {
@@ -380,10 +401,10 @@ impl canvas::Program<Message> for SchematicCanvas {
 
         let shifted_snapshot =
             if let (Some((dx, dy)), Some(snap)) = (drag_offset, self.active_snapshot()) {
-                if !self.selected.is_empty() {
-                    Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
-                } else {
+                if self.selected.is_empty() {
                     None
+                } else {
+                    Some(shift_snapshot_for_selection(snap, &self.selected, dx, dy))
                 }
             } else {
                 None
@@ -456,44 +477,44 @@ fn shift_snapshot_for_selection(
     let shift = |p: Point| -> Point { Point::new(p.x + dx, p.y + dy) };
 
     let mut out = snap.clone();
-    for w in out.wires.iter_mut() {
+    for w in &mut out.wires {
         if is_selected(w.uuid, SelectedKind::Wire) {
             w.start = shift(w.start);
             w.end = shift(w.end);
         }
     }
-    for b in out.buses.iter_mut() {
+    for b in &mut out.buses {
         if is_selected(b.uuid, SelectedKind::Bus) {
             b.start = shift(b.start);
             b.end = shift(b.end);
         }
     }
-    for be in out.bus_entries.iter_mut() {
+    for be in &mut out.bus_entries {
         if is_selected(be.uuid, SelectedKind::BusEntry) {
             be.position = shift(be.position);
         }
     }
-    for j in out.junctions.iter_mut() {
+    for j in &mut out.junctions {
         if is_selected(j.uuid, SelectedKind::Junction) {
             j.position = shift(j.position);
         }
     }
-    for nc in out.no_connects.iter_mut() {
+    for nc in &mut out.no_connects {
         if is_selected(nc.uuid, SelectedKind::NoConnect) {
             nc.position = shift(nc.position);
         }
     }
-    for l in out.labels.iter_mut() {
+    for l in &mut out.labels {
         if is_selected(l.uuid, SelectedKind::Label) {
             l.position = shift(l.position);
         }
     }
-    for tn in out.text_notes.iter_mut() {
+    for tn in &mut out.text_notes {
         if is_selected(tn.uuid, SelectedKind::TextNote) {
             tn.position = shift(tn.position);
         }
     }
-    for sym in out.symbols.iter_mut() {
+    for sym in &mut out.symbols {
         if is_selected(sym.uuid, SelectedKind::Symbol) {
             // Whole-symbol drag: anchor + both fields travel together.
             sym.position = shift(sym.position);
@@ -519,7 +540,7 @@ fn shift_snapshot_for_selection(
             }
         }
     }
-    for cs in out.child_sheets.iter_mut() {
+    for cs in &mut out.child_sheets {
         if is_selected(cs.uuid, SelectedKind::ChildSheet) {
             cs.position = shift(cs.position);
             for pin in &mut cs.pins {
@@ -534,7 +555,7 @@ fn shift_snapshot_for_selection(
         }
     }
     use signex_types::schematic::SchDrawing;
-    for d in out.drawings.iter_mut() {
+    for d in &mut out.drawings {
         let uuid = match d {
             SchDrawing::Line { uuid, .. }
             | SchDrawing::Rect { uuid, .. }

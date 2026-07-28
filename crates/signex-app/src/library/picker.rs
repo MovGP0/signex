@@ -1,3 +1,9 @@
+#![expect(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Component picker modal.
 //!
 //! Opened from File ▸ Library ▸ Place Component… (and, eventually,
@@ -29,6 +35,7 @@ use super::state::{LibraryState, PickerState};
 const PICKER_W: f32 = 720.0;
 const PICKER_H: f32 = 480.0;
 
+#[must_use]
 pub fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PickerState,
@@ -67,12 +74,11 @@ pub fn view<'a>(
             .padding([14, 14]),
         );
     } else {
-        for (path, summary) in rows.iter() {
+        for (path, summary) in &rows {
             let is_selected = picker
                 .selected
                 .as_ref()
-                .map(|(p, c)| p == path && c.row_id == summary.row_id)
-                .unwrap_or(false);
+                .is_some_and(|(p, c)| p == path && c.row_id == summary.row_id);
             let row_bg = if is_selected {
                 Some(crate::styles::ti(tokens.hover))
             } else {

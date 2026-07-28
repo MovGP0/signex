@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! The id-preserving form of the pad-sidecar re-mint.
 //!
 //! [`super::remint_pad_geometry`] drops the pad's sketch geometry and
@@ -101,7 +106,7 @@ pub fn remint_pad_geometry_in_place(pad: &mut EditorPad, footprint: &mut Footpri
 /// from here.
 ///
 /// A paired walk, not either of the single-sided sweeps: it descends
-/// through Line / Arc / Circle because a RoundRect records only its
+/// through Line / Arc / Circle because a `RoundRect` records only its
 /// four Arcs on `shape_params` and the anchors and inset centres hang
 /// off them.
 /// The pairs the walk starts from: the centre, the bbox corners, and

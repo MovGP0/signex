@@ -1,3 +1,9 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch updates — numeric placement-input buffer concern.
 //!
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
@@ -39,8 +45,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 .state
                 .placement_input
                 .as_ref()
-                .map(|p| p.buffer.as_str())
-                .unwrap_or("");
+                .map_or("", |p| p.buffer.as_str());
             let accept = if ch.is_ascii_digit() {
                 true
             } else if ch == '.' {
@@ -118,8 +123,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     .state
                     .placement_input
                     .as_ref()
-                    .map(|p| p.kind)
-                    .unwrap_or(fields[0]);
+                    .map_or(fields[0], |p| p.kind);
                 let idx = fields.iter().position(|k| *k == current).unwrap_or(0);
                 let next_kind = fields[(idx + 1) % fields.len()];
                 // Park the focused field (preserving its digits),

@@ -1,6 +1,6 @@
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{MenuMessage, Message, Signex, Tool};
 
 impl Signex {
     pub(super) fn handle_menu_placement_command(

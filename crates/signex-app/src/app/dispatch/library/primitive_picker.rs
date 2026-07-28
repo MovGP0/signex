@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::match_same_arms,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Primitive-picker handlers — routing the symbol / footprint picker
 //! modal and applying a pick to either a browser row or the active
 //! Component Preview.
@@ -5,7 +12,10 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{
+    EditorAddress, LibraryMessage, Message, PrimitiveKind, PrimitivePickerMsg,
+    PrimitivePickerState, PrimitivePickerTarget, PrimitiveRef, RowId, Signex, Task, commands,
+};
 
 impl Signex {
     /// Open the Symbol/Footprint primitive picker modal. `target`
@@ -45,8 +55,7 @@ impl Signex {
                     .library
                     .primitive_picker
                     .as_ref()
-                    .map(|p| p.kind)
-                    .unwrap_or(PrimitiveKind::Symbol);
+                    .map_or(PrimitiveKind::Symbol, |p| p.kind);
                 let (label, ext) = match kind {
                     PrimitiveKind::Symbol => ("Pick Symbol (*.snxsym)", "snxsym"),
                     PrimitiveKind::Footprint => ("Pick Footprint (*.snxfpt)", "snxfpt"),
@@ -141,7 +150,7 @@ impl Signex {
         primitive_ref: PrimitiveRef,
     ) {
         // 1. Read the row from the library cache.
-        let mut row = match self
+        let mut row = if let Some(r) = self
             .library
             .library_at(&address.library_path)
             .and_then(|lib| lib.tables.get(&address.table))
@@ -151,17 +160,16 @@ impl Signex {
             })
             .cloned()
         {
-            Some(r) => r,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %address.library_path.display(),
-                    table = %address.table,
-                    row_id = %address.row_id,
-                    "primitive pick: row not found in cache"
-                );
-                return;
-            }
+            r
+        } else {
+            tracing::warn!(
+                target: "signex::library",
+                library = %address.library_path.display(),
+                table = %address.table,
+                row_id = %address.row_id,
+                "primitive pick: row not found in cache"
+            );
+            return;
         };
         // 2. Apply.
         match kind {
@@ -218,7 +226,7 @@ impl Signex {
     }
 
     /// Component Preview tab — apply a freshly-picked primitive ref to
-    /// the row, resolve through the LibrarySet, save via update_row.
+    /// the row, resolve through the `LibrarySet`, save via `update_row`.
     fn apply_primitive_pick_to_preview(
         &mut self,
         address: EditorAddress,
@@ -302,10 +310,9 @@ impl Signex {
             .find(|p| {
                 p.extension()
                     .and_then(|s| s.to_str())
-                    .map(|ext| ext.eq_ignore_ascii_case("snxlib"))
-                    .unwrap_or(false)
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("snxlib"))
             })
-            .map(|p| p.to_path_buf());
+            .map(std::path::Path::to_path_buf);
         let Some(snxlib_dir) = snxlib_dir else {
             if let Some(picker) = self.library.primitive_picker.as_mut() {
                 picker.error = Some(
@@ -329,29 +336,27 @@ impl Signex {
             return Task::none();
         }
         // Resolve library_id + parse uuid from filename.
-        let library_id = match self.library.library_at(&snxlib_dir) {
-            Some(lib) => lib.library_id,
-            None => {
-                if let Some(picker) = self.library.primitive_picker.as_mut() {
-                    picker.error = Some("Library failed to mount.".into());
-                }
-                return Task::none();
+        let library_id = if let Some(lib) = self.library.library_at(&snxlib_dir) {
+            lib.library_id
+        } else {
+            if let Some(picker) = self.library.primitive_picker.as_mut() {
+                picker.error = Some("Library failed to mount.".into());
             }
+            return Task::none();
         };
         let stem = file
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or_default();
-        let uuid = match uuid::Uuid::parse_str(stem) {
-            Ok(u) => u,
-            Err(_) => {
-                if let Some(picker) = self.library.primitive_picker.as_mut() {
-                    picker.error = Some(format!(
-                        "Filename `{stem}` is not a UUID — pick a primitive file in `<lib>.snxlib/symbols/`."
-                    ));
-                }
-                return Task::none();
+        let uuid = if let Ok(u) = uuid::Uuid::parse_str(stem) {
+            u
+        } else {
+            if let Some(picker) = self.library.primitive_picker.as_mut() {
+                picker.error = Some(format!(
+                    "Filename `{stem}` is not a UUID — pick a primitive file in `<lib>.snxlib/symbols/`."
+                ));
             }
+            return Task::none();
         };
         let primitive_ref = PrimitiveRef::new(library_id, uuid);
         Task::done(Message::Library(LibraryMessage::PrimitivePicker(

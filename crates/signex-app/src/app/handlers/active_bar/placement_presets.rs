@@ -1,6 +1,12 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{Message, Signex, Tool, ToolMessage};
 
 impl Signex {
     pub(super) fn handle_active_bar_placement_preset(
@@ -211,8 +217,9 @@ impl Signex {
                     .ui_state
                     .pending_net_color
                     .filter(|c| c.a != 0)
-                    .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
-                    .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
+                    .map_or(iced::Color::from_rgb(0.40, 0.40, 0.93), |c| {
+                        iced::Color::from_rgb8(c.r, c.g, c.b)
+                    });
                 self.ui_state.net_color_custom.draft = seed;
                 self.ui_state.net_color_custom.show = true;
             }

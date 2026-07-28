@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::float_cmp,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Body 3D editor pane.
 //!
 //! Sits in the right column of the Footprint tab (per
@@ -34,6 +41,7 @@ impl std::fmt::Display for ShapePick {
 
 /// Render the Body 3D editor pane. `body` is borrowed from
 /// `Footprint::body_3d`; messages mutate it through the dispatcher.
+#[must_use]
 pub fn view<'a>(
     body: &Body3D,
     tokens: &'a ThemeTokens,
@@ -148,7 +156,7 @@ fn labeled_field<'a>(
 }
 
 /// Render one color row — preview swatch + 4 numeric inputs (R/G/B/A
-/// 0..1) + cycle button. We don't pull the full ColorPicker here
+/// 0..1) + cycle button. We don't pull the full `ColorPicker` here
 /// (would explode the panel height); the cycle preset gives the user
 /// quick access to a dark/light/custom palette.
 fn color_row<'a>(

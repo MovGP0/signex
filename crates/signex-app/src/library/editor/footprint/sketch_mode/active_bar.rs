@@ -1,3 +1,9 @@
+#![expect(
+    clippy::too_many_lines,
+    clippy::vec_init_then_push,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sketch-mode Active Bar — floating toolbar over the footprint
 //! canvas when the editor is in [`EditorMode::Sketch`].
 //!
@@ -49,7 +55,7 @@ use crate::library::messages::{
 
 /// Build the Active Bar items for the given editor state. Theme is
 /// pulled from `editor.path` → `themes::current_id()` lookup at the
-/// caller's site (same pattern as the SchLib editor).
+/// caller's site (same pattern as the `SchLib` editor).
 pub fn items<'a>(
     editor: &'a FootprintEditorState,
     theme_id: signex_types::theme::ThemeId,
@@ -480,9 +486,7 @@ fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 19] {
             m[tag_index(SketchConstraintTag::DistancePtCircle)] = true;
         }
         // EqualRadius spans any two of Circle / Arc.
-        (Some("Circle"), Some("Circle"))
-        | (Some("Circle"), Some("Arc"))
-        | (Some("Arc"), Some("Circle")) => {
+        (Some("Circle" | "Arc"), Some("Circle")) | (Some("Circle"), Some("Arc")) => {
             m[tag_index(SketchConstraintTag::EqualRadius)] = true;
         }
         _ => {}
@@ -528,7 +532,7 @@ const fn tag_index(tag: SketchConstraintTag) -> usize {
 pub(crate) const DIM_INPUT_W: f32 = 92.0;
 
 /// Build the inline dimension `text_input` slot. Sized to read like
-/// the rest of the bar (matches the BTN_SIZE vertical rhythm).
+/// the rest of the bar (matches the `BTN_SIZE` vertical rhythm).
 fn build_dimension_input<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,

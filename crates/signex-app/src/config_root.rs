@@ -33,7 +33,7 @@ use std::path::PathBuf;
 /// one-shot legacy-prefs migration should run at all — that migration
 /// must not touch the developer's real config directory during a test
 /// run (issue #437).
-pub(crate) fn is_test_redirect_active() -> bool {
+pub(crate) const fn is_test_redirect_active() -> bool {
     cfg!(test) || cfg!(feature = "test-prefs-redirect")
 }
 
@@ -46,6 +46,7 @@ pub(crate) fn is_test_redirect_active() -> bool {
 /// write the developer's real config directory. Originally
 /// `fonts::prefs_path`-only (#437), hoisted to cover all four resolvers
 /// in #440.
+#[must_use]
 pub fn config_root() -> Option<PathBuf> {
     if is_test_redirect_active() {
         return Some(
@@ -65,6 +66,7 @@ pub fn config_root() -> Option<PathBuf> {
 /// `base.join("signex")` themselves, so a rename of the folder here
 /// would have silently diverged production from the tests that are
 /// supposed to prove it (#440 review).
+#[must_use]
 pub fn config_root_for_dir(base: &std::path::Path) -> PathBuf {
     base.join("signex")
 }

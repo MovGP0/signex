@@ -1,3 +1,11 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Component Preview handlers — the five preview tabs (Preview /
 //! Parameters / Supply / Datasheet / Simulation): editor events, tab
 //! selection, and saving a row.
@@ -5,7 +13,10 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{
+    EditorAddress, EditorMsg, LibraryMessage, Message, PreviewTab, RowId, Signex, Task,
+    apply_inline_edit,
+};
 
 impl Signex {
     /// Trace-only signal: a Component Preview tab was opened for the
@@ -176,19 +187,17 @@ impl Signex {
             tracing::warn!(target: "signex::library", error = %e, "save row: refresh_content_hash failed");
         }
 
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => {
-                tracing::warn!(target: "signex::library", "save row: library not open");
-                return;
-            }
+        let library_id = if let Some(lib) = self.library.library_at(&library_path) {
+            lib.library_id
+        } else {
+            tracing::warn!(target: "signex::library", "save row: library not open");
+            return;
         };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => {
-                tracing::warn!(target: "signex::library", "save row: library not mounted");
-                return;
-            }
+        let adapter = if let Some(a) = self.library.set.get(library_id) {
+            a
+        } else {
+            tracing::warn!(target: "signex::library", "save row: library not mounted");
+            return;
         };
         match adapter.update_row(&table, row.clone(), "edit row (signex-app)") {
             Ok(()) => {

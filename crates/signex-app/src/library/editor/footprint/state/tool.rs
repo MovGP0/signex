@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pads-mode + sketch-mode tool enums and the multi-click pending-tool
 //! state.
 
@@ -34,7 +39,7 @@ pub enum PadsTool {
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
 /// only; v0.13.2 adds Line, Circle, Arc; v0.15 adds Rectangle; v0.16
-/// adds RoundedRectangle.
+/// adds `RoundedRectangle`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SketchTool {
     #[default]

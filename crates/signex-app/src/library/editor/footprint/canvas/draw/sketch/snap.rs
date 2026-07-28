@@ -1,3 +1,8 @@
+#![expect(
+    clippy::manual_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Inferred-constraint snap glyph — the badge drawn at the cursor while
 //! a placement tool is active, hinting the auto-constraint the next
 //! click will land.

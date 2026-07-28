@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Bounding-box silk text (item ③). A drag-rect sets the frame; the
 //! string is aligned/clipped inside it at render time
 //! (`canvas/draw_silk.rs`). No auto-wrap/reflow.

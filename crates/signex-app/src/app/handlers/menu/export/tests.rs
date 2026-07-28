@@ -1,3 +1,8 @@
+#![expect(
+    clippy::ptr_arg,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Export scope regressions (#406) — asserted on the *emitted page set*.
 //!
 //! These drive [`super::build_export_scope`] itself rather than the scope
@@ -78,7 +83,7 @@ fn schematic(children: &[&str]) -> SchematicSheet {
 /// what makes the net real, and the reference is what a dropped subtree costs
 /// you on the board — missing components. `net_name` is unqualified in the
 /// project netlist because the label is `Global`.
-pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str]) -> SchematicSheet {
+pub fn sheet_with_net(reference: &str, net_name: &str, children: &[&str]) -> SchematicSheet {
     use signex_types::schematic::{
         HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol,
         VAlign, Wire,
@@ -196,7 +201,7 @@ fn netlist_references(ctx: &signex_output::ExportContext) -> Vec<String> {
 /// A `Signex` with one loaded, *active* project whose persisted sheet list is
 /// `listed`. Sheets are not opened here — callers add the engines they need
 /// with [`open`].
-pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
+pub fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
@@ -238,7 +243,7 @@ fn open(ds: &mut DocumentState, path: &PathBuf, children: &[&str]) {
     open_with(ds, path, schematic(children));
 }
 
-pub(crate) fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
+pub fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
     let engine = signex_engine::Engine::new(sheet).expect("engine");
     ds.engines.insert(path.clone(), engine);
 }

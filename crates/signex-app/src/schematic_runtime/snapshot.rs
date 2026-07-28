@@ -1,4 +1,18 @@
-use super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::{
+    ArcInput, CanvasColors, Color, FillType, HAlign, HashMap, HashSet, JunctionInput, LabelType,
+    OverlayInputs, PolygonInput, Rectangle, RendererSnapshot, SchDrawing, SchematicRenderSnapshot,
+    ScreenTransform, TextInput, ThemeColor, VAlign, WireInput, arc_sweeps_through_mid,
+    circle_vertices, circumcircle, drawing_aabb, fill_color_for, focus_color, label_color,
+    label_marker_polygon, line_visible, point_visible, rect_visible, renderer_id,
+    resolve_stroke_color, screen_px_to_world_mm, stroke_world_mm, symbol_body_aabb, to_iced,
+    to_rgba,
+};
 
 pub(super) fn build_renderer_snapshot(
     snapshot: &SchematicRenderSnapshot,
@@ -25,8 +39,7 @@ pub(super) fn build_renderer_snapshot(
 
         let base_color = wire_color_overrides
             .and_then(|map| map.get(&wire.uuid))
-            .map(to_iced)
-            .unwrap_or_else(|| to_iced(&colors.wire));
+            .map_or_else(|| to_iced(&colors.wire), to_iced);
         let color = focus_color(base_color, focus_set, wire.uuid);
         wires.push(WireInput {
             id: renderer_id(wire.uuid),
@@ -280,8 +293,7 @@ pub(super) fn build_renderer_snapshot(
                         [start.x as f32, end.y as f32],
                     ],
                     fill_color: fill_color_for(*fill, stroke_color, colors)
-                        .map(to_rgba)
-                        .unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                        .map_or([0.0, 0.0, 0.0, 0.0], to_rgba),
                     stroke_color: Some(to_rgba(resolve_stroke_color(stroke_color, base_color))),
                     stroke_width_mm: width
                         .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
@@ -306,8 +318,7 @@ pub(super) fn build_renderer_snapshot(
                         40,
                     ),
                     fill_color: fill_color_for(*fill, stroke_color, colors)
-                        .map(to_rgba)
-                        .unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                        .map_or([0.0, 0.0, 0.0, 0.0], to_rgba),
                     stroke_color: Some(to_rgba(resolve_stroke_color(stroke_color, base_color))),
                     stroke_width_mm: width
                         .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
@@ -396,8 +407,7 @@ pub(super) fn build_renderer_snapshot(
                             .map(|point| [point.x as f32, point.y as f32])
                             .collect(),
                         fill_color: fill_color_for(*fill, stroke_color, colors)
-                            .map(to_rgba)
-                            .unwrap_or([0.0, 0.0, 0.0, 0.0]),
+                            .map_or([0.0, 0.0, 0.0, 0.0], to_rgba),
                         stroke_color: Some(stroke),
                         stroke_width_mm: width_mm,
                     });

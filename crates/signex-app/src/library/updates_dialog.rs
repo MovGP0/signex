@@ -1,3 +1,9 @@
+#![expect(
+    clippy::redundant_closure_for_method_calls,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! "Library Updates Available" modal — Stage 16 of
 //! `v0.9-snxlib-as-file-plan.md` §3.5.
 //!
@@ -76,16 +82,18 @@ pub enum BumpKind {
 impl BumpKind {
     /// Default checkbox state for the "Update Selected Components"
     /// flow — patch-only is the safe default.
-    pub fn default_checked(self) -> bool {
-        matches!(self, BumpKind::Patch)
+    #[must_use]
+    pub const fn default_checked(self) -> bool {
+        matches!(self, Self::Patch)
     }
 
     /// Short label for the badge column.
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            BumpKind::Patch => "patch",
-            BumpKind::Minor => "minor",
-            BumpKind::Major => "major",
+            Self::Patch => "patch",
+            Self::Minor => "minor",
+            Self::Major => "major",
         }
     }
 }
@@ -94,6 +102,7 @@ impl BumpKind {
 /// [`BumpKind`]. Both inputs are opaque-string-treated semver: the
 /// rule splits on `.` and compares the leading two numeric segments.
 /// Any parse failure or unequal-major pair upgrades to [`BumpKind::Major`].
+#[must_use]
 pub fn classify_bump(current: &str, latest: &str) -> BumpKind {
     fn parts(s: &str) -> (Option<u32>, Option<u32>) {
         let mut iter = s.split('.');
@@ -147,6 +156,7 @@ pub struct LibraryUpdateEntry {
 }
 
 /// Modal state — owned by [`crate::library::LibraryState::library_updates`].
+///
 /// `None` while closed; populated by the schematic-open scan. Sorted
 /// by `ref_des` (lexicographic with natural-numeric tail handling
 /// would be nicer but isn't worth the dep here — `R12` sorts before
@@ -166,6 +176,7 @@ impl LibraryUpdatesState {
     /// Build a state from a freshly-collected drift list. Auto-sorts
     /// by `ref_des` and applies the `bump_kind.default_checked()`
     /// rule to each entry's checkbox.
+    #[must_use]
     pub fn new(schematic_path: PathBuf, mut entries: Vec<LibraryUpdateEntry>) -> Self {
         entries
             .sort_by(|a, b| signex_types::designator::compare_references(&a.ref_des, &b.ref_des));
@@ -192,6 +203,7 @@ impl LibraryUpdatesState {
     }
 
     /// Number of entries the user has currently checked.
+    #[must_use]
     pub fn selected_count(&self) -> usize {
         self.entries.iter().filter(|e| e.selected).count()
     }
@@ -199,6 +211,7 @@ impl LibraryUpdatesState {
 
 /// Render the modal card. Returns an `Element<LibraryMessage>` so the
 /// caller can `.map(Message::Library)`.
+#[must_use]
 pub fn view<'a>(
     state: &'a LibraryUpdatesState,
     tokens: &'a ThemeTokens,
@@ -211,8 +224,10 @@ pub fn view<'a>(
         .schematic_path
         .file_name()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| state.schematic_path.display().to_string());
+        .map_or_else(
+            || state.schematic_path.display().to_string(),
+            |s| s.to_string(),
+        );
 
     let header = container(
         row![
@@ -247,7 +262,7 @@ pub fn view<'a>(
     .spacing(2);
 
     let selected = state.selected_count();
-    let update_label = format!("Update Selected Components ({})", selected);
+    let update_label = format!("Update Selected Components ({selected})");
 
     let footer = container(
         row![
@@ -333,12 +348,12 @@ fn render_entry_row<'a>(
     .into()
 }
 
-fn secondary_btn<'a>(
-    label: &'a str,
+fn secondary_btn(
+    label: &str,
     message: LibraryMessage,
     text_color: iced::Color,
     border: iced::Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     button(container(text(label.to_string()).size(11).color(text_color)).padding([4, 14]))
         .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -474,7 +489,7 @@ mod tests {
                 library_id: Uuid::nil(),
                 library_name: "Lib".to_string(),
                 row_id: RowId::from_uuid(Uuid::nil()),
-                library_path: library_path.clone(),
+                library_path,
                 current_version: "1.0.0".to_string(),
                 latest_version: "1.0.1".to_string(),
                 bump_kind: BumpKind::Patch,

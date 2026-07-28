@@ -1,6 +1,11 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sub-message enums: window / palette / overlay / selection / panel edits.
 
-use super::*;
+use super::{DragTarget, StatusBarRequest, ThemeId};
 
 /// Window lifecycle, docking, and native-chrome message family
 /// (ADR-0001 D3). Namespaced under `Message::Window`, routed to
@@ -79,7 +84,7 @@ pub enum WindowMsg {
     StartMainWindowDrag,
     /// User pressed one of the 6 px edge strips around the borderless
     /// main window — ask the OS to start a resize drag in that
-    /// direction. Replaces the WS_THICKFRAME edges we lose when
+    /// direction. Replaces the `WS_THICKFRAME` edges we lose when
     /// decorations are disabled.
     StartMainWindowResize(iced::window::Direction),
     /// User pressed one of the 6 px edge strips around a borderless
@@ -111,14 +116,14 @@ pub enum CommandPaletteMsg {
     /// always-on placeholder) but unfocused; query is preserved so a
     /// re-open continues where the user left off.
     Close,
-    /// Live query update from the chrome-strip text_input. Resets the
+    /// Live query update from the chrome-strip `text_input`. Resets the
     /// selected row to 0 because the result list reorders on every
     /// keystroke.
     QueryChanged(String),
     /// Move the highlighted row by `delta` (clamped to result count).
-    /// Wired to ArrowUp / ArrowDown when the palette is open.
+    /// Wired to `ArrowUp` / `ArrowDown` when the palette is open.
     MoveSelection(i32),
-    /// Click on a specific row in the dropdown — sets selected_index
+    /// Click on a specific row in the dropdown — sets `selected_index`
     /// and executes in one shot.
     Select(usize),
     /// Execute the currently selected entry. Wired to Enter and to
@@ -159,7 +164,7 @@ pub enum OverlayMsg {
     /// the first canvas interaction after launch.
     DismissFirstRunTour,
     /// User pressed the title bar of a modal at window-space (x, y) —
-    /// begin dragging it. The next DragMove events update its offset.
+    /// begin dragging it. The next `DragMove` events update its offset.
     ModalDragStart {
         modal: crate::app::state::ModalId,
         x: f32,
@@ -175,7 +180,7 @@ pub enum OverlayMsg {
         world_y: f64,
         select: Option<signex_types::schematic::SelectedItem>,
     },
-    /// Toggle AutoFocus — dim everything not in the current selection.
+    /// Toggle `AutoFocus` — dim everything not in the current selection.
     ToggleAutoFocus,
 }
 
@@ -280,7 +285,7 @@ pub enum BomPreviewMsg {
     /// drag-reorder feedback to highlight the drop target.
     ColumnHoverEnter(usize),
     /// Cursor left a column header. Clears the hover state for that
-    /// idx; the next on_enter on a sibling header replaces it.
+    /// idx; the next `on_enter` on a sibling header replaces it.
     ColumnHoverExit(usize),
     /// User pressed a column's right-edge resize handle. Stores
     /// the start x and start width on `BomPreviewState`; subsequent

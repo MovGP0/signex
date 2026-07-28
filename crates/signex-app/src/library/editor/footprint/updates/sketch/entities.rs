@@ -1,3 +1,11 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::needless_pass_by_value,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch updates — entity placement & drag geometry concern.
 //!
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
@@ -98,8 +106,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             let corner_pad_idx = editor.state.pads.iter().position(|p| {
                 p.corner_entity_ids
                     .as_ref()
-                    .map(|ids| ids.contains(&id))
-                    .unwrap_or(false)
+                    .is_some_and(|ids| ids.contains(&id))
             });
             if let Some(pad_idx) = corner_pad_idx {
                 use signex_sketch::entity::EntityKind;
@@ -116,20 +123,20 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 let mut max_y = f64::NEG_INFINITY;
                 if let Some(sketch) = editor.primitive().sketch.as_ref() {
                     for cid in corners {
-                        if let Some(e) = sketch.entities.iter().find(|e| e.id == cid) {
-                            if let EntityKind::Point { x, y } = e.kind {
-                                if x < min_x {
-                                    min_x = x;
-                                }
-                                if y < min_y {
-                                    min_y = y;
-                                }
-                                if x > max_x {
-                                    max_x = x;
-                                }
-                                if y > max_y {
-                                    max_y = y;
-                                }
+                        if let Some(e) = sketch.entities.iter().find(|e| e.id == cid)
+                            && let EntityKind::Point { x, y } = e.kind
+                        {
+                            if x < min_x {
+                                min_x = x;
+                            }
+                            if y < min_y {
+                                min_y = y;
+                            }
+                            if x > max_x {
+                                max_x = x;
+                            }
+                            if y > max_y {
+                                max_y = y;
                             }
                         }
                     }
@@ -137,8 +144,8 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 if min_x.is_finite() && min_y.is_finite() {
                     let new_w = (max_x - min_x).max(0.05);
                     let new_h = (max_y - min_y).max(0.05);
-                    let new_cx = (min_x + max_x) / 2.0;
-                    let new_cy = (min_y + max_y) / 2.0;
+                    let new_cx = f64::midpoint(min_x, max_x);
+                    let new_cy = f64::midpoint(min_y, max_y);
                     let pad = &mut editor.state.pads[pad_idx];
                     pad.position_mm = (new_cx, new_cy);
                     pad.size_mm = (new_w, new_h);
@@ -293,12 +300,12 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                              p2: (f64, f64),
                              d2: (f64, f64)|
              -> Option<(f64, f64)> {
-                let det = d2.0 * d1.1 - d1.0 * d2.1;
+                let det = d1.0.mul_add(-d2.1, d2.0 * d1.1);
                 if det.abs() < 1e-9 {
                     return None;
                 }
-                let t = (d2.0 * (p2.1 - p1.1) - d2.1 * (p2.0 - p1.0)) / det;
-                Some((p1.0 + t * d1.0, p1.1 + t * d1.1))
+                let t = d2.1.mul_add(-(p2.0 - p1.0), d2.0 * (p2.1 - p1.1)) / det;
+                Some((t.mul_add(d1.0, p1.0), t.mul_add(d1.1, p1.1)))
             };
             let target_for =
                 |endpoint: signex_sketch::id::SketchEntityId, pos: (f64, f64)| -> (f64, f64) {
@@ -450,8 +457,8 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     let new_centre = {
                         let pad = &editor.state.pads[pad_idx];
                         pad.local_to_world_mm(
-                            (new_xmin + new_xmax) / 2.0,
-                            (new_ymin + new_ymax) / 2.0,
+                            f64::midpoint(new_xmin, new_xmax),
+                            f64::midpoint(new_ymin, new_ymax),
                         )
                     };
                     // The pad FRAME moved — extents AND centre. The
@@ -514,24 +521,24 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 use signex_sketch::entity::EntityKind;
                 if let Some(cid) = centre_id {
-                    for entity in sketch.entities.iter_mut() {
-                        if let EntityKind::Circle { center, radius } = &mut entity.kind {
-                            if *center == cid {
-                                *radius = d / 2.0;
-                            }
+                    for entity in &mut sketch.entities {
+                        if let EntityKind::Circle { center, radius } = &mut entity.kind
+                            && *center == cid
+                        {
+                            *radius = d / 2.0;
                         }
-                        if entity.id == cid {
-                            if let Some(attr) = entity.pad.as_mut() {
-                                attr.size_x_expr = format!("{:.4}mm", d);
-                                attr.size_y_expr = format!("{:.4}mm", d);
-                            }
+                        if entity.id == cid
+                            && let Some(attr) = entity.pad.as_mut()
+                        {
+                            attr.size_x_expr = format!("{d:.4}mm");
+                            attr.size_y_expr = format!("{d:.4}mm");
                         }
                     }
                 }
                 if let Some(name) = diameter_param.as_deref() {
                     sketch
                         .parameters
-                        .insert(name.to_string(), format!("{:.4}mm", d));
+                        .insert(name.to_string(), format!("{d:.4}mm"));
                 }
             }
             editor.with_parts(|state, primitive| {

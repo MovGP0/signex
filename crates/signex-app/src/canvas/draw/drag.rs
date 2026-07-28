@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use super::super::*;
 
 impl SchematicCanvas {
@@ -91,8 +98,8 @@ impl SchematicCanvas {
                 };
                 for sel in &self.selected {
                     use signex_types::schematic::{Point, SelectedKind};
-                    let dxf = dx as f64;
-                    let dyf = dy as f64;
+                    let dxf = f64::from(dx);
+                    let dyf = f64::from(dy);
                     match sel.kind {
                         SelectedKind::Wire => {
                             if let Some(w) = snap.wires.iter().find(|w| w.uuid == sel.uuid) {

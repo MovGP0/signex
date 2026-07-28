@@ -1,3 +1,11 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Generic GPU render path for any `signex_gfx::scene::Scene`.
 //!
 //! CLEAN ROOM DECLARATION
@@ -50,6 +58,7 @@ fn log_text_error_once(once: &Once, stage: &str, error: impl std::fmt::Display) 
 /// The screen mapping is `screen_px = world_mm * scale + offset_px`, so the
 /// world point drawn at the top-left corner is `-offset / scale`. Returns the
 /// origin unchanged when the scale is degenerate.
+#[must_use]
 pub fn world_origin_mm(offset_px: [f32; 2], scale_px_per_mm: f32) -> [f32; 2] {
     if scale_px_per_mm > 0.0 {
         [
@@ -106,7 +115,7 @@ impl shader::Pipeline for ScenePipeline {
 /// One frame's worth of scene geometry handed to the GPU. Cheap to build each
 /// frame — it is the same instance data the CPU path already produces.
 ///
-/// TypeId caveat: iced keys the stored [`ScenePipeline`] by this primitive's
+/// `TypeId` caveat: iced keys the stored [`ScenePipeline`] by this primitive's
 /// `TypeId`, so every widget that emits a `ScenePrimitive` shares ONE pipeline
 /// (one set of instance buffers + one camera). That is fine while only the PCB
 /// editor mounts it. If a second `ScenePrimitive`-emitting widget (e.g. a
@@ -274,7 +283,8 @@ impl SceneShaderProgram {
     /// geometry so the pipeline can skip redundant GPU uploads on pan/zoom:
     /// `Some(g)` from a cached source that bumps `g` only on real geometry
     /// changes, or `None` for an uncached source that uploads every frame.
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         scene: Arc<Scene>,
         generation: Option<u64>,
         offset_px: [f32; 2],

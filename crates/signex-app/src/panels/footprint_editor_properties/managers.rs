@@ -1,3 +1,9 @@
+#![expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Grid Manager + Guide Manager + Other section + grid_manager_btn —
 //! the per-editor library Options surfaces below the Pad form.
 

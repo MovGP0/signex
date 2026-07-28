@@ -1,10 +1,17 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Document/project save handlers. Split from `handlers/document_files.rs`.
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use super::super::super::*;
+use super::super::super::{Message, Signex};
 
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
@@ -30,7 +37,10 @@ impl Signex {
                     }
                     match self.save_primitive_tab_at(&path) {
                         Ok(()) => {
-                            crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()))
+                            crate::diagnostics::log_info(format!(
+                                "[save] Wrote {}",
+                                path.display()
+                            ));
                         }
                         Err(e) => crate::diagnostics::log_error("Save failed", &e),
                     }
@@ -49,7 +59,9 @@ impl Signex {
                 _ => {}
             }
         }
-        if let Some(result) = self.with_active_schematic_session_mut(|session| session.save()) {
+        if let Some(result) =
+            self.with_active_schematic_session_mut(crate::app::documents::SchematicTabSession::save)
+        {
             result.context("save active schematic session")?;
             let path = self.active_tab_path().unwrap_or_default();
             crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
@@ -58,10 +70,10 @@ impl Signex {
             // Best-effort; failure logged + ignored (user data is on
             // disk regardless).
             if !path.as_os_str().is_empty() {
-                let label = path
-                    .file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.display().to_string());
+                let label = path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |f| f.to_string_lossy().into_owned(),
+                );
                 let msg = format!("Save {label}");
                 self.commit_save_to_project_git(&path, &msg);
             }
@@ -245,10 +257,10 @@ impl Signex {
         crate::diagnostics::log_info(format!("[save] Wrote project {}", project_path.display()));
         // v0.22 Phase 8.4 — auto-commit the .snxprj file into
         // its own project git repo when enable_git is on.
-        let label = project_path
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| project_path.display().to_string());
+        let label = project_path.file_name().map_or_else(
+            || project_path.display().to_string(),
+            |f| f.to_string_lossy().into_owned(),
+        );
         let msg = format!("Save {label}");
         self.commit_save_to_project_git(&project_path, &msg);
         // Rebuild the panel ctx so the project root row drops
@@ -320,11 +332,11 @@ impl Signex {
         }
 
         // Update the tab(s) — title, path, kind variant.
-        let new_title = to_path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| to_path.display().to_string());
-        for tab in self.document_state.tabs.iter_mut() {
+        let new_title = to_path.file_stem().map_or_else(
+            || to_path.display().to_string(),
+            |s| s.to_string_lossy().into_owned(),
+        );
+        for tab in &mut self.document_state.tabs {
             if tab.path == from_path {
                 tab.path = to_path.to_path_buf();
                 tab.title = new_title.clone();
@@ -353,7 +365,7 @@ impl Signex {
         // saving into a fresh `<lib>/symbols/` directory just works.
         match self.save_primitive_tab_at(to_path) {
             Ok(()) => {
-                crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()))
+                crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()));
             }
             Err(e) => crate::diagnostics::log_error("Save As failed", &e),
         }
@@ -380,8 +392,7 @@ impl Signex {
         let lib_dir = path.ancestors().find(|p| {
             p.extension()
                 .and_then(|e| e.to_str())
-                .map(|e| e.eq_ignore_ascii_case("snxlib"))
-                .unwrap_or(false)
+                .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"))
         });
         let Some(lib_dir) = lib_dir else {
             tracing::warn!(
@@ -395,18 +406,17 @@ impl Signex {
         // Mount through `state.open_library` (idempotent — re-opening a
         // mounted library is a no-op). Bail on failure: an invalid
         // library directory shouldn't poison the project's library list.
-        if self.library.library_at(lib_dir).is_none() {
-            if let Err(e) =
+        if self.library.library_at(lib_dir).is_none()
+            && let Err(e) =
                 crate::library::commands::open_library(&mut self.library, lib_dir.to_path_buf())
-            {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %lib_dir.display(),
-                    error = %e,
-                    "save-as: open_library failed — leaving project untouched"
-                );
-                return;
-            }
+        {
+            tracing::warn!(
+                target: "signex::library",
+                path = %lib_dir.display(),
+                error = %e,
+                "save-as: open_library failed — leaving project untouched"
+            );
+            return;
         }
         let library_id = self.library.library_at(lib_dir).map(|l| l.library_id);
 

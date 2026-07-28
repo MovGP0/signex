@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Aabb, Point, SchematicRenderSnapshot, SelectedItem, SelectedKind, aabb_overlaps,
+    collect_item_bounds, point_in_polygon, point_to_segment_distance,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SelectionMode {
@@ -8,6 +11,7 @@ pub enum SelectionMode {
     Single,
 }
 
+#[must_use]
 pub fn hit_test(
     snapshot: &SchematicRenderSnapshot,
     world_x: f64,
@@ -17,6 +21,7 @@ pub fn hit_test(
     hit_test_items(snapshot, point).into_iter().next()
 }
 
+#[must_use]
 pub fn hit_test_polygon(
     snapshot: &SchematicRenderSnapshot,
     polygon: &[(f64, f64)],
@@ -34,6 +39,7 @@ pub fn hit_test_polygon(
     out
 }
 
+#[must_use]
 pub fn hit_test_rect_mode(
     snapshot: &SchematicRenderSnapshot,
     rect: &Aabb,

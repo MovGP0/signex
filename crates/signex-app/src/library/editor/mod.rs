@@ -1,8 +1,14 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Component Preview tab — read-only Symbol/Footprint render plus
 //! template-validated forms for parameters / supply / datasheet /
 //! simulation.
 //!
-//! In the v0.9-refactor-2 (DBLib) model, components are TSV rows
+//! In the v0.9-refactor-2 (`DBLib`) model, components are TSV rows
 //! addressed by [`crate::library::state::EditorAddress`]
 //! (`library_path + table + row_id`). The state lives on
 //! [`crate::library::state::ComponentPreviewState`].
@@ -88,11 +94,11 @@ fn view_header<'a>(
     .into()
 }
 
-fn view_tabs<'a>(
+fn view_tabs(
     active: PreviewTab,
-    tokens: &'a ThemeTokens,
+    tokens: &ThemeTokens,
     address: EditorAddress,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let mut row_widget = row![].spacing(0).align_y(iced::Alignment::Center);
     for tab in PreviewTab::ORDER {

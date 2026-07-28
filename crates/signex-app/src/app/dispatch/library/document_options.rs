@@ -1,10 +1,15 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Tools ▸ Document Options modal handlers — opening the modal against
 //! a library's display settings, the draft field setters, and Apply.
 //!
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{DocumentOptionsModalState, Message, Signex, Task};
 
 impl Signex {
     /// Tools menu fired Document Options for the library at

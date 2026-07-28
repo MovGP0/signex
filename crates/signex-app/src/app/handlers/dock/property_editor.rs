@@ -1,4 +1,11 @@
-use super::super::super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::super::Signex;
 
 impl Signex {
     pub(super) fn handle_dock_property_editor_message(
@@ -113,7 +120,7 @@ impl Signex {
                     signex_engine::Command::UpdateSymbolTextSize {
                         symbol_id: *uuid,
                         field: signex_engine::SymbolTextField::Value,
-                        font_size_mm: (*pt as f64) * signex_types::schematic::SCHEMATIC_PT_TO_MM,
+                        font_size_mm: f64::from(*pt) * signex_types::schematic::SCHEMATIC_PT_TO_MM,
                     },
                     true,
                     true,
@@ -180,7 +187,7 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditLabelFontSizePt(uuid, pt) => {
-                let mm = (*pt as f64) * signex_types::schematic::SCHEMATIC_PT_TO_MM;
+                let mm = f64::from(*pt) * signex_types::schematic::SCHEMATIC_PT_TO_MM;
                 self.apply_engine_command(
                     signex_engine::Command::UpdateLabelProps {
                         label_id: *uuid,

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::type_complexity,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Per-shape parametric geometry minting. Each `mint_*_pad_geometry`
 //! function takes a fresh centre `Point` ID (pushed by the caller),
 //! mints additional geometry (Lines / Arcs / Circle / extra Points)
@@ -72,7 +77,7 @@ pub(super) fn mint_round_pad_geometry(
     bind_shape_param(sketch, pad, "diameter", centre_id, diameter);
 }
 
-/// v0.24 Track A — mint a RoundRect pad's parametric geometry.
+/// v0.24 Track A — mint a `RoundRect` pad's parametric geometry.
 /// Returns the four bbox corner IDs in `[ne, se, sw, nw]` order.
 pub(super) fn mint_round_rect_pad_geometry(
     sketch: &mut SketchData,
@@ -232,13 +237,13 @@ pub(super) fn mint_oval_pad_geometry(
 
     let arc_centres: [(f64, f64); 2] = if wide {
         [
-            (xmin + inset, (ymin + ymax) / 2.0),
-            (xmax - inset, (ymin + ymax) / 2.0),
+            (xmin + inset, f64::midpoint(ymin, ymax)),
+            (xmax - inset, f64::midpoint(ymin, ymax)),
         ]
     } else {
         [
-            ((xmin + xmax) / 2.0, ymin + inset),
-            ((xmin + xmax) / 2.0, ymax - inset),
+            (f64::midpoint(xmin, xmax), ymin + inset),
+            (f64::midpoint(xmin, xmax), ymax - inset),
         ]
     }
     .map(|(x, y)| pad.local_to_world_mm(x, y));

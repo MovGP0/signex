@@ -2,7 +2,10 @@
 //!
 //! Extracted verbatim from the former single-file `browser` module.
 
-use super::*;
+use super::{
+    BROWSER_TEXT_SIZE, Border, Element, LibraryMessage, RowId, Space, Theme, ThemeTokens, button,
+    container, row, text, theme_ext,
+};
 
 pub(super) fn view_action_row<'a>(
     library_path: &'a std::path::Path,
@@ -42,7 +45,7 @@ pub(super) fn view_action_row<'a>(
     });
 
     let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected {
-        let library_for_del = lib_pb.clone();
+        let library_for_del = lib_pb;
         let table_for_del = table.to_string();
         button(
             text("Delete Selected")

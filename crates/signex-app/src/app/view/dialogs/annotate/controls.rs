@@ -7,7 +7,7 @@
 //! to the annotate concern; kept `pub(super)` so only `annotate/mod.rs`
 //! reaches them.
 
-use super::super::*;
+use super::super::{AnnotateMsg, Message};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Theme};
 

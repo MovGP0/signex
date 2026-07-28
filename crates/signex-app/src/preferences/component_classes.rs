@@ -2,7 +2,10 @@
 //! (add / edit / remove / reset). Moved verbatim from the former
 //! single-file `preferences` module.
 
-use super::*;
+use super::{
+    PrefMsg, danger_button_style, primary_button_style, secondary_button_style, text_muted,
+    text_primary,
+};
 use iced::widget::{Column, Space, button, column, container, row, text, text_input};
 use iced::{Element, Length};
 

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch tools — transform & pattern (carved from `sketch_tools::apply`, ADR-0001 D2).
 //!
 //! Tool-branch bodies moved verbatim; the preamble locals they read
@@ -42,25 +48,23 @@ pub(super) fn apply(
             use signex_sketch::constraint::{Constraint, ConstraintKind};
             use signex_sketch::id::ConstraintId;
 
-            let line_id = match editor.state.selected_sketch {
-                Some(id) => id,
-                None => {
-                    editor.state.solve_warnings.push(
-                                "Mirror: select a Line first (Select tool, click a Line, then click here to mirror)"
-                                    .into(),
-                            );
-                    editor.state.tool_pending = ToolPending::Idle;
-                    editor.canvas_cache.clear();
-                    return;
-                }
+            let line_id = if let Some(id) = editor.state.selected_sketch {
+                id
+            } else {
+                editor.state.solve_warnings.push(
+                            "Mirror: select a Line first (Select tool, click a Line, then click here to mirror)"
+                                .into(),
+                        );
+                editor.state.tool_pending = ToolPending::Idle;
+                editor.canvas_cache.clear();
+                return;
             };
 
-            let sketch_ref = match editor.primitive().sketch.as_ref() {
-                Some(s) => s,
-                None => {
-                    editor.state.tool_pending = ToolPending::Idle;
-                    return;
-                }
+            let sketch_ref = if let Some(s) = editor.primitive().sketch.as_ref() {
+                s
+            } else {
+                editor.state.tool_pending = ToolPending::Idle;
+                return;
             };
             let line_endpoints = sketch_ref
                 .entities
@@ -70,17 +74,16 @@ pub(super) fn apply(
                     EntityKind::Line { start, end } => Some((start, end)),
                     _ => None,
                 });
-            let (a_id, b_id) = match line_endpoints {
-                Some(p) => p,
-                None => {
-                    editor
-                        .state
-                        .solve_warnings
-                        .push("Mirror: selection is not a Line — pick a Line entity first".into());
-                    editor.state.tool_pending = ToolPending::Idle;
-                    editor.canvas_cache.clear();
-                    return;
-                }
+            let (a_id, b_id) = if let Some(p) = line_endpoints {
+                p
+            } else {
+                editor
+                    .state
+                    .solve_warnings
+                    .push("Mirror: selection is not a Line — pick a Line entity first".into());
+                editor.state.tool_pending = ToolPending::Idle;
+                editor.canvas_cache.clear();
+                return;
             };
 
             let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
@@ -98,12 +101,11 @@ pub(super) fn apply(
                 .iter()
                 .find(|e| e.id == ctx.resolved_id)
                 .map(|e| e.kind.clone());
-            let kind_of = match kind_of {
-                Some(k) => k,
-                None => {
-                    editor.state.tool_pending = ToolPending::Idle;
-                    return;
-                }
+            let kind_of = if let Some(k) = kind_of {
+                k
+            } else {
+                editor.state.tool_pending = ToolPending::Idle;
+                return;
             };
 
             let (ax, ay) = match pos_of(a_id) {
@@ -116,7 +118,7 @@ pub(super) fn apply(
             };
             let vx = bx - ax;
             let vy = by - ay;
-            let v_dot_v = vx * vx + vy * vy;
+            let v_dot_v = vy.mul_add(vy, vx * vx);
             if v_dot_v <= 1e-12 {
                 editor
                     .state
@@ -127,10 +129,10 @@ pub(super) fn apply(
                 return;
             }
             let reflect = |px: f64, py: f64| -> (f64, f64) {
-                let t = ((px - ax) * vx + (py - ay) * vy) / v_dot_v;
-                let foot_x = ax + t * vx;
-                let foot_y = ay + t * vy;
-                (2.0 * foot_x - px, 2.0 * foot_y - py)
+                let t = (py - ay).mul_add(vy, (px - ax) * vx) / v_dot_v;
+                let foot_x = t.mul_add(vx, ax);
+                let foot_y = t.mul_add(vy, ay);
+                (2.0f64.mul_add(foot_x, -px), 2.0f64.mul_add(foot_y, -py))
             };
 
             // Mirror a Point entity by ID: emits a new Point
@@ -299,17 +301,16 @@ pub(super) fn apply(
             use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
             use signex_sketch::id::ConstraintId;
 
-            let source_id = match editor.state.selected_sketch {
-                Some(id) => id,
-                None => {
-                    editor.state.solve_warnings.push(
-                                "Offset: select a Line / Arc / Circle first (Select tool, click the curve, then click on the side to offset)"
-                                    .into(),
-                            );
-                    editor.state.tool_pending = ToolPending::Idle;
-                    editor.canvas_cache.clear();
-                    return;
-                }
+            let source_id = if let Some(id) = editor.state.selected_sketch {
+                id
+            } else {
+                editor.state.solve_warnings.push(
+                            "Offset: select a Line / Arc / Circle first (Select tool, click the curve, then click on the side to offset)"
+                                .into(),
+                        );
+                editor.state.tool_pending = ToolPending::Idle;
+                editor.canvas_cache.clear();
+                return;
             };
             // v0.25 polish — prefer placement_input over the
             // legacy `dimension_input` text field. The
@@ -340,12 +341,11 @@ pub(super) fn apply(
                 editor.state.placement_input = None;
             }
 
-            let sketch_ref = match editor.primitive().sketch.as_ref() {
-                Some(s) => s,
-                None => {
-                    editor.state.tool_pending = ToolPending::Idle;
-                    return;
-                }
+            let sketch_ref = if let Some(s) = editor.primitive().sketch.as_ref() {
+                s
+            } else {
+                editor.state.tool_pending = ToolPending::Idle;
+                return;
             };
             let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
                 sketch_ref
@@ -362,17 +362,16 @@ pub(super) fn apply(
                 .iter()
                 .find(|e| e.id == source_id)
                 .map(|e| e.kind.clone());
-            let source_kind = match source_kind {
-                Some(k) => k,
-                None => {
-                    editor
-                        .state
-                        .solve_warnings
-                        .push("Offset: selection no longer exists in the sketch".into());
-                    editor.state.tool_pending = ToolPending::Idle;
-                    editor.canvas_cache.clear();
-                    return;
-                }
+            let source_kind = if let Some(k) = source_kind {
+                k
+            } else {
+                editor
+                    .state
+                    .solve_warnings
+                    .push("Offset: selection no longer exists in the sketch".into());
+                editor.state.tool_pending = ToolPending::Idle;
+                editor.canvas_cache.clear();
+                return;
             };
 
             match source_kind {
@@ -387,7 +386,7 @@ pub(super) fn apply(
                     };
                     let dx = bx - ax;
                     let dy = by - ay;
-                    let len = (dx * dx + dy * dy).sqrt();
+                    let len = dx.hypot(dy);
                     if len < 1e-9 {
                         editor
                             .state
@@ -404,7 +403,7 @@ pub(super) fn apply(
                     // side.
                     let cx = ctx.x_mm - ax;
                     let cy = ctx.y_mm - ay;
-                    let cross = dx * cy - dy * cx;
+                    let cross = dy.mul_add(-cx, dx * cy);
                     let sign = if cross >= 0.0 { 1.0 } else { -1.0 };
                     let nx = -dy / len * sign;
                     let ny = dx / len * sign;
@@ -499,7 +498,7 @@ pub(super) fn apply(
                     // expand (+dist). Clamp to a positive
                     // radius so we don't mint a degenerate
                     // shape.
-                    let click_r = ((ctx.x_mm - cx).powi(2) + (ctx.y_mm - cy).powi(2)).sqrt();
+                    let click_r = (ctx.x_mm - cx).hypot(ctx.y_mm - cy);
                     let signed = if click_r < radius { -dist } else { dist };
                     let new_radius = (radius + signed).max(1e-6);
                     let new_circle_id = SketchEntityId::new();
@@ -531,8 +530,8 @@ pub(super) fn apply(
                         anchor_id,
                         ctx.plane_id,
                         EntityKind::Point {
-                            x: cx + (ctx.x_mm - cx) * scale,
-                            y: cy + (ctx.y_mm - cy) * scale,
+                            x: (ctx.x_mm - cx).mul_add(scale, cx),
+                            y: (ctx.y_mm - cy).mul_add(scale, cy),
                         },
                     ));
                     let on_new_circle = Constraint {
@@ -594,8 +593,8 @@ pub(super) fn apply(
                     };
                     // Source radius from start position;
                     // direction from start angle.
-                    let source_r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
-                    let click_r = ((ctx.x_mm - cx).powi(2) + (ctx.y_mm - cy).powi(2)).sqrt();
+                    let source_r = (sx - cx).hypot(sy - cy);
+                    let click_r = (ctx.x_mm - cx).hypot(ctx.y_mm - cy);
                     let signed = if click_r < source_r { -dist } else { dist };
                     let new_r = (source_r + signed).max(1e-6);
                     let scale = new_r / source_r.max(1e-9);
@@ -607,16 +606,16 @@ pub(super) fn apply(
                         new_start,
                         ctx.plane_id,
                         EntityKind::Point {
-                            x: cx + (sx - cx) * scale,
-                            y: cy + (sy - cy) * scale,
+                            x: (sx - cx).mul_add(scale, cx),
+                            y: (sy - cy).mul_add(scale, cy),
                         },
                     ));
                     let e_entity = ctx.flag(Entity::new(
                         new_end,
                         ctx.plane_id,
                         EntityKind::Point {
-                            x: cx + (ex - cx) * scale,
-                            y: cy + (ey - cy) * scale,
+                            x: (ex - cx).mul_add(scale, cx),
+                            y: (ey - cy).mul_add(scale, cy),
                         },
                     ));
                     let new_arc = ctx.flag(Entity::new(

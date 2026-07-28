@@ -1,3 +1,10 @@
+#![allow(clippy::expect_used, clippy::float_cmp, clippy::unwrap_used)]
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::ptr_arg,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! The invariant: exactly ONE owner of per-shape sidecar layout.
 //!
 //! A transform that changes the pad FRAME (rotate, flip) regenerates

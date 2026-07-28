@@ -35,6 +35,7 @@ const LIB_PANEL_TEXT_SIZE: f32 = 11.0;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
 
 /// Render the Library left-dock panel.
+#[must_use]
 pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -65,7 +66,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
             .padding([12, 8]),
         );
     } else {
-        for lib in state.open_libraries.iter() {
+        for lib in &state.open_libraries {
             // Apply the library-name filter when a needle is set.
             if !needle.is_empty() && !lib.display_name.to_lowercase().contains(&needle) {
                 continue;

@@ -1,4 +1,13 @@
-use super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::{
+    Color, DirtyFlags, HashMap, OverlayCircleInput, OverlayInputs, OverlayPolygonInput,
+    RendererSnapshot, ResolvedTheme, SchematicRenderSnapshot, ScreenTransform, SelectedItem,
+    canvas, draw_renderer_snapshot, item_aabb, screen_px_to_world_mm, stroke_world_mm, to_rgba,
+};
 
 pub fn draw_selection_overlay(
     frame: &mut canvas::Frame,

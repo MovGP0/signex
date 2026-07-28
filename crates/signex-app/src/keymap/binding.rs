@@ -1,3 +1,10 @@
+#![expect(
+    clippy::match_wildcard_for_single_variants,
+    clippy::missing_errors_doc,
+    clippy::struct_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use crate::keymap::AppCommandId;
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
@@ -53,6 +60,7 @@ pub struct Modifiers {
 }
 
 impl Modifiers {
+    #[must_use]
     pub fn from_iced(modifiers: keyboard::Modifiers) -> Self {
         Self {
             ctrl: modifiers.control(),
@@ -62,7 +70,8 @@ impl Modifiers {
         }
     }
 
-    pub fn is_empty(self) -> bool {
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
         !self.ctrl && !self.alt && !self.shift && !self.command
     }
 }
@@ -74,6 +83,7 @@ pub struct KeyStroke {
 }
 
 impl KeyStroke {
+    #[must_use]
     pub fn from_iced(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Self> {
         let key = match key.as_ref() {
             keyboard::Key::Character(value) => {
@@ -302,7 +312,8 @@ pub enum ShortcutBindingAction {
 }
 
 impl ShortcutBindingAction {
-    pub fn command(&self) -> Option<&AppCommandId> {
+    #[must_use]
+    pub const fn command(&self) -> Option<&AppCommandId> {
         match self {
             Self::Command(command) | Self::Unbind(command) => Some(command),
             Self::NoAction => None,

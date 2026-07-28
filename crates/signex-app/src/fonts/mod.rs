@@ -1,3 +1,14 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::explicit_auto_deref,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::or_fun_call,
+    clippy::significant_drop_tightening,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Font management for Signex.
 //!
 //! Responsibilities:
@@ -101,6 +112,7 @@ pub struct ComponentClassEntry {
 }
 
 /// Materialise the seed list as owned `ComponentClassEntry` values.
+#[must_use]
 pub fn default_component_classes() -> Vec<ComponentClassEntry> {
     DEFAULT_COMPONENT_CLASSES
         .iter()
@@ -130,14 +142,15 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
     // `.unwrap()` would panic the UI thread on every subsequent
     // tooltip render after any unrelated panic that happened to
     // hold this lock.
-    let mut map = map_lock.lock().unwrap_or_else(|e| e.into_inner());
-    let static_name: &'static str = match map.get(name) {
-        Some(s) => *s,
-        None => {
-            let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
-            map.insert(name.to_string(), leaked);
-            leaked
-        }
+    let mut map = map_lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let static_name: &'static str = if let Some(s) = map.get(name) {
+        *s
+    } else {
+        let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
+        map.insert(name.to_string(), leaked);
+        leaked
     };
     iced::Font::with_name(static_name)
 }
@@ -207,7 +220,9 @@ fn prefs_path() -> PathBuf {
             // through to the arm below and run migrate_legacy_prefs
             // against the developer's real legacy path mid-test-suite
             // (#440 review). Deciding on the gate alone rules that out.
-            let dir = root.expect("config_root() always resolves under the test/dev redirect");
+            let Some(dir) = root else {
+                return production_temp_fallback_path();
+            };
             return dir.join("prefs.json");
         }
         let canonical = match root {
@@ -256,11 +271,11 @@ fn production_temp_fallback_path() -> PathBuf {
             // `prefs_path()` caches the returned path for the whole
             // process lifetime and writes to it repeatedly across the
             // session, so the directory has to outlive any handle we
-            // could hold instead. `into_path()` is `tempfile`'s
+            // could hold instead. `keep()` is `tempfile`'s
             // documented opt-out of the drop-time cleanup; the OS's
             // own temp-dir sweep remains the intended eventual
             // cleanup, matching the "will NOT persist" contract below.
-            dir.into_path()
+            dir.keep()
         }
         Err(e) => {
             tracing::error!(
@@ -313,10 +328,12 @@ pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
     // truncated `canonical` file, which then blocks re-migration forever
     // because `canonical.exists()` is already true on the next launch.
-    if !canonical.exists() && legacy != canonical && legacy.exists() {
-        if let Ok(bytes) = std::fs::read(legacy) {
-            write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
-        }
+    if !canonical.exists()
+        && legacy != canonical
+        && legacy.exists()
+        && let Ok(bytes) = std::fs::read(legacy)
+    {
+        write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
     }
 
     // F3: rewrite any non-canonical label_style discriminant → "standard".
@@ -332,12 +349,11 @@ pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     let stale_label = json
         .get("label_style")
         .and_then(|v| v.as_str())
-        .map(|s| {
+        .is_some_and(|s| {
             !CANONICAL_LABEL_STYLES
                 .iter()
                 .any(|c| s.eq_ignore_ascii_case(c))
-        })
-        .unwrap_or(false);
+        });
     if stale_label {
         json["label_style"] = serde_json::Value::String("standard".to_string());
         if let Ok(serialized) = serde_json::to_string_pretty(&json) {
@@ -354,21 +370,24 @@ pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
 /// `$HOME/.config`. Only used by [`migrate_legacy_prefs`] to find
 /// existing user files for one-shot migration.
 fn legacy_posix_prefs_path() -> PathBuf {
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
+    let base = std::env::var("XDG_CONFIG_HOME").map_or_else(
+        |_| {
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
             PathBuf::from(home).join(".config")
-        });
+        },
+        PathBuf::from,
+    );
     base.join("signex").join("prefs.json")
 }
 
 /// Read only the `ui_font` key from the preferences file.
 /// Returns `DEFAULT_UI_FONT` if the file is absent, malformed, or the key missing.
+#[must_use]
 pub fn read_ui_font_pref() -> String {
     read_ui_font_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_ui_font_pref_at(path: &Path) -> String {
     read_prefs_json(path)
         .and_then(|j| j["ui_font"].as_str().map(str::to_string))
@@ -379,13 +398,13 @@ pub fn read_ui_font_pref_at(path: &Path) -> String {
 /// Creates parent directories if they do not exist.
 /// Silently ignores I/O errors (non-critical preference).
 pub fn write_ui_font_pref(font_name: &str) {
-    write_ui_font_pref_at(&prefs_path(), font_name)
+    write_ui_font_pref_at(&prefs_path(), font_name);
 }
 
 pub fn write_ui_font_pref_at(path: &Path, font_name: &str) {
     update_prefs_json(path, |json| {
         json["ui_font"] = serde_json::Value::String(font_name.to_string());
-    })
+    });
 }
 
 /// Read the user's component-class list from the prefs file. Falls
@@ -396,6 +415,7 @@ pub fn write_ui_font_pref_at(path: &Path, font_name: &str) {
 /// surface handles the "no classes defined" case at the point of
 /// use, so saving an empty list and reading it back round-trips
 /// faithfully.
+#[must_use]
 pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -431,10 +451,12 @@ pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
 
 /// Read `power_port_style` from preferences file.
 /// Defaults to `Altium` when missing or invalid.
+#[must_use]
 pub fn read_power_port_style_pref() -> PowerPortStyle {
     read_power_port_style_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_power_port_style_pref_at(path: &Path) -> PowerPortStyle {
     let raw = read_prefs_json(path)
         .and_then(|j| j["power_port_style"].as_str().map(str::to_string))
@@ -448,7 +470,7 @@ pub fn read_power_port_style_pref_at(path: &Path) -> PowerPortStyle {
 
 /// Persist power port style without clobbering other preference keys.
 pub fn write_power_port_style_pref(style: PowerPortStyle) {
-    write_power_port_style_pref_at(&prefs_path(), style)
+    write_power_port_style_pref_at(&prefs_path(), style);
 }
 
 pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
@@ -458,15 +480,17 @@ pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
     };
     update_prefs_json(path, |json| {
         json["power_port_style"] = serde_json::Value::String(token.to_string());
-    })
+    });
 }
 
 /// Read `label_style` from preferences file.
 /// Defaults to `Standard` when missing or invalid.
+#[must_use]
 pub fn read_label_style_pref() -> LabelStyle {
     read_label_style_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_label_style_pref_at(path: &Path) -> LabelStyle {
     let raw = read_prefs_json(path)
         .and_then(|j| j["label_style"].as_str().map(str::to_string))
@@ -480,7 +504,7 @@ pub fn read_label_style_pref_at(path: &Path) -> LabelStyle {
 
 /// Persist label style without clobbering other preference keys.
 pub fn write_label_style_pref(style: LabelStyle) {
-    write_label_style_pref_at(&prefs_path(), style)
+    write_label_style_pref_at(&prefs_path(), style);
 }
 
 pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
@@ -490,15 +514,17 @@ pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
     };
     update_prefs_json(path, |json| {
         json["label_style"] = serde_json::Value::String(token.to_string());
-    })
+    });
 }
 
 /// Read `multisheet_style` from preferences file.
 /// Defaults to `Standard` when missing or invalid.
+#[must_use]
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
     read_multisheet_style_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_multisheet_style_pref_at(path: &Path) -> MultisheetStyle {
     let raw = read_prefs_json(path)
         .and_then(|j| j["multisheet_style"].as_str().map(str::to_string))
@@ -512,7 +538,7 @@ pub fn read_multisheet_style_pref_at(path: &Path) -> MultisheetStyle {
 
 /// Persist multisheet style without clobbering other preference keys.
 pub fn write_multisheet_style_pref(style: MultisheetStyle) {
-    write_multisheet_style_pref_at(&prefs_path(), style)
+    write_multisheet_style_pref_at(&prefs_path(), style);
 }
 
 pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
@@ -522,15 +548,17 @@ pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
     };
     update_prefs_json(path, |json| {
         json["multisheet_style"] = serde_json::Value::String(token.to_string());
-    })
+    });
 }
 
 /// Read the schematic visible-grid `grid_style` preference. Defaults
 /// to `Dots` (matches the previous hard-coded behaviour).
+#[must_use]
 pub fn read_grid_style_pref() -> GridStyle {
     read_grid_style_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_grid_style_pref_at(path: &Path) -> GridStyle {
     let raw = read_prefs_json(path)
         .and_then(|j| j["grid_style"].as_str().map(str::to_string))
@@ -549,7 +577,7 @@ pub fn read_grid_style_pref_at(path: &Path) -> GridStyle {
 
 /// Persist grid style without clobbering other preference keys.
 pub fn write_grid_style_pref(style: GridStyle) {
-    write_grid_style_pref_at(&prefs_path(), style)
+    write_grid_style_pref_at(&prefs_path(), style);
 }
 
 pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
@@ -560,7 +588,7 @@ pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
     };
     update_prefs_json(path, |json| {
         json["grid_style"] = serde_json::Value::String(token.to_string());
-    })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -604,12 +632,14 @@ fn update_prefs_json(path: &Path, mut mutator: impl FnMut(&mut serde_json::Value
 // ──────────────────────────────────────────────────────────────────────
 
 /// Read the last-applied theme. Defaults to `ThemeId::Signex`.
+#[must_use]
 pub fn read_theme_pref() -> ThemeId {
     read_theme_pref_at(&prefs_path())
 }
 
 /// Same as [`read_theme_pref`] but reads from `path` — exposed for
 /// integration tests that inject a tempdir prefs file.
+#[must_use]
 pub fn read_theme_pref_at(path: &Path) -> ThemeId {
     read_prefs_json(path)
         .and_then(|json| json.get("theme").cloned())
@@ -619,7 +649,7 @@ pub fn read_theme_pref_at(path: &Path) -> ThemeId {
 
 /// Persist theme without clobbering other preference keys.
 pub fn write_theme_pref(theme: ThemeId) {
-    write_theme_pref_at(&prefs_path(), theme)
+    write_theme_pref_at(&prefs_path(), theme);
 }
 
 /// Same as [`write_theme_pref`] but writes to `path` — exposed for tests.
@@ -628,7 +658,7 @@ pub fn write_theme_pref_at(path: &Path, theme: ThemeId) {
         if let Ok(value) = serde_json::to_value(theme) {
             json["theme"] = value;
         }
-    })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -636,10 +666,12 @@ pub fn write_theme_pref_at(path: &Path, theme: ThemeId) {
 // ──────────────────────────────────────────────────────────────────────
 
 /// Read the last-active coordinate unit. Defaults to `Unit::Mm`.
+#[must_use]
 pub fn read_unit_pref() -> Unit {
     read_unit_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_unit_pref_at(path: &Path) -> Unit {
     read_prefs_json(path)
         .and_then(|json| json.get("unit").cloned())
@@ -649,7 +681,7 @@ pub fn read_unit_pref_at(path: &Path) -> Unit {
 
 /// Persist coordinate unit without clobbering other preference keys.
 pub fn write_unit_pref(unit: Unit) {
-    write_unit_pref_at(&prefs_path(), unit)
+    write_unit_pref_at(&prefs_path(), unit);
 }
 
 pub fn write_unit_pref_at(path: &Path, unit: Unit) {
@@ -657,7 +689,7 @@ pub fn write_unit_pref_at(path: &Path, unit: Unit) {
         if let Ok(value) = serde_json::to_value(unit) {
             json["unit"] = value;
         }
-    })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -665,10 +697,12 @@ pub fn write_unit_pref_at(path: &Path, unit: Unit) {
 // ──────────────────────────────────────────────────────────────────────
 
 /// Read the last grid-visible toggle. Defaults to `true`.
+#[must_use]
 pub fn read_grid_visible_pref() -> bool {
     read_grid_visible_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_grid_visible_pref_at(path: &Path) -> bool {
     read_prefs_json(path)
         .and_then(|json| json["grid_visible"].as_bool())
@@ -676,13 +710,13 @@ pub fn read_grid_visible_pref_at(path: &Path) -> bool {
 }
 
 pub fn write_grid_visible_pref(visible: bool) {
-    write_grid_visible_pref_at(&prefs_path(), visible)
+    write_grid_visible_pref_at(&prefs_path(), visible);
 }
 
 pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
     update_prefs_json(path, |json| {
         json["grid_visible"] = serde_json::Value::Bool(visible);
-    })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -692,10 +726,12 @@ pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
 /// Read the PCB GPU-render toggle. Defaults to the compile-time
 /// [`crate::feature_flags::PCB_GPU_RENDER`] when the key is absent, so the
 /// const acts as the factory default and old prefs files stay compatible.
+#[must_use]
 pub fn read_pcb_gpu_render_pref() -> bool {
     read_pcb_gpu_render_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_pcb_gpu_render_pref_at(path: &Path) -> bool {
     read_prefs_json(path)
         .and_then(|json| json["pcb_gpu_render"].as_bool())
@@ -703,13 +739,13 @@ pub fn read_pcb_gpu_render_pref_at(path: &Path) -> bool {
 }
 
 pub fn write_pcb_gpu_render_pref(enabled: bool) {
-    write_pcb_gpu_render_pref_at(&prefs_path(), enabled)
+    write_pcb_gpu_render_pref_at(&prefs_path(), enabled);
 }
 
 pub fn write_pcb_gpu_render_pref_at(path: &Path, enabled: bool) {
     update_prefs_json(path, |json| {
         json["pcb_gpu_render"] = serde_json::Value::Bool(enabled);
-    })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -717,10 +753,12 @@ pub fn write_pcb_gpu_render_pref_at(path: &Path, enabled: bool) {
 // ──────────────────────────────────────────────────────────────────────
 
 /// Read the last snap-enabled toggle. Defaults to `true`.
+#[must_use]
 pub fn read_snap_enabled_pref() -> bool {
     read_snap_enabled_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_snap_enabled_pref_at(path: &Path) -> bool {
     read_prefs_json(path)
         .and_then(|json| json["snap_enabled"].as_bool())
@@ -728,13 +766,13 @@ pub fn read_snap_enabled_pref_at(path: &Path) -> bool {
 }
 
 pub fn write_snap_enabled_pref(enabled: bool) {
-    write_snap_enabled_pref_at(&prefs_path(), enabled)
+    write_snap_enabled_pref_at(&prefs_path(), enabled);
 }
 
 pub fn write_snap_enabled_pref_at(path: &Path, enabled: bool) {
     update_prefs_json(path, |json| {
         json["snap_enabled"] = serde_json::Value::Bool(enabled);
-    })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -743,25 +781,28 @@ pub fn write_snap_enabled_pref_at(path: &Path, enabled: bool) {
 
 /// Read the last grid size (mm). Returns `None` when missing so the
 /// caller can fall back to the engine's preferred default.
+#[must_use]
 pub fn read_grid_size_mm_pref() -> Option<f32> {
     read_grid_size_mm_pref_at(&prefs_path())
 }
 
+#[must_use]
 pub fn read_grid_size_mm_pref_at(path: &Path) -> Option<f32> {
     read_prefs_json(path).and_then(|json| json["grid_size_mm"].as_f64().map(|v| v as f32))
 }
 
 pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
-    write_grid_size_mm_pref_at(&prefs_path(), grid_size_mm)
+    write_grid_size_mm_pref_at(&prefs_path(), grid_size_mm);
 }
 
 pub fn write_grid_size_mm_pref_at(path: &Path, grid_size_mm: f32) {
     update_prefs_json(path, |json| {
         json["grid_size_mm"] = serde_json::json!(grid_size_mm);
-    })
+    });
 }
 
 /// Read the default symbol-editor grid size (mm). Falls back to 1.27 mm.
+#[must_use]
 pub fn read_symbol_grid_size_mm_pref() -> f32 {
     read_prefs_json(&prefs_path())
         .and_then(|json| json["symbol_grid_size_mm"].as_f64().map(|v| v as f32))
@@ -771,10 +812,11 @@ pub fn read_symbol_grid_size_mm_pref() -> f32 {
 pub fn write_symbol_grid_size_mm_pref(grid_size_mm: f32) {
     update_prefs_json(&prefs_path(), |json| {
         json["symbol_grid_size_mm"] = serde_json::json!(grid_size_mm);
-    })
+    });
 }
 
 /// Read the symbol-editor grid style preference. Defaults to `Dots`.
+#[must_use]
 pub fn read_symbol_grid_style_pref() -> GridStyle {
     let raw = read_prefs_json(&prefs_path())
         .and_then(|j| j["symbol_grid_style"].as_str().map(str::to_string))
@@ -799,10 +841,11 @@ pub fn write_symbol_grid_style_pref(style: GridStyle) {
     };
     update_prefs_json(&prefs_path(), |json| {
         json["symbol_grid_style"] = serde_json::Value::String(token.to_string());
-    })
+    });
 }
 
 /// Read the symbol-editor pin-selection preference. Defaults to `PinOnly`.
+#[must_use]
 pub fn read_symbol_pin_selection_pref() -> PinSelectionMode {
     let raw = read_prefs_json(&prefs_path())
         .and_then(|j| j["symbol_pin_selection"].as_str().map(str::to_string))
@@ -813,7 +856,7 @@ pub fn read_symbol_pin_selection_pref() -> PinSelectionMode {
 pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
     update_prefs_json(&prefs_path(), |json| {
         json["symbol_pin_selection"] = serde_json::Value::String(mode.pref_token().to_string());
-    })
+    });
 }
 
 mod dock_layout;

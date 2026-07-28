@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Git history panel — right-dock surface that follows the active
 //! tab. Reuses [`signex_widgets::history_pane`] to render the
 //! actual cards. State is kept minimal: an active path resolved
@@ -29,7 +34,7 @@ pub struct HistoryPanelState {
     pub generation: u32,
     /// The path the most-recent load was issued for — `None` means
     /// no active file or the active tab has no history-trackable
-    /// resource (e.g. a future ComponentEditor tab).
+    /// resource (e.g. a future `ComponentEditor` tab).
     pub active_path: Option<std::path::PathBuf>,
     /// Whether the most-recent load is still in flight.
     pub loading: bool,
@@ -39,7 +44,7 @@ pub struct HistoryPanelState {
     /// path has no history yet.
     pub entries: Vec<signex_widgets::HistoryEntry>,
     /// Render mode for the active load. Distinguishes "not in a git
-    /// repo" (NoRepo) from "no commits yet" (entries.is_empty()).
+    /// repo" (`NoRepo`) from "no commits yet" (`entries.is_empty()`).
     pub mode: HistoryRenderMode,
     /// True when the active path has uncommitted edits in the
     /// working tree (the engine reports it via `dirty_paths`).
@@ -52,7 +57,7 @@ pub struct HistoryPanelState {
 /// version-controlled).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HistoryRenderMode {
-    /// No active file at all (no tabs, ComponentEditor tab, etc.).
+    /// No active file at all (no tabs, `ComponentEditor` tab, etc.).
     #[default]
     NoActiveFile,
     /// Active file exists but no `.git/` was found at the project
@@ -69,6 +74,7 @@ pub enum HistoryRenderMode {
 /// [`signex_widgets::history_pane`]; layers on the "no active
 /// file" / "not in a git repo" / "loading" header + the working-
 /// tree pseudo-card.
+#[must_use]
 pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
@@ -159,14 +165,14 @@ fn message_card<'a, M: 'a>(
 /// `PanelMsg::HistoryRestoreClicked { sha }` on press. The handler
 /// runs `LocalGitProjectAdapter::restore_at` against the active
 /// tab's owning project.
-fn commit_card<'a>(
-    entry: &'a signex_widgets::HistoryEntry,
+fn commit_card(
+    entry: &signex_widgets::HistoryEntry,
     now: chrono::DateTime<Utc>,
     primary: Color,
     muted: Color,
     border_c: Color,
     bg: Option<iced::Background>,
-) -> Element<'a, PanelMsg> {
+) -> Element<'_, PanelMsg> {
     let header = iced::widget::row![
         text(entry.author_name.clone()).size(12).color(primary),
         iced::widget::Space::new().width(Length::Fill),

@@ -1,10 +1,16 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Document/project open + create handlers. Split from `handlers/document_files.rs`.
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use super::super::super::*;
+use super::super::super::{FileMsg, Message, Signex};
 
 impl Signex {
     pub(crate) fn handle_document_file_opened(
@@ -55,8 +61,7 @@ impl Signex {
         if project_path
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("snxprj"))
-            != Some(true)
+            .is_none_or(|e| !e.eq_ignore_ascii_case("snxprj"))
         {
             anyhow::bail!(
                 "new project path must end in .snxprj (got {})",
@@ -180,7 +185,7 @@ impl Signex {
     /// Append a `LoadedProject` for `project_path` to the workspace if
     /// it isn't already loaded, then make it active. De-dupes by path
     /// so re-opening the same project just switches activity. Used by
-    /// both `open_project_file` (direct .standard_pro open) and the
+    /// both `open_project_file` (direct .`standard_pro` open) and the
     /// companion-project path inside `open_schematic_file` /
     /// `open_pcb_file`. Returns the resolved `ProjectId`.
     fn load_or_activate_project(
@@ -270,10 +275,10 @@ impl Signex {
                 crate::diagnostics::log_error("Failed to parse companion project", &error);
             }
         }
-        let title = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Schematic".to_string());
+        let title = path.file_stem().map_or_else(
+            || "Schematic".to_string(),
+            |stem| stem.to_string_lossy().to_string(),
+        );
         // Parked-engine restore — same Altium-parity rule as the
         // project-tree open path. Reparsing from disk would discard
         // edits the user made before closing the tab.
@@ -330,10 +335,10 @@ impl Signex {
                 crate::diagnostics::log_error("Failed to parse companion project", &error);
             }
         }
-        let title = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().to_string())
-            .unwrap_or_else(|| "PCB".to_string());
+        let title = path.file_stem().map_or_else(
+            || "PCB".to_string(),
+            |stem| stem.to_string_lossy().to_string(),
+        );
         // Read + parse off the UI thread — same reasoning as
         // `open_schematic_file` above. Mark the path in flight right
         // before spawning — cleared in both arms of

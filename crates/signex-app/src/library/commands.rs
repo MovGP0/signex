@@ -1,3 +1,11 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library subsystem command helpers.
 //!
 //! Thin wrappers around `LibraryAdapter` calls that the dispatcher
@@ -78,8 +86,7 @@ pub fn register_pending_library(
     let ext_ok = lib_path
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxlib"))
-        .unwrap_or(false);
+        .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
     if !ext_ok {
         return Err(LibraryError::Conflict(format!(
             "library path must end with `.snxlib`: {}",
@@ -89,7 +96,7 @@ pub fn register_pending_library(
     let stem = lib_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .unwrap_or_default();
     if stem.is_empty() {
         return Err(LibraryError::Conflict(
@@ -243,8 +250,7 @@ pub fn create_library_at(
     let ext_ok = lib_path
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxlib"))
-        .unwrap_or(false);
+        .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
     if !ext_ok {
         return Err(LibraryError::Conflict(format!(
             "library path must end with `.snxlib`: {}",
@@ -254,7 +260,7 @@ pub fn create_library_at(
     let stem = lib_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .unwrap_or_default();
     if stem.is_empty() {
         return Err(LibraryError::Conflict(
@@ -293,7 +299,7 @@ pub fn create_library_at(
         format: FORMAT_TOKEN.into(),
         library_id,
         library: LibrarySection {
-            name: stem.clone(),
+            name: stem,
             description: None,
         },
         // Mode/workflow/users default — Stage 13 will surface the
@@ -410,8 +416,7 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
         let is_snxlib = resolved
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("snxlib"))
-            .unwrap_or(false);
+            .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
         if !is_snxlib {
             continue;
         }
@@ -546,6 +551,7 @@ pub fn create_component_row(
 }
 
 /// Re-run a query against every open library — picker filter helper.
+#[must_use]
 pub fn list_components_filtered(
     state: &LibraryState,
     text_filter: &str,

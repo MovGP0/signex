@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::widget::{Column, button, container, row, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 

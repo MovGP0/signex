@@ -1,9 +1,19 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Keyboard Shortcuts section — the profile picker, the grouped /
 //! searchable shortcut table, the chord recorder card, and the shortcut
 //! chip / profile-option / label helpers. Moved verbatim from the former
 //! single-file `preferences` module.
 
-use super::*;
+use super::{
+    PrefMsg, danger_button_style, h_sep, primary_button_style, secondary_button_style,
+    section_title, text_muted, text_primary,
+};
 use iced::widget::{Column, Space, button, column, container, row, text, text_input};
 use iced::{Background, Border, Element, Length, Theme};
 
@@ -16,12 +26,12 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     let profiles = editor.profiles();
     let active = profiles.iter().find(|profile| profile.active);
     let active_option = active.map(KeymapProfileOption::from);
-    let active_is_custom = active
-        .map(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
-        .unwrap_or(false);
-    let active_summary = active
-        .map(|profile| format!("{} bindings", profile.binding_count))
-        .unwrap_or_else(|| "No active profile".to_string());
+    let active_is_custom =
+        active.is_some_and(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom);
+    let active_summary = active.map_or_else(
+        || "No active profile".to_string(),
+        |profile| format!("{} bindings", profile.binding_count),
+    );
 
     let profile_options: Vec<KeymapProfileOption> =
         profiles.iter().map(KeymapProfileOption::from).collect();
@@ -442,9 +452,9 @@ fn keymap_recorder_control<'a>(
     .into()
 }
 
-fn recorded_shortcut_chips<'a>(
-    recorder: &'a crate::app::KeymapRecorderState,
-) -> Vec<Element<'a, PrefMsg>> {
+fn recorded_shortcut_chips(
+    recorder: &crate::app::KeymapRecorderState,
+) -> Vec<Element<'_, PrefMsg>> {
     recorder
         .strokes
         .iter()
@@ -494,7 +504,7 @@ impl std::fmt::Display for KeymapProfileOption {
     }
 }
 
-fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
+const fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
     match context {
         crate::keymap::ShortcutContext::Global => "Global",
         crate::keymap::ShortcutContext::Schematic => "Schematic",

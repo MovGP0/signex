@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Window chrome and layout scaffolding — the borderless main-window
 //! chrome strip, the Preferences body, the detached-modal frame, and the
 //! dock-panel / resize-handle helpers.
@@ -6,7 +11,10 @@
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{
+    BomPreviewMsg, CommandPaletteMsg, DragTarget, Element, Length, Message, PanelPosition,
+    PreferencesMsg, Signex, UiMsg, WindowMsg, container, text_input,
+};
 
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
@@ -90,19 +98,19 @@ impl Signex {
 
         let controls = row![
             chrome_btn(
-                h_min.clone(),
+                h_min,
                 Message::Window(WindowMsg::MinimizeMainWindow),
                 hover_c,
                 text_c
             ),
             chrome_btn(
-                h_max.clone(),
+                h_max,
                 Message::Window(WindowMsg::ToggleMaximizeMainWindow),
                 hover_c,
                 text_c,
             ),
             chrome_btn(
-                h_close.clone(),
+                h_close,
                 Message::Window(WindowMsg::CloseMainWindow),
                 close_hover,
                 Color::WHITE,
@@ -128,13 +136,12 @@ impl Signex {
         // search over commands, placed symbols, and project files. The
         // text_input is always rendered; the dropdown overlay is gated
         // on `command_palette.open` and rendered by `collect_overlays`.
-        let search_icon =
-            svg(h_search.clone())
-                .width(12)
-                .height(12)
-                .style(move |_: &iced::Theme, _| svg::Style {
-                    color: Some(muted_c),
-                });
+        let search_icon = svg(h_search)
+            .width(12)
+            .height(12)
+            .style(move |_: &iced::Theme, _| svg::Style {
+                color: Some(muted_c),
+            });
         let palette_input = text_input(
             "Search files, symbols, commands…",
             &self.ui_state.command_palette.query,
@@ -322,8 +329,7 @@ impl Signex {
                     .document_state
                     .bom_preview
                     .as_ref()
-                    .map(|p| p.column_resize.is_some())
-                    .unwrap_or(false);
+                    .is_some_and(|p| p.column_resize.is_some());
                 let mut stack = iced::widget::Stack::new()
                     .push(body)
                     .push(Self::detached_modal_resize_overlay(modal));

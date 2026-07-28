@@ -1,3 +1,10 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint editor — geometry update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
@@ -36,10 +43,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             // halves originate from disjoint editor fields.
             editor.with_parts(|state, primitive| {
                 let idx = state.add_pad_at(x_mm, y_mm);
-                if let Some(pad) = state.pads.get_mut(idx) {
-                    if footprint_sketch_is_active(primitive) {
-                        pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
-                    }
+                if let Some(pad) = state.pads.get_mut(idx)
+                    && footprint_sketch_is_active(primitive)
+                {
+                    pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
@@ -73,10 +80,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 state.pads.push(pad);
                 let idx = state.pads.len() - 1;
                 state.selected_pad = Some(idx);
-                if let Some(p) = state.pads.get_mut(idx) {
-                    if footprint_sketch_is_active(primitive) {
-                        pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
-                    }
+                if let Some(p) = state.pads.get_mut(idx)
+                    && footprint_sketch_is_active(primitive)
+                {
+                    pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
@@ -134,7 +141,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 PlaceArcPending::Start { center, start } => {
                     let (cx, cy) = center;
                     let (sx, sy) = start;
-                    let radius = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                    let radius = (sx - cx).hypot(sy - cy);
                     if radius > 1e-6 {
                         let start_deg = (sy - cy).atan2(sx - cx).to_degrees();
                         let end_deg = (y_mm - cy).atan2(x_mm - cx).to_degrees();
@@ -251,10 +258,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
         FootprintEditorMsg::AddHole { x_mm, y_mm } => {
             editor.with_parts(|state, primitive| {
                 let idx = state.add_hole_at(x_mm, y_mm);
-                if let Some(pad) = state.pads.get_mut(idx) {
-                    if footprint_sketch_is_active(primitive) {
-                        pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
-                    }
+                if let Some(pad) = state.pads.get_mut(idx)
+                    && footprint_sketch_is_active(primitive)
+                {
+                    pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
@@ -289,7 +296,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
 /// auto-mint has already fired). Mirroring into a non-existent sketch would
 /// create one silently, which is undesirable for users who only ever work
 /// in Pads mode.
-fn footprint_sketch_is_active(fp: &signex_library::primitive::footprint::Footprint) -> bool {
+const fn footprint_sketch_is_active(fp: &signex_library::primitive::footprint::Footprint) -> bool {
     match fp.sketch.as_ref() {
         Some(s) => !s.entities.is_empty(),
         None => false,

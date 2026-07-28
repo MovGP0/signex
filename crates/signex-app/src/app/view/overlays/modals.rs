@@ -1,3 +1,9 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::nonminimal_bool,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dialog and library-modal overlay builders — Preferences, Find &
 //! Replace, keyboard shortcuts, the first-run tour, the simple confirm
 //! dialogs, the detachable annotate/ERC dialogs, and the full stack of
@@ -9,7 +15,7 @@
 //! owns one overlay's guard + widget tree; ordering is enforced by the
 //! `collect_overlays` assembler.
 
-use super::*;
+use super::{CommandPaletteMsg, Element, Length, Message, PreferencesMsg, Signex};
 use iced::widget::container;
 
 impl Signex {
@@ -337,7 +343,7 @@ impl Signex {
         Some(backdrop.into())
     }
 
-    /// Tools ▸ Document Options modal — Altium SchLib parity.
+    /// Tools ▸ Document Options modal — Altium `SchLib` parity.
     pub(in crate::app::view) fn document_options_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let state = self.library.document_options.as_ref()?;
@@ -426,7 +432,7 @@ impl Signex {
 
     /// Command palette dropdown (Ctrl+Shift+P). Painted last so it sits
     /// above every other modal layer; click-outside dismisses via the
-    /// standard dismiss_layer pattern. Pushes the dismiss layer then the
+    /// standard `dismiss_layer` pattern. Pushes the dismiss layer then the
     /// dropdown.
     pub(in crate::app::view) fn command_palette_overlay(&self) -> Vec<Element<'_, Message>> {
         if !self.ui_state.command_palette.open {

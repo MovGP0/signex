@@ -1,3 +1,9 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::ref_option,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — right-click context menu update logic. Mirrors
 //! `library::editor::footprint::updates::context_menu` in structure.
 //!

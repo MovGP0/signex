@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::float_cmp,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Tests for symbol-editor interaction state.
 use super::*;
 use signex_library::Symbol;
@@ -597,8 +603,8 @@ fn polygon_centroid_is_area_weighted_not_skewed_by_a_densely_subdivided_side() {
     // 8 extra collinear points along the top edge (4,4) -> (0,4) — 11
     // vertices total, 8 of them clustered on one side.
     for i in 1..9 {
-        let t = i as f64 / 9.0;
-        vertices.push([4.0 - 4.0 * t, 4.0]);
+        let t = f64::from(i) / 9.0;
+        vertices.push([4.0f64.mul_add(-t, 4.0), 4.0]);
     }
     vertices.push([0.0, 4.0]);
 
@@ -900,7 +906,7 @@ fn rotated_wraparound_arc_hit_test_and_draw_sweep_agree() {
 /// (which fires on `end_deg < 0.0`) into swapping the pair to its
 /// complement on reload, silently turning the 285° arc the user dragged
 /// into a 75° arc — the same round-trip data loss the Properties-panel
-/// edit path guards against. Regression for the ArcEnd handle writer.
+/// edit path guards against. Regression for the `ArcEnd` handle writer.
 #[test]
 fn arc_endpoint_handle_drag_survives_save_reload() {
     use signex_gfx::primitive::arc::ccw_wrapped_sweep_rad;

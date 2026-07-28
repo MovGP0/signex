@@ -14,6 +14,7 @@ impl FootprintEditorState {
     /// Combined pad selection — primary plus ctrl-click extras —
     /// sorted, deduped, and clamped to the live pad list. Empty when
     /// nothing is selected.
+    #[must_use]
     pub fn selected_pad_indices(&self) -> Vec<usize> {
         let mut indices: Vec<usize> = Vec::new();
         if let Some(p) = self.selected_pad {

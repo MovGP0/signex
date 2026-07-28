@@ -1,3 +1,11 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_ref_mut,
+    clippy::option_if_let_else,
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Export handlers — PDF export dialog + netlist export. Split from `menu/export.rs`.
 
 use std::path::PathBuf;
@@ -5,7 +13,7 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_output::{Exporter, NetlistExporter, NetlistOptions, PdfExporter};
 
-use super::super::super::super::*;
+use super::super::super::super::{ExportMsg, Message, Signex};
 
 impl Signex {
     pub(crate) fn handle_export_pdf_open_dialog(&mut self) -> iced::Task<Message> {
@@ -37,15 +45,14 @@ impl Signex {
             }
         };
 
-        let (mut ctx, issues) = match super::build_export_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                self.document_state.pending_pdf_options = None;
-                self.document_state.pending_pdf_files = None;
-                self.document_state.export_error =
-                    Some("Cannot export PDF: no active schematic.".to_string());
-                return Task::none();
-            }
+        let (mut ctx, issues) = if let Some(c) = super::build_export_scope(&self.document_state) {
+            c
+        } else {
+            self.document_state.pending_pdf_options = None;
+            self.document_state.pending_pdf_files = None;
+            self.document_state.export_error =
+                Some("Cannot export PDF: no active schematic.".to_string());
+            return Task::none();
         };
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
@@ -147,12 +154,11 @@ impl Signex {
             }
         };
 
-        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                log::warn!("Netlist export: no active schematic");
-                return Task::none();
-            }
+        let (ctx, issues) = if let Some(c) = super::build_export_scope(&self.document_state) {
+            c
+        } else {
+            log::warn!("Netlist export: no active schematic");
+            return Task::none();
         };
         super::log_stitch_issues(&self.document_state, &ctx, &issues);
 

@@ -1,6 +1,16 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    clippy::used_underscore_binding,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Diagnostic panels -- ERC and Messages.
 
-use super::*;
+use super::{
+    Background, Color, Column, Element, Length, PanelContext, PanelMsg, Space, Theme, container,
+    row, section_title, separator, text, theme_ext,
+};
 
 /// Flattened ERC diagnostic row for the ERC panel.
 ///
@@ -14,7 +24,7 @@ pub struct ErcDiagnosticEntry {
     pub severity: ErcSeverityLite,
     pub rule_label: &'static str,
     /// Underlying rule kind — drives the Quick Fix chip's label and
-    /// per-rule action (UnusedPin → place a NoConnect; others →
+    /// per-rule action (`UnusedPin` → place a `NoConnect`; others →
     /// zoom + select on the canvas). Carrying it here means the panel
     /// view can decide both the label and the dispatch with no
     /// extra lookup against `erc_violations_by_path`.
@@ -192,7 +202,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     move |_theme: &Theme, status: iced::widget::button::Status| {
                         let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
                         iced::widget::button::Style {
-                            background: row_bg.clone().or(base.background),
+                            background: row_bg.or(base.background),
                             ..base
                         }
                     },

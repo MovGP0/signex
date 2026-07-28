@@ -1,4 +1,10 @@
-//! SchLib editor's Active Bar — the floating tool bar over the
+#![expect(
+    clippy::match_same_arms,
+    clippy::redundant_field_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! `SchLib` editor's Active Bar — the floating tool bar over the
 //! `.snxsym` canvas, mirroring the schematic editor's Altium-style
 //! Active Bar pattern but with SchLib-specific tools.
 //!
@@ -13,7 +19,7 @@
 //! Built on top of the unified
 //! `signex_widgets::active_bar::view_with_overlay` so a single call
 //! returns the bar + dropdown overlay + click-outside backstop —
-//! identical pattern across schematic / footprint / SchLib /
+//! identical pattern across schematic / footprint / `SchLib` /
 //! upcoming PCB editors.
 
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -27,7 +33,7 @@ use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, S
 
 mod dropdowns;
 
-/// Build the SchLib bar items only — caller mounts via
+/// Build the `SchLib` bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
 pub fn bar_items(
@@ -57,7 +63,7 @@ pub fn bar_items(
         enabled: true,
         selected: active_tool == SymbolTool::AddPin,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path,
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin)),
         }),
         ..ActiveBarButton::default()
@@ -114,7 +120,7 @@ pub fn dropdown_overlay<'a>(
     Some(Stack::new().push(backstop).push(panel_anchor).into())
 }
 
-/// Dropdown trigger items for the SchLib bar. Same dual-action
+/// Dropdown trigger items for the `SchLib` bar. Same dual-action
 /// pattern as the schematic / footprint bars: left-click runs the
 /// default action (or toggles the menu when there's no obvious
 /// default), right-click opens the dropdown.

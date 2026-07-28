@@ -1,3 +1,12 @@
+#![expect(
+    clippy::if_not_else,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Primitive-editor handlers — opening `.snxsym` / `.snxfpt` document
 //! tabs, routing symbol / footprint edit events, saving primitive
 //! tabs, and the associated canvas-cache / external-change plumbing.
@@ -5,7 +14,10 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{
+    FootprintEditorMsg, Message, PrimitiveEdit, Signex, SymbolEditorMsg, Task,
+    apply_footprint_clipboard_op, apply_footprint_primitive_edit, atomic_write,
+};
 
 impl Signex {
     /// Open a standalone primitive editor tab for the file at `path`.
@@ -89,16 +101,16 @@ impl Signex {
                     }
                 };
 
-                let title = path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| {
+                let title = path.file_stem().map_or_else(
+                    || {
                         if !file.display_name.is_empty() {
                             file.display_name.clone()
                         } else {
                             file.symbols[0].name.clone()
                         }
-                    });
+                    },
+                    |s| s.to_string_lossy().into_owned(),
+                );
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
                 let state = crate::app::SymbolEditorState::new(path.clone(), file);
@@ -180,8 +192,7 @@ impl Signex {
 
                 let title = path
                     .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or(display_name);
+                    .map_or(display_name, |s| s.to_string_lossy().into_owned());
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
                 // HI-23: seed snap-disabled from the user's persisted
@@ -553,7 +564,7 @@ impl Signex {
             .library
             .open_libraries
             .iter()
-            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false));
+            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)));
         let Some(lib) = lib else {
             return;
         };
@@ -582,7 +593,7 @@ impl Signex {
             .library
             .open_libraries
             .iter()
-            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false))
+            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
         {
             Some(lib) => lib.library_id,
             None => return,
@@ -619,7 +630,7 @@ impl Signex {
     ///
     /// Best-effort — returns silently when the path isn't under a
     /// mounted library or when the adapter has no reload hook.
-    fn reload_primitive_in_library_set(&mut self, _path: &std::path::Path) {
+    const fn reload_primitive_in_library_set(&mut self, _path: &std::path::Path) {
         // Stubbed pending the corresponding `LibrarySet::reload_primitive`
         // helper. The standalone editor tab already holds the
         // authoritative copy of the primitive in memory and on-disk

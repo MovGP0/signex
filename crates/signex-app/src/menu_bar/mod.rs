@@ -1,7 +1,15 @@
-//! Top menu bar using iced_aw MenuBar with proper dropdown/submenu support.
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::struct_excessive_bools,
+    clippy::suboptimal_flops,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Top menu bar using `iced_aw` `MenuBar` with proper dropdown/submenu support.
 //!
 //! Altium-style menu structure: File, Edit, View, Place, Design, Tools, Window, Help.
-//! iced_aw handles all overlay positioning, hover-to-switch, and keyboard navigation.
+//! `iced_aw` handles all overlay positioning, hover-to-switch, and keyboard navigation.
 //! Anchored on the left by the Signex wordmark — PNGs rasterised from
 //! `brand/signex-logo-{white,black}.svg` into `brand/generated/` at 1×/2×/3×
 //! the on-screen 96×31 logical size. Regenerate via
@@ -89,7 +97,7 @@ pub enum MenuMessage {
     /// (0.14, `src/button.rs:342`) forces `Status::Disabled` whenever
     /// `on_press` is `None`, which means the hover style never fires. By
     /// wiring these buttons to `NoOp` we unlock `Status::Hovered` so the
-    /// highlight shows on pointer-over alone, even before iced_aw opens a
+    /// highlight shows on pointer-over alone, even before `iced_aw` opens a
     /// dropdown. The message is swallowed by `handle_menu_message` via
     /// its `Task::none()` fallthrough — no handler needs to match it.
     NoOp,
@@ -186,7 +194,7 @@ pub enum MenuMessage {
     /// Help ▸ Keyboard Shortcuts and from F1.
     OpenKeyboardShortcuts,
     /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
-    /// `part_number` by one and switches the editor's active_part to
+    /// `part_number` by one and switches the editor's `active_part` to
     /// the new value. No-op when no Symbol editor is the active tab.
     ToolsNewPart,
     /// Tools ▸ Remove Part — drops the active part on the active
@@ -197,7 +205,7 @@ pub enum MenuMessage {
     /// Tools ▸ Document Options... — opens the Document Options modal
     /// for the active `.snxlib` (sheet color / grid / unit). Mirrors
     /// Altium's Tools ▸ Document Options entry. No-op when not on
-    /// a SchLib tab.
+    /// a `SchLib` tab.
     ToolsDocumentOptions,
 }
 
@@ -281,6 +289,7 @@ const MENU_ROOT_LABELS: &[&str] = &[
 /// `root_btn`) plus the chrome's left padding. Used by the chrome
 /// to clamp the centered search bar so it can't slide under the
 /// menu items on narrow windows.
+#[must_use]
 pub fn approx_menu_bar_width() -> f32 {
     // `root_btn` uses `padding([7, 6])` → 12 px horizontal per button.
     const PER_BTN_PADDING: f32 = 12.0;
@@ -293,7 +302,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
     let labels_total: f32 = MENU_ROOT_LABELS
         .iter()
-        .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
+        .map(|l| (l.chars().count() as f32).mul_add(PX_PER_CHAR, PER_BTN_PADDING))
         .sum();
     CHROME_LEFT_PAD + WORDMARK_LOGICAL_W + WORDMARK_TO_MENU_GAP + labels_total
 }
@@ -339,8 +348,10 @@ fn cmd_label(command_id: &str, fallback: &str) -> String {
     AppCommandId::new(command_id)
         .ok()
         .and_then(|command| crate::keymap::metadata_for(&command))
-        .map(|meta| meta.menu_label().to_string())
-        .unwrap_or_else(|| fallback.to_string())
+        .map_or_else(
+            || fallback.to_string(),
+            |meta| meta.menu_label().to_string(),
+        )
 }
 
 fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
@@ -355,6 +366,7 @@ fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<S
 
 /// Wrap a menu element in the toolbar-strip styled container used on
 /// secondary (undocked-tab) windows that keep their OS title bar.
+#[must_use]
 pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
     container(menu)
         .padding([0, 8])
@@ -367,10 +379,10 @@ pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Elem
 /// (later) matching chrome icons. Mirrors the sRGB Y' coefficients so
 /// cyan/green tones don't fool the check like a naive (r+g+b)/3 would.
 fn is_dark_surface(c: signex_types::theme::Color) -> bool {
-    let r = c.r as f32 / 255.0;
-    let g = c.g as f32 / 255.0;
-    let b = c.b as f32 / 255.0;
-    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let r = f32::from(c.r) / 255.0;
+    let g = f32::from(c.g) / 255.0;
+    let b = f32::from(c.b) / 255.0;
+    let lum = 0.7152f32.mul_add(g, 0.2126 * r) + 0.0722 * b;
     lum < 0.5
 }
 
@@ -380,7 +392,7 @@ fn is_dark_surface(c: signex_types::theme::Color) -> bool {
 ///
 /// Altium paints a subtle framed highlight behind the label on hover and
 /// keeps it lit while the dropdown is open. `button::Status::Hovered` covers
-/// the pointer case; `Pressed` is the "menu is open" state (iced_aw holds
+/// the pointer case; `Pressed` is the "menu is open" state (`iced_aw` holds
 /// the root in Pressed while its submenu is visible).
 fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();

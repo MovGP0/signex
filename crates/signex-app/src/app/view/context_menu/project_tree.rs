@@ -1,3 +1,9 @@
+#![expect(
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Projects-panel tree-view right-click menu.
 //!
 //! Data-to-view (#269): the menu is assembled as a `Vec<DropdownEntry>`
@@ -5,7 +11,7 @@
 //! clicked node's [`TreeNodeRole`] (pure, unit-tested) selects which item
 //! set the `&self` builder produces.
 
-use super::*;
+use super::{ContextMenuMsg, ContextSubmenu, Element, Message, Signex, container};
 
 use super::items::{dd_disabled, dd_msg, save_entry, submenu_launcher};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -25,7 +31,11 @@ pub(super) enum TreeNodeRole {
 }
 
 /// Pure role detection for a project-tree node (see [`TreeNodeRole`]).
-pub(super) fn tree_node_role(icon: &TreeIcon, path_len: usize, has_children: bool) -> TreeNodeRole {
+pub(super) const fn tree_node_role(
+    icon: &TreeIcon,
+    path_len: usize,
+    has_children: bool,
+) -> TreeNodeRole {
     if path_len == 1 {
         return TreeNodeRole::Root;
     }
@@ -110,8 +120,7 @@ impl Signex {
                     .map(|p| p.path.clone());
                 let project_is_dirty = project_path
                     .as_ref()
-                    .map(|p| self.document_state.dirty_paths.contains(p))
-                    .unwrap_or(false);
+                    .is_some_and(|p| self.document_state.dirty_paths.contains(p));
                 let can_save = has_schematic || project_is_dirty;
 
                 v.push(dd_disabled(
@@ -205,8 +214,7 @@ impl Signex {
                     .first()
                     .and_then(|idx| self.document_state.projects.get(*idx))
                     .and_then(|p| p.path.parent())
-                    .map(|dir| !dir.join(".git").exists())
-                    .unwrap_or(false);
+                    .is_some_and(|dir| !dir.join(".git").exists());
                 if no_git_yet {
                     v.push(dd_msg(
                         None,

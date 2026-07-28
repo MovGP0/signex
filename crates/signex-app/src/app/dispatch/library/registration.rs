@@ -1,3 +1,11 @@
+#![expect(
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::redundant_field_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library lifecycle handlers — creating a library for a project or
 //! at a path, the open-library picker, adding standalone symbol /
 //! footprint files, and registering a standalone library onto the
@@ -6,7 +14,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{LibraryCreateOptionsState, LibraryMessage, Message, PickerMsg, Signex, Task};
 
 impl Signex {
     /// Resolution of the "New Component Library" save-as dialog — pops
@@ -142,7 +150,7 @@ impl Signex {
             },
             move |picked| match picked {
                 Some(lib_path) => Message::Library(LibraryMessage::CreateLibraryAtPath {
-                    project_path: project_path.clone(),
+                    project_path: project_path,
                     lib_path,
                 }),
                 None => Message::Noop,

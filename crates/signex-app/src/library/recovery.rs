@@ -109,6 +109,7 @@ pub enum BrokenBindingChoice {
 }
 
 /// Render the active recovery dialog.
+#[must_use]
 pub fn view<'a>(
     dialog: &'a RecoveryDialog,
     tokens: &'a ThemeTokens,
@@ -239,7 +240,7 @@ fn git_missing_view<'a>(
 
     if let Some(url) = remote {
         summary_lines = summary_lines.push(Space::new().height(4));
-        summary_lines = summary_lines.push(text(format!("Remote: {}", url)).size(11).color(muted));
+        summary_lines = summary_lines.push(text(format!("Remote: {url}")).size(11).color(muted));
     }
 
     summary_lines = summary_lines.push(Space::new().height(10));
@@ -325,7 +326,7 @@ fn broken_binding_view<'a>(
 
     let header = container(
         row![
-            text(format!("Broken {} Binding", kind_label))
+            text(format!("Broken {kind_label} Binding"))
                 .size(14)
                 .color(text_c),
             Space::new().width(Length::Fill),
@@ -351,8 +352,8 @@ fn broken_binding_view<'a>(
         text(format!("Library: {}", library_path.display()))
             .size(11)
             .color(muted),
-        text(format!("Row: {}", row_id)).size(11).color(muted),
-        text(format!("Missing UUID: {}", missing_uuid))
+        text(format!("Row: {row_id}")).size(11).color(muted),
+        text(format!("Missing UUID: {missing_uuid}"))
             .size(11)
             .color(muted),
     ]
@@ -393,12 +394,12 @@ fn broken_binding_view<'a>(
     .into()
 }
 
-fn secondary_btn<'a>(
-    label: &'a str,
+fn secondary_btn(
+    label: &str,
     message: LibraryMessage,
     text_color: iced::Color,
     border: iced::Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     button(container(text(label.to_string()).size(11).color(text_color)).padding([4, 14]))
         .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -416,7 +417,7 @@ fn secondary_btn<'a>(
         .into()
 }
 
-fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
+fn primary_btn(label: &str, message: LibraryMessage) -> Element<'_, LibraryMessage> {
     let bg = iced::Color::from_rgb(0.00, 0.47, 0.84);
     let fg = iced::Color::WHITE;
     button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]))
@@ -437,7 +438,7 @@ fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, Libra
 /// Destructive button — used for *Re-init (lose history)*. Painted
 /// muted-red so the lossy semantics read at a glance. Confirm with
 /// the user before tweaking the colour.
-fn destructive_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
+fn destructive_btn(label: &str, message: LibraryMessage) -> Element<'_, LibraryMessage> {
     let bg = iced::Color::from_rgb(0.74, 0.25, 0.22);
     let fg = iced::Color::WHITE;
     button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]))
@@ -455,11 +456,11 @@ fn destructive_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, L
         .into()
 }
 
-fn disabled_btn<'a>(
-    label: &'a str,
+fn disabled_btn(
+    label: &str,
     text_color: iced::Color,
     border: iced::Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let muted = iced::Color {
         a: text_color.a * 0.5,
         ..text_color

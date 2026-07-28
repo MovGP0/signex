@@ -1,8 +1,13 @@
+#![expect(
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Camera input — scroll-wheel zoom (cursor-anchored). The
 //! `WheelScrolled` branch of `Program::update`, extracted verbatim;
 //! same delta normalisation, epsilon guard, and `Zoom` publish site.
 
-use super::super::*;
+use super::super::{CanvasAction, SymbolCanvas};
 use iced::Rectangle;
 use iced::mouse;
 use iced::widget::canvas;

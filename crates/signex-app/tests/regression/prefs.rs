@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 //! `prefs.json` migration plus the read/write round-trip sweep.
 
 use signex_app::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};

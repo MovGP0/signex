@@ -1,6 +1,11 @@
+#![expect(
+    clippy::assigning_clones,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{Message, Signex};
 use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, SelectionFilter};
 
 impl Signex {
@@ -77,7 +82,7 @@ impl Signex {
         self.sync_and_persist_custom_filter_presets();
     }
 
-    pub(crate) fn handle_select_custom_filter_tab(&mut self, idx: usize) {
+    pub(crate) const fn handle_select_custom_filter_tab(&mut self, idx: usize) {
         let len = self.interaction_state.custom_filter_presets.len();
         if idx >= len {
             return;

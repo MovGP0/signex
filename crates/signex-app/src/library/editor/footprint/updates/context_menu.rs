@@ -1,7 +1,12 @@
-//! Footprint editor — context_menu update logic.
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Footprint editor — `context_menu` update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
-//! The router delegates all context_menu `FootprintEditorMsg` variants here;
+//! The router delegates all `context_menu` `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
 use crate::library::messages::FootprintEditorMsg;

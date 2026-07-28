@@ -1,9 +1,19 @@
+#![expect(
+    clippy::float_cmp,
+    clippy::needless_pass_by_value,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Move + box-select operations for the symbol editor.
 
 use super::rotation::{pin_body_delta, translate_graphic_to};
-use super::*;
+use super::{
+    BoxSelectKind, Symbol, SymbolGraphicKind, SymbolPin, SymbolSelection, translate_graphic_by,
+};
 
 /// Move the currently-selected element to a new canvas position.
+///
 /// Coordinates are in mm; callers should snap to the grid first.
 /// For graphics this translates the entire shape so its anchor (TL
 /// corner / `from` endpoint / `center` / `position`) lands on `(x, y)`.
@@ -21,9 +31,9 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         // value drag re-binds against `ComponentRow` once that pipeline
         // ships.
         // All / Multiple — delta-based movement handled by move_all / move_multiple.
-        Some(SymbolSelection::Field(_))
-        | Some(SymbolSelection::All)
-        | Some(SymbolSelection::Multiple { .. })
+        Some(
+            SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. },
+        )
         | None => {}
     }
 }
@@ -128,12 +138,12 @@ pub fn align_selected_to_grid(
         }
         Some(SymbolSelection::All) => {
             let mut changed = false;
-            for pin in sym.pins.iter_mut() {
+            for pin in &mut sym.pins {
                 let before = pin.position;
                 snap_pin_to_grid(pin, step);
                 changed |= pin.position != before;
             }
-            for g in sym.graphics.iter_mut() {
+            for g in &mut sym.graphics {
                 let before = g.kind.clone();
                 snap_graphic_to_grid(&mut g.kind, step);
                 changed |= g.kind != before;
@@ -183,6 +193,7 @@ fn snap_value_to_grid(v: f64, step: f64) -> f64 {
 /// The selection kind (`Window` / `Crossing`) is determined by the
 /// caller from the drag direction before calling this function.
 /// Returns `None` when nothing falls inside the box.
+#[must_use]
 pub fn select_in_box(
     sym: &Symbol,
     x0: f64,
@@ -377,7 +388,7 @@ fn segment_crosses_box(
 
 fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> bool {
     let cross2d = |o: [f64; 2], p: [f64; 2], q: [f64; 2]| -> f64 {
-        (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
+        (p[1] - o[1]).mul_add(-(q[0] - o[0]), (p[0] - o[0]) * (q[1] - o[1]))
     };
     let d1 = cross2d(c, d, a);
     let d2 = cross2d(c, d, b);

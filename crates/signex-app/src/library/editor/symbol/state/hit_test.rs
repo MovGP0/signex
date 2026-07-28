@@ -1,6 +1,14 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::many_single_char_names,
+    clippy::match_same_arms,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Delete + hit-testing + graphic-handle geometry for the symbol editor.
 
-use super::*;
+use super::{GraphicHandle, Symbol, SymbolGraphicKind, SymbolSelection};
 
 /// Delete whatever is currently selected. Returns `Some(new_sel)` if
 /// the caller should update its selection (typically `None` after a
@@ -34,14 +42,14 @@ pub fn delete_selected(
         }) => {
             // Delete in reverse index order so removing an item doesn't
             // invalidate the indices of the remaining ones.
-            let mut pins_desc = pin_indices.clone();
+            let mut pins_desc = pin_indices;
             pins_desc.sort_unstable_by(|a, b| b.cmp(a));
             for idx in pins_desc {
                 if idx < sym.pins.len() {
                     sym.pins.remove(idx);
                 }
             }
-            let mut gfx_desc = graphic_indices.clone();
+            let mut gfx_desc = graphic_indices;
             gfx_desc.sort_unstable_by(|a, b| b.cmp(a));
             for idx in gfx_desc {
                 if idx < sym.graphics.len() {
@@ -58,6 +66,7 @@ pub fn delete_selected(
 /// bodies. Pins win (small hit target, often inside graphics);
 /// graphics scan in reverse so the most-recently-placed graphic
 /// wins overlap.
+#[must_use]
 pub fn hit_test(sym: &Symbol, x: f64, y: f64, active_part: u8) -> Option<SymbolSelection> {
     const PIN_HIT_R_SQ: f64 = 1.5 * 1.5;
     for (i, pin) in sym.pins.iter().enumerate() {
@@ -66,7 +75,7 @@ pub fn hit_test(sym: &Symbol, x: f64, y: f64, active_part: u8) -> Option<SymbolS
         }
         let dx = pin.position[0] - x;
         let dy = pin.position[1] - y;
-        if dx * dx + dy * dy <= PIN_HIT_R_SQ {
+        if dy.mul_add(dy, dx * dx) <= PIN_HIT_R_SQ {
             return Some(SymbolSelection::Pin(i));
         }
     }
@@ -109,7 +118,7 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
         SymbolGraphicKind::Circle { center, radius } => {
             let dx = x - center[0];
             let dy = y - center[1];
-            let d = (dx * dx + dy * dy).sqrt();
+            let d = dx.hypot(dy);
             (d - radius).abs() <= GRAPHIC_BODY_TOL
         }
         SymbolGraphicKind::Arc {
@@ -120,7 +129,7 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
         } => {
             let dx = x - center[0];
             let dy = y - center[1];
-            let d = (dx * dx + dy * dy).sqrt();
+            let d = dx.hypot(dy);
             if (d - radius).abs() > GRAPHIC_BODY_TOL {
                 return false;
             }
@@ -195,10 +204,12 @@ fn polygon_outline_hit(x: f64, y: f64, vertices: &[[f64; 2]], tol: f64) -> bool 
 }
 
 /// Compute the world (mm) position of a graphic's resize handle.
+///
 /// Returns `None` if the handle variant doesn't match the graphic
 /// kind — defensive against stale `GraphicHandle` values lingering
 /// across selection swaps.
 #[allow(dead_code)]
+#[must_use]
 pub fn graphic_handle_position(
     sym: &Symbol,
     idx: usize,
@@ -263,6 +274,7 @@ pub fn graphic_handle_position(
 /// Enumerate every resize handle for the graphic at `idx`.
 /// Returns `(handle_variant, world_position)` pairs for Select-tool
 /// handle rendering.
+#[must_use]
 pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2])> {
     let Some(g) = sym.graphics.get(idx) else {
         return Vec::new();
@@ -324,7 +336,10 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
                 // cast anyway rather than silently truncating/wrapping
                 // (which used to collide distinct vertices onto the
                 // same handle id past a `u16`'s 65535).
-                debug_assert!(i <= u32::MAX as usize, "polygon vertex index overflows u32");
+                debug_assert!(
+                    u32::try_from(i).is_ok(),
+                    "polygon vertex index overflows u32"
+                );
                 (GraphicHandle::PolygonVertex(i as u32), *v)
             })
             .collect(),
@@ -357,6 +372,7 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// unclickable-as-a-body: a click almost anywhere near it grabbed an
 /// invisible vertex handle instead of falling through to
 /// `hit_test`'s body selection.
+#[must_use]
 pub fn hit_test_graphic_handle(
     sym: &Symbol,
     x: f64,
@@ -381,7 +397,7 @@ pub fn hit_test_graphic_handle(
             }
             let dx = pos[0] - x;
             let dy = pos[1] - y;
-            if dx * dx + dy * dy <= r_sq {
+            if dy.mul_add(dy, dx * dx) <= r_sq {
                 return Some((idx, handle));
             }
         }
@@ -445,7 +461,7 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             let dy = y - center[1];
             // Floor at 0.1 mm so a click on the centre doesn't make
             // the circle vanish — matches the pin-length floor.
-            *radius = (dx * dx + dy * dy).sqrt().max(0.1);
+            *radius = dx.hypot(dy).max(0.1);
         }
         (
             SymbolGraphicKind::Arc {

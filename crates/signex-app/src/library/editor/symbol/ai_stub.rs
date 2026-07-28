@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! AI pinout preview — minimal stub kept for the `ai_preview` field on
 //! `SymbolEditorState`. The full extraction pipeline (`from_pdf` /
 //! `from_guess` / `into_apply_list`) is a v0.9-refactor-3 follow-up;
@@ -13,6 +18,7 @@ pub struct AiPinoutPreview {
 impl AiPinoutPreview {
     /// Whether the parent UI should warn the user. Mirrors the 0.5
     /// threshold called out in `signex-library/src/ai_stub.rs`.
+    #[must_use]
     pub fn is_low_confidence(&self) -> bool {
         self.confidence < 0.5
     }

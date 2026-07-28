@@ -1,3 +1,10 @@
+#![expect(
+    clippy::no_effect_underscore_binding,
+    clippy::redundant_field_names,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pads-mode Active Bar — floating tool row for the footprint editor
 //! when the editor is in [`EditorMode::Normal`].
 //!
@@ -103,7 +110,7 @@ pub fn mode_switcher_overlay<'a>(
             "3D",
             EditorMode::View3d,
             matches!(mode, EditorMode::View3d),
-            path.clone()
+            path
         ),
     ]
     .spacing(2)
@@ -203,7 +210,7 @@ pub fn footprint_tabs_overlay<'a>(
     )
     .padding([3, 9])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
+        path: path,
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AddNewSibling),
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -371,7 +378,7 @@ pub fn items(
             enabled: true,
             selected: pads_tool == PadsTool::PlaceString,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
+                path: path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(
                     PadsTool::PlaceString,
                 )),

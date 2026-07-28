@@ -1,10 +1,17 @@
+#![expect(
+    clippy::implicit_hasher,
+    clippy::or_fun_call,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! ERC severity / pin-matrix preference IO. Split from `fonts.rs`.
 
-use super::*;
+use super::{prefs_path, write_pref_atomic};
 
 /// Read ERC severity overrides from preferences file. Returns an empty
 /// map if the file is absent or the key missing — callers treat "no
-/// entry" as "use the rule's default severity", matching the ui_state
+/// entry" as "use the rule's default severity", matching the `ui_state`
 /// semantic used throughout the app.
 pub fn read_erc_severity_overrides()
 -> std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity> {
@@ -57,8 +64,12 @@ pub fn write_erc_severity_overrides(
     }
 }
 
-fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
-    use signex_erc::RuleKind::*;
+const fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
+    use signex_erc::RuleKind::{
+        AmbiguousLabelAnchor, BadHierSheetPin, BusBitWidthMismatch, DanglingWire,
+        DuplicateRefDesignator, HierPortDisconnected, MissingPowerFlag, NetLabelConflict,
+        OrphanLabel, PowerPortShort, SymbolOutsideSheet, UnusedPin,
+    };
     match rule {
         UnusedPin => "unused_pin",
         DuplicateRefDesignator => "duplicate_ref_designator",
@@ -76,7 +87,11 @@ fn erc_rule_kind_key(rule: signex_erc::RuleKind) -> &'static str {
 }
 
 fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
-    use signex_erc::RuleKind::*;
+    use signex_erc::RuleKind::{
+        AmbiguousLabelAnchor, BadHierSheetPin, BusBitWidthMismatch, DanglingWire,
+        DuplicateRefDesignator, HierPortDisconnected, MissingPowerFlag, NetLabelConflict,
+        OrphanLabel, PowerPortShort, SymbolOutsideSheet, UnusedPin,
+    };
     Some(match s {
         "unused_pin" => UnusedPin,
         "duplicate_ref_designator" => DuplicateRefDesignator,
@@ -94,7 +109,7 @@ fn parse_erc_rule_kind(s: &str) -> Option<signex_erc::RuleKind> {
     })
 }
 
-fn erc_severity_key(sev: signex_erc::Severity) -> &'static str {
+const fn erc_severity_key(sev: signex_erc::Severity) -> &'static str {
     match sev {
         signex_erc::Severity::Error => "error",
         signex_erc::Severity::Warning => "warning",

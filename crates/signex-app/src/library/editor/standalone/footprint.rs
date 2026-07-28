@@ -1,3 +1,11 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Standalone `.snxfpt` footprint-editor document tab view builders.
 //! Split from `library/editor/standalone.rs` as pure code motion.
 

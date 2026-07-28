@@ -1,3 +1,9 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint editor layer registry — the seven Altium-spec layers a
 //! footprint surfaces: F.Cu / B.Cu / F.SilkS / B.SilkS / F.Fab / B.Fab
 //! / Edge.Cuts (the courtyard polygon stays on Edge.Cuts in this Phase
@@ -28,41 +34,43 @@ pub enum FpLayer {
 
 impl FpLayer {
     /// Display order — left to right along the layer toolbar.
-    pub const ORDER: &'static [FpLayer] = &[
-        FpLayer::FCu,
-        FpLayer::BCu,
-        FpLayer::FSilks,
-        FpLayer::BSilks,
-        FpLayer::FFab,
-        FpLayer::BFab,
-        FpLayer::EdgeCuts,
+    pub const ORDER: &'static [Self] = &[
+        Self::FCu,
+        Self::BCu,
+        Self::FSilks,
+        Self::BSilks,
+        Self::FFab,
+        Self::BFab,
+        Self::EdgeCuts,
     ];
 
     /// Short display label for the toolbar pill — Altium nomenclature
     /// per `docs/UX_REFERENCE_ALTIUM.md`. The Standard/data-layer name is
     /// available via [`Self::standard_name`] for sexpr round-trips.
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            FpLayer::FCu => "Top Layer",
-            FpLayer::BCu => "Bottom Layer",
-            FpLayer::FSilks => "Top Overlay",
-            FpLayer::BSilks => "Bottom Overlay",
-            FpLayer::FFab => "Top Assembly",
-            FpLayer::BFab => "Bottom Assembly",
-            FpLayer::EdgeCuts => "Keep-Out",
+            Self::FCu => "Top Layer",
+            Self::BCu => "Bottom Layer",
+            Self::FSilks => "Top Overlay",
+            Self::BSilks => "Bottom Overlay",
+            Self::FFab => "Top Assembly",
+            Self::BFab => "Bottom Assembly",
+            Self::EdgeCuts => "Keep-Out",
         }
     }
 
     /// Standard layer-name string used in `.standard_mod` / footprint S-expressions.
-    pub fn standard_name(self) -> &'static str {
+    #[must_use]
+    pub const fn standard_name(self) -> &'static str {
         match self {
-            FpLayer::FCu => "F.Cu",
-            FpLayer::BCu => "B.Cu",
-            FpLayer::FSilks => "F.SilkS",
-            FpLayer::BSilks => "B.SilkS",
-            FpLayer::FFab => "F.Fab",
-            FpLayer::BFab => "B.Fab",
-            FpLayer::EdgeCuts => "Edge.Cuts",
+            Self::FCu => "F.Cu",
+            Self::BCu => "B.Cu",
+            Self::FSilks => "F.SilkS",
+            Self::BSilks => "B.SilkS",
+            Self::FFab => "F.Fab",
+            Self::BFab => "B.Fab",
+            Self::EdgeCuts => "Edge.Cuts",
         }
     }
 
@@ -71,30 +79,32 @@ impl FpLayer {
     /// a footprint sexpr — graphics on unknown layers are still drawn
     /// (they end up routed to a sensible default colour) but the
     /// toolbar can't toggle them.
-    pub fn from_standard_name(name: &str) -> Option<FpLayer> {
+    #[must_use]
+    pub fn from_standard_name(name: &str) -> Option<Self> {
         match name {
-            "F.Cu" => Some(FpLayer::FCu),
-            "B.Cu" => Some(FpLayer::BCu),
-            "F.SilkS" => Some(FpLayer::FSilks),
-            "B.SilkS" => Some(FpLayer::BSilks),
-            "F.Fab" => Some(FpLayer::FFab),
-            "B.Fab" => Some(FpLayer::BFab),
-            "Edge.Cuts" => Some(FpLayer::EdgeCuts),
+            "F.Cu" => Some(Self::FCu),
+            "B.Cu" => Some(Self::BCu),
+            "F.SilkS" => Some(Self::FSilks),
+            "B.SilkS" => Some(Self::BSilks),
+            "F.Fab" => Some(Self::FFab),
+            "B.Fab" => Some(Self::BFab),
+            "Edge.Cuts" => Some(Self::EdgeCuts),
             _ => None,
         }
     }
 
     /// Render colour for the layer — Altium-flavoured palette, kept
     /// muted so multiple visible layers don't drown each other out.
-    pub fn color(self) -> Color {
+    #[must_use]
+    pub const fn color(self) -> Color {
         match self {
-            FpLayer::FCu => Color::from_rgba(0.85, 0.20, 0.20, 1.0),
-            FpLayer::BCu => Color::from_rgba(0.30, 0.45, 0.95, 1.0),
-            FpLayer::FSilks => Color::from_rgba(0.95, 0.95, 0.95, 1.0),
-            FpLayer::BSilks => Color::from_rgba(0.65, 0.55, 0.85, 1.0),
-            FpLayer::FFab => Color::from_rgba(0.85, 0.65, 0.30, 1.0),
-            FpLayer::BFab => Color::from_rgba(0.55, 0.45, 0.30, 1.0),
-            FpLayer::EdgeCuts => Color::from_rgba(0.95, 0.85, 0.20, 1.0),
+            Self::FCu => Color::from_rgba(0.85, 0.20, 0.20, 1.0),
+            Self::BCu => Color::from_rgba(0.30, 0.45, 0.95, 1.0),
+            Self::FSilks => Color::from_rgba(0.95, 0.95, 0.95, 1.0),
+            Self::BSilks => Color::from_rgba(0.65, 0.55, 0.85, 1.0),
+            Self::FFab => Color::from_rgba(0.85, 0.65, 0.30, 1.0),
+            Self::BFab => Color::from_rgba(0.55, 0.45, 0.30, 1.0),
+            Self::EdgeCuts => Color::from_rgba(0.95, 0.85, 0.20, 1.0),
         }
     }
 }
@@ -131,7 +141,8 @@ impl Default for LayerVisibility {
 }
 
 impl LayerVisibility {
-    pub fn get(&self, layer: FpLayer) -> bool {
+    #[must_use]
+    pub const fn get(&self, layer: FpLayer) -> bool {
         match layer {
             FpLayer::FCu => self.f_cu,
             FpLayer::BCu => self.b_cu,
@@ -143,7 +154,7 @@ impl LayerVisibility {
         }
     }
 
-    pub fn toggle(&mut self, layer: FpLayer) {
+    pub const fn toggle(&mut self, layer: FpLayer) {
         match layer {
             FpLayer::FCu => self.f_cu = !self.f_cu,
             FpLayer::BCu => self.b_cu = !self.b_cu,

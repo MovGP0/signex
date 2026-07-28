@@ -1,9 +1,17 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Scene overlay — resize handles for the currently-selected
 //! graphic(s), shown only in the Select tool. Extracted verbatim from
 //! `Program::draw`; the symbol body itself renders via
 //! `draw_symbol_with_renderer` (still in the parent `canvas` module).
 
-use super::super::*;
+use super::super::{
+    SYMBOL_HANDLE_STROKE_PX_AT_100, SymbolCanvas, SymbolTool, is_graphic_selected, state,
+    stroke_px_at_zoom,
+};
 use iced::Size;
 use iced::widget::canvas;
 
@@ -18,7 +26,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         // Resize handles for placed graphics — visible in the Select tool
         // only for the currently-selected graphic(s) so the canvas isn't

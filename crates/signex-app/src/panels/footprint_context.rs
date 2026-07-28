@@ -1,3 +1,9 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint-editor panel context and its summary view-models.
 
 /// Context handed to the Properties panel when a `.snxfpt` editor
@@ -22,8 +28,8 @@ pub struct FootprintEditorPanelContext {
     pub sketch_entity_count: usize,
     /// Number of sketch constraints when a sketch is present.
     pub sketch_constraint_count: usize,
-    /// Number of free DoF the most recent solve reported, plus
-    /// elapsed_ms. `None` if no solve has run yet.
+    /// Number of free `DoF` the most recent solve reported, plus
+    /// `elapsed_ms`. `None` if no solve has run yet.
     pub last_solve: Option<FootprintSolveSummary>,
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
@@ -66,7 +72,7 @@ pub struct FootprintEditorPanelContext {
     /// Drives the Properties panel's "Solve warnings" section.
     pub solve_warnings: Vec<String>,
     /// v0.16.2 — sketch-entity ID of the primary selection. Wired
-    /// through so the Properties panel's Role pick_list can emit
+    /// through so the Properties panel's Role `pick_list` can emit
     /// `FootprintSketchSetRole` with the right id.
     pub selected_sketch_entity_id: Option<signex_sketch::id::SketchEntityId>,
     /// v0.16.2 — current role of the primary selected sketch entity
@@ -75,11 +81,11 @@ pub struct FootprintEditorPanelContext {
     pub selected_sketch_role: crate::library::messages::RoleTag,
     /// v0.16.2 — `true` when the primary selected sketch entity is a
     /// Point. Drives the "Pad role applies to Points only" hint on
-    /// the Role pick_list.
+    /// the Role `pick_list`.
     pub selected_sketch_is_point: bool,
     /// v0.16.3 — `true` when the Pads-mode tool is `PlacePad`. Drives
     /// visibility of the "Pad placement defaults" form on the
-    /// Properties panel (designator override + size_x / size_y / side).
+    /// Properties panel (designator override + `size_x` / `size_y` / side).
     pub placement_active: bool,
     /// v0.16.3 — `true` when TAB has paused click-publish during pad
     /// placement. Adds a "PAUSED — TAB to resume" hint to the form.
@@ -87,9 +93,9 @@ pub struct FootprintEditorPanelContext {
     /// v0.16.3 — designator override for the next placed pad. `None`
     /// = use the auto-incrementing numeric designator.
     pub next_pad_designator_override: Option<String>,
-    /// v0.16.3 — size_x of the next placed pad in mm.
+    /// v0.16.3 — `size_x` of the next placed pad in mm.
     pub next_pad_size_x_mm: f64,
-    /// v0.16.3 — size_y of the next placed pad in mm.
+    /// v0.16.3 — `size_y` of the next placed pad in mm.
     pub next_pad_size_y_mm: f64,
     /// v0.16.3 — copper side for the next placed pad.
     pub next_pad_side: crate::library::editor::footprint::state::PadSide,
@@ -111,7 +117,7 @@ pub struct FootprintEditorPanelContext {
     pub next_pad_drill_diameter_mm: Option<f64>,
     /// v0.20 — drill slot length for the next placed pad in mm.
     /// `None` = round drill; `Some(l)` = oval slot of length l.
-    /// Drives the HOLE → Shape pick_list (Round vs Slot) and the
+    /// Drives the HOLE → Shape `pick_list` (Round vs Slot) and the
     /// Slot length input visibility.
     pub next_pad_drill_slot_length_mm: Option<f64>,
     /// v0.20 — pad-template name for the next placed pad. Empty =
@@ -204,7 +210,7 @@ pub struct FootprintEditorPanelContext {
     /// selected pad. Empty when the pad has no `shape_params` bindings
     /// (e.g. legacy pads minted before v0.24, or pads whose shape has
     /// no parametric handles like Rect / Oval). One entry per
-    /// (feature_key → parameter) binding; the Properties panel
+    /// (`feature_key` → parameter) binding; the Properties panel
     /// renders one editable row per entry so the user can edit the
     /// shared sketch parameter without entering Sketch mode.
     pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
@@ -251,7 +257,7 @@ pub struct KeepoutSummary {
     pub no_pours: bool,
 }
 
-/// v0.16.4 — BoardCutout role properties surfaced on the Properties panel.
+/// v0.16.4 — `BoardCutout` role properties surfaced on the Properties panel.
 #[derive(Debug, Clone)]
 pub struct CutoutSummary {
     pub edge_radius_expr: Option<String>,
@@ -271,7 +277,7 @@ pub struct ArraySummary {
     /// sketch click on a Point sets `array.center`.
     pub repicking_polar_center: bool,
     /// v0.25 polish — when `numbering == BgaRowCol`, this carries the
-    /// BGA-specific config (skip_letters / start_row / start_col) so
+    /// BGA-specific config (`skip_letters` / `start_row` / `start_col`) so
     /// the Properties panel can surface editable rows for each. `None`
     /// for Linear / Explicit numbering schemes.
     pub bga_config: Option<BgaConfigSummary>,
@@ -332,10 +338,11 @@ pub enum ArrayKindSummary {
     },
 }
 
-/// v0.23 — Numbering scheme kind for the Properties panel pick_list.
+/// v0.23 — Numbering scheme kind for the Properties panel `pick_list`.
+///
 /// Mirrors [`signex_sketch::array::NumberingScheme`]'s tag. The handler
 /// preserves the inner expression fields when flipping kinds where
-/// possible (e.g. switching to LinearIncrement keeps any prior
+/// possible (e.g. switching to `LinearIncrement` keeps any prior
 /// start/step expressions; switching to Explicit clears them).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumberingSchemeKindUi {
@@ -359,6 +366,7 @@ impl std::fmt::Display for NumberingSchemeKindUi {
 }
 
 /// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`].
+///
 /// Each variant maps to a single text-input on one [`ArrayKindSummary`]
 /// branch; the handler uses the variant to disambiguate the target
 /// field when mutating the array in place.
@@ -481,7 +489,7 @@ pub struct OverConstraintSummary {
     /// other over-constraints) dims. Drives per-row hover precision
     /// in the Properties panel "Conflicts" list.
     pub constraint_id: signex_sketch::id::ConstraintId,
-    /// Kind label — "Coincident", "DistancePtPt", "Horizontal", etc.
+    /// Kind label — "Coincident", "`DistancePtPt`", "Horizontal", etc.
     /// Static string avoids allocating per-row.
     pub kind_label: &'static str,
     /// Post-solve residual magnitude. The LM iteration drives this

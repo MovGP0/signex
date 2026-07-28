@@ -1,10 +1,15 @@
+#![expect(
+    clippy::unnecessary_map_or,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Remove-from-project / delete-file flow for the project-navigation dock.
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::{Message, Signex};
 
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
@@ -86,7 +91,7 @@ impl Signex {
             .target_path
             .file_name()
             .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             && let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
@@ -118,8 +123,7 @@ impl Signex {
                     .path
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .map(|n| n != filename)
-                    .unwrap_or(true)
+                    .map_or(true, |n| n != filename)
             });
             if loaded.data.libraries.len() != lib_before {
                 mutated = true;
@@ -133,8 +137,7 @@ impl Signex {
                 spec.lib_path
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .map(|n| n != filename)
-                    .unwrap_or(true)
+                    .map_or(true, |n| n != filename)
             });
             if loaded.pending_libraries.len() != pending_before {
                 mutated = true;

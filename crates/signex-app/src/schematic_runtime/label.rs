@@ -1,4 +1,12 @@
-use super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::{
+    Color, DirtyFlags, HAlign, HashMap, Label, LabelType, OverlayInputs, RendererSnapshot,
+    ResolvedTheme, ScreenTransform, TextInput, VAlign, canvas, draw_renderer_snapshot, to_rgba,
+};
 
 pub fn draw_label_preview(
     frame: &mut canvas::Frame,

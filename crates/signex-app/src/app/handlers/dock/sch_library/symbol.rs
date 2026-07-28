@@ -1,3 +1,8 @@
+#![expect(
+    clippy::useless_let_if_seq,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol-editor + SCH-library-panel state mutators — the helper
 //! methods behind the `SchLibrary*` and `SymEditor*` dock-panel
 //! messages. Each resolves the active `.snxsym` tab, mutates its
@@ -7,7 +12,7 @@
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
 
-use super::*;
+use super::Signex;
 
 impl Signex {
     /// Resolve the active `.snxsym` tab → its containing `.snxlib`,

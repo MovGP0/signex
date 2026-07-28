@@ -1,3 +1,12 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::manual_let_else,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser tab handlers — opening the browser, adding /
 //! deleting / editing component rows, inline cell commits, and
 //! opening a Component Preview row from the browser.
@@ -13,7 +22,10 @@ mod classes;
 mod grid;
 mod tables;
 
-use super::*;
+use super::{
+    BrowserEditMsg, ComponentPreviewState, DeleteConfirmState, EditRowModalState, EditorAddress,
+    LibraryMessage, Message, PrimitiveKind, PrimitivePickerTarget, RowId, Signex, Task, commands,
+};
 
 impl Signex {
     /// Open `.snxlib` at `path` as a Library Browser tab. Mounts the
@@ -88,8 +100,7 @@ impl Signex {
         let title = path
             .file_stem()
             .and_then(|s| s.to_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| path.display().to_string());
+            .map_or_else(|| path.display().to_string(), str::to_string);
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
         self.park_active_schematic_session();
@@ -127,21 +138,20 @@ impl Signex {
         library_path: std::path::PathBuf,
         table: Option<String>,
     ) -> Task<Message> {
-        let library_idx = match self
+        let library_idx = if let Some(idx) = self
             .library
             .open_libraries
             .iter()
             .position(|lib| lib.root == library_path)
         {
-            Some(idx) => idx,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    "browser: Add Component — library not mounted"
-                );
-                return Task::none();
-            }
+            idx
+        } else {
+            tracing::warn!(
+                target: "signex::library",
+                library = %library_path.display(),
+                "browser: Add Component — library not mounted"
+            );
+            return Task::none();
         };
 
         // Resolve target table — explicit arg wins, else fall back to
@@ -149,15 +159,16 @@ impl Signex {
         let generic = signex_library::ComponentClass::generic();
         let resolved_table = match table {
             Some(t) if !t.trim().is_empty() => t,
-            _ => match self
-                .library
-                .open_libraries
-                .get(library_idx)
-                .and_then(|lib| self.library.set.get(lib.library_id))
-                .map(|adapter| adapter.manifest().table_for_class(generic.as_str()))
-            {
-                Some(t) => t,
-                None => {
+            _ => {
+                if let Some(t) = self
+                    .library
+                    .open_libraries
+                    .get(library_idx)
+                    .and_then(|lib| self.library.set.get(lib.library_id))
+                    .map(|adapter| adapter.manifest().table_for_class(generic.as_str()))
+                {
+                    t
+                } else {
                     tracing::warn!(
                         target: "signex::library",
                         library = %library_path.display(),
@@ -165,7 +176,7 @@ impl Signex {
                     );
                     return Task::none();
                 }
-            },
+            }
         };
 
         // F19 (2026-05-03 library polish, "we had a talk about basic
@@ -243,8 +254,10 @@ impl Signex {
             .library_at(&library_path)
             .and_then(|lib| lib.tables.get(&table))
             .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
-            .map(|r| r.internal_pn.as_str().to_string())
-            .unwrap_or_else(|| format!("row {row_id}"));
+            .map_or_else(
+                || format!("row {row_id}"),
+                |r| r.internal_pn.as_str().to_string(),
+            );
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.delete_confirm = Some(DeleteConfirmState {
                 table,
@@ -263,30 +276,28 @@ impl Signex {
         table: String,
         row_id: RowId,
     ) -> Task<Message> {
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    "browser delete: library not mounted"
-                );
-                return Task::none();
-            }
+        let library_id = if let Some(lib) = self.library.library_at(&library_path) {
+            lib.library_id
+        } else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %library_path.display(),
+                "browser delete: library not mounted"
+            );
+            return Task::none();
         };
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    "browser delete: adapter not present in set"
-                );
-                return Task::none();
-            }
+        let adapter = if let Some(a) = self.library.set.get(library_id) {
+            a
+        } else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %library_path.display(),
+                "browser delete: adapter not present in set"
+            );
+            return Task::none();
         };
         match adapter.delete_row(&table, row_id, "delete row") {
-            Ok(_) => {
+            Ok(()) => {
                 tracing::info!(
                     target: "signex::library",
                     path = %library_path.display(),
@@ -418,16 +429,13 @@ impl Signex {
                     if let Some((value, unit)) = modal.param_buf.get(&key).cloned() {
                         let pv = if !unit.trim().is_empty() {
                             // Try parse as f64 first, otherwise store as text.
-                            value
-                                .parse::<f64>()
-                                .ok()
-                                .map(|n| signex_library::ParamValue::Measurement {
+                            value.parse::<f64>().ok().map_or_else(
+                                || signex_library::ParamValue::Text(format!("{value} {unit}")),
+                                |n| signex_library::ParamValue::Measurement {
                                     value: n,
                                     unit: unit.clone(),
-                                })
-                                .unwrap_or_else(|| {
-                                    signex_library::ParamValue::Text(format!("{value} {unit}"))
-                                })
+                                },
+                            )
                         } else if let Ok(n) = value.parse::<f64>() {
                             signex_library::ParamValue::Number(n)
                         } else if value.eq_ignore_ascii_case("true") {
@@ -530,7 +538,7 @@ impl Signex {
                 )),
             };
             match result {
-                Ok(_) => {
+                Ok(()) => {
                     if let Err(e) = self.library.refresh_components(&address.library_path) {
                         tracing::warn!(
                             target: "signex::library",
@@ -576,24 +584,23 @@ impl Signex {
             None => return Task::none(),
         };
         // Read the current row from the cache, mutate, re-hash, save.
-        let mut row = match self
+        let mut row = if let Some(r) = self
             .library
             .library_at(&library_path)
             .and_then(|lib| lib.tables.get(&table))
             .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == row_id))
             .cloned()
         {
-            Some(r) => r,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    table = %table,
-                    row = %row_id,
-                    "browser cell commit: row not found in cache"
-                );
-                return Task::none();
-            }
+            r
+        } else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %library_path.display(),
+                table = %table,
+                row = %row_id,
+                "browser cell commit: row not found in cache"
+            );
+            return Task::none();
         };
         match column.as_str() {
             "internal_pn" => {
@@ -717,16 +724,15 @@ impl Signex {
         // Pre-load the row from the adapter via `read_row`; if it
         // fails we surface and bail without leaving an empty tab
         // behind.
-        let library_id = match self.library.library_at(&library_path) {
-            Some(lib) => lib.library_id,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %library_path.display(),
-                    "open component row: library not open"
-                );
-                return Task::none();
-            }
+        let library_id = if let Some(lib) = self.library.library_at(&library_path) {
+            lib.library_id
+        } else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %library_path.display(),
+                "open component row: library not open"
+            );
+            return Task::none();
         };
         let row_result = self
             .library
@@ -749,7 +755,7 @@ impl Signex {
             .document_state
             .project_for_path(&synthetic_path)
             .map(|p| p.id);
-        let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
+        let preview = ComponentPreviewState::from_row(library_path, table, row);
         self.library.editors.insert(address.clone(), preview);
         self.park_active_schematic_session();
         self.document_state.tabs.push(crate::app::TabInfo {

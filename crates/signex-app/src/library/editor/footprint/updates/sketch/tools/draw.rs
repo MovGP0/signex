@@ -1,3 +1,13 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::match_same_arms,
+    clippy::similar_names,
+    clippy::suboptimal_flops,
+    clippy::too_many_lines,
+    clippy::type_complexity,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch tools — drawing tools (carved from `sketch_tools::apply`, ADR-0001 D2).
 //!
 //! Tool-branch bodies moved verbatim; the preamble locals they read
@@ -70,7 +80,7 @@ pub(super) fn apply(
                     {
                         let dx = x1 - x0;
                         let dy = y1 - y0;
-                        let len_sq = dx * dx + dy * dy;
+                        let len_sq = dy.mul_add(dy, dx * dx);
                         if len_sq > 1e-12 {
                             let len = len_sq.sqrt();
                             let sin_abs = (dy / len).abs();
@@ -142,7 +152,7 @@ pub(super) fn apply(
                             _ => None,
                         }),
                 ) {
-                    ((e_pt.0 - c_pt.0).powi(2) + (e_pt.1 - c_pt.1).powi(2)).sqrt()
+                    (e_pt.0 - c_pt.0).hypot(e_pt.1 - c_pt.1)
                 } else {
                     1.0
                 };
@@ -578,12 +588,11 @@ pub(super) fn apply(
                         (f64, f64),
                         Option<(SketchEntityId, (f64, f64))>,
                     ) = {
-                        let sketch_ref = match editor.primitive().sketch.as_ref() {
-                            Some(s) => s,
-                            None => {
-                                editor.state.tool_pending = ToolPending::Idle;
-                                return;
-                            }
+                        let sketch_ref = if let Some(s) = editor.primitive().sketch.as_ref() {
+                            s
+                        } else {
+                            editor.state.tool_pending = ToolPending::Idle;
+                            return;
                         };
                         let pos_of =
                             |id: SketchEntityId| -> Option<(f64, f64)> {
@@ -594,19 +603,17 @@ pub(super) fn apply(
                                     },
                                 )
                             };
-                        let first_p = match pos_of(first) {
-                            Some(p) => p,
-                            None => {
-                                editor.state.tool_pending = ToolPending::Idle;
-                                return;
-                            }
+                        let first_p = if let Some(p) = pos_of(first) {
+                            p
+                        } else {
+                            editor.state.tool_pending = ToolPending::Idle;
+                            return;
                         };
-                        let end_p = match pos_of(ctx.resolved_id) {
-                            Some(p) => p,
-                            None => {
-                                editor.state.tool_pending = ToolPending::Idle;
-                                return;
-                            }
+                        let end_p = if let Some(p) = pos_of(ctx.resolved_id) {
+                            p
+                        } else {
+                            editor.state.tool_pending = ToolPending::Idle;
+                            return;
                         };
                         // Find a Line whose end matches `first`.
                         // Prefer the most recently authored one
@@ -644,71 +651,69 @@ pub(super) fn apply(
                     // the chord's perpendicular bisector
                     // midpoint shifted by half-chord —
                     // produces a 90° arc as a sane default.
-                    let (cx, cy) = match incident_line {
-                        Some((_, line_other_pos)) => {
-                            // Line direction (line_other -> first)
-                            let lx = first_pos.0 - line_other_pos.0;
-                            let ly = first_pos.1 - line_other_pos.1;
-                            let llen_sq = lx * lx + ly * ly;
-                            if llen_sq <= 1e-12 {
-                                // Degenerate; treat as no line.
-                                let mx = (first_pos.0 + end_pos.0) * 0.5;
-                                let my = (first_pos.1 + end_pos.1) * 0.5;
-                                let dx = end_pos.0 - first_pos.0;
-                                let dy = end_pos.1 - first_pos.1;
-                                // Rotate 90° CCW for placeholder.
-                                (mx + (-dy) * 0.5, my + dx * 0.5)
-                            } else {
-                                // Perpendicular to the line at first.
-                                let llen = llen_sq.sqrt();
-                                let nx = -ly / llen;
-                                let ny = lx / llen;
-                                // Centre is on the line through `first`
-                                // along (nx, ny). Solve for the t such
-                                // that |centre - end| = |centre - first|:
-                                //   (first.x + t*nx - end.x)^2
-                                //   + (first.y + t*ny - end.y)^2 = t^2
-                                // Expanding:
-                                //   |first - end|^2
-                                //   + 2*t*((first.x - end.x)*nx + (first.y - end.y)*ny)
-                                //   = 0
-                                // → t = -|first - end|^2 /
-                                //       (2 * ((first - end) · n))
-                                let dx = first_pos.0 - end_pos.0;
-                                let dy = first_pos.1 - end_pos.1;
-                                let denom = 2.0 * (dx * nx + dy * ny);
-                                let chord_sq = dx * dx + dy * dy;
-                                if denom.abs() <= 1e-9 {
-                                    // end is on the line — tangent
-                                    // circle is undefined (would be
-                                    // infinite radius / a straight
-                                    // line). Fall back to the chord
-                                    // midpoint perpendicular.
-                                    let mx = (first_pos.0 + end_pos.0) * 0.5;
-                                    let my = (first_pos.1 + end_pos.1) * 0.5;
-                                    (mx + nx * 0.5, my + ny * 0.5)
-                                } else {
-                                    let t = -chord_sq / denom;
-                                    (first_pos.0 + t * nx, first_pos.1 + t * ny)
-                                }
-                            }
-                        }
-                        None => {
-                            // Placeholder centre — perpendicular
-                            // to the chord at the midpoint, half
-                            // chord length out (gives a 90°
-                            // arc). The user will typically
-                            // re-constrain manually.
-                            editor.state.solve_warnings.push(
-                                "Tangent Arc: no incident line found, placeholder centre".into(),
-                            );
+                    let (cx, cy) = if let Some((_, line_other_pos)) = incident_line {
+                        // Line direction (line_other -> first)
+                        let lx = first_pos.0 - line_other_pos.0;
+                        let ly = first_pos.1 - line_other_pos.1;
+                        let llen_sq = lx * lx + ly * ly;
+                        if llen_sq <= 1e-12 {
+                            // Degenerate; treat as no line.
                             let mx = (first_pos.0 + end_pos.0) * 0.5;
                             let my = (first_pos.1 + end_pos.1) * 0.5;
                             let dx = end_pos.0 - first_pos.0;
                             let dy = end_pos.1 - first_pos.1;
-                            // Rotate 90° CCW.
+                            // Rotate 90° CCW for placeholder.
                             (mx + (-dy) * 0.5, my + dx * 0.5)
+                        } else {
+                            // Perpendicular to the line at first.
+                            let llen = llen_sq.sqrt();
+                            let nx = -ly / llen;
+                            let ny = lx / llen;
+                            // Centre is on the line through `first`
+                            // along (nx, ny). Solve for the t such
+                            // that |centre - end| = |centre - first|:
+                            //   (first.x + t*nx - end.x)^2
+                            //   + (first.y + t*ny - end.y)^2 = t^2
+                            // Expanding:
+                            //   |first - end|^2
+                            //   + 2*t*((first.x - end.x)*nx + (first.y - end.y)*ny)
+                            //   = 0
+                            // → t = -|first - end|^2 /
+                            //       (2 * ((first - end) · n))
+                            let dx = first_pos.0 - end_pos.0;
+                            let dy = first_pos.1 - end_pos.1;
+                            let denom = 2.0 * (dx * nx + dy * ny);
+                            let chord_sq = dx * dx + dy * dy;
+                            if denom.abs() <= 1e-9 {
+                                // end is on the line — tangent
+                                // circle is undefined (would be
+                                // infinite radius / a straight
+                                // line). Fall back to the chord
+                                // midpoint perpendicular.
+                                let mx = (first_pos.0 + end_pos.0) * 0.5;
+                                let my = (first_pos.1 + end_pos.1) * 0.5;
+                                (mx + nx * 0.5, my + ny * 0.5)
+                            } else {
+                                let t = -chord_sq / denom;
+                                (first_pos.0 + t * nx, first_pos.1 + t * ny)
+                            }
                         }
+                    } else {
+                        // Placeholder centre — perpendicular
+                        // to the chord at the midpoint, half
+                        // chord length out (gives a 90°
+                        // arc). The user will typically
+                        // re-constrain manually.
+                        editor
+                            .state
+                            .solve_warnings
+                            .push("Tangent Arc: no incident line found, placeholder centre".into());
+                        let mx = (first_pos.0 + end_pos.0) * 0.5;
+                        let my = (first_pos.1 + end_pos.1) * 0.5;
+                        let dx = end_pos.0 - first_pos.0;
+                        let dy = end_pos.1 - first_pos.1;
+                        // Rotate 90° CCW.
+                        (mx + (-dy) * 0.5, my + dx * 0.5)
                     };
 
                     // Mint the centre Point.
@@ -743,7 +748,7 @@ pub(super) fn apply(
                             // Cross > 0 → end is to the left of
                             // the incoming line direction → CCW
                             // arc opens left.
-                            lx * ey - ly * ex >= 0.0
+                            ly.mul_add(-ex, lx * ey) >= 0.0
                         }
                         None => true,
                     };

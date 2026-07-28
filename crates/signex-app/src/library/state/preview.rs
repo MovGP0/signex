@@ -1,6 +1,14 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Component-preview, picker, and misc library-modal state types.
 
-use super::*;
+use super::{
+    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, EditorAddress, Footprint,
+    HashMap, PathBuf, PrimitiveRef, SimModel, Symbol,
+};
 
 /// Picker modal state.
 #[derive(Debug, Clone, Default)]
@@ -35,7 +43,7 @@ pub struct NewComponentState {
     /// — validation happens at submit time.
     pub category: String,
     /// Optional symbol primitive binding picked at modal time.
-    /// `None` = leave the row's symbol_ref as the nil sentinel; the
+    /// `None` = leave the row's `symbol_ref` as the nil sentinel; the
     /// user can bind later via the Component Preview's Pick Symbol.
     pub symbol_ref: Option<PrimitiveRef>,
     /// Optional footprint primitive binding picked at modal time.
@@ -110,21 +118,22 @@ pub enum PreviewTab {
 }
 
 impl PreviewTab {
-    pub const ORDER: &'static [PreviewTab] = &[
-        PreviewTab::Preview,
-        PreviewTab::Parameters,
-        PreviewTab::Supply,
-        PreviewTab::Datasheet,
-        PreviewTab::Simulation,
+    pub const ORDER: &'static [Self] = &[
+        Self::Preview,
+        Self::Parameters,
+        Self::Supply,
+        Self::Datasheet,
+        Self::Simulation,
     ];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PreviewTab::Preview => "Preview",
-            PreviewTab::Parameters => "Parameters",
-            PreviewTab::Supply => "Supply",
-            PreviewTab::Datasheet => "Datasheet",
-            PreviewTab::Simulation => "Simulation",
+            Self::Preview => "Preview",
+            Self::Parameters => "Parameters",
+            Self::Supply => "Supply",
+            Self::Datasheet => "Datasheet",
+            Self::Simulation => "Simulation",
         }
     }
 }
@@ -146,7 +155,7 @@ pub struct PinMapInlineState {
 /// Component Preview tab state — one per open row.
 ///
 /// Per `v0.9-refactor-2-plan.md` §11: a row is the unit of storage
-/// (DBLib model). The preview surface is read-only for Symbol/Footprint;
+/// (`DBLib` model). The preview surface is read-only for Symbol/Footprint;
 /// the form-shaped tabs (Parameters / Supply / Datasheet / Simulation)
 /// edit `row` in-place and persist via `adapter.update_row(table, row, msg)`.
 #[derive(Debug)]
@@ -154,7 +163,7 @@ pub struct ComponentPreviewState {
     /// Library this row lives in (absolute `*.snxlib/` directory).
     pub library_path: PathBuf,
     /// Table the row lives in (filename stem; `tables/<table>.tsv` for
-    /// LocalGit, `component_rows.table_name = ?` for Database).
+    /// `LocalGit`, `component_rows.table_name = ?` for Database).
     pub table: String,
     /// Mutable working copy of the row. `Save` calls
     /// `adapter.update_row(&table, &row, "edit message")`.
@@ -167,7 +176,7 @@ pub struct ComponentPreviewState {
     /// Resolved Footprint — `None` when no footprint is bound or the
     /// ref is missing.
     pub footprint: Option<Footprint>,
-    /// Resolved SimModel — `None` when the Simulation tab hasn't been
+    /// Resolved `SimModel` — `None` when the Simulation tab hasn't been
     /// visited yet or no sim is bound.
     pub sim: Option<SimModel>,
 
@@ -188,7 +197,7 @@ pub struct ComponentPreviewState {
     pub params_edit_buf: HashMap<String, String>,
 
     /// Inline pin-map editor state for the Preview tab's pin-map
-    /// subsection. Holds expanded_row + override_buf only; the
+    /// subsection. Holds `expanded_row` + `override_buf` only; the
     /// canonical pin/pad bindings live on `row.pin_map_overrides`.
     pub pin_map_state: PinMapInlineState,
 
@@ -199,6 +208,7 @@ pub struct ComponentPreviewState {
 
 impl ComponentPreviewState {
     /// Build a preview state from a freshly-loaded row.
+    #[must_use]
     pub fn from_row(library_path: PathBuf, table: String, row: ComponentRow) -> Self {
         Self {
             library_path,
@@ -216,19 +226,19 @@ impl ComponentPreviewState {
     }
 
     #[allow(dead_code)]
-    pub fn mark_dirty(&mut self) {
+    pub const fn mark_dirty(&mut self) {
         self.dirty = true;
     }
 
     #[allow(dead_code)]
-    pub fn clear_dirty(&mut self) {
+    pub const fn clear_dirty(&mut self) {
         self.dirty = false;
     }
 }
 
 /// Backwards-compatible alias — other slices still refer to
 /// `ComponentEditorState` while their own retarget passes land. Once
-/// every consumer (panel / documents / new_component / commands /
+/// every consumer (panel / documents / `new_component` / commands /
 /// dispatch) is on `ComponentPreviewState`, this alias goes away.
 #[allow(dead_code)]
 pub type ComponentEditorState = ComponentPreviewState;

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 //! Wiremock-backed validation for the Mouser test flow.
 //!
 //! The signex-app handler runs `MouserAdapter::lookup_by_mpn(SENTINEL)`

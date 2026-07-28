@@ -1,3 +1,11 @@
+#![expect(
+    clippy::doc_lazy_continuation,
+    clippy::manual_let_else,
+    clippy::needless_collect,
+    clippy::too_many_lines,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Parametric pad-shape mirror into sketch entities (round, round-rect, oval, chamfered pads).
 
 use signex_app::app::{Message, Signex};

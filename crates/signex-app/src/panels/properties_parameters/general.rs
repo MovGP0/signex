@@ -1,3 +1,9 @@
+#![expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Properties panel views — Custom Selection Filters section, the
 //! General + Page Options tab (`view_properties_general`), and the
 //! document-parameter table (`view_properties_parameters`) — plus the
@@ -5,23 +11,29 @@
 //! Moved verbatim from the former single-file `properties_parameters`
 //! module.
 
-use super::super::*;
+use super::super::{
+    Background, Border, CollapsedSections, Color, Column, Element, Length, PAPER_SIZES,
+    PageFormatMode, PageOrigin, PanelContext, PanelMsg, SheetColor, Theme, Unit, Wrap,
+    canvas_font_popup, collapsible_section, container, form_check_row_shortcut, form_font_link_row,
+    form_grid_row, form_int_edit_row, form_label, form_mm_edit_row, form_pick_row,
+    paper_dimensions, row, section_hdr, text, thin_sep,
+};
 use iced::widget::column;
 
 /// Custom Selection Filters collapsible section — tabbed editor for up to
 /// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
 /// `view_properties_general` so the schematic Properties panel and the
 /// Footprint editor's Properties panel render the EXACT same widget.
-pub fn view_custom_selection_filters_section<'a>(
+pub fn view_custom_selection_filters_section(
     presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
-    collapsed_sections: &'a CollapsedSections,
+    collapsed_sections: &CollapsedSections,
     muted: Color,
     primary: Color,
     border_c: Color,
     accent_c: Color,
     tag_hover: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<'_, PanelMsg> {
     use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
     let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
     let muted_c = muted;

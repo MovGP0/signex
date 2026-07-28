@@ -1,10 +1,16 @@
+#![expect(
+    clippy::or_fun_call,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library settings dispatcher — distributor / API credential
-//! settings (`SettingsMsg`), including DigiKey OAuth and persistence.
+//! settings (`SettingsMsg`), including `DigiKey` OAuth and persistence.
 //!
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{LibraryMessage, Message, SettingsMsg, Signex, Task};
 
 impl Signex {
     pub(super) fn handle_library_settings_message(&mut self, msg: SettingsMsg) -> Task<Message> {

@@ -17,6 +17,7 @@ pub fn apply_preset(state: &mut FootprintEditorState, preset: &FootprintFilterPr
 
 /// Snapshot the editor's currently-enabled filter kinds into a new
 /// named preset, ready to be appended to the persisted list.
+#[must_use]
 pub fn capture_preset(state: &FootprintEditorState, name: String) -> FootprintFilterPreset {
     FootprintFilterPreset {
         name,

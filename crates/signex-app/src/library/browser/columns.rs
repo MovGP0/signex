@@ -1,3 +1,8 @@
+#![expect(
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser — grid column model + derivation.
 //!
 //! The `GridColumn` / `ColumnKind` types, the numeric-aware cell
@@ -6,7 +11,7 @@
 //! search-filter predicate. Extracted verbatim from the former
 //! single-file `browser` module.
 
-use super::*;
+use super::{BTreeMap, ComponentRow, LifecycleState, MAX_PARAM_COLUMNS};
 
 pub(super) struct GridColumn {
     pub(super) label: String,
@@ -51,14 +56,14 @@ impl ColumnKind {
     /// and to the [`super::super::state::BrowserSort`] state.
     pub(super) fn sort_key(&self) -> String {
         match self {
-            ColumnKind::InternalPn => "internal_pn".to_string(),
-            ColumnKind::Manufacturer => "manufacturer".to_string(),
-            ColumnKind::Mpn => "mpn".to_string(),
-            ColumnKind::Rev => "version".to_string(),
-            ColumnKind::Symbol => "symbol_ref".to_string(),
-            ColumnKind::Footprint => "footprint_ref".to_string(),
-            ColumnKind::Tags => "parameters.tags".to_string(),
-            ColumnKind::Parameter(key) => format!("parameters.{key}"),
+            Self::InternalPn => "internal_pn".to_string(),
+            Self::Manufacturer => "manufacturer".to_string(),
+            Self::Mpn => "mpn".to_string(),
+            Self::Rev => "version".to_string(),
+            Self::Symbol => "symbol_ref".to_string(),
+            Self::Footprint => "footprint_ref".to_string(),
+            Self::Tags => "parameters.tags".to_string(),
+            Self::Parameter(key) => format!("parameters.{key}"),
         }
     }
 
@@ -69,11 +74,11 @@ impl ColumnKind {
     /// released and unreleased rows still sort by version order).
     pub(super) fn cell_value(&self, r: &ComponentRow) -> String {
         match self {
-            ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
-            ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
-            ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
-            ColumnKind::Rev => r.version.clone(),
-            ColumnKind::Symbol => {
+            Self::InternalPn => r.internal_pn.as_str().to_string(),
+            Self::Manufacturer => r.primary_mpn.manufacturer.clone(),
+            Self::Mpn => r.primary_mpn.mpn.clone(),
+            Self::Rev => r.version.clone(),
+            Self::Symbol => {
                 if r.symbol_ref.uuid == uuid::Uuid::nil() {
                     "—".to_string()
                 } else {
@@ -83,17 +88,17 @@ impl ColumnKind {
                     format!("• {:.8}", r.symbol_ref.uuid)
                 }
             }
-            ColumnKind::Footprint => match &r.footprint_ref {
+            Self::Footprint => match &r.footprint_ref {
                 Some(fp) if fp.uuid != uuid::Uuid::nil() => {
                     format!("• {:.8}", fp.uuid)
                 }
                 _ => "—".to_string(),
             },
-            ColumnKind::Tags => match r.parameters.get("tags") {
+            Self::Tags => match r.parameters.get("tags") {
                 Some(v) => v.display(),
                 None => String::new(),
             },
-            ColumnKind::Parameter(key) => match r.parameters.get(key) {
+            Self::Parameter(key) => match r.parameters.get(key) {
                 Some(v) => v.display(),
                 None => String::new(),
             },
@@ -191,10 +196,10 @@ pub(super) fn derive_columns(
     // classes.
     let mut classes: std::collections::BTreeSet<String> =
         rows.iter().map(|r| r.class.as_str().to_string()).collect();
-    if classes.is_empty() {
-        if let Some(stem) = table_name.strip_suffix('s') {
-            classes.insert(stem.to_string());
-        }
+    if classes.is_empty()
+        && let Some(stem) = table_name.strip_suffix('s')
+    {
+        classes.insert(stem.to_string());
     }
     for class in &classes {
         if let Some(tmpl) = registry.resolve(library_id, class) {
@@ -268,13 +273,13 @@ pub(super) fn derive_columns(
 /// Per-lifecycle indicator dot colour. Matches plan §6:
 ///
 /// * Released → green;
-/// * Draft / InReview → neutral grey ("active, but not preferred");
+/// * Draft / `InReview` → neutral grey ("active, but not preferred");
 /// * Deprecated → amber/yellow;
 /// * Obsolete → muted dark grey.
 ///
 /// Centralised here so both the dot and any future lifecycle badge
 /// in the side preview pane can pull the same colour.
-pub(super) fn lifecycle_dot_color(state: LifecycleState) -> iced::Color {
+pub(super) const fn lifecycle_dot_color(state: LifecycleState) -> iced::Color {
     match state {
         LifecycleState::Released => iced::Color::from_rgb(0.30, 0.78, 0.40),
         LifecycleState::InReview => iced::Color::from_rgb(0.50, 0.65, 0.95),

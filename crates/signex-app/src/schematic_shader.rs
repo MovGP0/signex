@@ -1,3 +1,11 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! GPU render path for the schematic canvas (issue #169 PR 2).
 //!
 //! CLEAN ROOM DECLARATION
@@ -155,7 +163,8 @@ pub struct SchematicShaderProgram {
 
 impl SchematicShaderProgram {
     /// Build from an already-tessellated `Scene` and the current transform.
-    pub fn new(scene: Scene, transform: &ScreenTransform) -> Self {
+    #[must_use]
+    pub const fn new(scene: Scene, transform: &ScreenTransform) -> Self {
         Self {
             scene,
             offset_px: [transform.offset_x, transform.offset_y],

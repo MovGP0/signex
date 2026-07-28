@@ -1,3 +1,9 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad-stack table cells + the per-pad copper row.
 //!
 //! These helpers render the pad-properties table chrome (header, body
@@ -15,7 +21,7 @@ use super::form::{
 use super::stack_preview::PadShapeChoice;
 
 /// v0.20 — Altium-style table header row. Renders the column titles
-/// in muted small text with the same FillPortion layout the data
+/// in muted small text with the same `FillPortion` layout the data
 /// rows use, so columns line up vertically. First cell is the
 /// section family name (COPPER / HOLE / PASTE / SOLDER).
 pub(super) fn pad_table_header<'a>(
@@ -82,7 +88,7 @@ pub(super) fn pad_table_row<'a>(
     container(row).padding([3, 8]).width(Length::Fill).into()
 }
 
-/// v0.20 — text_input cell with the same chrome as `pad_input_row`'s
+/// v0.20 — `text_input` cell with the same chrome as `pad_input_row`'s
 /// input but no leading label — meant for table data rows.
 pub(super) fn pad_table_input_cell<'a>(
     value: String,
@@ -111,7 +117,7 @@ pub(super) fn pad_table_input_cell<'a>(
         .into()
 }
 
-/// v0.20 — pick_list cell for table data rows.
+/// v0.20 — `pick_list` cell for table data rows.
 pub(super) fn pad_table_picklist_cell<'a, T>(
     options: &'a [T],
     selected: T,
@@ -183,7 +189,7 @@ pub(super) fn pad_table_static_cell<'a>(
 
 /// v0.20 — single COPPER table row. Built inline because all four
 /// data cells (X-Size, Y-Size, Shape, Relief) reference different
-/// fields on PadFormValues + different message constructors.
+/// fields on `PadFormValues` + different message constructors.
 pub(super) fn pad_copper_row<'a>(
     label: &'a str,
     values: &PadFormValues,
@@ -240,9 +246,9 @@ pub(super) fn pad_copper_row<'a>(
     } else {
         // Mid / Bottom rows mirror Top — no per-layer overrides yet.
         vec![
-            pad_table_disabled_cell(&format!("{:.3}", values.size_x_mm), muted, border_c),
-            pad_table_disabled_cell(&format!("{:.3}", values.size_y_mm), muted, border_c),
-            pad_table_static_cell(&format!("{current_shape}"), muted),
+            pad_table_disabled_cell(format!("{:.3}", values.size_x_mm), muted, border_c),
+            pad_table_disabled_cell(format!("{:.3}", values.size_y_mm), muted, border_c),
+            pad_table_static_cell(format!("{current_shape}"), muted),
             pad_table_disabled_cell("", muted, border_c),
         ]
     };

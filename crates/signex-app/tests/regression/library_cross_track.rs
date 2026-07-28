@@ -1,3 +1,12 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_collect,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Phase-5 tests that span two tracks (undo + placement + geometry) at once — the Phase-5 counterparts of the Phase-3 `library_pad_geometry` tests.
 
 use signex_app::app::{EditMsg, Message, Signex};

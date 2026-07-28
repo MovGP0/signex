@@ -1,3 +1,12 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pointer input — pan start/stop, cursor-move (handle drag, item
 //! drag, rubber-band + multi-click preview tracking, idle readout),
 //! and left-release commit (box-select / drag-commit). Each method is
@@ -5,7 +14,10 @@
 //! conditions, coordinate math, and `Action` capture/publish sites are
 //! unchanged.
 
-use super::super::*;
+use super::super::{
+    CanvasAction, CanvasState, SymbolCanvas, SymbolSelection, SymbolTool, state, unwrap_angle,
+    world_for, world_unsnapped,
+};
 use iced::Rectangle;
 use iced::mouse;
 use iced::widget::canvas;
@@ -184,7 +196,7 @@ impl SymbolCanvas<'_> {
             // All or Multiple selection: delta-based drag.
             let is_delta_based = matches!(
                 self.selected,
-                Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. })
+                Some(SymbolSelection::All | SymbolSelection::Multiple { .. })
             );
             if is_delta_based {
                 if let Some((last_wx, last_wy)) = state.last_drag_world_pos {
@@ -202,8 +214,7 @@ impl SymbolCanvas<'_> {
             // Single-item selection: absolute positioning with anchor offset.
             let (move_x, move_y) = state
                 .drag_anchor_offset
-                .map(|(dx, dy)| (wx + dx, wy + dy))
-                .unwrap_or((wx, wy));
+                .map_or((wx, wy), |(dx, dy)| (wx + dx, wy + dy));
             return Some(canvas::Action::publish(CanvasAction::Move {
                 x: move_x,
                 y: move_y,
@@ -262,14 +273,14 @@ impl SymbolCanvas<'_> {
             state.arc_cursor = Some((wx, wy));
             // Phase 2: keep a continuous (unwrapped) end angle so
             // arcs that sweep past ±180° don't jump.
-            if let Some((cx, cy)) = state.arc_center {
-                if state.arc_radius_start.is_some() {
-                    let raw = (wy - cy).atan2(wx - cx).to_degrees();
-                    state.arc_end_deg_unwrapped = Some(match state.arc_end_deg_unwrapped {
-                        Some(prev) => unwrap_angle(prev, raw),
-                        None => raw,
-                    });
-                }
+            if let Some((cx, cy)) = state.arc_center
+                && state.arc_radius_start.is_some()
+            {
+                let raw = (wy - cy).atan2(wx - cx).to_degrees();
+                state.arc_end_deg_unwrapped = Some(match state.arc_end_deg_unwrapped {
+                    Some(prev) => unwrap_angle(prev, raw),
+                    None => raw,
+                });
             }
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {
@@ -328,7 +339,7 @@ impl SymbolCanvas<'_> {
             state.box_select_origin.take(),
             state.box_select_current.take(),
         ) {
-            let drag_dist_sq = (cx - ox).powi(2) + (cy - oy).powi(2);
+            let drag_dist_sq = (cy - oy).mul_add(cy - oy, (cx - ox).powi(2));
             if drag_dist_sq > 0.5 * 0.5 {
                 // Enough movement — commit as a box selection.
                 let kind = if cx >= ox {
@@ -342,10 +353,9 @@ impl SymbolCanvas<'_> {
                     Some(sel) => canvas::Action::publish(CanvasAction::Select(sel)).and_capture(),
                     None => canvas::Action::publish(CanvasAction::Deselect).and_capture(),
                 });
-            } else {
-                // Micro-drag treated as a click → deselect.
-                return Some(canvas::Action::publish(CanvasAction::Deselect).and_capture());
             }
+            // Micro-drag treated as a click → deselect.
+            return Some(canvas::Action::publish(CanvasAction::Deselect).and_capture());
         }
 
         // Notify dispatcher that a move drag completed so it can

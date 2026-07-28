@@ -1,6 +1,16 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Projects and Navigator panel views plus the project-tree model.
 
-use super::*;
+use super::{
+    Column, Element, Length, PanelContext, PanelMsg, TreeIcon, TreeNode, TreeView, container,
+    section_title, separator, text, theme_ext,
+};
 use iced::widget::column;
 
 /// Per-sheet info for the project tree.
@@ -39,7 +49,7 @@ pub struct SheetInfo {
 #[derive(Debug, Clone)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
-    /// Display name (project stem — "MyBoard" from "MyBoard.standard_pro").
+    /// Display name (project stem — "`MyBoard`" from "`MyBoard.standard_pro`").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each
     /// root, when present.
@@ -77,6 +87,7 @@ pub struct ProjectPanelInfo {
 }
 
 /// Per-library bundle for the project tree's `Libraries` group.
+///
 /// Mirrors what [`signex_types::project::LibraryEntry`] records on
 /// the project, plus a couple of cached fields the panel pulls from
 /// `LibraryState` so the view doesn't have to re-borrow the library
@@ -231,8 +242,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
                 .root
                 .file_name()
                 .and_then(|s| s.to_str())
-                .map(str::to_string)
-                .unwrap_or_else(|| format!("{}.snxlib", lib.display_name));
+                .map_or_else(|| format!("{}.snxlib", lib.display_name), str::to_string);
             let display = if lib.missing {
                 format!("{filename}  (missing)")
             } else {
@@ -284,7 +294,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         .with_dirty(project.is_dirty)
 }
 
-pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+pub fn view_projects(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     if ctx.project_tree.is_empty() {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![

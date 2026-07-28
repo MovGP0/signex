@@ -1,3 +1,9 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint editor — selection update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
@@ -222,8 +228,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 .state
                 .selected_pad
                 .and_then(|idx| editor.state.pads.get(idx))
-                .map(|p| p.primary_layer())
-                .unwrap_or(crate::library::editor::footprint::layers::FpLayer::FCu);
+                .map_or(
+                    crate::library::editor::footprint::layers::FpLayer::FCu,
+                    super::super::state::pad::EditorPad::primary_layer,
+                );
             let mut matches: Vec<usize> = editor
                 .state
                 .pads

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::match_same_arms,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sheet colour, page format / origin and paper-size helpers.
 
 /// Sheet background colour presets.
@@ -12,32 +17,33 @@ pub enum SheetColor {
 }
 
 impl SheetColor {
-    pub fn to_color(self) -> iced::Color {
+    #[must_use]
+    pub const fn to_color(self) -> iced::Color {
         match self {
-            SheetColor::Black => iced::Color::from_rgb8(0x14, 0x14, 0x14),
-            SheetColor::White => iced::Color::WHITE,
-            SheetColor::DarkGray => iced::Color::from_rgb8(0x2A, 0x2A, 0x2A),
-            SheetColor::LightGray => iced::Color::from_rgb8(0xD0, 0xD0, 0xD0),
-            SheetColor::Cream => iced::Color::from_rgb8(0xFB, 0xF4, 0xE0),
+            Self::Black => iced::Color::from_rgb8(0x14, 0x14, 0x14),
+            Self::White => iced::Color::WHITE,
+            Self::DarkGray => iced::Color::from_rgb8(0x2A, 0x2A, 0x2A),
+            Self::LightGray => iced::Color::from_rgb8(0xD0, 0xD0, 0xD0),
+            Self::Cream => iced::Color::from_rgb8(0xFB, 0xF4, 0xE0),
         }
     }
-    pub const ALL: &'static [SheetColor] = &[
-        SheetColor::Black,
-        SheetColor::White,
-        SheetColor::DarkGray,
-        SheetColor::LightGray,
-        SheetColor::Cream,
+    pub const ALL: &'static [Self] = &[
+        Self::Black,
+        Self::White,
+        Self::DarkGray,
+        Self::LightGray,
+        Self::Cream,
     ];
 }
 
 impl std::fmt::Display for SheetColor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            SheetColor::Black => "Black",
-            SheetColor::White => "White",
-            SheetColor::DarkGray => "Dark Gray",
-            SheetColor::LightGray => "Light Gray",
-            SheetColor::Cream => "Cream",
+            Self::Black => "Black",
+            Self::White => "White",
+            Self::DarkGray => "Dark Gray",
+            Self::LightGray => "Light Gray",
+            Self::Cream => "Cream",
         })
     }
 }
@@ -62,8 +68,8 @@ pub enum PageOrigin {
 impl std::fmt::Display for PageOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            PageOrigin::UpperLeft => "Upper Left",
-            PageOrigin::LowerLeft => "Lower Left",
+            Self::UpperLeft => "Upper Left",
+            Self::LowerLeft => "Lower Left",
         })
     }
 }
@@ -73,7 +79,8 @@ pub const PAPER_SIZES: &[&str] = &[
     "A0", "A1", "A2", "A3", "A4", "A5", "B5", "Letter", "Legal", "Tabloid",
 ];
 
-/// (width_mm, height_mm) for a paper size string.
+/// (`width_mm`, `height_mm`) for a paper size string.
+#[must_use]
 pub fn paper_dimensions(size: &str) -> (f32, f32) {
     match size {
         "A0" => (1189.0, 841.0),

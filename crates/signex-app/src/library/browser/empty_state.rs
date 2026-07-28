@@ -3,7 +3,10 @@
 //! Centred call-to-action shown when the library has no tables yet.
 //! Extracted verbatim from the former single-file `browser` module.
 
-use super::*;
+use super::{
+    BROWSER_TEXT_SIZE, Border, Element, Length, LibraryMessage, OpenLibrary, Space, Theme,
+    ThemeTokens, button, container, text, theme_ext,
+};
 use iced::widget::column;
 
 pub(super) fn view_empty_state<'a>(
@@ -17,7 +20,7 @@ pub(super) fn view_empty_state<'a>(
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
-    let library_for_add = lib_pb.clone();
+    let library_for_add = lib_pb;
     let add_btn = button(
         text("Add Component")
             .size(BROWSER_TEXT_SIZE)

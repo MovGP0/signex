@@ -1,3 +1,11 @@
+#![expect(
+    clippy::implicit_hasher,
+    clippy::match_same_arms,
+    clippy::missing_const_for_fn,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Active Bar dropdown menus — data-driven. Each `ActiveBarMenu` builds
 //! pure `DropdownEntry` rows that the shared
 //! `signex_widgets::active_bar_dropdown` widget renders, so the
@@ -22,6 +30,7 @@ use super::{
 // ─── View: Dropdown menus ────────────────────────────────────
 
 /// Render the dropdown menu for the given Active Bar button.
+#[must_use]
 pub fn view_dropdown<'a>(
     menu: ActiveBarMenu,
     tokens: &'a ThemeTokens,
@@ -84,7 +93,7 @@ fn dd_item(
 
 /// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
 /// through the `EntrySpec` data table + `render` below; the two
-/// irregular menus (Filter chip grid and NetColor swatches) use the
+/// irregular menus (Filter chip grid and `NetColor` swatches) use the
 /// widget's `Custom` escape hatch and keep their own builder.
 fn dropdown_entries(
     menu: ActiveBarMenu,
@@ -527,7 +536,7 @@ fn render(
         .collect()
 }
 
-/// NetColor menu: seven colour swatches (each an irregular `Custom` row —
+/// `NetColor` menu: seven colour swatches (each an irregular `Custom` row —
 /// a colour chip in place of an SVG icon), then the Custom / Clear rows
 /// as ordinary items. The Clear rows grey out when no net carries a
 /// custom colour (`requires_net_color`).
@@ -838,7 +847,7 @@ fn filter_entry(
 /// 28 px icon column + 24 px button padding + a small safety margin).
 /// `Filter` returns `None` because its chip wrap layout already drives
 /// its own width.
-fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
+const fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
     // Width formula: ~6.5 px/char × longest_label + 60 px overhead
     // (24 px button padding + 20 px icon column + 8 px spacing +
     //  small safety). Roboto @ 13 px is narrower than the 8 px/char
@@ -874,6 +883,7 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
+#[must_use]
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
     // Bar layout (`view_bar`), in the widget's own constants so the
     // pixel geometry has one home. Advancing past one button costs
@@ -893,17 +903,17 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
     pad + match menu {
         ActiveBarMenu::Filter => 0.0,
         ActiveBarMenu::Select => btn,
-        ActiveBarMenu::SelectMode => 2.0 * btn + s,
-        ActiveBarMenu::Align => 3.0 * btn + s,
-        ActiveBarMenu::Wiring => 4.0 * btn + 2.0 * s,
-        ActiveBarMenu::Power => 5.0 * btn + 2.0 * s,
-        ActiveBarMenu::Harness => 6.0 * btn + 3.0 * s,
-        ActiveBarMenu::SheetSymbol => 7.0 * btn + 3.0 * s,
-        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,
-        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,
-        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,
-        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,
-        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,
+        ActiveBarMenu::SelectMode => 2.0f32.mul_add(btn, s),
+        ActiveBarMenu::Align => 3.0f32.mul_add(btn, s),
+        ActiveBarMenu::Wiring => 2.0f32.mul_add(s, 4.0 * btn),
+        ActiveBarMenu::Power => 2.0f32.mul_add(s, 5.0 * btn),
+        ActiveBarMenu::Harness => 3.0f32.mul_add(s, 6.0 * btn),
+        ActiveBarMenu::SheetSymbol => 3.0f32.mul_add(s, 7.0 * btn),
+        ActiveBarMenu::Port => 3.0f32.mul_add(s, 8.0 * btn),
+        ActiveBarMenu::Directives => 3.0f32.mul_add(s, 9.0 * btn),
+        ActiveBarMenu::TextTools => 4.0f32.mul_add(s, 10.0 * btn),
+        ActiveBarMenu::Shapes => 4.0f32.mul_add(s, 11.0 * btn),
+        ActiveBarMenu::NetColor => 4.0f32.mul_add(s, 12.0 * btn),
     }
 }
 

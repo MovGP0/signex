@@ -1,3 +1,9 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.26 — Right-click canvas context menu for the footprint editor.
 //!
 //! Mirrors Altium's PCB Library Editor right-click conventions:
@@ -32,7 +38,7 @@ use crate::styles::ti;
 /// v0.26-C — surface the silk graphic''s kind in the menu header so
 /// the user can tell at a glance what they''re about to delete /
 /// inspect. Mirrors Altium''s naming.
-fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> &'static str {
+const fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> &'static str {
     use signex_library::FpGraphicKind;
     match kind {
         FpGraphicKind::Line { .. } => "Track",
@@ -204,8 +210,7 @@ pub fn view_context_menu<'a>(
                 .state
                 .pads
                 .get(idx)
-                .map(|p| format!("Pad {}", p.number))
-                .unwrap_or_else(|| format!("Pad {idx}"));
+                .map_or_else(|| format!("Pad {idx}"), |p| format!("Pad {}", p.number));
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
 
@@ -492,7 +497,7 @@ fn item_submenu_header<'a>(
     .into()
 }
 
-fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+fn separator(tokens: &ThemeTokens) -> Element<'_, LibraryMessage> {
     let c = ti(tokens.border);
     container(iced::widget::Space::new().height(1))
         .padding(Padding::from([4u16, 0u16]))

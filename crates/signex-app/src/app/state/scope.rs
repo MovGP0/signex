@@ -1,3 +1,9 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::question_mark,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Which project the document on screen belongs to.
 //!
 //! `DocumentState.active_project` is a *sticky* workspace pointer: it keeps
@@ -29,7 +35,7 @@ use super::LoadedProject;
 /// differently-cased drive letter) would otherwise report the sheet as loose
 /// and silently degrade a project export to a single page. Unix paths are
 /// case-sensitive, so there the key is the path verbatim.
-pub(crate) fn path_key(path: &Path) -> String {
+pub fn path_key(path: &Path) -> String {
     let raw = path.to_string_lossy();
     if cfg!(windows) {
         raw.to_lowercase().replace('\\', "/")
@@ -89,7 +95,7 @@ fn parent_of(loaded: &HashMap<PathBuf, Vec<String>>) -> HashMap<String, PathBuf>
 ///
 /// Cycles in the hierarchy (a child re-referencing an ancestor) terminate on
 /// the visited set rather than looping — ERC reports those separately.
-pub(crate) fn project_owning_sheet<'a>(
+pub fn project_owning_sheet<'a>(
     projects: &'a [LoadedProject],
     loaded: &HashMap<PathBuf, Vec<String>>,
     path: &Path,

@@ -1,8 +1,15 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! PDF preview tab (toolbar, thumbnail rail, pan/zoom viewport) — a
 //! method of the shared `Signex` view impl, split from
 //! `view/pdf_preview.rs` as pure code motion.
 
-use super::super::*;
+use super::super::{Element, Length, Message, PrintPreviewMsg, Signex};
 
 impl Signex {
     /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
@@ -188,7 +195,7 @@ impl Signex {
         };
         let summary_row = row![
             text("Sheet").size(11).color(text_muted),
-            text(format!("{} • {}", page_size_label, orientation_label))
+            text(format!("{page_size_label} • {orientation_label}"))
                 .size(11)
                 .color(text_c),
         ]

@@ -1,5 +1,13 @@
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Parameters tab — template-validated parameter form, retargeted at
-//! `state.row.parameters` (DBLib model).
+//! `state.row.parameters` (`DBLib` model).
 //!
 //! Renders three groups against the active class template:
 //! - **Required:** every `ParameterTemplate.required_params` slot, with
@@ -469,7 +477,7 @@ fn add_custom_row<'a>(
                     // is benign when fired with an empty buffer. UIs
                     // (e.g. an inline name field) layer on top.
                     name: String::new(),
-                    kind: kind_for_msg.clone(),
+                    kind: kind_for_msg,
                 },
             })
             .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -666,7 +674,7 @@ mod tests {
             }
         }
         // Parse failed → no commit, parameter stays absent.
-        assert!(params.get("tcr").is_none());
+        assert!(!params.contains_key("tcr"));
         // Buffer still carries the typed text so the user can fix it.
         assert_eq!(buffer.get("tcr").map(String::as_str), Some("12.5e"));
     }

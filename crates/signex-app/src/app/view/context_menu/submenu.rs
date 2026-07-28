@@ -8,7 +8,7 @@
 //! via `ContextAction::ActiveBar(...)` so placement / transform pipelines
 //! stay shared with the toolbar.
 
-use super::*;
+use super::{ContextAction, ContextMenuMsg, ContextSubmenu, Element, Message, Signex};
 
 use super::items::{dd_disabled, dd_kb, dd_msg};
 use crate::icons as ic;
@@ -118,7 +118,7 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
 /// Distribute needs ≥3 (two endpoints + at least one item to space
 /// between them). Returns `(pairwise_enabled, distribute_enabled)`.
 /// Align To Grid works on a single item so it is always enabled.
-pub(super) fn align_gate(selected: usize) -> (bool, bool) {
+pub(super) const fn align_gate(selected: usize) -> (bool, bool) {
     (selected >= 2, selected >= 3)
 }
 
@@ -236,7 +236,7 @@ pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownE
             "PCB Library",
             "",
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                P::AddProjectFootprintLibrary(target.clone()),
+                P::AddProjectFootprintLibrary(target),
             )),
         ));
     }

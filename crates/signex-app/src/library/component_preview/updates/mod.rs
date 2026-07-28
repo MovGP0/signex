@@ -26,7 +26,7 @@ use crate::library::messages::EditorMsg;
 /// dispatcher before reaching here; this is the reducer for in-place row
 /// mutations across the datasheet, pin-map, supply, parameters, and
 /// simulation field groups.
-pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
+pub fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
     match msg {
         // ── Component-level ──────────────────────────────────────────
         EditorMsg::SelectTab(tab) => state.active_tab = tab,
@@ -42,12 +42,12 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
 
         // ── Pin map ──────────────────────────────────────────────────
         EditorMsg::PinMapAutoMatchByNumber | EditorMsg::PinMapClearOverrides => {
-            pin_map::clear_overrides(state)
+            pin_map::clear_overrides(state);
         }
         EditorMsg::PinMapAutoMatchByName => pin_map::warn_auto_match_by_name(),
         EditorMsg::PinMapOpenOverrideEdit(pin) => pin_map::open_override_edit(state, pin),
         EditorMsg::PinMapOverrideBufChanged { pin, value } => {
-            pin_map::set_override_buf(state, pin, value)
+            pin_map::set_override_buf(state, pin, value);
         }
         EditorMsg::PinMapAddOverride { pin, pad } => pin_map::add_override(state, pin, pad),
         EditorMsg::PinMapCancelOverrideEdit => pin_map::cancel_override_edit(state),
@@ -55,7 +55,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
 
         // ── Supply: primary part ─────────────────────────────────────
         EditorMsg::SupplyPrimarySetManufacturer(value) => {
-            supply::set_primary_manufacturer(state, value)
+            supply::set_primary_manufacturer(state, value);
         }
         EditorMsg::SupplyPrimarySetMpn(value) => supply::set_primary_mpn(state, value),
         EditorMsg::SupplyPrimarySetStatus(value) => supply::set_primary_status(state, value),
@@ -64,23 +64,23 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         // ── Supply: alternates ───────────────────────────────────────
         EditorMsg::SupplyAlternateAdd => supply::add_alternate(state),
         EditorMsg::SupplyAlternateSetManufacturer { idx, value } => {
-            supply::set_alternate_manufacturer(state, idx, value)
+            supply::set_alternate_manufacturer(state, idx, value);
         }
         EditorMsg::SupplyAlternateSetMpn { idx, value } => {
-            supply::set_alternate_mpn(state, idx, value)
+            supply::set_alternate_mpn(state, idx, value);
         }
         EditorMsg::SupplyAlternateSetStatus { idx, value } => {
-            supply::set_alternate_status(state, idx, value)
+            supply::set_alternate_status(state, idx, value);
         }
         EditorMsg::SupplyAlternateSetNotes { idx, value } => {
-            supply::set_alternate_notes(state, idx, value)
+            supply::set_alternate_notes(state, idx, value);
         }
         EditorMsg::SupplyAlternateRemove { idx } => supply::remove_alternate(state, idx),
 
         // ── Supply: distributor listings ─────────────────────────────
         EditorMsg::SupplyListingAdd => supply::add_listing(state),
         EditorMsg::SupplyListingSetDistributor { idx, value } => {
-            supply::set_listing_distributor(state, idx, value)
+            supply::set_listing_distributor(state, idx, value);
         }
         EditorMsg::SupplyListingSetSku { idx, value } => supply::set_listing_sku(state, idx, value),
         EditorMsg::SupplyListingSetUrl { idx, value } => supply::set_listing_url(state, idx, value),
@@ -91,10 +91,10 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::ParamSetNumberBuf { name, buf } => parameters::set_number_buf(state, name, buf),
         EditorMsg::ParamCommitNumber { name } => parameters::commit_number(state, name),
         EditorMsg::ParamSetMeasurementBuf { name, buf } => {
-            parameters::set_measurement_buf(state, name, buf)
+            parameters::set_measurement_buf(state, name, buf);
         }
         EditorMsg::ParamCommitMeasurement { name, unit } => {
-            parameters::commit_measurement(state, name, unit)
+            parameters::commit_measurement(state, name, unit);
         }
         EditorMsg::ParamSetBool { name, value } => parameters::set_bool(state, name, value),
         EditorMsg::ParamRemove { name } => parameters::remove(state, name),
@@ -106,7 +106,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::SimSetName(name) => sim::set_name(state, name),
         EditorMsg::SimBodyAction(action) => sim::apply_body_action(state, action),
         EditorMsg::SimSetPinNode { pin_number, value } => {
-            sim::set_pin_node(state, pin_number, value)
+            sim::set_pin_node(state, pin_number, value);
         }
 
         // ── Owned by other surfaces ──────────────────────────────────

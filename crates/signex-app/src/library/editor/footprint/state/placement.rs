@@ -1,3 +1,8 @@
+#![expect(
+    clippy::match_same_arms,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Multi-click sketch-tool gesture state — `PlacementInput`,
 //! `PlacementInputKind`, and `PlaceArcPending` for in-flight tool
 //! state across canvas frames.
@@ -58,6 +63,7 @@ impl PlacementInputKind {
     /// w/h/radius); single-element for radius/sweep/distance tools;
     /// empty for tools that take no typed dimensions. Single source of
     /// truth for `from_active_tool` and the Tab field-cycle.
+    #[must_use]
     pub fn placement_fields(tool: SketchTool, pending: &ToolPending) -> Vec<Self> {
         match (tool, pending) {
             (SketchTool::Line, ToolPending::LineFirst { .. }) => {
@@ -81,6 +87,7 @@ impl PlacementInputKind {
     /// v0.24 Track D — the default focused field when a gesture stage
     /// opens: the first of `placement_fields`. Drives the canvas
     /// keyboard guard and the kind minted for the first typed digit.
+    #[must_use]
     pub fn from_active_tool(tool: SketchTool, pending: &ToolPending) -> Option<Self> {
         Self::placement_fields(tool, pending).first().copied()
     }
@@ -89,7 +96,8 @@ impl PlacementInputKind {
     /// len/angle, Rectangle w/h, Rounded-Rect w/h/radius). Tab cycles
     /// these while a buffer is active; for single-field kinds Tab keeps
     /// its placement-pause role.
-    pub fn is_tab_switchable(self) -> bool {
+    #[must_use]
+    pub const fn is_tab_switchable(self) -> bool {
         matches!(
             self,
             Self::LineLength
@@ -101,12 +109,14 @@ impl PlacementInputKind {
     }
 
     /// `true` when the buffer accepts a leading minus sign.
-    pub fn allows_negative(self) -> bool {
+    #[must_use]
+    pub const fn allows_negative(self) -> bool {
         matches!(self, Self::ArcSweep | Self::LineAngle)
     }
 
     /// Short label rendered in the cursor overlay.
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::LineLength => "len",
             Self::LineAngle => "ang",

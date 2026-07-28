@@ -1,4 +1,4 @@
-//! `signex-app`'s library subsystem (DBLib model — v0.9-refactor-2).
+//! `signex-app`'s library subsystem (`DBLib` model — v0.9-refactor-2).
 //!
 //! Wires the [`signex_library`] crate (data + adapters) into the iced
 //! UI. Components are TSV rows under `<lib>/tables/<category>.tsv`,

@@ -45,7 +45,7 @@ pub enum Message {
     /// main canvas slot for the duration of the handler so the
     /// hundreds of `active_canvas_mut()` call sites read and write the
     /// right canvas transparently. Keyboard-generated canvas events
-    /// (FitAll shortcut, etc.) continue to use the unwrapped
+    /// (`FitAll` shortcut, etc.) continue to use the unwrapped
     /// `Message::CanvasEvent` variant and always target the main
     /// window.
     CanvasEventInWindow {
@@ -114,12 +114,12 @@ pub enum Message {
     /// editor. Routed to `dispatch_parameter_manager_message`.
     ParameterManager(ParameterManagerMsg),
     /// Cycle Altium's rubber-band selection mode
-    /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
+    /// Inside → Outside → `TouchingLine` → Inside. Bound to Shift+S.
     CycleSelectionMode,
     /// Close the in-flight lasso polygon (Enter key). Commits the
     /// selection if >= 3 vertices, otherwise cancels.
     LassoCommit,
-    /// Apply an edit to a placed SchDrawing. Dispatched from the
+    /// Apply an edit to a placed `SchDrawing`. Dispatched from the
     /// post-placement Properties panel (Line / Rect / Circle / Arc /
     /// Polygon editable rows). Engine replaces the stored drawing by
     /// uuid with full undo.
@@ -165,8 +165,8 @@ pub enum Message {
     FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
     /// v0.15 — Esc-key tool cancel routed through the dispatcher.
     /// If the active tab is a footprint editor, fires
-    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
-    /// tool_pending); otherwise falls back to the schematic
+    /// `FootprintToolEscape` (resets `PadsTool` + `SketchTool` +
+    /// `tool_pending`); otherwise falls back to the schematic
     /// `Tool::Select` reset.
     EscapePressed,
     Noop,

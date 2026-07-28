@@ -1,6 +1,11 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, PreferencesMsg, Signex, ThemeId};
 
 impl Signex {
     pub(crate) fn handle_preferences_open_requested(&mut self) -> Task<Message> {
@@ -100,11 +105,10 @@ impl Signex {
         self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
         // Revert the render_config globals used for schematic live preview.
         let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|c| c.tokens)
-                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+            self.ui_state.custom_theme.as_ref().map_or_else(
+                || signex_types::theme::theme_tokens(ThemeId::Signex),
+                |c| c.tokens,
+            )
         } else {
             signex_types::theme::theme_tokens(self.ui_state.theme_id)
         };
@@ -169,11 +173,10 @@ impl Signex {
                 self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
                 self.update_canvas_theme();
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+                    self.ui_state.custom_theme.as_ref().map_or_else(
+                        || signex_types::theme::theme_tokens(ThemeId::Signex),
+                        |c| c.tokens,
+                    )
                 } else {
                     signex_types::theme::theme_tokens(self.ui_state.theme_id)
                 };
@@ -253,21 +256,19 @@ impl Signex {
             PrefMsg::DraftTheme(id) => {
                 self.ui_state.preferences_draft_theme = id;
                 let tokens = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+                    self.ui_state.custom_theme.as_ref().map_or_else(
+                        || signex_types::theme::theme_tokens(ThemeId::Signex),
+                        |c| c.tokens,
+                    )
                 } else {
                     signex_types::theme::theme_tokens(id)
                 };
                 self.document_state.panel_ctx.tokens = tokens;
                 let canvas_colors = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.canvas)
-                        .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
+                    self.ui_state.custom_theme.as_ref().map_or_else(
+                        || signex_types::theme::canvas_colors(ThemeId::Signex),
+                        |c| c.canvas,
+                    )
                 } else {
                     signex_types::theme::canvas_colors(id)
                 };
@@ -361,26 +362,23 @@ impl Signex {
                     self.ui_state
                         .custom_theme
                         .as_ref()
-                        .map(|c| c.name.clone())
-                        .unwrap_or_else(|| "Custom".to_string())
+                        .map_or_else(|| "Custom".to_string(), |c| c.name.clone())
                 } else {
                     id.label().to_string()
                 };
                 let tokens = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+                    self.ui_state.custom_theme.as_ref().map_or_else(
+                        || signex_types::theme::theme_tokens(ThemeId::Signex),
+                        |c| c.tokens,
+                    )
                 } else {
                     signex_types::theme::theme_tokens(id)
                 };
                 let canvas = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.canvas)
-                        .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
+                    self.ui_state.custom_theme.as_ref().map_or_else(
+                        || signex_types::theme::canvas_colors(ThemeId::Signex),
+                        |c| c.canvas,
+                    )
                 } else {
                     signex_types::theme::canvas_colors(id)
                 };

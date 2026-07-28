@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::ref_option,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol-tab interactive canvas.
 //!
 //! The canvas reads the typed [`signex_library::Symbol`] primitive
@@ -122,6 +130,7 @@ impl<'a> SymbolCanvas<'a> {
     /// `SymbolEditorState` + the active theme + global grid/unit
     /// settings. See module-level docs for the parity rationale.
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         symbol: &'a Symbol,
         selected: Option<SymbolSelection>,
@@ -170,7 +179,7 @@ impl<'a> SymbolCanvas<'a> {
     /// True when `pin` should render on the currently-active part.
     /// Part Zero (`part_number == 0`) appears on every part; other
     /// pins only render when they match `active_part`.
-    fn pin_visible_on_active_part(&self, pin: &SymbolPin) -> bool {
+    const fn pin_visible_on_active_part(&self, pin: &SymbolPin) -> bool {
         pin.part_number == 0 || pin.part_number == self.active_part
     }
 
@@ -337,7 +346,7 @@ fn is_graphic_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
     state::graphic_is_selected(sel, idx)
 }
 
-impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
+impl canvas::Program<CanvasAction> for SymbolCanvas<'_> {
     type State = CanvasState;
 
     fn update(
@@ -398,20 +407,20 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // Hover detection: change the cursor when the pointer is close
         // to any graphic handle. Tolerance is expressed in screen pixels
         // so it feels the same at all zoom levels.
-        if self.tool == SymbolTool::Select {
-            if let Some(pos) = cursor.position_in(bounds) {
-                let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
-                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((_, handle)) = state::hit_test_graphic_handle(
-                    self.symbol,
-                    wx,
-                    wy,
-                    tol_mm,
-                    self.active_part,
-                    &self.selected,
-                ) {
-                    return state::handle_interaction(handle);
-                }
+        if self.tool == SymbolTool::Select
+            && let Some(pos) = cursor.position_in(bounds)
+        {
+            let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
+            let tol_mm = f64::from((8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0));
+            if let Some((_, handle)) = state::hit_test_graphic_handle(
+                self.symbol,
+                wx,
+                wy,
+                tol_mm,
+                self.active_part,
+                &self.selected,
+            ) {
+                return state::handle_interaction(handle);
             }
         }
         if cursor.is_over(bounds) {
@@ -451,7 +460,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
     }
 }
 
-impl<'a> SymbolCanvas<'a> {
+impl SymbolCanvas<'_> {
     fn draw_symbol_with_renderer(
         &self,
         frame: &mut canvas::Frame,
@@ -488,7 +497,7 @@ impl<'a> SymbolCanvas<'a> {
         crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
             frame,
             &scene,
-            |point| iced::Point::new(ox + point[0] * scale, oy - point[1] * scale),
+            |point| iced::Point::new(point[0].mul_add(scale, ox), point[1].mul_add(-scale, oy)),
             crate::renderer_scene_canvas::SceneDrawOptions {
                 scale_px_per_mm: scale,
                 min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
@@ -544,7 +553,7 @@ impl<'a> SymbolCanvas<'a> {
                         // drawn so the legacy auto-body fill below never
                         // leaks onto another rectangle.
                         body_drawn = true;
-                        to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                        to_rgba(Color::from_rgba8(fr, fg, fb, f32::from(fa) / 255.0))
                     } else if !body_drawn {
                         body_drawn = true;
                         to_rgba(Color {
@@ -574,7 +583,7 @@ impl<'a> SymbolCanvas<'a> {
                 SymbolGraphicKind::Circle { center, radius } => {
                     let fill = match g.fill {
                         Some([fr, fg, fb, fa]) => {
-                            to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                            to_rgba(Color::from_rgba8(fr, fg, fb, f32::from(fa) / 255.0))
                         }
                         None => [0.0, 0.0, 0.0, 0.0],
                     };
@@ -624,7 +633,7 @@ impl<'a> SymbolCanvas<'a> {
                 SymbolGraphicKind::Polygon { vertices } => {
                     let fill = match g.fill {
                         Some([fr, fg, fb, fa]) => {
-                            to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                            to_rgba(Color::from_rgba8(fr, fg, fb, f32::from(fa) / 255.0))
                         }
                         None => [0.0, 0.0, 0.0, 0.0],
                     };

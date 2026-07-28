@@ -1,3 +1,9 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Project & document modals — Rename, Project Options, Enable Version
 //! Control, Grid Properties, and the Custom Selection Filter.
 //!
@@ -5,7 +11,10 @@
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{
+    EnableVersionControlMsg, GridPropertiesMsg, Message, ProjectMsg, RenameMsg, SelectionFilterMsg,
+    Signex,
+};
 use iced::widget::{Space, column, container, row, text};
 use iced::{Color, Element, Length};
 
@@ -91,9 +100,9 @@ impl Signex {
             "new-name.snxsch"
         };
         let prompt = if st.is_project_rename {
-            format!("Rename project \"{}\"", current_label)
+            format!("Rename project \"{current_label}\"")
         } else {
-            format!("Rename \"{}\"", current_label)
+            format!("Rename \"{current_label}\"")
         };
 
         let mut body: iced::widget::Column<'_, Message> = column![

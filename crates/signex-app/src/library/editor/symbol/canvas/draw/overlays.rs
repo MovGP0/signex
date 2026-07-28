@@ -1,8 +1,13 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Top overlays — the rubber-band box selection and the line /
 //! circle / arc multi-click placement previews. Drawn last (top of
 //! the z-stack).
 
-use super::super::*;
+use super::super::{CanvasState, SYMBOL_GRAPHIC_STROKE_PX_AT_100, SymbolCanvas, stroke_px_at_zoom};
 use iced::Color;
 use iced::Size;
 use iced::widget::canvas;
@@ -19,7 +24,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         if let (Some((ox, oy)), Some((cx, cy))) =
             (state.box_select_origin, state.box_select_current)
@@ -70,7 +78,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         if let (Some((fx, fy)), Some((cx, cy))) = (state.rect_from, state.rect_cursor) {
             let p0 = w2s(fx, fy);
@@ -118,7 +129,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         if let (Some((fx, fy)), Some((cx, cy))) = (state.line_from, state.line_cursor) {
             let p0 = w2s(fx, fy);
@@ -150,13 +164,16 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         if let (Some((cx, cy)), Some((cur_x, cur_y))) = (state.circle_center, state.circle_cursor) {
             let center_p = w2s(cx, cy);
             let dx = cur_x - cx;
             let dy = cur_y - cy;
-            let radius_world = (dx * dx + dy * dy).sqrt().max(0.1);
+            let radius_world = dx.hypot(dy).max(0.1);
             let radius_screen = (radius_world as f32) * scale;
             let preview_color = Color {
                 a: 0.55,
@@ -193,7 +210,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         if let Some((cx, cy)) = state.arc_center {
             let center_p = w2s(cx, cy);
@@ -216,7 +236,10 @@ impl SymbolCanvas<'_> {
                 );
                 // Start-angle endpoint dot.
                 let start_rad = start_deg.to_radians();
-                let sp = w2s(cx + radius * start_rad.cos(), cy + radius * start_rad.sin());
+                let sp = w2s(
+                    radius.mul_add(start_rad.cos(), cx),
+                    radius.mul_add(start_rad.sin(), cy),
+                );
                 frame.fill(&canvas::Path::circle(sp, 3.0), preview_color);
                 // Line from center to cursor (end-angle preview).
                 if let Some((cur_x, cur_y)) = state.arc_cursor {
@@ -299,7 +322,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         let preview_color = Color {
             a: 0.55,

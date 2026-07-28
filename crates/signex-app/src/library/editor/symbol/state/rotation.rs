@@ -1,6 +1,16 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Rotation + graphic translation helpers for the symbol editor.
 
-use super::*;
+use super::{
+    GraphicRotationPivotMode, PinOrientation, Pose2d, Rotatable2d, RotationPivot, RotationSpace,
+    Symbol, SymbolGraphicKind, SymbolPin, SymbolSelection, Vec2d, normalize_angle_rad,
+    rotate_object, rotate_vec,
+};
 
 /// Rotate the selected entity by 90°.
 ///
@@ -39,11 +49,11 @@ pub fn rotate_selected_with_pivot(
             }
         }
         Some(SymbolSelection::Graphic(idx)) => {
-            rotate_graphic_90(sym, idx, clockwise, graphic_pivot_mode)
+            rotate_graphic_90(sym, idx, clockwise, graphic_pivot_mode);
         }
-        Some(SymbolSelection::Field(_))
-        | Some(SymbolSelection::All)
-        | Some(SymbolSelection::Multiple { .. })
+        Some(
+            SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. },
+        )
         | None => {}
     }
 }
@@ -247,7 +257,7 @@ pub(super) fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
     }
 }
 
-fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientation {
+const fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientation {
     match (o, clockwise) {
         (PinOrientation::Up, true) => PinOrientation::Right,
         (PinOrientation::Right, true) => PinOrientation::Down,

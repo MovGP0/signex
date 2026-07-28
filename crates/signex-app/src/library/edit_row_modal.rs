@@ -1,3 +1,10 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Edit Component Details modal — full row editor invoked by
 //! double-clicking a row in the Library Browser grid.
 //!
@@ -53,6 +60,7 @@ const LIFECYCLE_OPTIONS: [LifecyclePick; 5] = [
     LifecyclePick(LifecycleState::Obsolete),
 ];
 
+#[must_use]
 pub fn view<'a>(
     library_path: &'a std::path::Path,
     edit: &'a EditRowModalState,
@@ -164,11 +172,11 @@ pub fn view<'a>(
     let symbol_label = if edit.draft.symbol_ref.uuid.is_nil() {
         "Unbound — pick a symbol".to_string()
     } else {
-        format!("symbol uuid {}", symbol_short)
+        format!("symbol uuid {symbol_short}")
     };
     let symbol_btn =
         button(container(text("Pick Symbol…").size(11).color(text_c)).padding([4, 12]))
-            .on_press(send.clone()(BrowserEditMsg::OpenSymbolPicker))
+            .on_press(send(BrowserEditMsg::OpenSymbolPicker))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.04,
@@ -188,7 +196,7 @@ pub fn view<'a>(
     };
     let footprint_btn =
         button(container(text("Pick Footprint…").size(11).color(text_c)).padding([4, 12]))
-            .on_press(send.clone()(BrowserEditMsg::OpenFootprintPicker))
+            .on_press(send(BrowserEditMsg::OpenFootprintPicker))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.04,
@@ -292,7 +300,7 @@ pub fn view<'a>(
     };
 
     let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
-        .on_press(send.clone()(BrowserEditMsg::Cancel))
+        .on_press(send(BrowserEditMsg::Cancel))
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.04,
@@ -356,7 +364,7 @@ fn view_params_section<'a>(
     let header = row![
         text("Parameters").size(11).color(muted).width(Length::Fill),
         button(container(text("+ Add Parameter").size(11).color(text_c)).padding([3, 10]))
-            .on_press(send.clone()(BrowserEditMsg::AddParam))
+            .on_press(send(BrowserEditMsg::AddParam))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgba(
                     1.0, 1.0, 1.0, 0.04,
@@ -561,6 +569,7 @@ pub(crate) fn short_uuid(u: &uuid::Uuid) -> String {
 
 /// Delete-row confirm modal — sibling overlay launched from the
 /// Library Browser action row's Delete Selected button.
+#[must_use]
 pub fn view_delete_confirm<'a>(
     library_path: &'a std::path::Path,
     confirm: &'a DeleteConfirmState,

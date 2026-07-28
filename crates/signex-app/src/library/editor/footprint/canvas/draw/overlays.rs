@@ -1,3 +1,11 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Interaction overlays — the Sketch reticle, the Select-tool cursor
 //! mark (with the line-hover resize arrow), the Touching-Line / Lasso
 //! ghosts, the rubber-band rectangle, and the sketch-entity overlay.
@@ -15,7 +23,7 @@ use super::sketch::{
 
 impl FootprintCanvas<'_> {
     /// v0.27 — Fusion-style sketch reticle painted at the SNAP target
-    /// (state.cursor_mm) while a placement tool is active. Hidden for
+    /// (`state.cursor_mm`) while a placement tool is active. Hidden for
     /// the Select tool + while the context menu is open.
     pub(in crate::library::editor::footprint::canvas) fn draw_sketch_reticle(
         &self,
@@ -86,7 +94,7 @@ impl FootprintCanvas<'_> {
             let hovered_line_angle: Option<f32> = if let Some(sketch_ref) = self.sketch {
                 const LINE_HIT_TOL_PX: f32 = 6.0;
                 let world = cstate.screen_to_world(p);
-                let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                let tol_mm = f64::from(LINE_HIT_TOL_PX / cstate.scale.max(1.0));
                 let pos_of = |pid: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
                     if let Some(solve) = self.state.last_solve.as_ref()
                         && let Some(q) = signex_sketch::solver::state::point_xy(
@@ -114,15 +122,15 @@ impl FootprintCanvas<'_> {
                     {
                         let line_dx = b.0 - a.0;
                         let line_dy = b.1 - a.1;
-                        let llen2 = line_dx * line_dx + line_dy * line_dy;
+                        let llen2 = line_dy.mul_add(line_dy, line_dx * line_dx);
                         if llen2 <= 1e-12 {
                             continue;
                         }
-                        let t = ((world.0 - a.0) * line_dx + (world.1 - a.1) * line_dy) / llen2;
+                        let t = (world.1 - a.1).mul_add(line_dy, (world.0 - a.0) * line_dx) / llen2;
                         let tc = t.clamp(0.0, 1.0);
                         let px = a.0 + tc * line_dx;
                         let py = a.1 + tc * line_dy;
-                        let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                        let d2 = (px - world.0).mul_add(px - world.0, (py - world.1).powi(2));
                         if d2 <= tol_mm * tol_mm {
                             // World uses the same Y-down mapping as
                             // screen, so atan2 in world matches the
@@ -211,21 +219,21 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if self.state.touching_line_active {
-            if let Some((sx, sy)) = self.state.touching_line_first {
-                let p0 = cstate.world_to_screen((sx, sy));
-                let p1 = match self.state.cursor_mm {
-                    Some(c) => cstate.world_to_screen(c),
-                    None => p0,
-                };
-                let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
-                frame.stroke(
-                    &Path::line(p0, p1),
-                    Stroke::default().with_width(1.5).with_color(line_col),
-                );
-                frame.fill(&Path::circle(p0, 3.5), line_col);
-                frame.fill(&Path::circle(p1, 3.5), line_col);
-            }
+        if self.state.touching_line_active
+            && let Some((sx, sy)) = self.state.touching_line_first
+        {
+            let p0 = cstate.world_to_screen((sx, sy));
+            let p1 = match self.state.cursor_mm {
+                Some(c) => cstate.world_to_screen(c),
+                None => p0,
+            };
+            let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
+            frame.stroke(
+                &Path::line(p0, p1),
+                Stroke::default().with_width(1.5).with_color(line_col),
+            );
+            frame.fill(&Path::circle(p0, 3.5), line_col);
+            frame.fill(&Path::circle(p1, 3.5), line_col);
         }
     }
 

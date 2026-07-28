@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::items_after_statements,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Editor-surface overlay builders — the blocking-modal gate, the
 //! export/preview/net-colour top-of-stack overlays, the schematic /
 //! footprint / symbol active bars, the in-canvas text-edit input, and
@@ -9,7 +17,9 @@
 //! thin assembler that calls them in push order. These are methods of
 //! the same `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{
+    Element, ExportMsg, Length, Message, NetColorMsg, OverlayMsg, Signex, TextEditMsg, ToolMessage,
+};
 use iced::widget::{column, container, row};
 
 impl Signex {
@@ -17,7 +27,7 @@ impl Signex {
     /// export-error, print preview, or the custom net-colour picker.
     /// Mirrors the inline guard that early-returns from
     /// `collect_overlays` before any tool/menu overlay is pushed.
-    pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
+    pub(in crate::app::view) const fn has_blocking_modal(&self) -> bool {
         self.document_state.export_error.is_some()
             || self.document_state.netlist_incomplete_prompt.is_some()
             || self.document_state.preview.is_some()
@@ -91,8 +101,8 @@ impl Signex {
         }
     }
 
-    /// Custom net-colour picker. Bespoke modal (not the iced_aw
-    /// ColorPicker) because the user needs a quick-pick palette +
+    /// Custom net-colour picker. Bespoke modal (not the `iced_aw`
+    /// `ColorPicker`) because the user needs a quick-pick palette +
     /// precise RGB inputs side-by-side. Pushes the dismiss backdrop
     /// then the picker card.
     pub(in crate::app::view) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
@@ -120,8 +130,7 @@ impl Signex {
             .get(self.document_state.active_tab)
             .and_then(|tab| tab.kind.as_footprint_editor())
             .and_then(|path| self.document_state.footprint_editors.get(path))
-            .map(|ed| ed.state.placement_paused)
-            .unwrap_or(false);
+            .is_some_and(|ed| ed.state.placement_paused);
         if !(interaction.canvas.placement_paused || footprint_paused) {
             return None;
         }
@@ -302,7 +311,7 @@ impl Signex {
         // CursorMoved threshold).
         let close_msg = Message::Library(
             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 msg: crate::library::messages::PrimitiveEdit::Footprint(
                     crate::library::messages::FootprintEditorMsg::CloseContextMenu,
                 ),
@@ -353,7 +362,7 @@ impl Signex {
         };
         let close_msg = Message::Library(
             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 msg: crate::library::messages::PrimitiveEdit::Footprint(
                     crate::library::messages::FootprintEditorMsg::MoveByCancel,
                 ),
@@ -393,7 +402,7 @@ impl Signex {
         };
         let close_msg = Message::Library(
             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 msg: crate::library::messages::PrimitiveEdit::Footprint(
                     crate::library::messages::FootprintEditorMsg::AlignCancel,
                 ),
@@ -479,7 +488,7 @@ impl Signex {
         };
         let close_msg = Message::Library(
             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 msg: crate::library::messages::PrimitiveEdit::Symbol(
                     crate::library::messages::SymbolEditorMsg::CloseContextMenu,
                 ),
@@ -534,7 +543,8 @@ impl Signex {
         } else {
             0.0
         };
-        let est_menu_h: f32 = (TOP_LEVEL_ROWS + expanded_rows) * ROW_HEIGHT_PX + CARD_V_PADDING_PX;
+        let est_menu_h: f32 =
+            (TOP_LEVEL_ROWS + expanded_rows).mul_add(ROW_HEIGHT_PX, CARD_V_PADDING_PX);
         let edge_margin: f32 = 4.0;
         let x = if mx + est_menu_w + edge_margin > ww {
             (ww - est_menu_w - edge_margin).max(0.0)
@@ -566,8 +576,8 @@ impl Signex {
         // The canvas Program publishes its latest camera into this Cell each
         // frame — that's the only way to read it from outside the Program.
         let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera.get();
-        let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
-        let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
+        let canvas_local_x = (edit_state.world_x as f32).mul_add(cam_scale, cam_off_x);
+        let canvas_local_y = (edit_state.world_y as f32).mul_add(cam_scale, cam_off_y);
         // Canvas top-left within the window: menu bar + tab bar above,
         // left dock + left resize handle (5px when shown) to the side.
         let tabs_h: f32 = if document.tabs.is_empty() { 0.0 } else { 28.0 };
@@ -714,7 +724,7 @@ impl Signex {
             .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
             .count() as f32;
         let popup_w = 210.0_f32;
-        let popup_h = visible_rows * 22.0 + 12.0;
+        let popup_h = visible_rows.mul_add(22.0, 12.0);
         let left = (ww - popup_w - 10.0).max(0.0);
         let top = (wh - popup_h - 26.0).max(0.0);
         vec![

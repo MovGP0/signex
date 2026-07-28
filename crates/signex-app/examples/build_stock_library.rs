@@ -1,3 +1,9 @@
+#![expect(
+    clippy::similar_names,
+    clippy::type_complexity,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Build the 5 reference parametric footprints that ship in
 //! `assets/stock-library/footprints/`.
 //!
@@ -73,14 +79,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 /// Count Points in `sketch.entities` carrying a `pad` attribute.
 fn count_sketch_pads(fp: &Footprint) -> usize {
-    fp.sketch
-        .as_ref()
-        .map_or(0, |s| {
-            s.entities
-                .iter()
-                .filter(|e| e.pad.is_some() && matches!(e.kind, EntityKind::Point { .. }))
-                .count()
-        })
+    fp.sketch.as_ref().map_or(0, |s| {
+        s.entities
+            .iter()
+            .filter(|e| e.pad.is_some() && matches!(e.kind, EntityKind::Point { .. }))
+            .count()
+    })
 }
 
 /// Helper: author one SMD Point with a `PadAttr`. Anchored at

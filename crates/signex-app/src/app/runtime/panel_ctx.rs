@@ -1,4 +1,11 @@
-use super::super::*;
+#![expect(
+    clippy::option_if_let_else,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::Signex;
 use super::footprint_ctx::build_footprint_editor_panel_ctx;
 use super::symbol_ctx::build_symbol_editor_panel_ctx;
 
@@ -101,14 +108,12 @@ impl Signex {
                     .data
                     .schematic_root
                     .as_deref()
-                    .map(lookup)
-                    .unwrap_or((false, false, false));
+                    .map_or((false, false, false), lookup);
                 let (pcb_file_open, pcb_file_dirty, pcb_file_active) = p
                     .data
                     .pcb_file
                     .as_deref()
-                    .map(lookup)
-                    .unwrap_or((false, false, false));
+                    .map_or((false, false, false), lookup);
 
                 // F24 — file existence check. Used to mark orphan
                 // references (file registered on the project but
@@ -118,18 +123,9 @@ impl Signex {
                     let abs = project_dir.join(filename);
                     abs.exists()
                 };
-                let project_file_missing = p
-                    .data
-                    .schematic_root
-                    .as_deref()
-                    .map(|f| !exists(f))
-                    .unwrap_or(false);
-                let pcb_file_missing = p
-                    .data
-                    .pcb_file
-                    .as_deref()
-                    .map(|f| !exists(f))
-                    .unwrap_or(false);
+                let project_file_missing =
+                    p.data.schematic_root.as_deref().is_some_and(|f| !exists(f));
+                let pcb_file_missing = p.data.pcb_file.as_deref().is_some_and(|f| !exists(f));
                 // Flatten `Project::libraries` into the panel struct
                 // alongside the sheet list. Each entry resolves to an
                 // absolute path so the right-click menu can dispatch
@@ -149,8 +145,7 @@ impl Signex {
                                 .path
                                 .file_stem()
                                 .and_then(|s| s.to_str())
-                                .map(str::to_string)
-                                .unwrap_or_else(|| entry.path.display().to_string()),
+                                .map_or_else(|| entry.path.display().to_string(), str::to_string),
                         };
                         let missing = !resolved.exists();
                         // F30 — list `.snxsym` / `.snxfpt` FILES, not
@@ -181,21 +176,20 @@ impl Signex {
                             // appeared in the project tree.
                             let lib_root = resolved
                                 .parent()
-                                .map(std::path::Path::to_path_buf)
-                                .unwrap_or_else(|| resolved.clone());
+                                .map_or_else(|| resolved.clone(), std::path::Path::to_path_buf);
                             let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
                                 let dir = lib_root.join(sub);
                                 let mut names: Vec<String> = std::fs::read_dir(&dir)
                                     .ok()
                                     .into_iter()
                                     .flatten()
-                                    .filter_map(|entry| entry.ok())
+                                    .filter_map(std::result::Result::ok)
                                     .filter_map(|entry| {
                                         let path = entry.path();
                                         if path.extension().and_then(|e| e.to_str()) == Some(ext) {
                                             path.file_stem()
                                                 .and_then(|s| s.to_str())
-                                                .map(|s| s.to_string())
+                                                .map(std::string::ToString::to_string)
                                         } else {
                                             None
                                         }
@@ -371,8 +365,7 @@ impl Signex {
                 })
                 .unwrap_or_else(|| "A4".to_string()),
             lib_symbol_count: active_schematic_snapshot
-                .map(|snapshot| snapshot.lib_symbols.len())
-                .unwrap_or(0),
+                .map_or(0, |snapshot| snapshot.lib_symbols.len()),
             lib_symbol_names: active_schematic_snapshot
                 .map(|snapshot| snapshot.lib_symbols.keys().cloned().collect())
                 .unwrap_or_default(),

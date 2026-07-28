@@ -14,7 +14,7 @@
 //! for any sibling that imports it.
 
 /// Placeholder — superseded by `ComponentEditorState::sim_body` and
-/// the SimModel primitive itself. Kept for backwards-compatible
+/// the `SimModel` primitive itself. Kept for backwards-compatible
 /// imports until WS-? deletes the module.
 #[derive(Debug, Default, Clone)]
 #[allow(dead_code)]

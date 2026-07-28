@@ -1,3 +1,13 @@
+#![expect(
+    clippy::doc_lazy_continuation,
+    clippy::items_after_statements,
+    clippy::match_same_arms,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    clippy::unnecessary_map_or,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.16.1 — Fusion-style cursor snap for the footprint sketch
 //! canvas.
 //!
@@ -74,13 +84,15 @@ pub enum SnapKind {
 }
 
 /// v0.18.23 — world-mm tolerance used by the guide-snap priority.
+///
 /// The cursor snaps onto a guide whose axis is within this distance.
 /// Picked to feel sticky at typical 1 mm grid steps without competing
 /// against point-hit (which is px-radius scaled).
 pub const GUIDE_SNAP_TOLERANCE_MM: f64 = 0.5;
 
 impl SnapResult {
-    pub fn raw(pos: (f64, f64)) -> Self {
+    #[must_use]
+    pub const fn raw(pos: (f64, f64)) -> Self {
         Self {
             pos,
             kind: SnapKind::Raw,
@@ -91,13 +103,15 @@ impl SnapResult {
 /// Convert a screen-pixel radius to world-mm at the current camera
 /// scale. Callers pass the canvas's `scale` (px/mm) and we return
 /// the equivalent world-mm radius for distance comparisons.
+#[must_use]
 pub fn px_to_world_mm(px: f32, scale_px_per_mm: f32) -> f64 {
-    (px / scale_px_per_mm.max(1e-3)) as f64
+    f64::from(px / scale_px_per_mm.max(1e-3))
 }
 
 /// Look up the active tool's anchor — the previously-placed Point
 /// the next click attaches to. Returns `None` for tool states with
 /// no anchor (Idle, Select, Place Point single-shot).
+#[must_use]
 pub fn anchor_for_tool(
     state: &FootprintEditorState,
     sketch: Option<&SketchData>,
@@ -134,21 +148,22 @@ pub fn anchor_for_tool(
 /// World-mm position of a sketch `Point`. Prefers the solver's last
 /// solved coordinates, falls back to authored coords. Returns `None`
 /// if the entity isn't a `Point` or the sketch is missing.
+#[must_use]
 pub fn point_pos(
     id: SketchEntityId,
     sketch: Option<&SketchData>,
     state: &FootprintEditorState,
 ) -> Option<(f64, f64)> {
     let sketch = sketch?;
-    if let Some(solve) = state.last_solve.as_ref() {
-        if let Some(p) = signex_sketch::solver::state::point_xy(
+    if let Some(solve) = state.last_solve.as_ref()
+        && let Some(p) = signex_sketch::solver::state::point_xy(
             id,
             &solve.result.state,
             &solve.result.index,
             sketch,
-        ) {
-            return Some(p);
-        }
+        )
+    {
+        return Some(p);
     }
     sketch
         .entities
@@ -165,6 +180,7 @@ pub fn point_pos(
 /// a prior call to the canvas's `sketch_snap` (we don't re-implement
 /// the spatial query here so the canvas's existing px-radius logic
 /// stays the source of truth).
+#[must_use]
 pub fn snap_cursor(
     raw: (f64, f64),
     sketch: Option<&SketchData>,
@@ -191,15 +207,14 @@ pub fn snap_cursor(
     let opts = state.snap_options;
 
     // Priority 1 — Point snap.
-    if opts.point_hit {
-        if let Some(id) = point_hit {
-            if let Some(pos) = point_pos(id, sketch, state) {
-                return SnapResult {
-                    pos,
-                    kind: SnapKind::Point(id),
-                };
-            }
-        }
+    if opts.point_hit
+        && let Some(id) = point_hit
+        && let Some(pos) = point_pos(id, sketch, state)
+    {
+        return SnapResult {
+            pos,
+            kind: SnapKind::Point(id),
+        };
     }
 
     // Priority 1.5 — Guide snap. Snaps the cursor onto enabled
@@ -214,18 +229,18 @@ pub fn snap_cursor(
             match g.axis {
                 GuideAxis::Vertical => {
                     if (raw.0 - g.position_mm).abs() <= GUIDE_SNAP_TOLERANCE_MM
-                        && snapped_x
-                            .map(|sx| (raw.0 - g.position_mm).abs() < (raw.0 - sx).abs())
-                            .unwrap_or(true)
+                        && snapped_x.map_or(true, |sx| {
+                            (raw.0 - g.position_mm).abs() < (raw.0 - sx).abs()
+                        })
                     {
                         snapped_x = Some(g.position_mm);
                     }
                 }
                 GuideAxis::Horizontal => {
                     if (raw.1 - g.position_mm).abs() <= GUIDE_SNAP_TOLERANCE_MM
-                        && snapped_y
-                            .map(|sy| (raw.1 - g.position_mm).abs() < (raw.1 - sy).abs())
-                            .unwrap_or(true)
+                        && snapped_y.map_or(true, |sy| {
+                            (raw.1 - g.position_mm).abs() < (raw.1 - sy).abs()
+                        })
                     {
                         snapped_y = Some(g.position_mm);
                     }
@@ -245,239 +260,239 @@ pub fn snap_cursor(
     // the closest hit within `snap_distance_mm`. Arc×Arc and
     // Arc×Circle pairs are queued — they need a curve×curve
     // intersection helper that doesn't exist yet.
-    if opts.snap_intersections {
-        if let Some(sketch) = sketch {
-            use signex_sketch::entity::EntityKind;
-            use signex_sketch::geom::{
-                Arc2, Circle2, Point2, Segment2, SegmentIntersection, segment_arc_intersections,
-                segment_circle_intersections, segment_segment_intersection,
-            };
+    if opts.snap_intersections
+        && let Some(sketch) = sketch
+    {
+        use signex_sketch::entity::EntityKind;
+        use signex_sketch::geom::{
+            Arc2, Circle2, Point2, Segment2, SegmentIntersection, segment_arc_intersections,
+            segment_circle_intersections, segment_segment_intersection,
+        };
 
-            let resolve =
-                |id: SketchEntityId| -> Option<(f64, f64)> { point_pos(id, Some(sketch), state) };
+        let resolve =
+            |id: SketchEntityId| -> Option<(f64, f64)> { point_pos(id, Some(sketch), state) };
 
-            // Lines as (start, end) world-mm pairs.
-            let lines: Vec<(Point2, Point2)> = sketch
-                .entities
-                .iter()
-                .filter_map(|e| {
-                    if let EntityKind::Line { start, end } = e.kind {
-                        let s = resolve(start)?;
-                        let f = resolve(end)?;
-                        Some((Point2::new(s.0, s.1), Point2::new(f.0, f.1)))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+        // Lines as (start, end) world-mm pairs.
+        let lines: Vec<(Point2, Point2)> = sketch
+            .entities
+            .iter()
+            .filter_map(|e| {
+                if let EntityKind::Line { start, end } = e.kind {
+                    let s = resolve(start)?;
+                    let f = resolve(end)?;
+                    Some((Point2::new(s.0, s.1), Point2::new(f.0, f.1)))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-            // Circles as (centre, radius).
-            let circles: Vec<(Point2, f64)> = sketch
-                .entities
-                .iter()
-                .filter_map(|e| {
-                    if let EntityKind::Circle { center, radius } = e.kind {
-                        let c = resolve(center)?;
-                        Some((Point2::new(c.0, c.1), radius))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+        // Circles as (centre, radius).
+        let circles: Vec<(Point2, f64)> = sketch
+            .entities
+            .iter()
+            .filter_map(|e| {
+                if let EntityKind::Circle { center, radius } = e.kind {
+                    let c = resolve(center)?;
+                    Some((Point2::new(c.0, c.1), radius))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-            // Arcs as (centre, radius, start_rad, end_rad, sweep_ccw).
-            let arcs: Vec<Arc2> = sketch
-                .entities
-                .iter()
-                .filter_map(|e| {
-                    if let EntityKind::Arc {
-                        center,
-                        start,
-                        end,
+        // Arcs as (centre, radius, start_rad, end_rad, sweep_ccw).
+        let arcs: Vec<Arc2> = sketch
+            .entities
+            .iter()
+            .filter_map(|e| {
+                if let EntityKind::Arc {
+                    center,
+                    start,
+                    end,
+                    sweep_ccw,
+                } = e.kind
+                {
+                    let c = resolve(center)?;
+                    let s = resolve(start)?;
+                    let f = resolve(end)?;
+                    let radius = (s.0 - c.0).hypot(s.1 - c.1);
+                    let start_rad = (s.1 - c.1).atan2(s.0 - c.0);
+                    let end_rad = (f.1 - c.1).atan2(f.0 - c.0);
+                    Some(Arc2::new(
+                        Point2::new(c.0, c.1),
+                        radius,
+                        start_rad,
+                        end_rad,
                         sweep_ccw,
-                    } = e.kind
-                    {
-                        let c = resolve(center)?;
-                        let s = resolve(start)?;
-                        let f = resolve(end)?;
-                        let radius = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
-                        let start_rad = (s.1 - c.1).atan2(s.0 - c.0);
-                        let end_rad = (f.1 - c.1).atan2(f.0 - c.0);
-                        Some(Arc2::new(
-                            Point2::new(c.0, c.1),
-                            radius,
-                            start_rad,
-                            end_rad,
-                            sweep_ccw,
-                        ))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            let tol = state.snap_options.snap_distance_mm.max(1e-6);
-            let tol_sq = tol * tol;
-            let mut best: Option<(f64, (f64, f64))> = None;
-            let consider = |pt: Point2, best: &mut Option<(f64, (f64, f64))>| {
-                let dx = pt.x - raw.0;
-                let dy = pt.y - raw.1;
-                let d_sq = dx * dx + dy * dy;
-                if d_sq <= tol_sq {
-                    match best {
-                        Some((b_sq, _)) if *b_sq <= d_sq => {}
-                        _ => *best = Some((d_sq, (pt.x, pt.y))),
-                    }
+                    ))
+                } else {
+                    None
                 }
-            };
+            })
+            .collect();
 
-            // Line × Line.
-            for i in 0..lines.len() {
-                for j in (i + 1)..lines.len() {
-                    let s_a = Segment2::new(lines[i].0, lines[i].1);
-                    let s_b = Segment2::new(lines[j].0, lines[j].1);
-                    if let SegmentIntersection::Point { pt, .. } =
-                        segment_segment_intersection(s_a, s_b)
-                    {
-                        consider(pt, &mut best);
-                    }
+        let tol = state.snap_options.snap_distance_mm.max(1e-6);
+        let tol_sq = tol * tol;
+        let mut best: Option<(f64, (f64, f64))> = None;
+        let consider = |pt: Point2, best: &mut Option<(f64, (f64, f64))>| {
+            let dx = pt.x - raw.0;
+            let dy = pt.y - raw.1;
+            let d_sq = dy.mul_add(dy, dx * dx);
+            if d_sq <= tol_sq {
+                match best {
+                    Some((b_sq, _)) if *b_sq <= d_sq => {}
+                    _ => *best = Some((d_sq, (pt.x, pt.y))),
                 }
             }
+        };
 
-            // Line × Arc.
-            for line in &lines {
-                let seg = Segment2::new(line.0, line.1);
-                for arc in &arcs {
-                    for (pt, _) in segment_arc_intersections(seg, *arc) {
-                        consider(pt, &mut best);
-                    }
+        // Line × Line.
+        for i in 0..lines.len() {
+            for j in (i + 1)..lines.len() {
+                let s_a = Segment2::new(lines[i].0, lines[i].1);
+                let s_b = Segment2::new(lines[j].0, lines[j].1);
+                if let SegmentIntersection::Point { pt, .. } =
+                    segment_segment_intersection(s_a, s_b)
+                {
+                    consider(pt, &mut best);
                 }
             }
+        }
 
-            // Line × Circle.
-            for line in &lines {
-                let seg = Segment2::new(line.0, line.1);
-                for c in &circles {
-                    let circle = Circle2::new(c.0, c.1);
-                    for (pt, _) in segment_circle_intersections(seg, circle) {
-                        consider(pt, &mut best);
-                    }
-                }
-            }
-
-            // v0.27 — Curve × curve. Circle × Circle, Arc × Arc,
-            // Arc × Circle. Round out the snap so any pair of
-            // sketch curves yields a snap target at their
-            // crossing.
-            use signex_sketch::geom::{
-                arc_arc_intersections, arc_circle_intersections, circle_circle_intersections,
-            };
-            for i in 0..circles.len() {
-                for j in (i + 1)..circles.len() {
-                    let a = Circle2::new(circles[i].0, circles[i].1);
-                    let b = Circle2::new(circles[j].0, circles[j].1);
-                    for pt in circle_circle_intersections(a, b) {
-                        consider(pt, &mut best);
-                    }
-                }
-            }
-            for i in 0..arcs.len() {
-                for j in (i + 1)..arcs.len() {
-                    for pt in arc_arc_intersections(arcs[i], arcs[j]) {
-                        consider(pt, &mut best);
-                    }
-                }
-            }
+        // Line × Arc.
+        for line in &lines {
+            let seg = Segment2::new(line.0, line.1);
             for arc in &arcs {
-                for c in &circles {
-                    let circle = Circle2::new(c.0, c.1);
-                    for pt in arc_circle_intersections(*arc, circle) {
-                        consider(pt, &mut best);
-                    }
+                for (pt, _) in segment_arc_intersections(seg, *arc) {
+                    consider(pt, &mut best);
                 }
             }
+        }
 
-            if let Some((_, pos)) = best {
-                return SnapResult {
-                    pos,
-                    kind: SnapKind::Intersection,
-                };
+        // Line × Circle.
+        for line in &lines {
+            let seg = Segment2::new(line.0, line.1);
+            for c in &circles {
+                let circle = Circle2::new(c.0, c.1);
+                for (pt, _) in segment_circle_intersections(seg, circle) {
+                    consider(pt, &mut best);
+                }
             }
+        }
+
+        // v0.27 — Curve × curve. Circle × Circle, Arc × Arc,
+        // Arc × Circle. Round out the snap so any pair of
+        // sketch curves yields a snap target at their
+        // crossing.
+        use signex_sketch::geom::{
+            arc_arc_intersections, arc_circle_intersections, circle_circle_intersections,
+        };
+        for i in 0..circles.len() {
+            for j in (i + 1)..circles.len() {
+                let a = Circle2::new(circles[i].0, circles[i].1);
+                let b = Circle2::new(circles[j].0, circles[j].1);
+                for pt in circle_circle_intersections(a, b) {
+                    consider(pt, &mut best);
+                }
+            }
+        }
+        for i in 0..arcs.len() {
+            for j in (i + 1)..arcs.len() {
+                for pt in arc_arc_intersections(arcs[i], arcs[j]) {
+                    consider(pt, &mut best);
+                }
+            }
+        }
+        for arc in &arcs {
+            for c in &circles {
+                let circle = Circle2::new(c.0, c.1);
+                for pt in arc_circle_intersections(*arc, circle) {
+                    consider(pt, &mut best);
+                }
+            }
+        }
+
+        if let Some((_, pos)) = best {
+            return SnapResult {
+                pos,
+                kind: SnapKind::Intersection,
+            };
         }
     }
 
     // Priority 2 + 3 — anchor-relative angle snap (H/V/15°).
-    if opts.horizontal_vertical || opts.angle {
-        if let Some(anchor) = anchor_for_tool(state, sketch) {
-            let dx = raw.0 - anchor.0;
-            let dy = raw.1 - anchor.1;
-            let dist = (dx * dx + dy * dy).sqrt();
-            // Skip degenerate (cursor on the anchor) — fall through to
-            // grid so we don't divide by zero on the angle math.
-            if dist > 1e-6 {
-                let angle = dy.atan2(dx);
-                // Horizontal: angle near 0 or ±π → |sin(angle)| small.
-                // Vertical:   angle near ±π/2  → |cos(angle)| small.
-                let axis_thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
-                // v0.14-footprint — fold the active grid step into the
-                // snapped point. Previously H/V and angle snap returned
-                // a position built from the raw cursor distance and
-                // `return`ed before the grid block below, so a snapped
-                // point kept the anchor's coordinate on the locked axis
-                // but an arbitrary OFF-GRID value on the free axis /
-                // along the ray ("snapped to angle but not to grid").
-                // Grid-snapping the free axis (H/V) and the ray distance
-                // (diagonal) keeps both true at once. No-op when grid
-                // snap is disabled.
-                let grid_snap = |v: f64| -> f64 {
-                    if opts.grid && opts.grid_step_mm > 1e-9 {
-                        (v / opts.grid_step_mm).round() * opts.grid_step_mm
-                    } else {
-                        v
-                    }
+    if (opts.horizontal_vertical || opts.angle)
+        && let Some(anchor) = anchor_for_tool(state, sketch)
+    {
+        let dx = raw.0 - anchor.0;
+        let dy = raw.1 - anchor.1;
+        let dist = dx.hypot(dy);
+        // Skip degenerate (cursor on the anchor) — fall through to
+        // grid so we don't divide by zero on the angle math.
+        if dist > 1e-6 {
+            let angle = dy.atan2(dx);
+            // Horizontal: angle near 0 or ±π → |sin(angle)| small.
+            // Vertical:   angle near ±π/2  → |cos(angle)| small.
+            let axis_thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
+            // v0.14-footprint — fold the active grid step into the
+            // snapped point. Previously H/V and angle snap returned
+            // a position built from the raw cursor distance and
+            // `return`ed before the grid block below, so a snapped
+            // point kept the anchor's coordinate on the locked axis
+            // but an arbitrary OFF-GRID value on the free axis /
+            // along the ray ("snapped to angle but not to grid").
+            // Grid-snapping the free axis (H/V) and the ray distance
+            // (diagonal) keeps both true at once. No-op when grid
+            // snap is disabled.
+            let grid_snap = |v: f64| -> f64 {
+                if opts.grid && opts.grid_step_mm > 1e-9 {
+                    (v / opts.grid_step_mm).round() * opts.grid_step_mm
+                } else {
+                    v
+                }
+            };
+            if opts.horizontal_vertical && angle.sin().abs() < axis_thresh {
+                // Horizontal: lock Y to the anchor, snap the free X
+                // axis to grid. Using the cursor's own X (not
+                // anchor + hypotenuse) avoids the perpendicular
+                // component leaking into the length.
+                let pos = (grid_snap(raw.0), anchor.1);
+                return SnapResult {
+                    pos,
+                    kind: SnapKind::Horizontal,
                 };
-                if opts.horizontal_vertical && angle.sin().abs() < axis_thresh {
-                    // Horizontal: lock Y to the anchor, snap the free X
-                    // axis to grid. Using the cursor's own X (not
-                    // anchor + hypotenuse) avoids the perpendicular
-                    // component leaking into the length.
-                    let pos = (grid_snap(raw.0), anchor.1);
-                    return SnapResult {
-                        pos,
-                        kind: SnapKind::Horizontal,
-                    };
-                }
-                if opts.horizontal_vertical && angle.cos().abs() < axis_thresh {
-                    // Vertical: lock X to the anchor, snap the free Y.
-                    let pos = (anchor.0, grid_snap(raw.1));
-                    return SnapResult {
-                        pos,
-                        kind: SnapKind::Vertical,
-                    };
-                }
+            }
+            if opts.horizontal_vertical && angle.cos().abs() < axis_thresh {
+                // Vertical: lock X to the anchor, snap the free Y.
+                let pos = (anchor.0, grid_snap(raw.1));
+                return SnapResult {
+                    pos,
+                    kind: SnapKind::Vertical,
+                };
+            }
 
-                if opts.angle {
-                    // Angle snap to ANGLE_STEP_DEG increments.
-                    let step_rad = ANGLE_STEP_DEG.to_radians();
-                    let snapped_angle = (angle / step_rad).round() * step_rad;
-                    let angle_diff = ((angle - snapped_angle).abs())
-                        .min((std::f64::consts::TAU - (angle - snapped_angle).abs()).abs());
-                    if angle_diff < ANGLE_THRESHOLD_DEG.to_radians() {
-                        // Hold the snapped azimuth exactly; step the
-                        // distance along the ray in grid increments so
-                        // the endpoint lands on a grid-multiple radius
-                        // (a true diagonal can't sit on both the ray
-                        // and an XY grid node, so grid the distance).
-                        let snapped_dist = grid_snap(dist);
-                        let pos = (
-                            anchor.0 + snapped_dist * snapped_angle.cos(),
-                            anchor.1 + snapped_dist * snapped_angle.sin(),
-                        );
-                        return SnapResult {
-                            pos,
-                            kind: SnapKind::Angle(snapped_angle),
-                        };
-                    }
+            if opts.angle {
+                // Angle snap to ANGLE_STEP_DEG increments.
+                let step_rad = ANGLE_STEP_DEG.to_radians();
+                let snapped_angle = (angle / step_rad).round() * step_rad;
+                let angle_diff = ((angle - snapped_angle).abs())
+                    .min((std::f64::consts::TAU - (angle - snapped_angle).abs()).abs());
+                if angle_diff < ANGLE_THRESHOLD_DEG.to_radians() {
+                    // Hold the snapped azimuth exactly; step the
+                    // distance along the ray in grid increments so
+                    // the endpoint lands on a grid-multiple radius
+                    // (a true diagonal can't sit on both the ray
+                    // and an XY grid node, so grid the distance).
+                    let snapped_dist = grid_snap(dist);
+                    let pos = (
+                        anchor.0 + snapped_dist * snapped_angle.cos(),
+                        anchor.1 + snapped_dist * snapped_angle.sin(),
+                    );
+                    return SnapResult {
+                        pos,
+                        kind: SnapKind::Angle(snapped_angle),
+                    };
                 }
             }
         }

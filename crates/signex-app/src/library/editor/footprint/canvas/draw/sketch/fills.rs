@@ -1,3 +1,11 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Filled closed loops — walks the line/arc graph, finds simple closed
 //! cycles, and fills each polygon with a role-tinted plate. Also
 //! exposes the `ClosedLoop` records so the click handler can select an
@@ -172,7 +180,7 @@ pub(super) fn draw_filled_closed_loops(
     // v0.16.2 — pick a fill colour for a loop by inspecting each
     // entity's role attr. Returns `None` when no entity in the loop
     // carries a role; the caller falls back to neutral grey.
-    fn role_color(entity: &Entity) -> Option<FpLayer> {
+    const fn role_color(entity: &Entity) -> Option<FpLayer> {
         if entity.pad.is_some() {
             return Some(FpLayer::FCu);
         }
@@ -228,15 +236,15 @@ pub(super) fn draw_filled_closed_loops(
         sketch: &signex_sketch::SketchData,
         state: &FootprintEditorState,
     ) -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some(p) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some(p) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some(p);
-            }
+            )
+        {
+            return Some(p);
         }
         sketch
             .entities

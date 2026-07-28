@@ -1,9 +1,18 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::fn_params_excessive_bools,
+    clippy::needless_pass_by_ref_mut,
+    clippy::option_if_let_else,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::path::PathBuf;
 
 use signex_types::pcb::PcbBoard;
 use signex_types::schematic::SchematicSheet;
 
-use super::*;
+use super::{SchematicTabSession, Signex, TabDocument, TabInfo, Tool};
 
 impl Signex {
     fn active_tab_cached_document(&self) -> Option<&TabDocument> {
@@ -16,7 +25,7 @@ impl Signex {
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
         self.document_state
             .active_engine()
-            .map(|engine| engine.document())
+            .map(signex_engine::Engine::document)
     }
 
     pub(crate) fn active_pcb(&self) -> Option<&PcbBoard> {
@@ -114,7 +123,7 @@ impl Signex {
         }
     }
 
-    pub(crate) fn park_active_schematic_session(&mut self) {
+    pub(crate) const fn park_active_schematic_session(&mut self) {
         // HashMap storage means engines never move — every schematic
         // tab's engine lives keyed by its on-disk path regardless of
         // which tab is active. Kept as an API seam so callers about to
@@ -293,8 +302,7 @@ impl Signex {
         let active_path = self.active_tab_path();
         let is_schematic = active_path
             .as_ref()
-            .map(|p| self.document_state.engines.contains_key(p))
-            .unwrap_or(false);
+            .is_some_and(|p| self.document_state.engines.contains_key(p));
         let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {

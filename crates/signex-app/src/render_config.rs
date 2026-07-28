@@ -37,15 +37,14 @@ pub enum GridStyle {
 }
 
 impl GridStyle {
-    pub const ALL: &'static [GridStyle] =
-        &[GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses];
+    pub const ALL: &'static [Self] = &[Self::Dots, Self::Lines, Self::SmallCrosses];
 }
 
 impl std::fmt::Display for PowerPortStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PowerPortStyle::Standard => write!(f, "Standard"),
-            PowerPortStyle::Altium => write!(f, "Altium"),
+            Self::Standard => write!(f, "Standard"),
+            Self::Altium => write!(f, "Altium"),
         }
     }
 }
@@ -53,8 +52,8 @@ impl std::fmt::Display for PowerPortStyle {
 impl std::fmt::Display for LabelStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LabelStyle::Standard => write!(f, "Standard"),
-            LabelStyle::Altium => write!(f, "Altium"),
+            Self::Standard => write!(f, "Standard"),
+            Self::Altium => write!(f, "Altium"),
         }
     }
 }
@@ -62,8 +61,8 @@ impl std::fmt::Display for LabelStyle {
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MultisheetStyle::Standard => write!(f, "Standard"),
-            MultisheetStyle::Altium => write!(f, "Altium"),
+            Self::Standard => write!(f, "Standard"),
+            Self::Altium => write!(f, "Altium"),
         }
     }
 }
@@ -71,9 +70,9 @@ impl std::fmt::Display for MultisheetStyle {
 impl std::fmt::Display for GridStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GridStyle::Dots => write!(f, "Dots"),
-            GridStyle::Lines => write!(f, "Lines"),
-            GridStyle::SmallCrosses => write!(f, "Small crosses"),
+            Self::Dots => write!(f, "Dots"),
+            Self::Lines => write!(f, "Lines"),
+            Self::SmallCrosses => write!(f, "Small crosses"),
         }
     }
 }
@@ -90,27 +89,29 @@ pub enum PinSelectionMode {
 }
 
 impl PinSelectionMode {
-    pub const ALL: [PinSelectionMode; 2] =
-        [PinSelectionMode::PinOnly, PinSelectionMode::TextAndPin];
+    pub const ALL: [Self; 2] = [Self::PinOnly, Self::TextAndPin];
     /// True when name/number labels are grabbable + glow.
-    pub fn allows_label_grab(self) -> bool {
-        matches!(self, PinSelectionMode::TextAndPin)
+    #[must_use]
+    pub const fn allows_label_grab(self) -> bool {
+        matches!(self, Self::TextAndPin)
     }
 
     /// Stable token used to persist this mode to `prefs.json`.
-    pub fn pref_token(self) -> &'static str {
+    #[must_use]
+    pub const fn pref_token(self) -> &'static str {
         match self {
-            PinSelectionMode::PinOnly => "pin_only",
-            PinSelectionMode::TextAndPin => "text_and_pin",
+            Self::PinOnly => "pin_only",
+            Self::TextAndPin => "text_and_pin",
         }
     }
 
     /// Parse a persisted token back into a mode — unknown/legacy values
     /// fall back to the `PinOnly` default.
+    #[must_use]
     pub fn from_pref_token(s: &str) -> Self {
         match s {
-            "text_and_pin" => PinSelectionMode::TextAndPin,
-            _ => PinSelectionMode::PinOnly,
+            "text_and_pin" => Self::TextAndPin,
+            _ => Self::PinOnly,
         }
     }
 }
@@ -118,8 +119,8 @@ impl PinSelectionMode {
 impl std::fmt::Display for PinSelectionMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            PinSelectionMode::PinOnly => "Pin only",
-            PinSelectionMode::TextAndPin => "Text and pin",
+            Self::PinOnly => "Pin only",
+            Self::TextAndPin => "Text and pin",
         })
     }
 }
@@ -139,7 +140,7 @@ struct CanvasTextConfig {
     symbol_grid_style: GridStyle,
 }
 
-fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
+const fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
     iced::Font {
         family: iced::font::Family::Name(name),
         weight: if bold {
@@ -203,11 +204,11 @@ pub fn set_power_port_style(style: PowerPortStyle) {
     }
 }
 
+#[must_use]
 pub fn power_port_style() -> PowerPortStyle {
     canvas_text_config()
         .read()
-        .map(|c| c.power_port_style)
-        .unwrap_or(PowerPortStyle::Altium)
+        .map_or(PowerPortStyle::Altium, |c| c.power_port_style)
 }
 
 pub fn set_label_style(style: LabelStyle) {
@@ -216,11 +217,11 @@ pub fn set_label_style(style: LabelStyle) {
     }
 }
 
+#[must_use]
 pub fn label_style() -> LabelStyle {
     canvas_text_config()
         .read()
-        .map(|c| c.label_style)
-        .unwrap_or(LabelStyle::Standard)
+        .map_or(LabelStyle::Standard, |c| c.label_style)
 }
 
 pub fn set_multisheet_style(style: MultisheetStyle) {
@@ -229,11 +230,11 @@ pub fn set_multisheet_style(style: MultisheetStyle) {
     }
 }
 
+#[must_use]
 pub fn multisheet_style() -> MultisheetStyle {
     canvas_text_config()
         .read()
-        .map(|c| c.multisheet_style)
-        .unwrap_or(MultisheetStyle::Standard)
+        .map_or(MultisheetStyle::Standard, |c| c.multisheet_style)
 }
 
 pub fn set_grid_style(style: GridStyle) {
@@ -242,11 +243,11 @@ pub fn set_grid_style(style: GridStyle) {
     }
 }
 
+#[must_use]
 pub fn grid_style() -> GridStyle {
     canvas_text_config()
         .read()
-        .map(|c| c.grid_style)
-        .unwrap_or(GridStyle::Dots)
+        .map_or(GridStyle::Dots, |c| c.grid_style)
 }
 
 pub fn set_symbol_grid_style(style: GridStyle) {
@@ -255,27 +256,24 @@ pub fn set_symbol_grid_style(style: GridStyle) {
     }
 }
 
+#[must_use]
 pub fn symbol_grid_style() -> GridStyle {
     canvas_text_config()
         .read()
-        .map(|c| c.symbol_grid_style)
-        .unwrap_or(GridStyle::Dots)
+        .map_or(GridStyle::Dots, |c| c.symbol_grid_style)
 }
 
+#[must_use]
 pub fn canvas_font() -> iced::Font {
-    canvas_text_config()
-        .read()
-        .map(|c| c.font)
-        .unwrap_or(IOSEVKA)
+    canvas_text_config().read().map_or(IOSEVKA, |c| c.font)
 }
 
+#[must_use]
 pub fn canvas_font_size_scale() -> f32 {
-    canvas_text_config()
-        .read()
-        .map(|c| c.size_scale)
-        .unwrap_or(1.0)
+    canvas_text_config().read().map_or(1.0, |c| c.size_scale)
 }
 
+#[must_use]
 pub fn to_iced(c: &signex_types::theme::Color) -> iced::Color {
-    iced::Color::from_rgba8(c.r, c.g, c.b, c.a as f32 / 255.0)
+    iced::Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
 }

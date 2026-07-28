@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Free math / coordinate helpers for the symbol canvas — text and
 //! stroke sizing at zoom, angle unwrapping, screen↔world conversion
 //! with the canvas snap grid, colour packing, circle tessellation,
@@ -5,14 +12,17 @@
 //! `pub(super)` so both the parent `canvas` module and its `input` /
 //! `draw` submodules can reach them.
 
-use super::*;
+use super::{
+    Color, MM_PER_EM, Rectangle, SNAP_GRID_MM, Symbol, SymbolCanvas, SymbolGraphicKind,
+    SymbolSelection, state,
+};
 
 pub(super) fn text_size_px_from_mm(size_mm: f32, scale: f32) -> f32 {
     let em_mm = size_mm.max(0.1) / MM_PER_EM;
     (em_mm * scale).clamp(2.0, 96.0)
 }
 
-pub(super) fn stroke_px_at_zoom(base_width_px_at_100: f32, _scale: f32) -> f32 {
+pub(super) const fn stroke_px_at_zoom(base_width_px_at_100: f32, _scale: f32) -> f32 {
     base_width_px_at_100
 }
 
@@ -42,7 +52,7 @@ pub(super) fn screen_px_to_world_mm(px: f32, scale: f32) -> f32 {
     (px / scale.max(0.001)).max(0.01)
 }
 
-pub(super) fn to_rgba(color: Color) -> [f32; 4] {
+pub(super) const fn to_rgba(color: Color) -> [f32; 4] {
     [color.r, color.g, color.b, color.a]
 }
 
@@ -55,7 +65,7 @@ pub(super) fn circle_vertices(center: [f64; 2], radius: f32, segments: usize) ->
     (0..segment_count)
         .map(|step| {
             let theta = (step as f32 / segment_count as f32) * std::f32::consts::TAU;
-            [cx + theta.cos() * r, cy + theta.sin() * r]
+            [theta.cos().mul_add(r, cx), theta.sin().mul_add(r, cy)]
         })
         .collect()
 }
@@ -76,8 +86,8 @@ pub(super) fn world_for(
     let world = canvas
         .camera
         .screen_to_world(iced::Point::new(sx, sy), bounds);
-    let wx = world.x as f64;
-    let wy = -world.y as f64;
+    let wx = f64::from(world.x);
+    let wy = f64::from(-world.y);
     (
         (wx / SNAP_GRID_MM).round() * SNAP_GRID_MM,
         (wy / SNAP_GRID_MM).round() * SNAP_GRID_MM,
@@ -96,7 +106,7 @@ pub(super) fn world_unsnapped(
     let world = canvas
         .camera
         .screen_to_world(iced::Point::new(sx, sy), bounds);
-    (world.x as f64, -world.y as f64)
+    (f64::from(world.x), f64::from(-world.y))
 }
 
 pub(super) fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> Option<(f64, f64)> {

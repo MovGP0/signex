@@ -1,3 +1,8 @@
+#![expect(
+    clippy::question_mark,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Camera input handling — first-draw fit, one-shot Fit-to-Window,
 //! scroll-wheel zoom (cursor-anchored), and middle/right-drag panning.
 //!
@@ -93,8 +98,8 @@ impl FootprintCanvas<'_> {
         };
         let new_scale = (cstate.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
         let actual_factor = new_scale / cstate.scale;
-        cstate.offset.x = cursor_pos.x - (cursor_pos.x - cstate.offset.x) * actual_factor;
-        cstate.offset.y = cursor_pos.y - (cursor_pos.y - cstate.offset.y) * actual_factor;
+        cstate.offset.x = (cursor_pos.x - cstate.offset.x).mul_add(-actual_factor, cursor_pos.x);
+        cstate.offset.y = (cursor_pos.y - cstate.offset.y).mul_add(-actual_factor, cursor_pos.y);
         cstate.scale = new_scale;
         self.cache.clear();
         // v0.14.2: same as the panning fix — publish a

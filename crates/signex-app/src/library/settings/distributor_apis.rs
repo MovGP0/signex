@@ -1,8 +1,14 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Settings → Library → Distributor APIs panel.
 //!
 //! Spec (v0.9-library-plan.md §14a.2):
 //!
-//! - DigiKey: OAuth2 PKCE — Phase 1 stubs the connect button.
+//! - `DigiKey`: `OAuth2` PKCE — Phase 1 stubs the connect button.
 //! - Mouser: API key in keyring — Phase 1 takes the user's key in
 //!   memory + a Test button.
 //! - LCSC, JLCPCB: no key required.
@@ -23,6 +29,7 @@ use super::super::state::DistributorSettings;
 /// Phase 1 ships this panel; Phase 2 wires it into the
 /// `crate::preferences` modal as a dedicated pref pane.
 #[allow(dead_code)]
+#[must_use]
 pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
@@ -225,7 +232,7 @@ pub fn view<'a>(
 }
 
 #[allow(dead_code)]
-fn distributor_label(src: DistributorSource) -> &'static str {
+const fn distributor_label(src: DistributorSource) -> &'static str {
     match src {
         DistributorSource::DigiKey => "DigiKey",
         DistributorSource::Mouser => "Mouser",
@@ -248,7 +255,7 @@ fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
 }
 
 #[allow(dead_code)]
-fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
+fn primary_btn(label: &str, message: LibraryMessage) -> Element<'_, LibraryMessage> {
     button(container(text(label.to_string()).size(11).color(iced::Color::WHITE)).padding([4, 12]))
         .on_press(message)
         .style(|_: &Theme, _| iced::widget::button::Style {
@@ -267,12 +274,12 @@ fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, Libra
 }
 
 #[allow(dead_code)]
-fn secondary_btn<'a>(
-    label: &'a str,
+fn secondary_btn(
+    label: &str,
     message: LibraryMessage,
     text_c: iced::Color,
     border: iced::Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     button(container(text(label.to_string()).size(11).color(text_c)).padding([4, 12]))
         .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {

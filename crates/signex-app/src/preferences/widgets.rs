@@ -6,7 +6,7 @@
 //! re-exported from `mod.rs` at `pub(in crate::preferences)`. Pure code
 //! motion out of the former single-file `preferences` module.
 
-use super::*;
+use super::PrefMsg;
 use iced::widget::{Space, button, column, container, text};
 use iced::{Background, Border, Element, Length, Theme};
 

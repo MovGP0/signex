@@ -1,6 +1,11 @@
+#![expect(
+    clippy::items_after_statements,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{ErcMsg, Message, PrintPreviewMsg, ProjectMsg, Signex};
 
 mod add;
 mod close_project;
@@ -161,7 +166,7 @@ impl Signex {
                     tree_path
                         .first()
                         .and_then(|idx| self.document_state.projects.get(*idx))
-                        .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+                        .and_then(|p| p.path.parent().map(std::path::Path::to_path_buf))
                 } else {
                     self.tree_path_to_file_path(&tree_path)
                 };
@@ -172,7 +177,7 @@ impl Signex {
                 }
             }
             ProjectTreeAction::PrintActive => {
-                return Task::perform(async {}, |_| {
+                return Task::perform(async {}, |()| {
                     Message::PrintPreview(PrintPreviewMsg::Requested)
                 });
             }
@@ -250,7 +255,7 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
             .arg(arg)
             .spawn()
             .map_err(|e| anyhow::anyhow!("explorer.exe failed to spawn: {e}"))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "macos")]

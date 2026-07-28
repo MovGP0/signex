@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! User-config persistence for the Distributor APIs panel.
 //!
 //! Stores the `[distributor_apis] preferred_order = [...]` list at
@@ -70,7 +76,7 @@ fn default_order() -> Vec<DistributorSource> {
 
 /// Wire-name for a distributor source — kept in this module so the
 /// schema is local to the file that owns it.
-fn source_to_str(s: DistributorSource) -> &'static str {
+const fn source_to_str(s: DistributorSource) -> &'static str {
     match s {
         DistributorSource::DigiKey => "digikey",
         DistributorSource::Mouser => "mouser",
@@ -98,6 +104,7 @@ fn str_to_source(s: &str) -> Option<DistributorSource> {
 /// Resolve `<config_dir>/signex/distributors.toml`. Returns `None`
 /// when the platform refuses to hand us a config dir (rare; e.g. some
 /// sandboxed CI runners). Tests override via [`config_path_for_dir`].
+#[must_use]
 pub fn config_path() -> Option<PathBuf> {
     crate::config_root::config_root().map(|root| root.join(FILE_NAME))
 }
@@ -106,6 +113,7 @@ pub fn config_path() -> Option<PathBuf> {
 /// directory. Lets unit tests round-trip without touching the real
 /// per-user config dir.
 #[allow(dead_code)]
+#[must_use]
 pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
     crate::config_root::config_root_for_dir(base).join(FILE_NAME)
 }
@@ -114,9 +122,7 @@ pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
 /// default when the file is missing/empty/corrupt — startup is
 /// best-effort.
 pub fn load_preferred_order() -> Vec<DistributorSource> {
-    config_path()
-        .map(|p| load_preferred_order_at(&p))
-        .unwrap_or_else(default_order)
+    config_path().map_or_else(default_order, |p| load_preferred_order_at(&p))
 }
 
 /// Load preferred order from a specific path — extracted so tests can

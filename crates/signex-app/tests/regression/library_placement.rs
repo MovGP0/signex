@@ -1,3 +1,9 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Sketch-tool gestures and live numeric placement input (typed distance/angle, Tab-cycling, Escape).
 
 use signex_app::app::{Message, Signex};

@@ -1,4 +1,4 @@
-use super::*;
+use super::Signex;
 
 impl Signex {
     fn render_invalidation_for_patch(
@@ -111,10 +111,10 @@ impl Signex {
 
         let invalidation = match engine.execute(command) {
             Ok(result) if result.changed => {
-                let invalidation = result
-                    .patch_pair
-                    .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                    .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE);
+                let invalidation = result.patch_pair.map_or(
+                    crate::schematic_runtime::RenderInvalidation::NONE,
+                    |patch_pair| Self::render_invalidation_for_patch(patch_pair.document),
+                );
                 self.interaction_state.undo_stack.record_engine_marker(1);
                 invalidation
             }

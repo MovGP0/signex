@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::option_if_let_else,
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Print-preview modal handlers. Split from `menu/export.rs`.
 
 use std::path::PathBuf;
@@ -5,7 +12,7 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions, PreviewRasterizer};
 
-use super::super::super::super::*;
+use super::super::super::super::{ExportMsg, Message, Signex};
 
 impl Signex {
     pub(crate) fn handle_print_preview_requested(&mut self) -> iced::Task<Message> {
@@ -14,12 +21,11 @@ impl Signex {
             return iced::Task::none();
         }
 
-        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                log::warn!("Print preview: no active schematic");
-                return iced::Task::none();
-            }
+        let (ctx, issues) = if let Some(c) = super::build_export_scope(&self.document_state) {
+            c
+        } else {
+            log::warn!("Print preview: no active schematic");
+            return iced::Task::none();
         };
         // Opening the modal is a user action, so the stitch issues surface
         // here — once. `rerasterize_print_preview` below must stay silent: it
@@ -35,8 +41,7 @@ impl Signex {
             let paper_str = ctx
                 .sheets
                 .first()
-                .map(|s| s.schematic.paper_size.as_str())
-                .unwrap_or("A4");
+                .map_or("A4", |s| s.schematic.paper_size.as_str());
             let page_size = PageSize::from_standard_str(paper_str);
             let orientation = PageSize::default_orientation_for_standard(paper_str);
             let palette = signex_output::SchematicPalette::from(
@@ -125,7 +130,7 @@ impl Signex {
         self.handle_detach_modal(crate::app::state::ModalId::PrintPreview)
     }
 
-    pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) {
+    pub(crate) const fn handle_print_preview_select_page(&mut self, idx: usize) {
         if let Some(preview) = self.document_state.preview.as_mut()
             && idx < preview.pages.len()
         {
@@ -172,7 +177,7 @@ impl Signex {
                 preview.pdf_options.page_range = PageRange::Specific(vec![page]);
             }
         }
-        if parsed_page.map(|p| p > 0).unwrap_or(false) {
+        if parsed_page.is_some_and(|p| p > 0) {
             self.rerasterize_print_preview();
         }
     }
@@ -405,7 +410,10 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_set_tab(&mut self, tab: crate::app::state::PdfPreviewTab) {
+    pub(crate) const fn handle_print_preview_set_tab(
+        &mut self,
+        tab: crate::app::state::PdfPreviewTab,
+    ) {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.active_tab = tab;
         }
@@ -431,7 +439,7 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_pan_finished(&mut self) {
+    pub(crate) const fn handle_print_preview_pan_finished(&mut self) {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.panning = None;
         }

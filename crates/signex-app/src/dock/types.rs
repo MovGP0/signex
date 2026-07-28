@@ -22,7 +22,7 @@ pub enum DockMessage {
     TabClick(PanelPosition, usize),
     /// Reorder tabs within a dock region. `from` is the dragged tab's
     /// original index, `to` is the index of the tab it was released
-    /// on. Currently produced by the internal TabClick handler — not
+    /// on. Currently produced by the internal `TabClick` handler — not
     /// emitted directly by the UI yet (left available for a future
     /// pointer-tracking drop indicator).
     #[allow(dead_code)]

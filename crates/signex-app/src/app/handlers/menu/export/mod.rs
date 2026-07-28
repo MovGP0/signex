@@ -1,3 +1,9 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Export / print-preview menu handlers (PDF, netlist, BOM, print).
 
 use std::path::PathBuf;
@@ -8,7 +14,7 @@ mod bom;
 mod pdf_netlist;
 mod print_preview;
 #[cfg(test)]
-pub(crate) mod tests;
+pub mod tests;
 
 /// Assemble the export context, discarding the stitch issues — for the
 /// callers that render an *intermediate* artifact rather than a deliverable
@@ -29,7 +35,7 @@ fn build_export_context(
 
 /// Everything that went wrong while deriving the export's netlist.
 #[derive(Default)]
-pub(crate) struct ExportIssues {
+pub struct ExportIssues {
     /// What the stitcher reported in-band.
     pub(crate) stitch: Vec<signex_net::StitchIssue>,
     /// Declared pages with no file at their path at all. A page that does not

@@ -1,8 +1,16 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! "New Component" modal — opened from File ▸ Library ▸ New
 //! Component… and from the project tree's library-node right-click
 //! menu.
 //!
-//! Components are rows in category tables (DBLib model). The modal
+//! Components are rows in category tables (`DBLib` model). The modal
 //! collects PN + library + table + class. On submit the dispatcher
 //! calls `commands::create_component_row` which mints Symbol +
 //! Footprint primitives, builds a `ComponentRow` with the binding
@@ -23,7 +31,7 @@
 //! ```
 //!
 //! When the manifest declares no `[[tables]]` overrides we still
-//! surface the table pick_list with a single "<class>s" placeholder
+//! surface the table `pick_list` with a single "<class>s" placeholder
 //! option so the user always sees the destination filename.
 
 use iced::widget::{Space, button, column, container, pick_list, row, svg, text, text_input};
@@ -146,7 +154,7 @@ pub fn view<'a>(
             .color(muted)
             .into()
     } else {
-        pick_list(lib_picks.clone(), selected_pick, |pick: LibraryPick| {
+        pick_list(lib_picks, selected_pick, |pick: LibraryPick| {
             LibraryMessage::NewComponentSetLibrary(pick.idx)
         })
         .placeholder("Select library…")
@@ -250,11 +258,9 @@ pub fn view<'a>(
         }
         form.into()
     } else {
-        let picker = pick_list(
-            table_picks.clone(),
-            selected_table_pick,
-            |pick: TablePick| LibraryMessage::NewComponentSetTable(pick.name),
-        )
+        let picker = pick_list(table_picks, selected_table_pick, |pick: TablePick| {
+            LibraryMessage::NewComponentSetTable(pick.name)
+        })
         .placeholder("Select table…")
         .padding(6)
         .text_size(12);
@@ -294,15 +300,14 @@ pub fn view<'a>(
         .iter()
         .find(|p| p.key == nc.class.as_str())
         .cloned();
-    let class_picker: Element<'_, LibraryMessage> = pick_list(
-        class_picks.clone(),
-        selected_class_pick,
-        |pick: ClassPick| LibraryMessage::NewComponentSetClass(ComponentClass::new(pick.key)),
-    )
-    .placeholder("Select class…")
-    .padding(6)
-    .text_size(12)
-    .into();
+    let class_picker: Element<'_, LibraryMessage> =
+        pick_list(class_picks, selected_class_pick, |pick: ClassPick| {
+            LibraryMessage::NewComponentSetClass(ComponentClass::new(pick.key))
+        })
+        .placeholder("Select class…")
+        .padding(6)
+        .text_size(12)
+        .into();
 
     // Form layout ─────────────────────────────────────────────
     let labelled =
@@ -322,7 +327,7 @@ pub fn view<'a>(
         Some(r) => {
             let s = r.uuid.simple().to_string();
             let short = if s.len() >= 8 { &s[..8] } else { s.as_str() };
-            format!("symbol uuid {}…", short)
+            format!("symbol uuid {short}…")
         }
     };
     let pick_symbol_btn =
@@ -357,7 +362,7 @@ pub fn view<'a>(
         Some(r) => {
             let s = r.uuid.simple().to_string();
             let short = if s.len() >= 8 { &s[..8] } else { s.as_str() };
-            format!("footprint uuid {}…", short)
+            format!("footprint uuid {short}…")
         }
     };
     let pick_footprint_btn =

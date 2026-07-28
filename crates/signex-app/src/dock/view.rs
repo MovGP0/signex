@@ -1,9 +1,18 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::match_wildcard_for_single_variants,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dock rendering: region tab strips, collapsed rails, and floating panels.
 
 use iced::widget::{Column, Space, button, canvas, column, container, mouse_area, row, svg, text};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
-use super::types::*;
+use super::types::{DockArea, DockMessage, DockRegion, PanelPosition};
 use crate::icons;
 use crate::panels::{self, PanelKind};
 use crate::styles;

@@ -20,7 +20,7 @@ use crate::app::state::scope::path_key;
 
 /// The sheets a project consists of, plus what could not be made sense of
 /// while assembling them.
-pub(crate) struct ProjectSheetSet {
+pub struct ProjectSheetSet {
     /// `absolute path → sheet`: the declared page set *plus* everything
     /// reachable from those pages and from the root down the `child_sheets`
     /// graph. Live engine snapshots for open tabs, disk parses for the rest.
@@ -59,7 +59,7 @@ impl ProjectSheetSet {
 /// cached canvas/ERC netlist, the ERC run, annotate and the duplicate-designator
 /// reset. Deriving the page list and the root here, once, is the point — each
 /// of those used to do it slightly differently and they disagreed (#406).
-pub(crate) fn assemble_active_project_sheets(
+pub fn assemble_active_project_sheets(
     document_state: &DocumentState,
 ) -> (Vec<PathBuf>, ProjectSheetSet) {
     let pages: Vec<PathBuf> = document_state
@@ -95,7 +95,7 @@ pub(crate) fn assemble_active_project_sheets(
 /// disagreed on the *order* to walk them in, which is what decides which
 /// designator number each `?` symbol gets — a preview showing `R1` on sheet
 /// A while the action hands sheet A `R2` (#435).
-pub(crate) fn ordered_project_sheet_paths(
+pub fn ordered_project_sheet_paths(
     project_set: &ProjectSheetSet,
     active_path: Option<&Path>,
 ) -> Vec<PathBuf> {
@@ -111,9 +111,7 @@ pub(crate) fn ordered_project_sheet_paths(
 
 /// Absolute path of a project's root schematic — its declared
 /// `schematic_root`, falling back to the first entry in the sheet list.
-pub(crate) fn project_root_sheet_path(
-    project: &crate::app::state::LoadedProject,
-) -> Option<PathBuf> {
+pub fn project_root_sheet_path(project: &crate::app::state::LoadedProject) -> Option<PathBuf> {
     let filename = project
         .data
         .schematic_root
@@ -159,7 +157,7 @@ fn load_sheet(
 ///
 /// Only paths reached from this project are loaded — an open tab belonging to
 /// some *other* project never rides along. Cycle-safe on the visited set.
-pub(crate) fn assemble_project_sheets(
+pub fn assemble_project_sheets(
     document_state: &DocumentState,
     pages: &[PathBuf],
     root_path: &Path,
@@ -256,7 +254,7 @@ fn walk(
 /// silently would stitch the second parent's subtree from the wrong file with
 /// no trace of it — that collision is returned as a
 /// [`signex_net::StitchIssue::AmbiguousChildFilename`] alongside the map.
-pub(crate) fn project_children_map(
+pub fn project_children_map(
     sheets: &HashMap<PathBuf, SchematicSheet>,
 ) -> (
     HashMap<String, SchematicSheet>,
@@ -320,7 +318,7 @@ pub(crate) fn project_children_map(
 /// page — a peer of the root, not nested under it — so its nets merge into
 /// the project the same way a hierarchical child's do: by shared Global/Power
 /// label name.
-pub(crate) fn add_flat_siblings_as_extra_roots(
+pub fn add_flat_siblings_as_extra_roots(
     children: &mut HashMap<String, SchematicSheet>,
     project_set: &ProjectSheetSet,
     project_dir: Option<&Path>,
@@ -372,7 +370,7 @@ pub(crate) fn add_flat_siblings_as_extra_roots(
 ///   points back out is not detected here. That residual is accepted: it
 ///   requires an attacker who can already write inside the project
 ///   directory.
-pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
+pub fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
         return None;
@@ -440,7 +438,7 @@ fn lexically_normalize(path: &Path) -> PathBuf {
 /// `project_dir`, falling back to the bare basename. Passed to
 /// [`signex_net::build_project_netlist`] as `root_filename` so a child that
 /// re-references the root is reported as a cycle rather than recursed into.
-pub(crate) fn root_reference_name(root_path: &Path, project_dir: Option<&Path>) -> Option<String> {
+pub fn root_reference_name(root_path: &Path, project_dir: Option<&Path>) -> Option<String> {
     project_dir
         .and_then(|dir| root_path.strip_prefix(dir).ok())
         .map(Path::to_path_buf)
@@ -455,7 +453,7 @@ pub(crate) fn root_reference_name(root_path: &Path, project_dir: Option<&Path>) 
 /// [`signex_net::build_project_netlist`] must surface its issues: the netlist
 /// is always produced, so a dropped `MissingChild` means an exported netlist
 /// that is quietly missing a whole subtree.
-pub(crate) fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
+pub fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
     use signex_net::StitchIssue as I;
     match issue {
         I::MissingChild {

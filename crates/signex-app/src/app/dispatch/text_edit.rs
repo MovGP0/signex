@@ -1,6 +1,6 @@
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex, TextEditMsg};
 
 impl Signex {
     pub(super) fn dispatch_text_edit_message(&mut self, message: TextEditMsg) -> Task<Message> {

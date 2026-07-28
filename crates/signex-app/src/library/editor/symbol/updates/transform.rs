@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+
 //! Symbol editor — rotate / delete / pin-field transform update logic.
 
 use super::{

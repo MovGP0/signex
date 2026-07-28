@@ -1,10 +1,16 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 /// Scan a library directory for standalone primitive files. Returns
 /// `(symbols, footprints, sims)` triples — each `(stem, absolute_path)`.
 /// Missing subdirectories are silently treated as empty so a fresh
 /// library doesn't error; non-UTF-8 filenames and dotfiles are skipped.
 ///
 /// Order is filename-stem-sorted so the project tree stays stable
-/// across sessions (read_dir order is platform-dependent on Windows).
+/// across sessions (`read_dir` order is platform-dependent on Windows).
 /// Project the active `.snxsym` editor's data into a panel-side
 /// snapshot. Called from `refresh_panel_ctx` so the right-dock
 /// Properties panel and the SCH-Library left-dock panel can render
@@ -87,28 +93,26 @@ pub(super) fn build_symbol_editor_panel_ctx(
         Some(sym_state::SymbolSelection::Pin(idx)) => pins
             .get(idx)
             .cloned()
-            .map(SymbolEditorSelection::Pin)
-            .unwrap_or(SymbolEditorSelection::None),
+            .map_or(SymbolEditorSelection::None, SymbolEditorSelection::Pin),
         Some(sym_state::SymbolSelection::Field(sym_state::FieldKey::Reference)) => {
             SymbolEditorSelection::FieldReference
         }
         Some(sym_state::SymbolSelection::Field(sym_state::FieldKey::Value)) => {
             SymbolEditorSelection::FieldValue
         }
-        Some(sym_state::SymbolSelection::Graphic(idx)) => sym
-            .graphics
-            .get(idx)
-            .map(|g| {
-                SymbolEditorSelection::Graphic(GraphicSummary {
-                    idx,
-                    kind: graphic_kind_to_summary(&g.kind),
-                    stroke_width: g.stroke_width,
-                    fill: g.fill,
+        Some(sym_state::SymbolSelection::Graphic(idx)) => {
+            sym.graphics
+                .get(idx)
+                .map_or(SymbolEditorSelection::None, |g| {
+                    SymbolEditorSelection::Graphic(GraphicSummary {
+                        idx,
+                        kind: graphic_kind_to_summary(&g.kind),
+                        stroke_width: g.stroke_width,
+                        fill: g.fill,
+                    })
                 })
-            })
-            .unwrap_or(SymbolEditorSelection::None),
-        Some(sym_state::SymbolSelection::All)
-        | Some(sym_state::SymbolSelection::Multiple { .. })
+        }
+        Some(sym_state::SymbolSelection::All | sym_state::SymbolSelection::Multiple { .. })
         | None => SymbolEditorSelection::None,
     };
 

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -22,6 +27,7 @@ impl AppCommandId {
         Ok(Self(value))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }

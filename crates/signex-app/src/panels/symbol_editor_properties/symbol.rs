@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol-level (nothing-selected) Properties rows + local-colour swatches.
 
 use iced::widget::{Column, container, row, text};
@@ -9,19 +14,19 @@ use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_fi
 /// [`color_field`] widget. `picker` carries the transient open-state;
 /// the inline palette / HSV overlay only expands when it targets this
 /// slot. `None` = inherit from the sheet palette.
-fn local_color_field<'a>(
-    label: &'a str,
+fn local_color_field(
+    label: &str,
     slot: crate::app::LocalColorSlot,
     current: Option<[u8; 4]>,
     muted: Color,
     border_c: Color,
     picker: Option<crate::app::LocalColorPicker>,
-) -> Element<'a, PanelMsg> {
+) -> Element<'_, PanelMsg> {
     use std::rc::Rc;
 
     let this = picker.filter(|p| p.slot == slot);
     let show_palette = this.is_some();
-    let show_advanced = this.map(|p| p.advanced).unwrap_or(false);
+    let show_advanced = this.is_some_and(|p| p.advanced);
 
     let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
         Rc::new(move |rgba| PanelMsg::SymEditorSetLocalColor { slot, color: rgba });

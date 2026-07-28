@@ -1,4 +1,4 @@
-use super::*;
+use super::{CanvasEvent, EditMsg, Message, Signex, UiMsg};
 use signex_renderer::pcb::{PcbAppEvent, dirty_flags_for_events};
 
 const PCB_EVENTS_NONE: &[PcbAppEvent] = &[];
@@ -15,7 +15,7 @@ const PCB_EVENTS_WIDE_MUTATION: &[PcbAppEvent] = &[
     PcbAppEvent::DrcResultsUpdated,
 ];
 
-pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [PcbAppEvent] {
+pub const fn pcb_renderer_events_for_message(message: &Message) -> &'static [PcbAppEvent] {
     match message {
         Message::Ui(UiMsg::ThemeChanged(_)) => PCB_EVENTS_THEME,
         Message::Edit(EditMsg::Undo | EditMsg::Redo) => PCB_EVENTS_WIDE_MUTATION,
@@ -24,9 +24,9 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
             event: CanvasEvent::MoveSelected { .. },
             ..
         } => PCB_EVENTS_FOOTPRINT_MOVE,
-        Message::CanvasEvent(CanvasEvent::CursorMoved)
-        | Message::CanvasEvent(CanvasEvent::CursorAt { .. })
-        | Message::CanvasEvent(CanvasEvent::FitAll)
+        Message::CanvasEvent(
+            CanvasEvent::CursorMoved | CanvasEvent::CursorAt { .. } | CanvasEvent::FitAll,
+        )
         | Message::CanvasEventInWindow {
             event: CanvasEvent::CursorMoved,
             ..

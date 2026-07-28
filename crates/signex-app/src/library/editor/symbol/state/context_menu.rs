@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Right-click canvas context menu state for the symbol editor.
 //! Mirrors `library::editor::footprint::state::context_menu` 1:1 in
 //! structure — see that module for the wider design rationale.

@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_value,
+    clippy::redundant_clone,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser table-admin handlers — the inline "+ Add Table",
 //! rename-table and delete-table flows fired from the browser tab's
 //! category strip.
@@ -5,7 +12,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{Message, Signex, Task};
 
 impl Signex {
     /// Flip the browser into add-table mode.
@@ -144,7 +151,7 @@ impl Signex {
         let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
             return Task::none();
         };
-        let Some((old_name, new_buf)) = state.renaming_table.clone() else {
+        let Some((old_name, new_buf)) = state.renaming_table else {
             return Task::none();
         };
         let new_trimmed = new_buf.trim().to_string();
@@ -200,7 +207,7 @@ impl Signex {
         let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
             return Task::none();
         };
-        let Some(draft) = state.adding_table.as_ref().cloned() else {
+        let Some(draft) = state.adding_table.clone() else {
             return Task::none();
         };
         let trimmed = draft.name.trim().to_string();

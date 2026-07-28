@@ -1,7 +1,7 @@
 //! Properties panel for the active `.snxsym` standalone editor tab (HI-22 / MD-20).
 //!
 //! Extracted from `panels/mod.rs`. Pure view code, zero behaviour change.
-//! Mirrors Altium SchLib's right-dock Properties: pin selected → pin
+//! Mirrors Altium `SchLib`'s right-dock Properties: pin selected → pin
 //! properties (editable Designator / Name / Length, read-only
 //! Electrical / Position / Orientation), graphic selected → per-shape
 //! numeric fields, field selected → field properties, nothing selected
@@ -17,7 +17,7 @@ mod pin;
 mod symbol;
 
 /// Properties panel content for the active `.snxsym` standalone editor
-/// tab. Mirrors Altium SchLib's right-dock Properties.
+/// tab. Mirrors Altium `SchLib`'s right-dock Properties.
 pub(super) fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
     muted: Color,

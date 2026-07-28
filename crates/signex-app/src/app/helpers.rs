@@ -49,13 +49,13 @@ pub(super) fn find_standard_symbols_dir() -> Option<PathBuf> {
     None
 }
 
-/// List .standard_sym filenames in a directory.
+/// List .`standard_sym` filenames in a directory.
 pub(super) fn list_standard_libraries(dir: &std::path::Path) -> Vec<String> {
     std::fs::read_dir(dir)
         .ok()
         .map(|entries| {
             let mut names: Vec<String> = entries
-                .filter_map(|e| e.ok())
+                .filter_map(std::result::Result::ok)
                 .filter(|e| {
                     e.path()
                         .extension()
@@ -78,7 +78,7 @@ pub(super) fn list_standard_libraries(dir: &std::path::Path) -> Vec<String> {
 /// Given a start and end point, produce wire segments constrained by the draw mode.
 /// - Ortho90: horizontal then vertical (two segments forming a 90-degree corner)
 /// - Angle45: snap to nearest 45-degree angle (may produce one or two segments)
-/// - FreeAngle: single straight segment
+/// - `FreeAngle`: single straight segment
 pub(super) fn constrain_segments(
     start: signex_types::schematic::Point,
     end: signex_types::schematic::Point,
@@ -125,7 +125,7 @@ pub(super) fn constrain_segments(
                 let d = adx.min(ady);
                 let sx = if dx > 0.0 { 1.0 } else { -1.0 };
                 let sy = if dy > 0.0 { 1.0 } else { -1.0 };
-                let diag_end = Point::new(start.x + d * sx, start.y + d * sy);
+                let diag_end = Point::new(d.mul_add(sx, start.x), d.mul_add(sy, start.y));
                 if (adx - ady).abs() < 0.01 {
                     // Exactly 45-degree
                     vec![(start, diag_end)]

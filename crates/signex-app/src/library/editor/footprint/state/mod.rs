@@ -1,3 +1,12 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::doc_lazy_continuation,
+    clippy::iter_with_drain,
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint editor in-memory state.
 //!
 //! The canvas state derives from a typed
@@ -58,7 +67,7 @@ const COURTYARD_SLACK_MM: f64 = 0.25;
 /// `FootprintEditorState::move_by_modal` means the modal is closed.
 /// Two erasable string buffers (same pattern as `dimension_input`) so
 /// typing "-" / "." mid-entry doesn't fight an f64 binding.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MoveByModal {
     pub dx_buf: String,
     pub dy_buf: String,
@@ -66,6 +75,7 @@ pub struct MoveByModal {
 
 impl MoveByModal {
     /// Parse both buffers as mm. `None` if either fails to parse.
+    #[must_use]
     pub fn parsed(&self) -> Option<(f64, f64)> {
         Some((
             self.dx_buf.trim().parse().ok()?,
@@ -273,6 +283,7 @@ impl FootprintEditorState {
     /// Empty state — used for brand-new components and as the fallback
     /// when the binding has no footprint primitive yet.
     #[allow(dead_code)]
+    #[must_use]
     pub fn empty() -> Self {
         let mut s = Self::with_pads(Vec::new());
         s.recompute_courtyard();
@@ -341,6 +352,7 @@ impl FootprintEditorState {
     }
 
     /// Bounding box of the entire footprint (pads + courtyard) in mm.
+    #[must_use]
     pub fn content_bbox_mm(&self) -> Option<(f64, f64, f64, f64)> {
         let mut bbox: Option<(f64, f64, f64, f64)> = None;
         let mut expand = |x0: f64, y0: f64, x1: f64, y1: f64| {
@@ -361,6 +373,7 @@ impl FootprintEditorState {
 
     /// Auto-incremented pad number — picks the next integer above the
     /// current max, or "1" if none of the pads parse as integers.
+    #[must_use]
     pub fn next_pad_number(&self) -> String {
         let max_int = self
             .pads
@@ -440,7 +453,7 @@ impl FootprintEditorState {
         pad.feature_bottom = defaults.feature_bottom;
         pad.testpoint = defaults.testpoint;
         pad.template = defaults.template.clone();
-        pad.template_library = defaults.template_library.clone();
+        pad.template_library = defaults.template_library;
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);
@@ -489,6 +502,7 @@ impl FootprintEditorState {
 
     /// Hit-test pads in reverse z-order (last-drawn = topmost).
     /// Skips pads on hidden layers.
+    #[must_use]
     pub fn pad_at(&self, x_mm: f64, y_mm: f64) -> Option<usize> {
         for (idx, pad) in self.pads.iter().enumerate().rev() {
             if !self.layer_visibility.get(pad.primary_layer()) {
@@ -665,16 +679,16 @@ impl FootprintEditorState {
         // ambiguous — is relinked from the sketch.
         pad::relink_pads_to_sketch(&mut new_pads, fp);
         self.pads = new_pads;
-        if let Some(idx) = self.selected_pad {
-            if idx >= self.pads.len() {
-                self.selected_pad = None;
-            }
+        if let Some(idx) = self.selected_pad
+            && idx >= self.pads.len()
+        {
+            self.selected_pad = None;
         }
     }
 
     /// Write the canvas-side pad list back onto the primitive. Called
     /// after every mutation so the saved row sees the current pad
-    /// layout. Other Footprint fields (graphics, body_3d, etc.) are
+    /// layout. Other Footprint fields (graphics, `body_3d`, etc.) are
     /// left untouched — they're edited by their own panes.
     pub fn sync_pads_to_primitive(canvas: &Self, fp: &mut Footprint) {
         fp.pads = canvas.pads.iter().map(EditorPad::to_pad).collect();
@@ -704,7 +718,7 @@ impl FootprintEditorState {
 /// - `Some(sel)` if `sel == removed_idx`    → `None`
 /// - `Some(sel)` if `sel < removed_idx`     → `Some(sel)`
 /// - `Some(sel)` if `sel > removed_idx`     → `Some(sel - 1)`
-pub(crate) fn adjust_selection_after_remove(
+pub(crate) const fn adjust_selection_after_remove(
     selected: Option<usize>,
     removed_idx: usize,
 ) -> Option<usize> {

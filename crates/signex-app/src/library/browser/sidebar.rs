@@ -1,3 +1,10 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::redundant_clone,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser — table/class master sidebar.
 //!
 //! The vertical master pane: one row per table, active-table highlight,
@@ -5,7 +12,10 @@
 //! Classes section. Extracted verbatim from the former single-file
 //! `browser` module.
 
-use super::*;
+use super::{
+    BROWSER_TEXT_SIZE, Border, Element, Length, LibraryBrowserState, LibraryMessage, LibraryState,
+    OpenLibrary, Space, Theme, ThemeTokens, button, container, row, text, text_input, theme_ext,
+};
 use iced::widget::column;
 
 /// Vertical table sidebar — replaces the old horizontal tab strip
@@ -97,7 +107,7 @@ pub(super) fn view_table_sidebar<'a>(
 
     for name in &names {
         let is_active = browser.active_table.as_deref() == Some(name.as_str());
-        let count = lib.tables.get(*name).map(|v| v.len()).unwrap_or(0);
+        let count = lib.tables.get(*name).map_or(0, std::vec::Vec::len);
         let is_renaming = browser
             .renaming_table
             .as_ref()
@@ -110,8 +120,7 @@ pub(super) fn view_table_sidebar<'a>(
             let buffer = browser
                 .renaming_table
                 .as_ref()
-                .map(|(_, b)| b.as_str())
-                .unwrap_or("");
+                .map_or("", |(_, b)| b.as_str());
             let library_for_input = lib_pb.clone();
             let library_for_confirm = lib_pb.clone();
             let library_for_cancel = lib_pb.clone();
@@ -333,7 +342,7 @@ pub(super) fn view_table_sidebar<'a>(
         let classes_list = library_state
             .set
             .get(lib.library_id)
-            .map(|adapter| adapter.library_classes())
+            .map(signex_library::LibraryAdapter::library_classes)
             .unwrap_or_default();
 
         for entry in &classes_list {
@@ -521,41 +530,56 @@ pub(super) fn view_table_sidebar<'a>(
         }
 
         // + Class form / button.
-        match browser.adding_class.as_ref() {
-            Some(draft) => {
-                let library_for_key = lib_pb.clone();
-                let library_for_label = lib_pb.clone();
-                let library_for_confirm = lib_pb.clone();
-                let library_for_cancel = lib_pb.clone();
-                let key_input = text_input("class_key", &draft.key)
-                    .on_input(move |s| LibraryMessage::BrowserSetNewClassKey {
-                        library_path: library_for_key.clone(),
-                        value: s,
-                    })
-                    .padding(3)
-                    .size(BROWSER_TEXT_SIZE);
-                let label_input = text_input("Label", &draft.label)
-                    .on_input(move |s| LibraryMessage::BrowserSetNewClassLabel {
-                        library_path: library_for_label.clone(),
-                        value: s,
-                    })
-                    .on_submit(LibraryMessage::BrowserConfirmAddClass {
-                        library_path: library_for_confirm.clone(),
-                    })
-                    .padding(3)
-                    .size(BROWSER_TEXT_SIZE);
-                let confirm = button(
-                    text("Create")
-                        .size(BROWSER_TEXT_SIZE)
-                        .color(iced::Color::WHITE),
-                )
+        if let Some(draft) = browser.adding_class.as_ref() {
+            let library_for_key = lib_pb.clone();
+            let library_for_label = lib_pb.clone();
+            let library_for_confirm = lib_pb.clone();
+            let library_for_cancel = lib_pb.clone();
+            let key_input = text_input("class_key", &draft.key)
+                .on_input(move |s| LibraryMessage::BrowserSetNewClassKey {
+                    library_path: library_for_key.clone(),
+                    value: s,
+                })
+                .padding(3)
+                .size(BROWSER_TEXT_SIZE);
+            let label_input = text_input("Label", &draft.label)
+                .on_input(move |s| LibraryMessage::BrowserSetNewClassLabel {
+                    library_path: library_for_label.clone(),
+                    value: s,
+                })
+                .on_submit(LibraryMessage::BrowserConfirmAddClass {
+                    library_path: library_for_confirm.clone(),
+                })
+                .padding(3)
+                .size(BROWSER_TEXT_SIZE);
+            let confirm = button(
+                text("Create")
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::WHITE),
+            )
+            .padding([3, 8])
+            .on_press(LibraryMessage::BrowserConfirmAddClass {
+                library_path: library_for_confirm,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.18, 0.36, 0.58,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    radius: 2.0.into(),
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+            let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([3, 8])
-                .on_press(LibraryMessage::BrowserConfirmAddClass {
-                    library_path: library_for_confirm,
+                .on_press(LibraryMessage::BrowserCancelAddClass {
+                    library_path: library_for_cancel,
                 })
                 .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
                     ))),
                     text_color: iced::Color::WHITE,
                     border: Border {
@@ -564,75 +588,57 @@ pub(super) fn view_table_sidebar<'a>(
                     },
                     ..iced::widget::button::Style::default()
                 });
-                let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
-                    .padding([3, 8])
-                    .on_press(LibraryMessage::BrowserCancelAddClass {
-                        library_path: library_for_cancel,
-                    })
-                    .style(|_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        text_color: iced::Color::WHITE,
-                        border: Border {
-                            radius: 2.0.into(),
-                            ..Border::default()
-                        },
-                        ..iced::widget::button::Style::default()
-                    });
-                let mut form = column![
-                    key_input,
-                    label_input,
-                    row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
-                ]
-                .spacing(2)
-                .padding([4, 8]);
-                if let Some(err) = draft.error.as_ref() {
-                    form = form.push(
-                        text(err.clone())
-                            .size(BROWSER_TEXT_SIZE)
-                            .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
-                    );
-                }
-                col = col.push(form);
-            }
-            None => {
-                let library_for_begin = lib_pb.clone();
-                col = col.push(
-                    container(
-                        button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
-                            .padding([4, 10])
-                            .width(Length::Fill)
-                            .on_press(LibraryMessage::BrowserBeginAddClass {
-                                library_path: library_for_begin,
-                            })
-                            .style(|_: &Theme, _| iced::widget::button::Style {
-                                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                                    1.0, 1.0, 1.0, 0.04,
-                                ))),
-                                text_color: iced::Color::WHITE,
-                                border: Border {
-                                    radius: 3.0.into(),
-                                    ..Border::default()
-                                },
-                                ..iced::widget::button::Style::default()
-                            }),
-                    )
-                    .padding(iced::Padding {
-                        top: 4.0,
-                        right: 8.0,
-                        bottom: 6.0,
-                        left: 8.0,
-                    }),
+            let mut form = column![
+                key_input,
+                label_input,
+                row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
+            ]
+            .spacing(2)
+            .padding([4, 8]);
+            if let Some(err) = draft.error.as_ref() {
+                form = form.push(
+                    text(err.clone())
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
                 );
             }
+            col = col.push(form);
+        } else {
+            let library_for_begin = lib_pb.clone();
+            col = col.push(
+                container(
+                    button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
+                        .padding([4, 10])
+                        .width(Length::Fill)
+                        .on_press(LibraryMessage::BrowserBeginAddClass {
+                            library_path: library_for_begin,
+                        })
+                        .style(|_: &Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            ))),
+                            text_color: iced::Color::WHITE,
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Border::default()
+                            },
+                            ..iced::widget::button::Style::default()
+                        }),
+                )
+                .padding(iced::Padding {
+                    top: 4.0,
+                    right: 8.0,
+                    bottom: 6.0,
+                    left: 8.0,
+                }),
+            );
         }
     } // end `if false` — Classes section gate (F20)
 
     // Inline `+ Table` form / button — same lifecycle as before, now
     // anchored at the bottom of the sidebar.
-    let bottom_section: Element<'a, LibraryMessage> = match browser.adding_table.as_ref() {
-        Some(draft) => {
+    let bottom_section: Element<'a, LibraryMessage> =
+        if let Some(draft) = browser.adding_table.as_ref() {
             let library_for_input = lib_pb.clone();
             let library_for_confirm = lib_pb.clone();
             let library_for_cancel = lib_pb.clone();
@@ -698,8 +704,7 @@ pub(super) fn view_table_sidebar<'a>(
                 );
             }
             form.into()
-        }
-        None => {
+        } else {
             let library_for_begin = lib_pb.clone();
             container(
                 button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
@@ -728,8 +733,7 @@ pub(super) fn view_table_sidebar<'a>(
                 left: 8.0,
             })
             .into()
-        }
-    };
+        };
 
     col = col.push(Space::new().height(Length::Fill));
     col = col.push(bottom_section);

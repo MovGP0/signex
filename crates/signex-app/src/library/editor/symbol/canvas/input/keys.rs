@@ -1,9 +1,16 @@
+#![expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Keyboard handling — the `KeyPressed` branch of `Program::update`,
 //! extracted verbatim. Escape cancels an in-progress multi-click draw;
 //! Delete/Backspace, Home, Ctrl+A, Space (rotate), and undo/redo keep
 //! identical key matching and publish sites.
 
-use super::super::*;
+use super::super::{
+    CanvasAction, CanvasState, RotatePivotMode, SymbolCanvas, SymbolSelection, SymbolTool,
+};
 use iced::widget::canvas;
 
 impl SymbolCanvas<'_> {
@@ -74,10 +81,9 @@ impl SymbolCanvas<'_> {
                 state.polygon_last_click_pos = None;
                 Some(canvas::Action::publish(CanvasAction::PolygonCommit).and_capture())
             }
-            iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
-            | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
-                Some(canvas::Action::publish(CanvasAction::DeleteSelected))
-            }
+            iced::keyboard::Key::Named(
+                iced::keyboard::key::Named::Delete | iced::keyboard::key::Named::Backspace,
+            ) => Some(canvas::Action::publish(CanvasAction::DeleteSelected)),
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
                 Some(canvas::Action::publish(CanvasAction::Fit))
             }

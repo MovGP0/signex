@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Datasheet edits for a Component Preview row.
 //!
 //! Owns the Datasheet tab's three actions: switching between URL and
@@ -14,23 +19,23 @@ use crate::library::editor::datasheet_picker::DatasheetMode;
 /// mode is a no-op and does not clobber the existing value.
 pub(super) fn set_mode(state: &mut ComponentPreviewState, mode: DatasheetMode) {
     match mode {
-        DatasheetMode::Url => match &state.row.datasheet {
-            signex_library::DatasheetRef::Url { .. } => {}
-            _ => {
+        DatasheetMode::Url => {
+            if let signex_library::DatasheetRef::Url { .. } = &state.row.datasheet {
+            } else {
                 state.row.datasheet = signex_library::DatasheetRef::default();
                 state.dirty = true;
             }
-        },
-        DatasheetMode::PinnedPdf => match &state.row.datasheet {
-            signex_library::DatasheetRef::HashPinned { .. } => {}
-            _ => {
+        }
+        DatasheetMode::PinnedPdf => {
+            if let signex_library::DatasheetRef::HashPinned { .. } = &state.row.datasheet {
+            } else {
                 state.row.datasheet = signex_library::DatasheetRef::HashPinned {
                     hash: String::new(),
                     filename: String::new(),
                 };
                 state.dirty = true;
             }
-        },
+        }
     }
 }
 

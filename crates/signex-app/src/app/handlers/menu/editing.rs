@@ -1,6 +1,8 @@
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{
+    AnnotateMsg, EditMsg, ErcMsg, MenuMessage, Message, OverlayMsg, Signex, selection_request,
+};
 
 impl Signex {
     pub(super) fn handle_menu_editing_command(

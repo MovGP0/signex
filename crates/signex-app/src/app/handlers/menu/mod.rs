@@ -1,9 +1,14 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{MenuMessage, Message, Signex};
 
 mod editing;
-pub(crate) mod export;
+pub mod export;
 mod file_commands;
 mod panel_commands;
 mod placement;

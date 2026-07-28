@@ -1,3 +1,10 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::ptr_arg,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Standalone `.snxsym` symbol-editor document tab view builders.
 //! Split from `library/editor/standalone.rs` as pure code motion.
 
@@ -19,7 +26,7 @@ use crate::panels::PanelContext;
 // ── Symbol ──────────────────────────────────────────────────────────
 
 /// Render the standalone Symbol editor for a `.snxsym` tab. Altium
-/// SchLib parity: the canvas takes the full tab width; the right-dock
+/// `SchLib` parity: the canvas takes the full tab width; the right-dock
 /// Properties panel renders symbol/pin properties driven by the
 /// selection (see `panels::view_symbol_editor_properties`). The
 /// in-tab properties column was retired in v0.9 phase 1 so the user
@@ -61,7 +68,7 @@ pub fn view_symbol<'a>(
         .into()
 }
 
-/// Bottom status footer for the .snxsym tab — Altium SchLib parity.
+/// Bottom status footer for the .snxsym tab — Altium `SchLib` parity.
 /// X / Y in the active unit (mm / mil), zoom %, grid spacing,
 /// pin count + a hint string. Mirrors the global schematic
 /// status bar so a user editing a symbol library has the same
@@ -251,7 +258,7 @@ fn view_symbol_canvas<'a>(
         editor.active_part,
         editor.context_menu.is_some(),
         &editor.camera,
-        display.grid_size_mm as f64,
+        f64::from(display.grid_size_mm),
         display.grid_visible,
         display.pin_selection.allows_label_grab(),
         display.sheet_color.to_color(),
@@ -355,7 +362,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
     }
 }
 
-fn symbol_context_target_to_msg(
+const fn symbol_context_target_to_msg(
     target: sym_state::SymbolContextTarget,
 ) -> crate::library::messages::SymbolContextTargetMsg {
     use crate::library::messages::SymbolContextTargetMsg;
@@ -367,7 +374,7 @@ fn symbol_context_target_to_msg(
     }
 }
 
-fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
+const fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
     use sym_state::GraphicHandle;
     match handle {
         GraphicHandle::RectCorner(c) => GraphicHandleMsg::RectCorner(c),
@@ -381,7 +388,7 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
     }
 }
 
-fn rotate_pivot_to_msg(pivot_mode: sym_canvas::RotatePivotMode) -> SymbolRotatePivotMsg {
+const fn rotate_pivot_to_msg(pivot_mode: sym_canvas::RotatePivotMode) -> SymbolRotatePivotMsg {
     match pivot_mode {
         sym_canvas::RotatePivotMode::WorldOrigin => SymbolRotatePivotMsg::WorldOrigin,
         sym_canvas::RotatePivotMode::GeometryCenter => SymbolRotatePivotMsg::GeometryCenter,

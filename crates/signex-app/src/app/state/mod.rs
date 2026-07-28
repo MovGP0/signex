@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::path::PathBuf;
 
 use signex_types::project::ProjectData;
@@ -7,7 +12,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
-pub(crate) mod scope;
+pub mod scope;
 mod ui;
 
 pub use interaction::InteractionState;
@@ -44,6 +49,7 @@ impl KeymapRecorderState {
     /// single stroke (Altium-style two/three-key gestures fit inside).
     pub const MAX_STROKES: usize = 3;
 
+    #[must_use]
     pub fn new(
         command: crate::keymap::AppCommandId,
         command_label: String,
@@ -71,6 +77,7 @@ impl KeymapRecorderState {
         }
     }
 
+    #[must_use]
     pub fn trigger_text(&self) -> String {
         crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
     }
@@ -244,6 +251,7 @@ impl LoadedProject {
     /// sheet paths it produces do not exist. The export skips those pages
     /// silently. `path.parent()` is the only one that cannot be stale: it is
     /// derived from the file actually opened.
+    #[must_use]
     pub fn dir(&self) -> &std::path::Path {
         self.path
             .parent()
@@ -362,7 +370,7 @@ pub struct DocumentState {
     pub pending_bom_options: Option<signex_output::BomOptions>,
     /// User-visible export error. `Some(msg)` while the error modal is shown.
     /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
-    /// itself (not the file dialog) fails. Cleared by DismissExportError.
+    /// itself (not the file dialog) fails. Cleared by `DismissExportError`.
     pub export_error: Option<String>,
     /// #431 — pending "Export anyway (incomplete)?" prompt. `Some` while the
     /// netlist-incomplete modal is up, waiting on the user's choice. Set by
@@ -447,7 +455,7 @@ pub struct BomPreviewState {
     /// the press has graduated into an actual drag.
     pub column_drag_press_x: Option<f32>,
     /// Index of the column header currently under the cursor.
-    /// Tracked via on_enter/on_exit on each header cell so the
+    /// Tracked via `on_enter/on_exit` on each header cell so the
     /// release handler (which fires on the press-source widget,
     /// not the cursor target) can resolve where the drop landed.
     pub column_hover: Option<usize>,
@@ -500,22 +508,22 @@ impl PdfQuality {
     /// DPI used to rasterise the on-screen preview. Capped well below
     /// the export label so an A4 page doesn't blow up to ~35 MB of
     /// RGBA at 600 DPI.
-    pub fn preview_dpi(self) -> f64 {
+    pub const fn preview_dpi(self) -> f64 {
         match self {
-            PdfQuality::Draft72 => 72.0,
-            PdfQuality::Medium300 => 144.0,
-            PdfQuality::High600 => 200.0,
+            Self::Draft72 => 72.0,
+            Self::Medium300 => 144.0,
+            Self::High600 => 200.0,
         }
     }
 
     /// DPI written to `PdfOptions.dpi` at export time. Vector content
     /// ignores this; future raster fallbacks (embedded images,
     /// rasterised symbol bodies) honour the verbatim picker label.
-    pub fn export_dpi(self) -> f32 {
+    pub const fn export_dpi(self) -> f32 {
         match self {
-            PdfQuality::Draft72 => 72.0,
-            PdfQuality::Medium300 => 300.0,
-            PdfQuality::High600 => 600.0,
+            Self::Draft72 => 72.0,
+            Self::Medium300 => 300.0,
+            Self::High600 => 600.0,
         }
     }
 }
@@ -523,9 +531,9 @@ impl PdfQuality {
 impl std::fmt::Display for PdfQuality {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            PdfQuality::Draft72 => "Draft (72 dpi)",
-            PdfQuality::Medium300 => "Medium (300 dpi)",
-            PdfQuality::High600 => "High (600 dpi)",
+            Self::Draft72 => "Draft (72 dpi)",
+            Self::Medium300 => "Medium (300 dpi)",
+            Self::High600 => "High (600 dpi)",
         };
         f.write_str(s)
     }
@@ -591,12 +599,13 @@ impl PreviewState {
 
 impl DocumentState {
     /// Mint a fresh `ProjectId` and bump the counter. Never reuses ids.
-    pub fn mint_project_id(&mut self) -> ProjectId {
+    pub const fn mint_project_id(&mut self) -> ProjectId {
         let id = ProjectId(self.next_project_id);
         self.next_project_id = self.next_project_id.wrapping_add(1);
         id
     }
 
+    #[must_use]
     pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {
         self.projects.iter().find(|p| p.id == id)
     }
@@ -604,6 +613,7 @@ impl DocumentState {
     /// Resolve the project that contains a file at this path. Used for
     /// per-tab project scoping (tabs store a path, we resolve to the
     /// project that parented them at load time).
+    #[must_use]
     pub fn project_for_path(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         let dir = path.parent()?;
         self.projects.iter().find(|p| p.path.parent() == Some(dir))
@@ -611,6 +621,7 @@ impl DocumentState {
 
     /// Convenience: currently-active project. Returns `None` when the
     /// workspace is empty or no project has been made active yet.
+    #[must_use]
     pub fn active_loaded_project(&self) -> Option<&LoadedProject> {
         self.active_project.and_then(|id| self.project_by_id(id))
     }
@@ -630,6 +641,7 @@ impl DocumentState {
     /// - no active schematic at all (a PCB / symbol / footprint tab is
     ///   focused, or nothing is open) → the sticky pointer, which is what
     ///   "the workspace at large" means when there is no document to scope by.
+    #[must_use]
     pub fn active_document_project(&self) -> Option<&LoadedProject> {
         let Some(path) = self.active_path.as_ref() else {
             return self.active_loaded_project();
@@ -646,6 +658,7 @@ impl DocumentState {
     /// are re-seeded from this set on every rerasterize) by hash iteration
     /// order — visibly reshuffling between rerasterizes with two or more loose
     /// schematics open. Callers that want a specific page first re-order after.
+    #[must_use]
     pub fn unowned_engine_paths(&self) -> Vec<PathBuf> {
         let refs = self.child_sheet_refs();
         let mut paths: Vec<PathBuf> = self
@@ -676,6 +689,7 @@ impl DocumentState {
             .collect()
     }
 
+    #[must_use]
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }
@@ -689,12 +703,13 @@ impl DocumentState {
     /// active tab — the tab's engine is gone, and `active_path` follows
     /// to whichever tab becomes active next.
     pub fn clear_active_engine(&mut self) {
-        if let Some(path) = self.active_path.as_ref().cloned() {
+        if let Some(path) = self.active_path.clone() {
             self.engines.remove(&path);
         }
         self.active_path = None;
     }
 
+    #[must_use]
     pub fn has_active_engine(&self) -> bool {
         self.active_engine().is_some()
     }
@@ -702,8 +717,9 @@ impl DocumentState {
     /// Per-window engine lookup. Main window → the active tab's engine
     /// (same as `active_engine`). Undocked tab windows → the engine for
     /// the path the window was opened on. All schematic engines live in
-    /// `self.engines`, so every window resolves with a single HashMap
+    /// `self.engines`, so every window resolves with a single `HashMap`
     /// lookup.
+    #[must_use]
     pub fn engine_for_window(
         &self,
         window_id: iced::window::Id,

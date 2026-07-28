@@ -1,3 +1,10 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.13 — Footprint editor active-bar dropdown menu definitions.
 //!
 //! Each `FpActiveBarMenu` variant maps to a function that returns the
@@ -8,7 +15,7 @@
 //! Wiring philosophy: every dropdown item here maps to an existing
 //! primitive and emits the real `FootprintEditorMsg` (Selection Filter
 //! pills, Snap toggles, snap-mode picks, Place tools, Drag Track End,
-//! Break Track, Body3D, Extruded 3D Body, Move Selection by X,Y, the
+//! Break Track, `Body3D`, Extruded 3D Body, Move Selection by X,Y, the
 //! Align… dialog, Text Frame). The [`stub`] helper + the
 //! `FootprintEditorMsg::ActiveBarStub` "coming soon" variant are retained
 //! (removing the variant is out of #372's scope) for any future
@@ -29,7 +36,7 @@ use crate::panels::SnapOptionFlag;
 use super::state::FootprintEditorState;
 
 /// Convenience: route a `FootprintEditorMsg` to the editor at `path`.
-fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
+const fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent {
         path,
         msg: PrimitiveEdit::Footprint(msg),
@@ -74,6 +81,7 @@ fn align_item_with_icon(
 /// row 1 of the Filter dropdown — footprint-native presets keyed on
 /// `SelectionFilterKind` (Task 6), not the schematic
 /// `CustomFilterPreset`.
+#[must_use]
 pub fn entries(
     menu: FpActiveBarMenu,
     state: &FootprintEditorState,

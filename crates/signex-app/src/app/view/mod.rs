@@ -1,8 +1,19 @@
+#![expect(
+    clippy::map_unwrap_or,
+    clippy::option_if_let_else,
+    clippy::redundant_closure_for_method_calls,
+    clippy::redundant_else,
+    clippy::suboptimal_flops,
+    clippy::too_many_lines,
+    clippy::useless_conversion,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::widget::{canvas, column, container, row, shader, stack, text_input};
 use iced::{Element, Length};
 
-pub(crate) mod dialogs;
-pub(crate) mod translate;
+pub mod dialogs;
+pub mod translate;
 
 mod chrome;
 mod context_menu;
@@ -11,7 +22,13 @@ mod overlays;
 mod pdf_preview;
 mod print_preview;
 
-use super::*;
+use super::{
+    AnnotateMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg, ContextSubmenu,
+    DragTarget, EnableVersionControlMsg, ErcMsg, ExportMsg, GridPropertiesMsg, Message,
+    MoveSelectionMsg, NetColorMsg, OverlayMsg, PanelPosition, ParameterManagerMsg, PreferencesMsg,
+    PrintPreviewMsg, ProjectMsg, RemoveMsg, RenameMsg, SelectionFilterMsg, Signex, TextEditMsg,
+    ToolMessage, UiMsg, WindowMsg, contracts, menu_bar, state, status_bar, tab_bar, view,
+};
 
 // ── Submenu chevron — single source of truth ─────────────────────────
 //
@@ -25,21 +42,21 @@ const SUBMENU_ARROW_SIZE: f32 = 18.0;
 
 /// Chrome strip search bar width in pixels — the widest it ever gets;
 /// `chrome_search_bar_geometry` shrinks it below this on narrow windows.
-pub(crate) const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
+pub const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
 /// Narrowest the chrome search bar shrinks to before it starts
 /// overlapping the menu row. Still wide enough for a few query words.
-pub(crate) const CHROME_SEARCH_BAR_MIN_WIDTH: f32 = 160.0;
+pub const CHROME_SEARCH_BAR_MIN_WIDTH: f32 = 160.0;
 /// One chrome control button (min / max / close) width — see
 /// `chrome_btn` in `view_main_window_chrome`.
-pub(crate) const CHROME_CONTROL_BTN_W: f32 = 46.0;
+pub const CHROME_CONTROL_BTN_W: f32 = 46.0;
 /// Total controls strip width — three buttons.
-pub(crate) const CHROME_CONTROLS_W: f32 = CHROME_CONTROL_BTN_W * 3.0;
+pub const CHROME_CONTROLS_W: f32 = CHROME_CONTROL_BTN_W * 3.0;
 /// Minimum left padding between the menu bar's right edge and the
 /// chrome search bar's left edge.
-pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
+pub const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 /// Minimum right padding between the chrome search bar's right edge
 /// and the window-controls strip.
-pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
+pub const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 
 /// `(x, width)` of the chrome strip's search bar for a window `window_w`
 /// pixels wide. Single source of truth: the chrome strip lays the bar
@@ -54,52 +71,18 @@ pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 /// clamped to `[CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH]`,
 /// so it shrinks as the window narrows and never grows past its design
 /// width on a wide monitor.
-pub(crate) fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
+pub fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
     let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
     let side = menu_end.max(CHROME_CONTROLS_W + CHROME_SEARCH_RIGHT_GAP);
-    let width = (window_w - 2.0 * side).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH);
+    let width = 2.0f32
+        .mul_add(-side, window_w)
+        .clamp(CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH);
     // Once the window is too narrow to centre a `MIN_WIDTH` bar, centring
     // would slide it under the menu items. Below that threshold it gives
     // up on centring and sits flush right of the menu instead — still
     // fully usable, which beats a pretty bar you can't click.
     let x = ((window_w - width) / 2.0).max(menu_end);
     (x, width)
-}
-
-#[cfg(test)]
-mod chrome_geometry_tests {
-    use super::*;
-
-    /// The bar is centred on the window, shrinks monotonically as the
-    /// window narrows, and never runs off the right edge or under the
-    /// menu items.
-    #[test]
-    fn search_bar_stays_centred_and_clamped() {
-        let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
-        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
-            let (x, w) = chrome_search_bar_geometry(window_w);
-            assert!(
-                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
-                "bar width {w} out of range at {window_w}"
-            );
-            assert!(
-                x >= menu_end,
-                "bar slid under the menu at {window_w}: x={x}"
-            );
-            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
-            // Centred whenever the window is wide enough for it.
-            if window_w - 2.0 * menu_end >= CHROME_SEARCH_BAR_MIN_WIDTH {
-                assert!(
-                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
-                    "bar off window centre at {window_w}: x={x} w={w}"
-                );
-            }
-        }
-        // Narrowing the window never widens the bar.
-        let (_, wide) = chrome_search_bar_geometry(1920.0);
-        let (_, narrow) = chrome_search_bar_geometry(1100.0);
-        assert!(narrow <= wide, "bar grew as the window shrank");
-    }
 }
 
 impl Signex {
@@ -807,5 +790,41 @@ impl Signex {
         layers.extend(self.library_updates_overlay());
 
         layers
+    }
+}
+
+#[cfg(test)]
+mod chrome_geometry_tests {
+    use super::*;
+
+    /// The bar is centred on the window, shrinks monotonically as the
+    /// window narrows, and never runs off the right edge or under the
+    /// menu items.
+    #[test]
+    fn search_bar_stays_centred_and_clamped() {
+        let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
+        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
+            let (x, w) = chrome_search_bar_geometry(window_w);
+            assert!(
+                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
+                "bar width {w} out of range at {window_w}"
+            );
+            assert!(
+                x >= menu_end,
+                "bar slid under the menu at {window_w}: x={x}"
+            );
+            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
+            // Centred whenever the window is wide enough for it.
+            if 2.0f32.mul_add(-menu_end, window_w) >= CHROME_SEARCH_BAR_MIN_WIDTH {
+                assert!(
+                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
+                    "bar off window centre at {window_w}: x={x} w={w}"
+                );
+            }
+        }
+        // Narrowing the window never widens the bar.
+        let (_, wide) = chrome_search_bar_geometry(1920.0);
+        let (_, narrow) = chrome_search_bar_geometry(1100.0);
+        assert!(narrow <= wide, "bar grew as the window shrank");
     }
 }

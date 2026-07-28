@@ -1,3 +1,8 @@
+#![expect(
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Keymap chord resolution.
 //!
 //! The keyboard subscription forwards each raw keystroke as
@@ -12,7 +17,7 @@
 
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex, TabKind};
 use crate::keymap::{KeyStroke, ShortcutContext};
 
 impl Signex {
@@ -100,7 +105,7 @@ impl Signex {
                 contexts.push(ShortcutContext::Footprint);
                 contexts.push(ShortcutContext::Library);
             }
-            Some(TabKind::SymbolEditor(_)) | Some(TabKind::LibraryBrowser(_)) => {
+            Some(TabKind::SymbolEditor(_) | TabKind::LibraryBrowser(_)) => {
                 contexts.push(ShortcutContext::Library);
             }
             _ => {}

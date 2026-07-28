@@ -1,3 +1,8 @@
+#![expect(
+    clippy::items_after_statements,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Shared modal-chrome primitives — backdrop wrapper, draggable / detached
 //! headers, the close-X button, and the common button / section builders
 //! every dialog family reaches for.
@@ -5,7 +10,7 @@
 //! Extracted verbatim from `view/dialogs.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change.
 
-use super::*;
+use super::{Message, OverlayMsg, WindowMsg};
 use iced::widget::{Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
@@ -50,13 +55,13 @@ pub(in crate::app::view) fn wrap_modal<'a>(
     iced::widget::stack![backdrop, positioned].into()
 }
 
-/// Wrap a header element in a mouse_area so pressing on it begins a modal
+/// Wrap a header element in a `mouse_area` so pressing on it begins a modal
 /// drag. Uses the last known mouse position as the drag anchor.
-pub(in crate::app::view) fn draggable_header<'a>(
-    header_content: Element<'a, Message>,
+pub(in crate::app::view) fn draggable_header(
+    header_content: Element<'_, Message>,
     modal: super::super::super::state::ModalId,
     last_mouse: (f32, f32),
-) -> Element<'a, Message> {
+) -> Element<'_, Message> {
     iced::widget::mouse_area(header_content)
         .on_press(Message::Overlay(OverlayMsg::ModalDragStart {
             modal,
@@ -69,10 +74,10 @@ pub(in crate::app::view) fn draggable_header<'a>(
 /// Borderless-window header — pressing anywhere on the header region
 /// asks iced to start an OS-level window drag. Replaces the OS title
 /// bar for detached modals opened with `decorations: false`.
-pub(crate) fn detached_header<'a>(
-    header_content: Element<'a, Message>,
+pub fn detached_header(
+    header_content: Element<'_, Message>,
     modal: super::super::super::state::ModalId,
-) -> Element<'a, Message> {
+) -> Element<'_, Message> {
     iced::widget::mouse_area(header_content)
         .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(modal)))
         .interaction(iced::mouse::Interaction::Grab)
@@ -84,7 +89,7 @@ pub(crate) fn detached_header<'a>(
 /// no border, fully transparent at rest, Windows-native red bg + white
 /// icon on hover. The `_border` argument is kept for API compatibility
 /// with existing call sites — it is intentionally ignored.
-pub(crate) fn close_x_button(
+pub fn close_x_button(
     message: Message,
     theme_id: signex_types::theme::ThemeId,
     text_color: Color,

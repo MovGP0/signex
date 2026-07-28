@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Signex-wide global library preferences.
 //!
 //! Stage 9 of `v0.9-snxlib-as-file-plan.md`. The Components Panel
@@ -46,6 +52,7 @@ struct GlobalPrefsFile {
 /// Resolved on-disk path of `global_libraries.toml`. `None` when the
 /// platform can't resolve a config dir (very rare — a stripped-down
 /// headless environment). See [`crate::config_root::config_root`].
+#[must_use]
 pub fn prefs_path() -> Option<PathBuf> {
     let root = crate::config_root::config_root()?;
     Some(root.join("global_libraries.toml"))
@@ -55,6 +62,7 @@ pub fn prefs_path() -> Option<PathBuf> {
 /// the file is missing or unparseable — both non-fatal cases. Parse
 /// errors warn through `tracing` so they're visible without taking the
 /// whole panel down.
+#[must_use]
 pub fn load() -> Vec<GlobalLibraryEntry> {
     let Some(path) = prefs_path() else {
         return Vec::new();

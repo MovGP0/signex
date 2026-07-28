@@ -1,10 +1,16 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::useless_let_if_seq,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Enable Version Control flow for the project-navigation dock —
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::Signex;
 
 impl Signex {
     pub(crate) fn open_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
@@ -63,7 +69,7 @@ impl Signex {
             return;
         };
         let library_file_path = project.data.resolve_library_path(entry);
-        let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
+        let Some(root_dir) = library_file_path.parent().map(std::path::Path::to_path_buf) else {
             return;
         };
         if root_dir.join(".git").exists() {
@@ -231,7 +237,7 @@ fn try_init_project_repo(
 /// Control modal. Surfaces the `.snxprj`, every sheet, the pcb file,
 /// and each `.snxlib` directory as separately tickable rows so the
 /// user can opt expensive folders out of the initial commit.
-pub(crate) fn collect_track_items(
+pub fn collect_track_items(
     project: &crate::app::state::LoadedProject,
     project_dir: &std::path::Path,
 ) -> Vec<crate::app::TrackItem> {
@@ -310,9 +316,7 @@ pub(crate) fn collect_track_items(
 /// / `footprints/` / `sims/` / `3dmodels/`) that already exist on
 /// disk. Entries that don't exist are skipped so the picker only
 /// shows real artefacts.
-pub(crate) fn collect_track_items_for_library(
-    root_dir: &std::path::Path,
-) -> Vec<crate::app::TrackItem> {
+pub fn collect_track_items_for_library(root_dir: &std::path::Path) -> Vec<crate::app::TrackItem> {
     let mut items: Vec<crate::app::TrackItem> = Vec::new();
     // Manifest-shaped files at the library root. Only surface them
     // when present — bare-bones libraries may carry only the
@@ -354,7 +358,7 @@ pub(crate) fn collect_track_items_for_library(
 /// empty string when every row is ticked (no exclusions needed) so
 /// the caller can skip writing a no-op file. Directory rows get a
 /// trailing slash so git matches the directory and its contents.
-pub(crate) fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
+pub fn build_gitignore_body(items: &[crate::app::TrackItem]) -> String {
     let mut lines: Vec<String> = Vec::new();
     for item in items {
         if item.tracked {

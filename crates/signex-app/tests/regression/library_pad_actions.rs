@@ -1,3 +1,9 @@
+#![allow(clippy::float_cmp)]
+#![expect(
+    clippy::cast_precision_loss,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Pad selection, clipboard, rotate/flip, courtyard recompute, and context-menu dispatch.
 
 use signex_app::app::{Message, Signex};

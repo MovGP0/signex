@@ -1,3 +1,10 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sim tab — SPICE deck editor + per-pin SPICE node mapping.
 //!
 //! Backed by the typed `SimModel` primitive bound through
@@ -441,7 +448,7 @@ mod tests {
     }
 
     /// Whitespace-only values trim to empty and remove the key —
-    /// mirrors the trimming that the SaveDraft path does on text input.
+    /// mirrors the trimming that the `SaveDraft` path does on text input.
     #[test]
     fn sim_set_pin_node_whitespace_removes_key() {
         let mut e = fixture_editor();
@@ -466,7 +473,7 @@ mod tests {
         );
     }
 
-    /// SimSetKind / SimSetName mutate the bound model in place.
+    /// `SimSetKind` / `SimSetName` mutate the bound model in place.
     #[test]
     fn sim_set_kind_and_name_mutate_in_place() {
         let mut e = fixture_editor();

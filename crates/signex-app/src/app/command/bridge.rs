@@ -8,14 +8,18 @@
 
 use crate::keymap::AppCommandId;
 
-use super::super::*;
+use super::super::{
+    AnnotateMsg, CanvasEvent, CommandPaletteMsg, EditMsg, ErcMsg, FileMsg, GridPropertiesMsg,
+    MenuMessage, Message, NetColorMsg, OverlayMsg, PreferencesMsg, PrintPreviewMsg, Tool,
+    ToolMessage, UiMsg, selection_request,
+};
 
 /// Map a stable command id onto the app's namespaced [`Message`] tree.
 ///
 /// Commands without a live dispatch arm return `None` (they resolve in
 /// the keymap but no-op) — that gap is the deferred catalog/dispatch
 /// triplication follow-up, not a regression here.
-pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
+pub fn core_to_message(command: &AppCommandId) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
 
     let message = match command.as_str() {

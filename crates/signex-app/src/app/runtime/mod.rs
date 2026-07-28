@@ -1,4 +1,4 @@
-use super::*;
+use super::{Message, Signex, Task, ThemeId};
 
 mod footprint_ctx;
 mod footprint_summaries;
@@ -97,7 +97,7 @@ impl Signex {
     /// the swap trick, "active canvas" refers to the undocked
     /// window's canvas for the duration of the event, so this
     /// function writes THAT window's selection into the shared
-    /// panel_ctx. End result: main-window panels reflect the
+    /// `panel_ctx`. End result: main-window panels reflect the
     /// most-recently-interacted-with window's selection. This is
     /// intentional "last-touched wins" behaviour.
     pub(crate) fn update_selection_info(&mut self) {
@@ -178,11 +178,10 @@ impl Signex {
 
     pub(crate) fn update_canvas_theme(&mut self) {
         let colors = if self.ui_state.theme_id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|custom_theme| custom_theme.canvas)
-                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
+            self.ui_state.custom_theme.as_ref().map_or_else(
+                || signex_types::theme::canvas_colors(ThemeId::Signex),
+                |custom_theme| custom_theme.canvas,
+            )
         } else {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };

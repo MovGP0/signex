@@ -51,6 +51,7 @@ fn tool_btn(label: &'static str, tool: Tool, active: Tool) -> Element<'static, T
 }
 
 #[allow(dead_code)]
+#[must_use]
 pub fn view(active: Tool) -> Element<'static, ToolMessage> {
     let sep = || text("|").size(10).color(Color::from_rgb(0.30, 0.31, 0.36));
 

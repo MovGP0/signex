@@ -1,10 +1,18 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Live shape-preview canvas widget (`DrawingPreview`) shown above the
 //! Drawing properties rows, plus its bounding-box / arc-sweep geometry
 //! helpers (circumcircle now comes from the shared
 //! `signex_types::schematic::circumcircle`, #461). Moved verbatim from the
 //! former single-file `element_properties` module.
 
-use super::super::*;
+use super::super::{Color, Point, Rectangle, Renderer, Theme, canvas, mouse};
 
 // ─── Drawing preview widget ─────────────────────────────────────
 
@@ -31,21 +39,21 @@ impl<Message> canvas::Program<Message> for DrawingPreview {
         use signex_types::schematic::SchDrawing;
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let pad = 14.0_f32;
-        let view_w = (bounds.width - 2.0 * pad).max(20.0);
-        let view_h = (bounds.height - 2.0 * pad).max(20.0);
+        let view_w = 2.0f32.mul_add(-pad, bounds.width).max(20.0);
+        let view_h = 2.0f32.mul_add(-pad, bounds.height).max(20.0);
         let cx_px = bounds.width / 2.0;
         let cy_px = bounds.height / 2.0;
 
         let (min_x, min_y, max_x, max_y) = shape_preview_bbox(&self.drawing);
         let span_w = (max_x - min_x).abs().max(0.1);
         let span_h = (max_y - min_y).abs().max(0.1);
-        let scale = (view_w as f64 / span_w).min(view_h as f64 / span_h) as f32;
+        let scale = (f64::from(view_w) / span_w).min(f64::from(view_h) / span_h) as f32;
         let wcx = (min_x + max_x) * 0.5;
         let wcy = (min_y + max_y) * 0.5;
         let w2s = |wx: f64, wy: f64| -> Point {
             Point::new(
-                cx_px + ((wx - wcx) as f32) * scale,
-                cy_px + ((wy - wcy) as f32) * scale,
+                ((wx - wcx) as f32).mul_add(scale, cx_px),
+                ((wy - wcy) as f32).mul_add(scale, cy_px),
             )
         };
 
@@ -137,9 +145,9 @@ impl<Message> canvas::Program<Message> for DrawingPreview {
                     let mut prev = w2s(start.x, start.y);
                     for i in 1..=steps {
                         let t = i as f64 / steps as f64;
-                        let a = from + (to - from) * t;
-                        let wx = cxw + rw * a.cos();
-                        let wy = cyw + rw * a.sin();
+                        let a = (to - from).mul_add(t, from);
+                        let wx = rw.mul_add(a.cos(), cxw);
+                        let wy = rw.mul_add(a.sin(), cyw);
                         let next = w2s(wx, wy);
                         frame.stroke(&canvas::Path::line(prev, next), stroke);
                         prev = next;
@@ -213,10 +221,10 @@ fn shape_preview_bbox(d: &signex_types::schematic::SchDrawing) -> (f64, f64, f64
         } => {
             let xs = [start.x, mid.x, end.x];
             let ys = [start.y, mid.y, end.y];
-            let min_x = xs.iter().cloned().fold(f64::INFINITY, f64::min);
-            let max_x = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let min_y = ys.iter().cloned().fold(f64::INFINITY, f64::min);
-            let max_y = ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let min_x = xs.iter().copied().fold(f64::INFINITY, f64::min);
+            let max_x = xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            let min_y = ys.iter().copied().fold(f64::INFINITY, f64::min);
+            let max_y = ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
             (min_x, min_y, max_x, max_y)
         }
         SchDrawing::Polyline { points, .. } => {

@@ -1,15 +1,20 @@
+#![expect(
+    clippy::manual_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Export-error and print / PDF preview modal builders.
 //!
 //! Extracted verbatim from `view/mod.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{Element, ExportMsg, Length, Message, PrintPreviewMsg, Signex};
 
 impl Signex {
     /// Export-error modal — plain "something went wrong, here's the
     /// message" dialog with an OK button. Sits on top of the print-preview
-    /// overlay when both would otherwise render; dismiss_layer handles
+    /// overlay when both would otherwise render; `dismiss_layer` handles
     /// click-outside-to-close.
     pub(super) fn view_export_error(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, row, text};

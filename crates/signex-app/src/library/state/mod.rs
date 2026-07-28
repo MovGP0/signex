@@ -1,4 +1,10 @@
-//! In-memory state for the Library subsystem (DBLib model).
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! In-memory state for the Library subsystem (`DBLib` model).
 //!
 //! Owned by [`crate::app::Signex::library`]. In the v0.9-refactor-2
 //! model, components are rows inside per-category TSV tables under
@@ -22,7 +28,7 @@
 //! * `picker` — component picker modal state (used by schematic
 //!   placement; flattens across every open library).
 //! * `new_component` — modal state for the "New Row" flow
-//!   (library + table + class + InternalPN).
+//!   (library + table + class + `InternalPN`).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
 
@@ -52,7 +58,8 @@ pub struct EditorAddress {
 }
 
 impl EditorAddress {
-    pub fn new(library_path: PathBuf, table: String, row_id: RowId) -> Self {
+    #[must_use]
+    pub const fn new(library_path: PathBuf, table: String, row_id: RowId) -> Self {
         Self {
             library_path,
             table,
@@ -66,6 +73,7 @@ impl EditorAddress {
     /// a second identity scheme. The path points at the row's home table
     /// with the `row_id` as a suffix so the synthetic key is unique
     /// per-row even when multiple rows share a table.
+    #[must_use]
     pub fn synthetic_tab_path(&self) -> PathBuf {
         self.library_path
             .join("tables")
@@ -81,10 +89,11 @@ impl EditorAddress {
 /// are hidden by default. Stage 18 surfaces these as a single dropdown
 /// pill in the browser header so users can pivot the visible row set
 /// without touching every row's lifecycle field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
     /// Default — show `Released` / `InReview` / `Draft` and tint
     /// `Deprecated`. Hides `Obsolete`.
+    #[default]
     ActiveAndPreferred,
     /// Show only `Released` (the "preferred for new designs" subset
     /// once admins promote rows out of `Draft`).
@@ -99,7 +108,8 @@ pub enum LifecycleFilter {
 
 impl LifecycleFilter {
     /// Stable display label for the dropdown.
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::ActiveAndPreferred => "Active + Preferred",
             Self::PreferredOnly => "Preferred Only",
@@ -110,11 +120,11 @@ impl LifecycleFilter {
 
     /// Every option in stable display order — drives the
     /// `pick_list`'s value list.
-    pub const ALL: &'static [LifecycleFilter] = &[
-        LifecycleFilter::ActiveAndPreferred,
-        LifecycleFilter::PreferredOnly,
-        LifecycleFilter::IncludeDeprecated,
-        LifecycleFilter::All,
+    pub const ALL: &'static [Self] = &[
+        Self::ActiveAndPreferred,
+        Self::PreferredOnly,
+        Self::IncludeDeprecated,
+        Self::All,
     ];
 
     /// Whether a row in `state` should render under this filter.
@@ -122,7 +132,8 @@ impl LifecycleFilter {
     /// (see `lifecycle_dot_color`). `LifecycleState` is
     /// `#[non_exhaustive]` so the match falls through to the default
     /// (active-but-not-preferred) bucket for any future variant.
-    pub fn allows(self, state: signex_library::LifecycleState) -> bool {
+    #[must_use]
+    pub const fn allows(self, state: signex_library::LifecycleState) -> bool {
         use signex_library::LifecycleState as L;
         match (self, state) {
             (Self::All, _) => true,
@@ -137,12 +148,6 @@ impl LifecycleFilter {
             (_, L::Obsolete) => false,
             _ => false,
         }
-    }
-}
-
-impl Default for LifecycleFilter {
-    fn default() -> Self {
-        Self::ActiveAndPreferred
     }
 }
 
@@ -182,7 +187,7 @@ pub struct LibraryBrowserState {
     pub edit_modal: Option<EditRowModalState>,
     /// Per-cell live-edit buffers for inline grid editing
     /// (Deliverable C). Keyed by `(row_id, column_key)` where
-    /// column_key is `"internal_pn"`, `"manufacturer"`, `"mpn"`, or
+    /// `column_key` is `"internal_pn"`, `"manufacturer"`, `"mpn"`, or
     /// `"parameters.<key>"`.
     pub cell_edit: HashMap<(RowId, String), String>,
     /// Confirmation modal state for Delete Selected (Deliverable D).
@@ -254,6 +259,7 @@ pub struct BrowserSort {
 }
 
 impl LibraryBrowserState {
+    #[must_use]
     pub fn new(library_path: PathBuf) -> Self {
         Self {
             library_path,
@@ -321,6 +327,7 @@ pub struct EditRowModalState {
 }
 
 impl EditRowModalState {
+    #[must_use]
     pub fn new(address: EditorAddress, draft: ComponentRow) -> Self {
         let param_buf: HashMap<String, (String, String)> = draft
             .parameters
@@ -403,7 +410,7 @@ pub struct LibraryState {
     /// under its `library_id`.
     pub open_libraries: Vec<OpenLibrary>,
     /// Component Preview states currently open. Keyed by
-    /// `(library_path, table, row_id)` per the DBLib row identity.
+    /// `(library_path, table, row_id)` per the `DBLib` row identity.
     /// Component Preview tabs are read-only for Symbol+Footprint;
     /// editing happens via standalone `.snxsym` / `.snxfpt` document
     /// tabs.
@@ -498,7 +505,8 @@ pub enum ComponentsMountSource {
 }
 
 impl ComponentsMountSource {
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Project => "Project",
             Self::Installed => "Installed",
@@ -509,7 +517,8 @@ impl ComponentsMountSource {
     /// Section key — lower-case identifier used for the
     /// `ComponentsPanelToggleSection` message + panel-state field
     /// dispatch.
-    pub fn key(self) -> &'static str {
+    #[must_use]
+    pub const fn key(self) -> &'static str {
         match self {
             Self::Project => "project",
             Self::Installed => "installed",
@@ -519,11 +528,7 @@ impl ComponentsMountSource {
 
     /// Every section in stable display order — Project on top,
     /// Installed in the middle, Global last.
-    pub const ORDER: &'static [ComponentsMountSource] = &[
-        ComponentsMountSource::Project,
-        ComponentsMountSource::Installed,
-        ComponentsMountSource::Global,
-    ];
+    pub const ORDER: &'static [Self] = &[Self::Project, Self::Installed, Self::Global];
 }
 
 /// Per-source collapse + filter state for the Components Panel.
@@ -536,7 +541,7 @@ pub struct ComponentsPanelState {
     pub collapsed_project: bool,
     pub collapsed_installed: bool,
     pub collapsed_global: bool,
-    /// Substring filter applied to mpn / manufacturer / internal_pn
+    /// Substring filter applied to mpn / manufacturer / `internal_pn`
     /// / library name. Empty = show everything. Stage 9 uses a
     /// case-insensitive `contains` match across all three fields;
     /// the rich `mpn:LM317 lifecycle:preferred` syntax (plan §5) is

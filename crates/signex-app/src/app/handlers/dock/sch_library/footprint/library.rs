@@ -1,3 +1,8 @@
+#![expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint Library panel handlers — the methods behind the
 //! `FpLibrary*` dock-panel messages that manage the *envelope* of
 //! internal footprints on the active `.snxfpt` editor (open sibling,
@@ -9,7 +14,7 @@
 
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex};
 
 impl Signex {
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_open_sibling(

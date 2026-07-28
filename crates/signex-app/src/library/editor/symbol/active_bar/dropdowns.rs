@@ -1,4 +1,9 @@
-//! v0.13 — SchLib (.snxsym) editor active-bar dropdown menu
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! v0.13 — `SchLib` (.snxsym) editor active-bar dropdown menu
 //! definitions.
 //!
 //! Each `SymActiveBarMenu` variant maps to a function that returns a
@@ -25,7 +30,7 @@ use crate::library::editor::symbol::state::{
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
 /// Convenience: route a `SymbolEditorMsg` to the editor at `path`.
-fn sym(path: PathBuf, msg: SymbolEditorMsg) -> LibraryMessage {
+const fn sym(path: PathBuf, msg: SymbolEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent {
         path,
         msg: PrimitiveEdit::Symbol(msg),

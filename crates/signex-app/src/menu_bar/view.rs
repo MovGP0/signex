@@ -1,9 +1,23 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Menu-bar view builder. Split from `menu_bar.rs` as pure code motion.
 
-use super::*;
+use super::{
+    BRAND_WORDMARK_BLACK_1X, BRAND_WORDMARK_BLACK_2X, BRAND_WORDMARK_BLACK_3X,
+    BRAND_WORDMARK_WHITE_1X, BRAND_WORDMARK_WHITE_2X, BRAND_WORDMARK_WHITE_3X, Background, Border,
+    Color, DROPDOWN_WIDTH, DrawPath, Element, Item, Menu, MenuBar, MenuColors, MenuContext,
+    MenuMessage, Theme, ThemeTokens, WORDMARK_LOGICAL_H, WORDMARK_LOGICAL_W, cmd_label, image,
+    is_dark_surface, leaf, leaf_stub, menu_style, root_btn, row, separator, shortcut_for,
+    submenu_item_btn, wordmark_tier,
+};
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
+#[must_use]
 pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
     // `leaf_if(enabled, ..)` wraps `leaf`/`leaf_stub` — enabled items

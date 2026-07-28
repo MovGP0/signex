@@ -1,6 +1,12 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{Message, Signex, TextEditState, Tool};
 use super::pre_placement_shape;
 
 impl Signex {
@@ -97,7 +103,7 @@ impl Signex {
                 if let Some(center) = self.interaction_state.shape_anchor.take() {
                     let dx = p.x - center.x;
                     let dy = p.y - center.y;
-                    let radius = (dx * dx + dy * dy).sqrt();
+                    let radius = dx.hypot(dy);
                     if radius > 0.01 {
                         let drawing = signex_types::schematic::SchDrawing::Circle {
                             uuid: uuid::Uuid::new_v4(),
@@ -169,8 +175,7 @@ impl Signex {
                 .interaction_state
                 .polyline_points
                 .last()
-                .map(|last| (last.x - p.x).abs() < 0.01 && (last.y - p.y).abs() < 0.01)
-                .unwrap_or(false);
+                .is_some_and(|last| (last.x - p.x).abs() < 0.01 && (last.y - p.y).abs() < 0.01);
             if !is_dup {
                 self.interaction_state.polyline_points.push(p);
             }

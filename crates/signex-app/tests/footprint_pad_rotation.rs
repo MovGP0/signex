@@ -1,3 +1,11 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::float_cmp,
+    clippy::ptr_arg,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Pad rotation is a geometry input, and the active-bar transforms act
 //! on the whole selection.
 //!

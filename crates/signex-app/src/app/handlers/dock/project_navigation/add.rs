@@ -1,10 +1,19 @@
+#![expect(
+    clippy::manual_is_variant_and,
+    clippy::manual_let_else,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Add Existing / Add New flows for the project-navigation dock.
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::{Message, ProjectMsg, Signex};
 
 impl Signex {
     /// `Add Existing to Project…` — open a multi-select file picker
@@ -56,7 +65,7 @@ impl Signex {
             .document_state
             .projects
             .get(project_idx)
-            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+            .and_then(|p| p.path.parent().map(std::path::Path::to_path_buf))
         {
             Some(d) => d,
             None => return iced::Task::none(),
@@ -92,7 +101,7 @@ impl Signex {
             .document_state
             .projects
             .get(project_idx)
-            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+            .and_then(|p| p.path.parent().map(std::path::Path::to_path_buf))
         {
             Some(d) => d,
             None => return iced::Task::none(),
@@ -131,7 +140,7 @@ impl Signex {
             .document_state
             .projects
             .get(project_idx)
-            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+            .and_then(|p| p.path.parent().map(std::path::Path::to_path_buf))
         {
             Some(d) => d,
             None => return iced::Task::none(),
@@ -170,19 +179,19 @@ impl Signex {
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.eq_ignore_ascii_case("snxsch"))
-            != Some(true)
+            == Some(true)
         {
+            path
+        } else {
             let mut p = path.into_os_string();
             p.push(".snxsch");
             std::path::PathBuf::from(p)
-        } else {
-            path
         };
         let project_dir = match self
             .document_state
             .projects
             .get(project_idx)
-            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+            .and_then(|p| p.path.parent().map(std::path::Path::to_path_buf))
         {
             Some(d) => d,
             None => return,
@@ -218,7 +227,7 @@ impl Signex {
             Err(e) => {
                 crate::diagnostics::log_error(
                     "Add New Schematic: serialise blank sheet",
-                    &anyhow::anyhow!("{}", e),
+                    &anyhow::anyhow!("{e}"),
                 );
                 return;
             }
@@ -226,7 +235,7 @@ impl Signex {
         if let Err(e) = signex_types::atomic_io::atomic_write(&path, serialised.as_bytes()) {
             crate::diagnostics::log_error(
                 "Add New Schematic: write blank sheet",
-                &anyhow::anyhow!("{}", e),
+                &anyhow::anyhow!("{e}"),
             );
             return;
         }
@@ -270,7 +279,7 @@ impl Signex {
                 if let Err(error) = std::fs::copy(&path, &dest) {
                     crate::diagnostics::log_error(
                         "Add Existing: copy failed",
-                        &anyhow::anyhow!("{}", error),
+                        &anyhow::anyhow!("{error}"),
                     );
                     continue;
                 }
@@ -371,8 +380,7 @@ impl Signex {
                 crate::diagnostics::log_error(
                     "Add Existing: unsupported file type for project tree",
                     &anyhow::anyhow!(
-                        ".{} files belong inside a .snxlib library, not the project root",
-                        ext,
+                        ".{ext} files belong inside a .snxlib library, not the project root",
                     ),
                 );
                 false

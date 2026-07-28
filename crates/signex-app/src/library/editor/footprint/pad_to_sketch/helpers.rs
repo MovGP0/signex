@@ -99,7 +99,7 @@ pub(super) fn push_arc_ccw(
 
 /// Mint the four bbox corner Points (`[ne, se, sw, nw]`) at the pad's
 /// bbox extents. Used as the spine of every rectangular mint variant
-/// (Rect / RoundRect / Oval / Chamfered).
+/// (Rect / `RoundRect` / Oval / Chamfered).
 pub(super) fn bbox_corner_points(
     sketch: &mut SketchData,
     plane_id: PlaneId,
@@ -113,12 +113,12 @@ pub(super) fn bbox_corner_points(
 /// when the entity was found (and is a Point); `false` otherwise.
 /// Shared between the move-mirror path and the post-solve mirrors.
 pub(super) fn set_point_xy(sketch: &mut SketchData, id: SketchEntityId, x: f64, y: f64) -> bool {
-    if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) {
-        if let EntityKind::Point { x: ex, y: ey } = &mut entity.kind {
-            *ex = x;
-            *ey = y;
-            return true;
-        }
+    if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id)
+        && let EntityKind::Point { x: ex, y: ey } = &mut entity.kind
+    {
+        *ex = x;
+        *ey = y;
+        return true;
     }
     false
 }

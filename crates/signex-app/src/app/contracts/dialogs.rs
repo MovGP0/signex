@@ -1,6 +1,14 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dialog + export + context-menu message enums.
 
-use super::*;
+use super::{
+    Channel, ContextAction, ContextSubmenu, PathBuf, ProjectCloseChoice, ProjectTreeAction,
+    RemoveChoice, SchematicSheet, TabContextAction,
+};
 
 /// Per-net colour override message family (ADR-0001 D3). Namespaced
 /// under `Message::NetColor` and routed to
@@ -125,7 +133,7 @@ pub enum EnableVersionControlMsg {
 pub enum RenameMsg {
     /// Text input in the rename modal — updates the live buffer.
     BufferChanged(String),
-    /// Commit the rename: fs::rename + update in-memory sheet / tab
+    /// Commit the rename: `fs::rename` + update in-memory sheet / tab
     /// state. Errors surface in `RenameDialogState::error`.
     Submit,
     /// Dismiss the rename modal without applying.
@@ -221,6 +229,7 @@ pub enum ExportMsg {
 }
 
 /// Custom Selection Filter modal message family (ADR-0001 D3).
+///
 /// Namespaced under `Message::SelectionFilter` and routed to
 /// `dispatch_selection_filter_message`. Drives the footprint editor's
 /// selection-filter customization modal.

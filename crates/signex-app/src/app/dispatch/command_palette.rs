@@ -1,9 +1,16 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Command palette dispatch — open/close, query updates, execute.
 
 use iced::Task;
 use iced::widget::operation;
 
-use super::super::*;
+use super::super::{CommandPaletteMsg, FileMsg, Message, OverlayMsg, Signex};
 use crate::app::command_palette::{
     COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, rank_results,
 };

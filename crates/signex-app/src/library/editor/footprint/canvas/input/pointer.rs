@@ -1,3 +1,13 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::question_mark,
+    clippy::similar_names,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pointer mechanics — button-press / button-release / cursor-move
 //! dispatchers plus the classification helpers they share (snap
 //! resolution, empty-press arming, drag-tick move publishing, and the
@@ -82,12 +92,12 @@ impl FootprintCanvas<'_> {
             }
             let cancel_msg: Option<EditorMsg> = match self.state.mode {
                 EditorMode::Normal => {
-                    if self.state.pads_tool != PadsTool::Select {
+                    if self.state.pads_tool == PadsTool::Select {
+                        None
+                    } else {
                         Some(EditorMsg::Footprint(FootprintEditorMsg::SetPadsTool(
                             PadsTool::Select,
                         )))
-                    } else {
-                        None
                     }
                 }
                 EditorMode::Sketch => {
@@ -285,7 +295,7 @@ impl FootprintCanvas<'_> {
             let target = if let Some(idx) = self.state.pad_at(world.0, world.1) {
                 FootprintContextTarget::Pad(idx)
             } else {
-                let tol = 4.0_f64 / (cstate.scale.max(1.0) as f64);
+                let tol = 4.0_f64 / f64::from(cstate.scale.max(1.0));
                 match silk_f_hit_at(self.silk_f, world.0, world.1, tol) {
                     Some(idx) => FootprintContextTarget::SilkF(idx),
                     None => FootprintContextTarget::Empty,
@@ -386,11 +396,9 @@ impl FootprintCanvas<'_> {
             && self.state.active_tool == SketchTool::Select)
             || (matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::Select);
-        let drag_active_for_snap = cstate
-            .drag
-            .as_ref()
-            .map(|d| d.sketch_line.is_some() || d.sketch_point.is_some() || d.pad_idx != usize::MAX)
-            .unwrap_or(false);
+        let drag_active_for_snap = cstate.drag.as_ref().is_some_and(|d| {
+            d.sketch_line.is_some() || d.sketch_point.is_some() || d.pad_idx != usize::MAX
+        });
         if select_mode_tick && !drag_active_for_snap {
             cstate.last_snap = None;
             raw_world
@@ -404,13 +412,9 @@ impl FootprintCanvas<'_> {
             // via `snap_cursor` still applies. Sketch-point and
             // sketch-line drags keep vertex snapping (that's the whole
             // point of dragging a vertex).
-            let pad_drag = cstate
-                .drag
-                .as_ref()
-                .map(|d| {
-                    d.pad_idx != usize::MAX && d.sketch_point.is_none() && d.sketch_line.is_none()
-                })
-                .unwrap_or(false);
+            let pad_drag = cstate.drag.as_ref().is_some_and(|d| {
+                d.pad_idx != usize::MAX && d.sketch_point.is_none() && d.sketch_line.is_none()
+            });
             let point_hit = if pad_drag {
                 None
             } else {
@@ -433,7 +437,7 @@ impl FootprintCanvas<'_> {
             if let Some(centre) = centre {
                 let dx_mm = world.0 - centre.0;
                 let dy_mm = world.1 - centre.1;
-                let r_mm = (dx_mm * dx_mm + dy_mm * dy_mm).sqrt();
+                let r_mm = dx_mm.hypot(dy_mm);
                 let diameter_mm = (2.0 * r_mm).max(0.05);
                 self.cache.clear();
                 return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -574,7 +578,7 @@ impl FootprintCanvas<'_> {
             Some(((ax, ay), (bx, by))) => {
                 let lx = bx - ax;
                 let ly = by - ay;
-                let llen = (lx * lx + ly * ly).sqrt();
+                let llen = lx.hypot(ly);
                 if llen <= 1e-9 {
                     (raw_dx, raw_dy)
                 } else {
@@ -582,7 +586,7 @@ impl FootprintCanvas<'_> {
                     // (-ly, lx)/llen.
                     let nx = -ly / llen;
                     let ny = lx / llen;
-                    let proj = raw_dx * nx + raw_dy * ny;
+                    let proj = raw_dy.mul_add(ny, raw_dx * nx);
                     (proj * nx, proj * ny)
                 }
             }

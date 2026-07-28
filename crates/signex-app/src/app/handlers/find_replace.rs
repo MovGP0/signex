@@ -1,6 +1,6 @@
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex};
 
 impl Signex {
     pub(crate) fn handle_find_replace_open_requested(

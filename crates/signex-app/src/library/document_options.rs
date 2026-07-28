@@ -1,4 +1,9 @@
-//! Tools ▸ Document Options modal — Altium SchLib parity.
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Tools ▸ Document Options modal — Altium `SchLib` parity.
 //!
 //! Per-`.snxlib` view settings: sheet color, grid spacing, grid
 //! visibility, coordinate display unit. Edits go to a working

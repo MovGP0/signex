@@ -1,5 +1,10 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Supply tab — primary MPN + ranked alternates + distributor listings
-//! editor. Retargeted to `ComponentRow` (DBLib model) per
+//! editor. Retargeted to `ComponentRow` (`DBLib` model) per
 //! `v0.9-refactor-2-plan.md` §11.4.
 //!
 //! The shape this view edits:
@@ -12,9 +17,9 @@
 //!
 //! 1. **Primary MPN** — 4-row form (Manufacturer / MPN / Status / Notes).
 //! 2. **Alternates** — one inline row per alternate (manufacturer, MPN,
-//!    status pick_list, notes, remove [×]) plus a `+ Add Alternate`
+//!    status `pick_list`, notes, remove [×]) plus a `+ Add Alternate`
 //!    trigger.
-//! 3. **Distributor Listings** — table-like rows (distributor pick_list,
+//! 3. **Distributor Listings** — table-like rows (distributor `pick_list`,
 //!    sku, url, remove [×]) plus a `+ Add Listing` trigger.
 //!
 //! Every value mutation flows through `EditorMsg::Supply*` → the
@@ -49,7 +54,7 @@ const DISTRIBUTOR_OPTS: [DistributorSource; 7] = [
     DistributorSource::Other,
 ];
 
-/// Wrapper so the pick_list `Display` impl prints a friendly label
+/// Wrapper so the `pick_list` `Display` impl prints a friendly label
 /// instead of the bare debug variant name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct StatusPick(AlternateStatus);
@@ -69,7 +74,7 @@ impl std::fmt::Display for StatusPick {
     }
 }
 
-/// Wrapper so the pick_list `Display` impl prints a friendly label
+/// Wrapper so the `pick_list` `Display` impl prints a friendly label
 /// instead of the bare debug variant name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct DistributorPick(DistributorSource);
@@ -80,7 +85,7 @@ impl std::fmt::Display for DistributorPick {
     }
 }
 
-fn distributor_label(s: DistributorSource) -> &'static str {
+const fn distributor_label(s: DistributorSource) -> &'static str {
     match s {
         DistributorSource::DigiKey => "DigiKey",
         DistributorSource::Mouser => "Mouser",
@@ -94,7 +99,7 @@ fn distributor_label(s: DistributorSource) -> &'static str {
 
 /// Best-effort reverse of `distributor_label` — turn the canonical string
 /// stored on `DistributorListing.distributor` back into a
-/// `DistributorSource` for the pick_list selection. Unknown / legacy
+/// `DistributorSource` for the `pick_list` selection. Unknown / legacy
 /// strings select `Other` so the picker can still drive the row.
 fn distributor_from_label(s: &str) -> DistributorSource {
     match s {

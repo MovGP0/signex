@@ -13,7 +13,8 @@ pub struct UndoStack {
 }
 
 impl UndoStack {
-    pub fn new(max_depth: usize) -> Self {
+    #[must_use]
+    pub const fn new(max_depth: usize) -> Self {
         Self {
             history: Vec::new(),
             position: 0,
@@ -42,15 +43,17 @@ impl UndoStack {
         }
     }
 
+    #[must_use]
     pub fn peek_undo_engine_steps(&self) -> Option<usize> {
         (self.position > 0).then(|| self.history[self.position - 1].steps)
     }
 
+    #[must_use]
     pub fn peek_redo_engine_steps(&self) -> Option<usize> {
         (self.position < self.history.len()).then(|| self.history[self.position].steps)
     }
 
-    pub fn step_back(&mut self) -> bool {
+    pub const fn step_back(&mut self) -> bool {
         if self.position == 0 {
             return false;
         }
@@ -58,7 +61,7 @@ impl UndoStack {
         true
     }
 
-    pub fn step_forward(&mut self) -> bool {
+    pub const fn step_forward(&mut self) -> bool {
         if self.position >= self.history.len() {
             return false;
         }
@@ -67,12 +70,14 @@ impl UndoStack {
     }
 
     #[allow(dead_code)]
-    pub fn can_undo(&self) -> bool {
+    #[must_use]
+    pub const fn can_undo(&self) -> bool {
         self.position > 0
     }
 
     #[allow(dead_code)]
-    pub fn can_redo(&self) -> bool {
+    #[must_use]
+    pub const fn can_redo(&self) -> bool {
         self.position < self.history.len()
     }
 }

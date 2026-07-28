@@ -1,6 +1,6 @@
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex};
 
 impl Signex {
     /// Tools > Passive Network Calculator. Opens the in-app modal.

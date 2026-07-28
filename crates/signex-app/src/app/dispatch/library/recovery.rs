@@ -5,7 +5,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{LibraryMessage, Message, Signex, Task};
 
 /// Atomic write — write `bytes` to `<path>.tmp` then `rename` over
 /// `path`. A crash mid-write leaves either the original file intact
@@ -45,11 +45,7 @@ use signex_library::{LibraryError, LocalGitAdapter};
 /// Stage H — adding `LibraryError::MissingGitRepo` /
 /// `LibraryError::MissingSnxlibFile` variants is a clean follow-up
 /// once the rest of v0.9 settles.
-pub(crate) fn route_open_error(
-    state: &mut LibraryState,
-    path: &std::path::Path,
-    err: &LibraryError,
-) {
+pub fn route_open_error(state: &mut LibraryState, path: &std::path::Path, err: &LibraryError) {
     // Don't clobber an already-open recovery dialog; the user resolves
     // them sequentially.
     if state.recovery.is_some() {
@@ -99,14 +95,15 @@ pub(super) fn handle_recovery_library_missing(
             |path| Message::Library(LibraryMessage::RecoveryLibraryMissingLocateResult(path)),
         ),
         LibraryMissingChoice::RemoveFromProject => {
-            let missing = match app.library.recovery.as_ref() {
-                Some(RecoveryDialog::LibraryMissing { path }) => path.clone(),
-                _ => {
-                    app.library.recovery = None;
-                    return Task::none();
-                }
+            let missing = if let Some(RecoveryDialog::LibraryMissing { path }) =
+                app.library.recovery.as_ref()
+            {
+                path.clone()
+            } else {
+                app.library.recovery = None;
+                return Task::none();
             };
-            for project in app.document_state.projects.iter_mut() {
+            for project in &mut app.document_state.projects {
                 // Compute resolved paths up-front so the closure can
                 // borrow only the indices vector, not project.data
                 // (which retain's closure also tries to read).
@@ -156,12 +153,13 @@ pub(super) fn handle_recovery_git_missing(
             Task::none()
         }
         GitMissingChoice::ReInit => {
-            let path = match app.library.recovery.as_ref() {
-                Some(RecoveryDialog::GitMissing { path, .. }) => path.clone(),
-                _ => {
-                    app.library.recovery = None;
-                    return Task::none();
-                }
+            let path = if let Some(RecoveryDialog::GitMissing { path, .. }) =
+                app.library.recovery.as_ref()
+            {
+                path.clone()
+            } else {
+                app.library.recovery = None;
+                return Task::none();
             };
             app.library.recovery = None;
             match LocalGitAdapter::recover_init(&path) {

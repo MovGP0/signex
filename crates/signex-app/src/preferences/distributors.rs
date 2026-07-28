@@ -4,7 +4,7 @@
 //! `PrefMsg::LibrarySettings(_)`. Moved verbatim from the former
 //! single-file `preferences` module.
 
-use super::*;
+use super::{PrefMsg, section_title};
 use iced::widget::{Space, column, container};
 use iced::{Element, Length};
 

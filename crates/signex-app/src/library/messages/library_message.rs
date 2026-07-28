@@ -98,10 +98,10 @@ pub enum LibraryMessage {
     /// User picked a target library in the modal — index into
     /// `LibraryState.open_libraries`.
     NewComponentSetLibrary(usize),
-    /// User picked a class in the modal pick_list.
+    /// User picked a class in the modal `pick_list`.
     NewComponentSetClass(ComponentClass),
     /// User picked a target table (filename stem) in the modal
-    /// pick_list. Rows live inside category tables, so the modal
+    /// `pick_list`. Rows live inside category tables, so the modal
     /// needs the user to pick a destination table — populated from
     /// `manifest().tables()` plus the default `<class>s` slot when
     /// the manifest declares no overrides.
@@ -371,7 +371,7 @@ pub enum LibraryMessage {
         row_id: RowId,
     },
     /// Inner-message envelope for events fired by the Edit Component
-    /// Details modal. Keyed by library_path so the dispatcher can find
+    /// Details modal. Keyed by `library_path` so the dispatcher can find
     /// the matching `LibraryBrowserState.edit_modal`.
     BrowserEdit {
         library_path: PathBuf,
@@ -458,7 +458,7 @@ pub enum LibraryMessage {
     /// stays linear (scan first, decide branch, fire this message).
     /// The dispatcher mounts the state directly when this fires; no
     /// payload because the state is already on `LibraryState`.
-    /// Toggle one row's checkbox in the modal — the symbol_uuid keys
+    /// Toggle one row's checkbox in the modal — the `symbol_uuid` keys
     /// the entry inside the modal state's `entries` vec.
     LibraryUpdatesToggleSelection(uuid::Uuid),
     /// User clicked Update Selected Components — apply the picked
@@ -478,7 +478,7 @@ pub enum LibraryMessage {
     /// doesn't ripple through the message enum.
     ComponentsPanelToggleSection(super::super::state::ComponentsMountSource),
     /// Live edit of the Components Panel filter input. Substring
-    /// matched across mpn / manufacturer / internal_pn / library
+    /// matched across mpn / manufacturer / `internal_pn` / library
     /// name. Stage 9 ships this; the rich syntax (plan §5) is
     /// follow-up work.
     ComponentsPanelSetFilter(String),

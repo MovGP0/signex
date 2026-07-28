@@ -1,6 +1,15 @@
+#![expect(
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Shared panel widget helpers (chevrons, section rows, form rows).
 
-use super::*;
+use super::{
+    Border, CollapsedSections, Color, Column, Element, Length, OnceLock, PROPERTY_LABEL_PORTION,
+    PROPERTY_ROW_PAD_X, PanelContext, PanelMsg, Theme, ThemeTokens, container, row, svg, text,
+    theme_ext, thin_sep,
+};
 use iced::widget::column;
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -214,7 +223,7 @@ pub fn part_tree_row<'a>(
 /// Plain `text(...).width(FillPortion(...)).wrapping(None)` lays out at
 /// the text's intrinsic width and bleeds past the allotted column when
 /// the panel is narrow — covering the value column or the panel edge.
-/// This helper enforces the FillPortion bound and clips visual overflow
+/// This helper enforces the `FillPortion` bound and clips visual overflow
 /// inside it. Used by every `form_*_row` and inline property row.
 pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     container(
@@ -251,7 +260,7 @@ pub fn form_edit_row_f64<'a>(
 ) -> Element<'a, PanelMsg> {
     use iced::widget::{row, text_input};
     let buf = format!("{value:.3}");
-    let on_submit_cb = on_submit.clone();
+    let on_submit_cb = on_submit;
     row![
         property_label_small(label, muted),
         text_input("", &buf)

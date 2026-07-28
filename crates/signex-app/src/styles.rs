@@ -1,3 +1,9 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Custom Iced styles matching Altium Designer's dark theme chrome.
 //!
 //! All style functions are token-aware factories that accept `&ThemeTokens`
@@ -12,8 +18,9 @@ use signex_types::theme::ThemeTokens;
 
 /// Convert a signex-types Color to an iced Color.
 #[inline]
+#[must_use]
 pub fn ti(c: signex_types::theme::Color) -> Color {
-    Color::from_rgba8(c.r, c.g, c.b, c.a as f32 / 255.0)
+    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
 }
 
 // ─── Container styles ─────────────────────────────────────────

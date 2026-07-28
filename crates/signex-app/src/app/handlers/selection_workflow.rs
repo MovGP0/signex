@@ -1,12 +1,18 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex, selection_request};
 use crate::active_bar::SelectionFilter;
 
 /// Return `true` iff the currently active filter set allows selecting the
 /// given hit. When no filters are active (empty set), selection is blocked
 /// entirely — that matches the Altium "unselect all categories" behaviour.
-pub(crate) fn passes_filter(
+pub fn passes_filter(
     item: &signex_types::schematic::SelectedItem,
     snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     filters: &std::collections::HashSet<SelectionFilter>,
@@ -18,8 +24,7 @@ pub(crate) fn passes_filter(
                 .symbols
                 .iter()
                 .find(|s| s.uuid == item.uuid)
-                .map(|s| s.is_power)
-                .unwrap_or(false);
+                .is_some_and(|s| s.is_power);
             if is_power {
                 SelectionFilter::PowerPorts
             } else {
@@ -219,7 +224,7 @@ impl Signex {
 /// "Select » Connection" behaviour which picks net geometry only.
 ///
 /// Endpoints are quantised to 0.001 mm (1 nm in Standard-space integer units)
-/// and stored in a HashSet — lookup is O(1), so the overall walk is
+/// and stored in a `HashSet` — lookup is O(1), so the overall walk is
 /// O(N · passes) instead of the naive O(P²·N²). Critical for power nets
 /// with hundreds of wires.
 fn expand_to_net(

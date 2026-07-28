@@ -1,4 +1,11 @@
-pub(super) fn footprint_pad_kind_label(
+#![expect(
+    clippy::manual_let_else,
+    clippy::match_same_arms,
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+pub(super) const fn footprint_pad_kind_label(
     pad: &crate::library::editor::footprint::state::EditorPad,
 ) -> &'static str {
     use signex_library::primitive::footprint::PadKind;
@@ -13,7 +20,7 @@ pub(super) fn footprint_pad_kind_label(
     }
 }
 
-pub(super) fn footprint_pad_shape_label(
+pub(super) const fn footprint_pad_shape_label(
     pad: &crate::library::editor::footprint::state::EditorPad,
 ) -> &'static str {
     use signex_library::primitive::footprint::PadShape;
@@ -50,7 +57,12 @@ pub(super) fn build_over_constraint_summaries(
     let over_set: std::collections::HashSet<_> = out.over_constraints.iter().copied().collect();
 
     let kind_label = |k: &ConstraintKind| -> &'static str {
-        use ConstraintKind::*;
+        use ConstraintKind::{
+            Angle, Coincident, DistancePtCircle, DistancePtLine, DistancePtPt, EqualLength,
+            EqualRadius, Fixed, Horizontal, Midpoint, Parallel, Perpendicular, PointOnArc,
+            PointOnLine, SymmetricAboutLine, SymmetricAboutPoint, TangentArcArc, TangentLineArc,
+            Vertical,
+        };
         match k {
             Coincident { .. } => "Coincident",
             PointOnLine { .. } => "PointOnLine",
@@ -74,7 +86,12 @@ pub(super) fn build_over_constraint_summaries(
         }
     };
     let first_focus = |k: &ConstraintKind| -> Option<signex_sketch::id::SketchEntityId> {
-        use ConstraintKind::*;
+        use ConstraintKind::{
+            Angle, Coincident, DistancePtCircle, DistancePtLine, DistancePtPt, EqualLength,
+            EqualRadius, Fixed, Horizontal, Midpoint, Parallel, Perpendicular, PointOnArc,
+            PointOnLine, SymmetricAboutLine, SymmetricAboutPoint, TangentArcArc, TangentLineArc,
+            Vertical,
+        };
         match k {
             Coincident { p1, .. } => Some(*p1),
             PointOnLine { point, .. } => Some(*point),

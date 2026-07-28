@@ -1,3 +1,11 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::similar_names,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad Stack section renderer, split out of `form/mod.rs` to keep both
 //! files under the 800-line cap (ADR-0001 #165). Verbatim code motion.
 
@@ -13,7 +21,14 @@ use super::super::table::{
     pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
     pad_table_input_cell, pad_table_picklist_cell, pad_table_row,
 };
-use super::*;
+use super::{
+    PadEditTarget, PadFormValues, pad_copper_offset_x_msg, pad_copper_offset_y_msg,
+    pad_corner_radius_msg, pad_drill_diameter_msg, pad_drill_slot_length_msg,
+    pad_hole_rotation_msg, pad_hole_tolerance_minus_msg, pad_hole_tolerance_plus_msg,
+    pad_input_row, pad_mask_bottom_msg, pad_mask_tented_bottom_msg, pad_mask_tented_top_msg,
+    pad_mask_top_msg, pad_paste_bottom_msg, pad_paste_enabled_bottom_msg,
+    pad_paste_enabled_top_msg, pad_paste_top_msg, pad_plated_msg,
+};
 
 /// v0.20 — render the "Pad Stack" section: copper shape + size,
 /// hole, per-side paste / mask expansions, tented flags, thermal
@@ -127,7 +142,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     // Only renders for `PadEditTarget::Selected` (placement-mode pads
     // have no minted entities, so no params to surface).
     if let PadEditTarget::Selected(pad_idx) = target {
-        for entry in shape_params.iter() {
+        for entry in shape_params {
             let key = entry.key.clone();
             let value_string = entry.current_expr.clone();
             col = col.push(pad_input_row(
@@ -159,7 +174,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         } else {
             HoleShapeChoice::Round
         };
-        let slot_default = values.drill_diameter_mm.map(|d| d * 1.5).unwrap_or(1.0);
+        let slot_default = values.drill_diameter_mm.map_or(1.0, |d| d * 1.5);
         // v0.25 polish — prefer the verbatim user buffer if one is
         // registered for this input; only fall back to formatting
         // the canonical f64 when no buffer exists. Without this

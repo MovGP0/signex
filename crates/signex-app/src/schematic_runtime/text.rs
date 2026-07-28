@@ -1,9 +1,19 @@
-use super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
 
+use super::{
+    Color, DirtyFlags, HashMap, OverlayInputs, RendererSnapshot, ResolvedTheme, ScreenTransform,
+    TextInput, TextNote, canvas, draw_renderer_snapshot, to_rgba,
+};
+
+#[must_use]
 pub fn expand_char_escapes(text: &str) -> String {
     text.to_string()
 }
 
+#[must_use]
 pub fn escape_for_standard(text: &str) -> String {
     text.to_string()
 }

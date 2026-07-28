@@ -1,3 +1,8 @@
+#![expect(
+    clippy::field_reassign_with_default,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! v0.18.25.1 — regression tests for the silk hit-test edge cases
 //! flagged by the v0.18.25 code review (H1 zero-sweep arc, M1
 //! polygon near-horizontal edges).

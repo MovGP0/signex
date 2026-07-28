@@ -1,3 +1,10 @@
+#![expect(
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Components Panel handlers (Stage 9) — section collapse, add-library
 //! from the Installed / Global headers, promote-to-global, and the
 //! Stage-9 stubs (manage-global, add-to-project, place-into-schematic).
@@ -5,7 +12,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{LibraryMessage, Message, RowId, Signex, Task, commands};
 
 impl Signex {
     /// Toggle the collapse flag for the named section.
@@ -75,7 +82,7 @@ impl Signex {
                 }
             }
             ComponentsMountSource::Global => {
-                match crate::panels::components_panel::global_prefs::add_path(path.clone()) {
+                match crate::panels::components_panel::global_prefs::add_path(path) {
                     Ok(updated) => {
                         self.library.global_libraries = updated;
                     }

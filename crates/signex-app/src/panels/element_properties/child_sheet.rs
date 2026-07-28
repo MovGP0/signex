@@ -1,15 +1,24 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_arguments,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Properties surface for a single hierarchical child sheet — read-only
 //! identity/geometry plus the editable Border/Fill colour swatch rows
 //! and stroke-width row. Moved verbatim from the former single-file
 //! `element_properties` module.
 
-use super::super::*;
+use super::super::{
+    Background, Border, Color, ColorFieldProps, Column, Element, Length, PanelContext, PanelMsg,
+    Theme, collapsible_section, color_field, container, prop_kv_row, row, text,
+};
 
 /// Properties section for a single hierarchical child sheet.
 /// Shows read-only info (Name / File / Position / Size) plus
 /// editable Border Colour, Fill Colour and Line Width with a
-/// Reset-to-default button. Colour edits open an iced_aw
-/// ColorPicker overlay anchored to a swatch button.
+/// Reset-to-default button. Colour edits open an `iced_aw`
+/// `ColorPicker` overlay anchored to a swatch button.
 pub(in crate::panels) fn view_child_sheet_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
@@ -122,13 +131,13 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 ///      a 12-colour grid plus "Custom…" and (when an override is
 ///      active) "Reset to Default".
 ///   2. Click the swatch again to collapse, or click "Custom…" to
-///      switch to the iced_aw HSV / RGB ColorPicker overlay.
+///      switch to the `iced_aw` HSV / RGB `ColorPicker` overlay.
 ///
 /// Both the palette pick and the advanced-picker submit reuse the
 /// same `EditChildSheet*Color` message so engine command + undo/redo
 /// round-trip is identical for both paths.
-fn child_sheet_color_row<'a>(
-    label: &'a str,
+fn child_sheet_color_row(
+    label: &str,
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
@@ -136,7 +145,7 @@ fn child_sheet_color_row<'a>(
     muted: Color,
     border_c: Color,
     is_border: bool,
-) -> Element<'a, PanelMsg> {
+) -> Element<'_, PanelMsg> {
     use std::rc::Rc;
 
     // StrokeColor → [u8; 4] RGBA so the generic widget stays agnostic
@@ -155,7 +164,7 @@ fn child_sheet_color_row<'a>(
     // the exact `iced::Color` the old preset path emitted; the handler
     // re-quantises to `StrokeColor` regardless.
     let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> = Rc::new(move |rgba: [u8; 4]| {
-        let color = iced::Color::from_rgba8(rgba[0], rgba[1], rgba[2], rgba[3] as f32 / 255.0);
+        let color = iced::Color::from_rgba8(rgba[0], rgba[1], rgba[2], f32::from(rgba[3]) / 255.0);
         if is_border {
             PanelMsg::EditChildSheetBorderColor(sheet_id, color)
         } else {
@@ -195,12 +204,12 @@ fn child_sheet_stroke_width_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let display = match buffered {
         Some(s) => s,
-        None => format!("{:.4}", stored_value)
+        None => format!("{stored_value:.4}")
             .trim_end_matches('0')
             .trim_end_matches('.')
             .to_string(),
     };
-    let display_for_input = display.clone();
+    let display_for_input = display;
     let input = iced::widget::text_input("0.1524", &display_for_input)
         .size(11)
         .padding(4)

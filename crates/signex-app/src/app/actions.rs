@@ -1,4 +1,11 @@
-use super::*;
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::or_fun_call,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::Signex;
 
 impl Signex {
     /// Clear every cursor-following ghost preview. Call before arming a new
@@ -36,7 +43,7 @@ impl Signex {
         let value = Self::component_value_from_lib_id(lib_id);
         let prefix: String = value
             .chars()
-            .take_while(|ch| ch.is_ascii_alphabetic())
+            .take_while(char::is_ascii_alphabetic)
             .collect();
         if prefix.is_empty() {
             "U".to_string()
@@ -61,24 +68,21 @@ impl Signex {
     }
 
     fn next_designator_for_prefix(&self, prefix: &str) -> String {
-        let next_index = self
-            .active_render_snapshot()
-            .map(|snapshot| {
-                snapshot
-                    .symbols
-                    .iter()
-                    .filter_map(|symbol| {
-                        let reference = symbol.reference.trim();
-                        if !reference.starts_with(prefix) {
-                            return None;
-                        }
-                        reference[prefix.len()..].parse::<u32>().ok()
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + 1
-            })
-            .unwrap_or(1);
+        let next_index = self.active_render_snapshot().map_or(1, |snapshot| {
+            snapshot
+                .symbols
+                .iter()
+                .filter_map(|symbol| {
+                    let reference = symbol.reference.trim();
+                    if !reference.starts_with(prefix) {
+                        return None;
+                    }
+                    reference[prefix.len()..].parse::<u32>().ok()
+                })
+                .max()
+                .unwrap_or(0)
+                + 1
+        });
 
         format!("{prefix}{next_index}")
     }
@@ -128,8 +132,7 @@ impl Signex {
             .panel_ctx
             .pre_placement
             .as_ref()
-            .map(|pp| pp.rotation)
-            .unwrap_or(0.0);
+            .map_or(0.0, |pp| pp.rotation);
 
         let symbol = signex_types::schematic::Symbol {
             uuid: uuid::Uuid::new_v4(),
@@ -278,9 +281,9 @@ impl Signex {
             .iter()
             .map(|anchor| anchor.y)
             .fold(f64::NEG_INFINITY, f64::max);
-        let center_x = (min_x + max_x) / 2.0;
-        let center_y = (min_y + max_y) / 2.0;
-        let gs = self.ui_state.grid_size_mm as f64;
+        let center_x = f64::midpoint(min_x, max_x);
+        let center_y = f64::midpoint(min_y, max_y);
+        let gs = f64::from(self.ui_state.grid_size_mm);
 
         let mut engine_commands = Vec::new();
         for anchor in &positions {
@@ -313,7 +316,7 @@ impl Signex {
         ) && positions.len() > 2
         {
             engine_commands.clear();
-            let mut sorted = positions.clone();
+            let mut sorted = positions;
             let n = sorted.len();
             match action {
                 ActiveBarAction::DistributeHorizontally => {

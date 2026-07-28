@@ -1,3 +1,11 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad-form types, message-helper macro, widget primitives, and the
 //! three Properties-panel render functions for Pads-mode (Properties
 //! / Pad Stack / Pad Features).
@@ -156,7 +164,7 @@ impl PadFormValues {
 macro_rules! pad_msg_fns {
     ($(($fn_name:ident, $ty:ty, $next:ident, $sel:ident, $field:ident);)*) => {
         $(
-            pub(in crate::panels::footprint_editor_properties) fn $fn_name(t: PadEditTarget, v: $ty) -> PanelMsg {
+            pub(in crate::panels::footprint_editor_properties) const fn $fn_name(t: PadEditTarget, v: $ty) -> PanelMsg {
                 match t {
                     PadEditTarget::Next => PanelMsg::$next(v),
                     PadEditTarget::Selected(idx) => PanelMsg::$sel { idx, $field: v },
@@ -209,7 +217,7 @@ pad_msg_fns! {
 }
 
 /// v0.20 — single-line label + text-input row used by every Pad
-/// Properties field. Mirrors the existing rotation/size_x rows'
+/// Properties field. Mirrors the existing `rotation/size_x` rows'
 /// chrome (40 px label, padded input, dim border).
 pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     label: &'a str,
@@ -253,7 +261,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     .into()
 }
 
-/// v0.20 — pick_list row for a Pad Properties field.
+/// v0.20 — `pick_list` row for a Pad Properties field.
 pub(in crate::panels::footprint_editor_properties) fn pad_pick_row<'a, T>(
     label: &'a str,
     options: &'a [T],

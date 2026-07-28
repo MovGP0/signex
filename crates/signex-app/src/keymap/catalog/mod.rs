@@ -1,3 +1,10 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use crate::keymap::{AppCommandId, Modifiers};
 
 mod general;
@@ -25,20 +32,16 @@ pub enum CommandGroup {
 
 impl CommandGroup {
     /// Display order for the grouped Keyboard Shortcuts view.
-    pub const ALL: &'static [CommandGroup] = &[
-        CommandGroup::General,
-        CommandGroup::Schematic,
-        CommandGroup::Pcb,
-        CommandGroup::ThreeD,
-    ];
+    pub const ALL: &'static [Self] = &[Self::General, Self::Schematic, Self::Pcb, Self::ThreeD];
 
     /// Human-readable header shown above each group.
-    pub fn display_name(&self) -> &'static str {
+    #[must_use]
+    pub const fn display_name(&self) -> &'static str {
         match self {
-            CommandGroup::General => "General",
-            CommandGroup::Schematic => "Schematic",
-            CommandGroup::Pcb => "PCB",
-            CommandGroup::ThreeD => "3D",
+            Self::General => "General",
+            Self::Schematic => "Schematic",
+            Self::Pcb => "PCB",
+            Self::ThreeD => "3D",
         }
     }
 }
@@ -110,7 +113,7 @@ pub struct CommandMetadata {
     /// and the (future) command palette, where the full phrasing helps
     /// ("Place wire", "Zoom in at cursor").
     pub label: &'static str,
-    /// Optional terse label for menu surfaces (menu_bar). `None` falls
+    /// Optional terse label for menu surfaces (`menu_bar`). `None` falls
     /// back to `label`. Lets one command carry both a short menu label
     /// ("Wire") and a descriptive catalog label ("Place wire") so the two
     /// UIs don't have to agree on a single string. Resolve via
@@ -152,6 +155,7 @@ impl CommandMetadata {
 
     /// The label a menu surface should display: the terse `menu_label`
     /// override when present, else the descriptive `label`.
+    #[must_use]
     pub const fn menu_label(&self) -> &'static str {
         match self.menu_label {
             Some(menu) => menu,
@@ -176,10 +180,12 @@ fn all_metadata() -> impl Iterator<Item = &'static CommandMetadata> {
     TABLES.iter().flat_map(|table| table.iter())
 }
 
+#[must_use]
 pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> {
     all_metadata().find(|metadata| metadata.id == command.as_str())
 }
 
+#[must_use]
 pub fn fallback_label(command: &AppCommandId) -> String {
     command
         .as_str()

@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_value,
+    clippy::single_match_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! New Component modal handlers — the draft-row fast path, the modal
 //! field setters, and the inline "+ New Table" create form that lives
 //! inside the modal's Advanced disclosure.
@@ -5,7 +12,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{LibraryMessage, Message, NewComponentState, Signex, Task, commands};
 
 impl Signex {
     /// File ▸ Library ▸ New Component… — v0.13 appends a draft row
@@ -91,7 +98,7 @@ impl Signex {
         Task::none()
     }
 
-    /// User picked a class in the modal pick_list.
+    /// User picked a class in the modal `pick_list`.
     pub(super) fn handle_new_component_set_class(
         &mut self,
         class: signex_library::ComponentClass,
@@ -114,7 +121,9 @@ impl Signex {
         // sensibly. Otherwise the user keeps editing the class
         // independently.
         if let Some(nc) = self.library.new_component.as_mut() {
-            if !name.is_empty() {
+            if name.is_empty() {
+                nc.table = None;
+            } else {
                 nc.table = Some(name.clone());
                 // Try to autoselect the matching class from the
                 // manifest (`[[tables]]` override). Only triggers
@@ -127,8 +136,6 @@ impl Signex {
                 {
                     nc.class = signex_library::ComponentClass::new(first);
                 }
-            } else {
-                nc.table = None;
             }
             nc.error = None;
         }
@@ -197,7 +204,7 @@ impl Signex {
         let Some(nc) = self.library.new_component.as_ref() else {
             return Task::none();
         };
-        let Some(draft) = nc.creating_table.as_ref().cloned() else {
+        let Some(draft) = nc.creating_table.clone() else {
             return Task::none();
         };
         let trimmed = draft.name.trim().to_string();
@@ -256,17 +263,16 @@ impl Signex {
     /// Submit the New Component modal — creates the draft row, then
     /// opens a Component Preview tab focused on the new row.
     pub(super) fn handle_new_component_submit(&mut self) -> Task<Message> {
-        let Some(nc) = self.library.new_component.as_ref().cloned() else {
+        let Some(nc) = self.library.new_component.clone() else {
             return Task::none();
         };
-        let library_idx = match nc.library_idx {
-            Some(i) => i,
-            None => {
-                if let Some(slot) = self.library.new_component.as_mut() {
-                    slot.error = Some("Pick a target library before submitting.".into());
-                }
-                return Task::none();
+        let library_idx = if let Some(i) = nc.library_idx {
+            i
+        } else {
+            if let Some(slot) = self.library.new_component.as_mut() {
+                slot.error = Some("Pick a target library before submitting.".into());
             }
+            return Task::none();
         };
         // Target table — modal pick takes precedence. When
         // the manifest declared no `[[tables]]` overrides the
@@ -275,32 +281,30 @@ impl Signex {
         // user submitted with an unset pick (ghost case when
         // the modal opens with neither a pre-pick nor a
         // user-selected table).
-        let library_path = match self.library.open_libraries.get(library_idx) {
-            Some(lib) => lib.root.clone(),
-            None => {
-                if let Some(slot) = self.library.new_component.as_mut() {
-                    slot.error = Some("Selected library is no longer open.".into());
-                }
-                return Task::none();
+        let library_path = if let Some(lib) = self.library.open_libraries.get(library_idx) {
+            lib.root.clone()
+        } else {
+            if let Some(slot) = self.library.new_component.as_mut() {
+                slot.error = Some("Selected library is no longer open.".into());
             }
+            return Task::none();
         };
-        let table = match nc.table.clone() {
-            Some(t) => t,
-            None => {
-                let resolved = self
-                    .library
-                    .open_libraries
-                    .get(library_idx)
-                    .and_then(|lib| self.library.set.get(lib.library_id))
-                    .map(|adapter| adapter.manifest().table_for_class(nc.class.as_str()));
-                match resolved {
-                    Some(t) => t,
-                    None => {
-                        if let Some(slot) = self.library.new_component.as_mut() {
-                            slot.error = Some("Pick a target table before submitting.".into());
-                        }
-                        return Task::none();
+        let table = if let Some(t) = nc.table.clone() {
+            t
+        } else {
+            let resolved = self
+                .library
+                .open_libraries
+                .get(library_idx)
+                .and_then(|lib| self.library.set.get(lib.library_id))
+                .map(|adapter| adapter.manifest().table_for_class(nc.class.as_str()));
+            match resolved {
+                Some(t) => t,
+                None => {
+                    if let Some(slot) = self.library.new_component.as_mut() {
+                        slot.error = Some("Pick a target table before submitting.".into());
                     }
+                    return Task::none();
                 }
             }
         };

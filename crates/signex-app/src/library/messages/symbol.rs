@@ -2,7 +2,10 @@
 //! former flat `PrimitiveEditorMsg` (ADR-0001 D3). Reached through
 //! [`super::PrimitiveEdit::Symbol`]; matched by `apply_symbol_primitive_edit`.
 
-use super::*;
+use super::{
+    GraphicHandleMsg, SymbolContextSubmenuMsg, SymbolContextTargetMsg, SymbolRotatePivotMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
+};
 
 #[derive(Debug, Clone)]
 pub enum SymbolEditorMsg {
@@ -188,7 +191,7 @@ pub enum SymbolEditorMsg {
     /// Tools ▸ New Part — bumps the symbol's max `part_number` by
     /// one and switches `active_part` to the new value. The new
     /// part starts with no pins; the user adds pins with the
-    /// active_part selected.
+    /// `active_part` selected.
     NewPart,
 
     /// Tools ▸ Remove Part / toolbar "−" — deletes the active sub-
@@ -248,5 +251,5 @@ pub enum SymbolEditorMsg {
     /// boxed message via itself, then closes the menu — the "any
     /// click on a real action closes the popover" behaviour every
     /// row wants, expressed once instead of per-row.
-    ContextMenuAction(Box<SymbolEditorMsg>),
+    ContextMenuAction(Box<Self>),
 }

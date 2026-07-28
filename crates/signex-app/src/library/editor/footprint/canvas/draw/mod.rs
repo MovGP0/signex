@@ -8,7 +8,7 @@
 //! Layer-method modules (`impl FootprintCanvas`):
 //! - [`background`] — background fill + grid, guides, origin crosshair.
 //! - [`scene`] — silk graphics, courtyard, pads, array badges.
-//! - [`ghosts`] — PlacePad / PlaceVia placement ghosts.
+//! - [`ghosts`] — `PlacePad` / `PlaceVia` placement ghosts.
 //! - [`overlays`] — sketch reticle, select cursor mark, touching-line
 //!   / lasso ghosts, rubber-band rectangle, sketch-entity overlay.
 //!

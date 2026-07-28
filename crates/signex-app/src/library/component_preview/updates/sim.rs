@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Simulation-model edits for a Component Preview row.
 //!
 //! Enabling simulation mints a fresh SPICE `SimModel` and binds it to the

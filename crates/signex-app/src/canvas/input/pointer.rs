@@ -1,4 +1,16 @@
-use super::super::*;
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::collapsible_else_if,
+    clippy::option_if_let_else,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{
+    CanvasEvent, CanvasState, ContextMenuMsg, Message, Rectangle, SchematicCanvas, ToolMessage,
+    active_bar_hit, canvas, mouse,
+};
 
 impl SchematicCanvas {
     /// Left-press: select, tool action, start box-select, or start drag-move.
@@ -10,8 +22,8 @@ impl SchematicCanvas {
     ) -> Option<canvas::Action<Message>> {
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             let world = state.camera.screen_to_world(cursor_pos, bounds);
-            let wx = world.x as f64;
-            let wy = world.y as f64;
+            let wx = f64::from(world.x);
+            let wy = f64::from(world.y);
 
             // Double-click detection (300ms, 3mm threshold)
             let now = std::time::Instant::now();
@@ -19,7 +31,7 @@ impl SchematicCanvas {
                 (state.last_click_time, state.last_click_world)
             {
                 let dt = now.duration_since(last_time);
-                let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
+                let dist = (wx - last_pos.0).hypot(wy - last_pos.1);
                 if dt.as_millis() < 300 && dist < 3.0 {
                     state.last_click_time = None;
                     state.last_click_world = None;
@@ -44,7 +56,9 @@ impl SchematicCanvas {
             //   - hit empty space              → publish click, start box-select
             // Altium-style: clicking and dragging on an unselected item
             // should immediately select-and-drag in one gesture.
-            let (on_selected, on_unselected_item) = if !self.drawing_mode {
+            let (on_selected, on_unselected_item) = if self.drawing_mode {
+                (false, false)
+            } else {
                 if let Some(snapshot) = self.active_snapshot() {
                     if let Some(hit) =
                         crate::schematic_runtime::hit_test::hit_test(snapshot, wx, wy)
@@ -57,8 +71,6 @@ impl SchematicCanvas {
                 } else {
                     (false, false)
                 }
-            } else {
-                (false, false)
             };
 
             if on_selected && !state.ctrl_held {
@@ -97,11 +109,11 @@ impl SchematicCanvas {
             state.move_origin = None;
             state.move_dragging = false;
             // Don't track box-select during drawing mode (avoids spurious BoxSelect events)
-            if !self.drawing_mode {
-                state.select_drag_start = Some((wx, wy));
+            if self.drawing_mode {
+                state.select_drag_start = None;
                 state.select_drag_end = None;
             } else {
-                state.select_drag_start = None;
+                state.select_drag_start = Some((wx, wy));
                 state.select_drag_end = None;
             }
             // Ctrl+Click toggles selection (add if missing, remove if
@@ -319,10 +331,10 @@ impl SchematicCanvas {
             // Track drag-to-move (selected items)
             if state.click_on_selected {
                 let world = state.camera.screen_to_world(cursor_pos, bounds);
-                let wx = world.x as f64;
-                let wy = world.y as f64;
+                let wx = f64::from(world.x);
+                let wy = f64::from(world.y);
                 if let Some(origin) = state.move_origin {
-                    let dist = ((wx - origin.0).powi(2) + (wy - origin.1).powi(2)).sqrt();
+                    let dist = (wx - origin.0).hypot(wy - origin.1);
                     if dist > 1.0 {
                         // Exceeded threshold — switch to move mode
                         state.move_dragging = true;
@@ -351,7 +363,7 @@ impl SchematicCanvas {
             // Track drag-to-select
             if state.select_drag_start.is_some() && !state.click_on_selected {
                 let world = state.camera.screen_to_world(cursor_pos, bounds);
-                state.select_drag_end = Some((world.x as f64, world.y as f64));
+                state.select_drag_end = Some((f64::from(world.x), f64::from(world.y)));
             }
 
             // Regular hover — update cursor position for status bar

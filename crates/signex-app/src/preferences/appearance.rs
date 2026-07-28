@@ -1,10 +1,16 @@
+#![expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Appearance section — theme picker cards, custom-theme import/export,
 //! UI font, and the schematic / symbol-editor render-style pick-lists.
 //!
 //! Moved verbatim from the former single-file `preferences` module —
 //! pure view code, zero behaviour change.
 
-use super::*;
+use super::{PrefMsg, h_sep, primary_button_style, section_title, text_muted, text_primary};
 use crate::fonts;
 use crate::render_config::{
     GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
@@ -317,8 +323,7 @@ pub(super) fn content_appearance<'a>(
                         .iter()
                         .zip(crate::canvas::grid::GRID_SIZE_LABELS.iter())
                         .find(|(_, l)| **l == lbl)
-                        .map(|(sz, _)| *sz)
-                        .unwrap_or(1.27);
+                        .map_or(1.27, |(sz, _)| *sz);
                     PrefMsg::DraftSymbolGridSize(mm)
                 },
             )

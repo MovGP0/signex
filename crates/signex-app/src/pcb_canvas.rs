@@ -1,3 +1,10 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::sync::Arc;
 
 use iced::event::Event;
@@ -66,7 +73,14 @@ pub struct PcbCanvas {
     pub visible_grid_mm: f64,
 }
 
+impl Default for PcbCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PcbCanvas {
+    #[must_use]
     pub fn new() -> Self {
         let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
         Self {
@@ -87,7 +101,7 @@ impl PcbCanvas {
         }
     }
 
-    pub fn active_renderer_snapshot(&self) -> Option<&PcbSnapshot> {
+    pub const fn active_renderer_snapshot(&self) -> Option<&PcbSnapshot> {
         self.renderer_snapshot.as_ref()
     }
 
@@ -178,12 +192,12 @@ impl PcbCanvas {
     /// geometry on pan/zoom. Read in `view()` right after `gpu_scene()`, so it
     /// reflects the same geometry that call returned (a rebuild bumps this at
     /// its invalidation site, never mid-`gpu_scene`).
-    pub fn scene_generation(&self) -> u64 {
+    pub const fn scene_generation(&self) -> u64 {
         self.scene_generation.get()
     }
 }
 
-fn color_from_rgba(rgba: [f32; 4]) -> Color {
+const fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
@@ -191,7 +205,7 @@ fn world_to_screen(camera: &Camera, bounds: Rectangle, point: [f32; 2]) -> iced:
     camera.world_to_screen(iced::Point::new(point[0], point[1]), bounds)
 }
 
-fn include_world_point(bounds: &mut Option<(f32, f32, f32, f32)>, x: f32, y: f32) {
+const fn include_world_point(bounds: &mut Option<(f32, f32, f32, f32)>, x: f32, y: f32) {
     if let Some((min_x, min_y, max_x, max_y)) = bounds.as_mut() {
         *min_x = (*min_x).min(x);
         *min_y = (*min_y).min(y);
@@ -278,7 +292,7 @@ fn draw_dashed_line(
 ) {
     let dx = p1.x - p0.x;
     let dy = p1.y - p0.y;
-    let length = (dx * dx + dy * dy).sqrt();
+    let length = dx.hypot(dy);
     if length <= 0.0001 {
         return;
     }
@@ -291,8 +305,8 @@ fn draw_dashed_line(
 
     while dist < length {
         let seg_end = (dist + dash).min(length);
-        let sp = iced::Point::new(p0.x + ux * dist, p0.y + uy * dist);
-        let ep = iced::Point::new(p0.x + ux * seg_end, p0.y + uy * seg_end);
+        let sp = iced::Point::new(ux.mul_add(dist, p0.x), uy.mul_add(dist, p0.y));
+        let ep = iced::Point::new(ux.mul_add(seg_end, p0.x), uy.mul_add(seg_end, p0.y));
         let path = canvas::Path::line(sp, ep);
         frame.stroke(
             &path,
@@ -405,10 +419,10 @@ fn draw_scene(frame: &mut canvas::Frame, scene: &Scene, camera: &Camera, bounds:
             SceneBucket::Polygons => draw_polygons(frame, &scene.polygons, camera, bounds),
             SceneBucket::OverlayLines => draw_lines(frame, &scene.overlay_lines, camera, bounds),
             SceneBucket::OverlayCircles => {
-                draw_circles(frame, &scene.overlay_circles, camera, bounds)
+                draw_circles(frame, &scene.overlay_circles, camera, bounds);
             }
             SceneBucket::OverlayPolygons => {
-                draw_polygons(frame, &scene.overlay_polygons, camera, bounds)
+                draw_polygons(frame, &scene.overlay_polygons, camera, bounds);
             }
             // The PCB CPU path emits no arc, text, or ERC buckets. Handled for
             // exhaustiveness so adding a Scene bucket forces a decision here.

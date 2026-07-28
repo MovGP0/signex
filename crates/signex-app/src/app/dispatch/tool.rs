@@ -1,6 +1,14 @@
+#![expect(
+    clippy::match_wildcard_for_single_variants,
+    clippy::needless_pass_by_value,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, PanelPosition, Signex, Tool, ToolMessage};
 
 impl Signex {
     /// On TAB during placement: commit the ghost at the current cursor
@@ -21,7 +29,7 @@ impl Signex {
             let x = self.ui_state.cursor_x;
             let y = self.ui_state.cursor_y;
             if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let g = self.ui_state.grid_size_mm as f64;
+                let g = f64::from(self.ui_state.grid_size_mm);
                 ((x / g).round() * g, (y / g).round() * g)
             } else {
                 (x, y)
@@ -163,18 +171,17 @@ impl Signex {
                 // tracks schematic tools, not footprint pads).
                 if let Some(active_tab) =
                     self.document_state.tabs.get(self.document_state.active_tab)
+                    && let Some(path) = active_tab.kind.as_footprint_editor()
                 {
-                    if let Some(path) = active_tab.kind.as_footprint_editor() {
-                        let path = path.clone();
-                        return self.update(crate::app::contracts::Message::Library(
-                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                                path,
-                                msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                    crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
-                                ),
-                            },
-                        ));
-                    }
+                    let path = path.clone();
+                    return self.update(crate::app::contracts::Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                            ),
+                        },
+                    ));
                 }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
@@ -219,12 +226,11 @@ impl Signex {
                             Tool::Component => {
                                 // Power port — armed via Active Bar — lives under
                                 // Tool::Component but has `pending_power` set.
-                                if let Some((net, _)) =
-                                    self.interaction_state.pending_power.as_ref().cloned()
+                                if let Some((net, _)) = self.interaction_state.pending_power.clone()
                                 {
                                     (
                                         PrePlacementKind::PowerPort,
-                                        format!("Power Port ({})", net),
+                                        format!("Power Port ({net})"),
                                         net,
                                         String::new(),
                                     )
@@ -318,29 +324,25 @@ impl Signex {
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.rotation)
-                        .unwrap_or(0.0);
+                        .map_or(0.0, |pp| pp.rotation);
                     let prev_font = self
                         .document_state
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.font.clone())
-                        .unwrap_or_else(|| "Iosevka".to_string());
+                        .map_or_else(|| "Iosevka".to_string(), |pp| pp.font.clone());
                     let prev_font_size = self
                         .document_state
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.font_size_pt)
-                        .unwrap_or(10);
+                        .map_or(10, |pp| pp.font_size_pt);
                     let prev_jh = self
                         .document_state
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.justify_h)
-                        .unwrap_or(signex_types::schematic::HAlign::Left);
+                        .map_or(signex_types::schematic::HAlign::Left, |pp| pp.justify_h);
                     let prev_jv = self
                         .document_state
                         .panel_ctx
@@ -353,15 +355,13 @@ impl Signex {
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.shape_width_mm)
-                        .unwrap_or(0.0);
+                        .map_or(0.0, |pp| pp.shape_width_mm);
                     let prev_shape_fill = self
                         .document_state
                         .panel_ctx
                         .pre_placement
                         .as_ref()
-                        .map(|pp| pp.shape_fill)
-                        .unwrap_or(signex_types::schematic::FillType::None);
+                        .map_or(signex_types::schematic::FillType::None, |pp| pp.shape_fill);
                     let label_text_for_commit = label_text.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {

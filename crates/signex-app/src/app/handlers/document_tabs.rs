@@ -1,6 +1,12 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{ContextMenuMsg, Message, Signex, TabMessage, WindowMsg};
 
 impl Signex {
     pub(crate) fn handle_document_tab_message(

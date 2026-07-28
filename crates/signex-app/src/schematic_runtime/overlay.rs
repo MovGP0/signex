@@ -1,4 +1,13 @@
-use super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::{
+    Color, DirtyFlags, HashMap, OverlayCircleInput, OverlayInputs, OverlayLineInput,
+    RendererSnapshot, ResolvedTheme, ScreenTransform, canvas, draw_renderer_snapshot,
+    screen_px_to_world_mm, to_rgba,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErcSeverity {

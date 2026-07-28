@@ -1,4 +1,4 @@
-use super::super::*;
+use super::super::{CanvasState, Color, Rectangle, SchematicCanvas, canvas};
 
 impl SchematicCanvas {
     /// Ghost power-port / symbol preview following the cursor.
@@ -20,11 +20,11 @@ impl SchematicCanvas {
             let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
-                    (cursor_world.x as f64 / g).round() * g,
-                    (cursor_world.y as f64 / g).round() * g,
+                    (f64::from(cursor_world.x) / g).round() * g,
+                    (f64::from(cursor_world.y) / g).round() * g,
                 )
             } else {
-                (cursor_world.x as f64, cursor_world.y as f64)
+                (f64::from(cursor_world.x), f64::from(cursor_world.y))
             };
             let mut preview = ghost_sym.clone();
             preview.position = signex_types::schematic::Point::new(sx, sy);
@@ -59,11 +59,11 @@ impl SchematicCanvas {
             let (sx, sy) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
-                    (cursor_world.x as f64 / g).round() * g,
-                    (cursor_world.y as f64 / g).round() * g,
+                    (f64::from(cursor_world.x) / g).round() * g,
+                    (f64::from(cursor_world.y) / g).round() * g,
                 )
             } else {
-                (cursor_world.x as f64, cursor_world.y as f64)
+                (f64::from(cursor_world.x), f64::from(cursor_world.y))
             };
             let mut preview = ghost_tn.clone();
             preview.position = signex_types::schematic::Point::new(sx, sy);
@@ -98,11 +98,11 @@ impl SchematicCanvas {
             let snap_world = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
-                    (cursor_world.x as f64 / g).round() * g,
-                    (cursor_world.y as f64 / g).round() * g,
+                    (f64::from(cursor_world.x) / g).round() * g,
+                    (f64::from(cursor_world.y) / g).round() * g,
                 )
             } else {
-                (cursor_world.x as f64, cursor_world.y as f64)
+                (f64::from(cursor_world.x), f64::from(cursor_world.y))
             };
             let mut preview_label = ghost.clone();
             preview_label.position =

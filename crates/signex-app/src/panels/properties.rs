@@ -1,6 +1,21 @@
+#![expect(
+    clippy::empty_line_after_doc_comments,
+    clippy::match_same_arms,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Properties panel and pre-placement editor views.
 
-use super::*;
+use super::{
+    Background, Color, Column, Element, Length, PanelContext, PanelMsg, Space, Theme,
+    collapsible_section, container, font_style_row, form_edit_row, form_edit_row_f64,
+    form_input_row, form_label, form_pick_row, preplacement_justification_grid, props_tab_btn, row,
+    scrollable, shape_fill_row, text, theme_ext, thin_sep, view_footprint_editor_properties,
+    view_library_row_properties, view_properties_general, view_properties_parameters,
+    view_selected_element_properties, view_symbol_editor_properties,
+};
 use iced::widget::column;
 
 /// Pre-placement configuration data — shown in Properties panel when Tab pressed.
@@ -22,7 +37,7 @@ pub struct PrePlacementData {
     pub font_size_pt: u32,
     /// Horizontal justification.
     pub justify_h: signex_types::schematic::HAlign,
-    /// Vertical justification (TextNote / Component fields).
+    /// Vertical justification (`TextNote` / Component fields).
     pub justify_v: signex_types::schematic::VAlign,
     /// Style toggles (currently cosmetic — engine wiring tracks v0.7+).
     pub bold: bool,
@@ -40,8 +55,8 @@ pub struct PrePlacementData {
 
 /// Stable identifiers for every numeric drawing-field editor so the
 /// panel keeps a transient string buffer per field across rerenders.
-/// Erasing a text_input leaves an empty string in the buffer until
-/// the user types a valid f64, at which point UpdateDrawingEdit fires.
+/// Erasing a `text_input` leaves an empty string in the buffer until
+/// the user types a valid f64, at which point `UpdateDrawingEdit` fires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DrawingFieldId {
     LineStartX,
@@ -314,7 +329,7 @@ fn view_pre_placement<'a>(
     let tool_name = pp.tool_name.clone();
     let kind = pp.kind;
     let pos_str = format!("{:.2}, {:.2}", pp.cursor_x_mm, pp.cursor_y_mm);
-    let rot_label = format!("{:.0} Degrees", rotation);
+    let rot_label = format!("{rotation:.0} Degrees");
     let font = pp.font.clone();
     let font_size_pt = pp.font_size_pt;
     let justify_h = pp.justify_h;
@@ -325,7 +340,7 @@ fn view_pre_placement<'a>(
     col = col.push(
         container(
             row![
-                text(tool_name.clone()).size(12).color(primary),
+                text(tool_name).size(12).color(primary),
                 Space::new().width(Length::Fill),
                 iced::widget::button(text("OK").size(10).color(Color::WHITE))
                     .padding([2, 10])
@@ -440,7 +455,7 @@ fn view_pre_placement<'a>(
                     ));
                     let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
                         .iter()
-                        .map(|n| n.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect();
                     c = c.push(form_pick_row(
                         "Font Size",

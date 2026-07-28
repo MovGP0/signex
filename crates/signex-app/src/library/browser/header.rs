@@ -4,7 +4,11 @@
 //! lifecycle-filter pick-list and the search box. Extracted verbatim
 //! from the former single-file `browser` module.
 
-use super::*;
+use super::{
+    BROWSER_TEXT_SIZE, Border, Element, Length, LibraryBrowserState, LibraryMessage,
+    LifecycleFilter, OpenLibrary, Space, Theme, ThemeTokens, button, container, pick_list, row,
+    text, text_input, theme_ext,
+};
 
 pub(super) fn view_header<'a>(
     library_path: &'a std::path::Path,
@@ -54,7 +58,7 @@ pub(super) fn view_header<'a>(
     // as a first-class browser filter so users can pivot between
     // "preferred only", "include deprecated", etc. without touching
     // every row's lifecycle field.
-    let library_for_lc = lib_pb.clone();
+    let library_for_lc = lib_pb;
     let lifecycle_picker = pick_list(
         LifecycleFilter::ALL.to_vec(),
         Some(browser.lifecycle_filter),

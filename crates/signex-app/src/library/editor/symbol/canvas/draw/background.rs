@@ -1,9 +1,22 @@
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Backdrop layers — background fill, the adaptive minor/major grid
-//! (Dots / SmallCrosses / Lines styles), and the world-origin
+//! (Dots / `SmallCrosses` / Lines styles), and the world-origin
 //! crosshair. Drawn first (bottom of the z-stack). Extracted verbatim
 //! from `Program::draw`.
 
-use super::super::*;
+use super::super::{
+    ORIGIN_MARKER_MM, SYMBOL_AXIS_STROKE_PX_AT_100, SymbolCanvas, stroke_px_at_zoom,
+    text_size_px_from_mm, world_unsnapped,
+};
 use iced::Rectangle;
 use iced::widget::canvas;
 
@@ -28,7 +41,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         // Grid — read spacing from the global panel_ctx so the
         // schematic + library editors share the View ▸ Grid
@@ -52,9 +68,9 @@ impl SymbolCanvas<'_> {
             // Cross-fade the minor level in as zoom increases.
             let minor_alpha = ((minor_screen - MIN_PX) / MIN_PX).clamp(0.0, 1.0);
             if minor_alpha > 0.0 {
-                let minor_world = minor_mm as f64;
+                let minor_world = f64::from(minor_mm);
                 let major_mm = minor_mm * 5.0;
-                let major_world = major_mm as f64;
+                let major_world = f64::from(major_mm);
                 // Visible world bounds (y-up: vy0 = screen-bottom, vy1 = screen-top).
                 let pad = 6.0 * minor_world;
                 let (vx0, vy0) = world_unsnapped(self, 0.0, bounds.height, bounds);
@@ -218,7 +234,10 @@ impl SymbolCanvas<'_> {
         let ox = cam.offset.x;
         let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
-            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+            iced::Point::new(
+                (x as f32).mul_add(scale, ox),
+                (y as f32).mul_add(-scale, oy),
+            )
         };
         // Origin marker at world (0, 0) — no default box/pin when a
         // symbol is created, so this gives a stable visual anchor.

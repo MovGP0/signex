@@ -1,3 +1,9 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser class-admin handlers — the sidebar inline
 //! "+ Class", rename-class and delete-class flows that edit the
 //! library's `[[classes]]` block.
@@ -5,7 +11,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{Message, Signex, Task};
 
 impl Signex {
     /// Open the inline create-class form.
@@ -70,7 +76,7 @@ impl Signex {
         let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
             return Task::none();
         };
-        let Some(draft) = state.adding_class.clone() else {
+        let Some(draft) = state.adding_class else {
             return Task::none();
         };
         let key = draft.key.trim().to_string();
@@ -133,10 +139,10 @@ impl Signex {
             Some(a) => a,
             None => return Task::none(),
         };
-        if let Err(error) = adapter.remove_library_class(&key, &format!("delete class {key}")) {
-            if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
-                s.class_error = Some(error.to_string());
-            }
+        if let Err(error) = adapter.remove_library_class(&key, &format!("delete class {key}"))
+            && let Some(s) = self.library.library_browsers.get_mut(&library_path)
+        {
+            s.class_error = Some(error.to_string());
         }
         Task::none()
     }
@@ -215,7 +221,7 @@ impl Signex {
         let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
             return Task::none();
         };
-        let Some((orig, new_key, new_label)) = state.renaming_class.clone() else {
+        let Some((orig, new_key, new_label)) = state.renaming_class else {
             return Task::none();
         };
         let new_key = new_key.trim().to_string();

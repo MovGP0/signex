@@ -1,4 +1,10 @@
-use super::super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{CanvasState, Color, Rectangle, Renderer, SchematicCanvas, canvas, mouse};
 
 impl SchematicCanvas {
     /// Layer 4 — every-frame overlay: cursor HUD, in-progress previews,
@@ -173,7 +179,7 @@ impl SchematicCanvas {
             // semi-opaque light chip so it reads on any canvas bg.
             let tag_x = snapped_screen.x + 14.0;
             let tag_y = snapped_screen.y - 16.0;
-            let tag_w = (label.chars().count() as f32) * 7.0 + 10.0;
+            let tag_w = (label.chars().count() as f32).mul_add(7.0, 10.0);
             let tag_h = 16.0;
             let chip = canvas::Path::rectangle(
                 iced::Point::new(tag_x - 2.0, tag_y - 2.0),

@@ -1,3 +1,14 @@
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::match_wildcard_for_single_variants,
+    clippy::similar_names,
+    clippy::suboptimal_flops,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad rendering + Pads-mode multi-click gesture preview.
 
 use iced::widget::canvas::{self, Path, Stroke};
@@ -247,7 +258,7 @@ pub(in crate::library::editor::footprint::canvas) fn draw_pads_tool_preview(
                 start: (sx, sy),
             } => {
                 let c = cstate.world_to_screen((cx, cy));
-                let radius_world = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                let radius_world = (sx - cx).hypot(sy - cy);
                 let r_px = (radius_world as f32) * cstate.scale;
                 let start_rad = ((sy - cy).atan2(sx - cx)) as f32;
                 let end_rad = ((cursor.1 - cy).atan2(cursor.0 - cx)) as f32;
@@ -259,7 +270,7 @@ pub(in crate::library::editor::footprint::canvas) fn draw_pads_tool_preview(
                     builder.move_to(Point::new(p0_x, p0_y));
                     for i in 1..=segments {
                         let t = (i as f32) / (segments as f32);
-                        let a = start_rad + sweep * t;
+                        let a = sweep.mul_add(t, start_rad);
                         let p_x = c.x + r_px * a.cos();
                         let p_y = c.y + r_px * a.sin();
                         builder.line_to(Point::new(p_x, p_y));

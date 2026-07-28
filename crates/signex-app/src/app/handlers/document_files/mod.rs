@@ -1,20 +1,27 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::option_if_let_else,
+    clippy::redundant_closure_for_method_calls,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Document-file open / save / git / history handler impls for `Signex`.
 
 use std::path::PathBuf;
 
-use super::super::*;
+use super::super::{FileMsg, Message};
 
 mod git;
 mod history;
 mod open;
 mod save;
 
-/// Build the AsyncFileDialog Task for a primitive's first save.
+/// Build the `AsyncFileDialog` Task for a primitive's first save.
 /// The dialog defaults to the suggested path's parent + filename so
 /// the common case is a single Enter key; the user can navigate to
 /// a global library directory outside the project if they want a
 /// shared symbol. Cancel = no save (editor stays dirty).
-pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<Message> {
+pub fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<Message> {
     let ext = suggested
         .extension()
         .and_then(|s| s.to_str())
@@ -28,14 +35,14 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
         "snxfpt" => "Save Footprint As",
         _ => "Save Symbol As",
     };
-    let default_dir = suggested
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let default_name = suggested
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| format!("New.{filter_ext}"));
+    let default_dir = suggested.parent().map_or_else(
+        || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        |p| p.to_path_buf(),
+    );
+    let default_name = suggested.file_name().map_or_else(
+        || format!("New.{filter_ext}"),
+        |s| s.to_string_lossy().into_owned(),
+    );
     let from = suggested;
 
     iced::Task::perform(
@@ -51,7 +58,7 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
         },
         move |picked| match picked {
             Some(to_path) => Message::File(FileMsg::SavePrimitiveAs {
-                from_path: from.clone(),
+                from_path: from,
                 to_path,
             }),
             None => Message::Noop,
@@ -63,7 +70,7 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
 /// for File ▸ New Project. Only the fields that don't have a serde
 /// default need explicit values; everything else falls through to the
 /// per-field defaults the writer/parser already round-trip.
-pub(crate) fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::SchematicSheet {
+pub fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::SchematicSheet {
     blank_schematic_sheet()
 }
 

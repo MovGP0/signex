@@ -10,16 +10,16 @@ use iced::Point;
 pub(super) fn screen_dist_to_segment_sq(p: Point, a: Point, b: Point) -> f32 {
     let abx = b.x - a.x;
     let aby = b.y - a.y;
-    let len_sq = abx * abx + aby * aby;
+    let len_sq = aby.mul_add(aby, abx * abx);
     if len_sq < 1e-6 {
         let dx = p.x - a.x;
         let dy = p.y - a.y;
-        return dx * dx + dy * dy;
+        return dy.mul_add(dy, dx * dx);
     }
-    let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / len_sq;
+    let t = (p.y - a.y).mul_add(aby, (p.x - a.x) * abx) / len_sq;
     let t = t.clamp(0.0, 1.0);
-    let qx = a.x + abx * t;
-    let qy = a.y + aby * t;
+    let qx = abx.mul_add(t, a.x);
+    let qy = aby.mul_add(t, a.y);
     let dx = p.x - qx;
     let dy = p.y - qy;
     dx * dx + dy * dy

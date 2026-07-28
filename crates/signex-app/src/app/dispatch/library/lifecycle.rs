@@ -1,3 +1,11 @@
+#![expect(
+    clippy::map_unwrap_or,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library lifecycle handlers — the Open / Close library commands, the
 //! close-library confirmation modal (Save All / Discard All / Cancel),
 //! and the left-dock library-tree node toggle.
@@ -5,7 +13,10 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{
+    CloseLibraryChoice, CloseLibraryConfirmState, EditorAddress, LibraryMessage, Message, Signex,
+    Task, commands, route_open_error,
+};
 
 impl Signex {
     /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog` on
@@ -46,15 +57,14 @@ impl Signex {
         if dirty.is_empty() {
             self.library.close_library(&path);
         } else {
-            let library_name = self
-                .library
-                .library_at(&path)
-                .map(|lib| lib.display_name.clone())
-                .unwrap_or_else(|| {
+            let library_name = self.library.library_at(&path).map_or_else(
+                || {
                     path.file_name()
                         .map(|s| s.to_string_lossy().into_owned())
                         .unwrap_or_else(|| path.display().to_string())
-                });
+                },
+                |lib| lib.display_name.clone(),
+            );
             self.library.close_library_confirm = Some(CloseLibraryConfirmState {
                 library_path: path,
                 library_name,
@@ -76,16 +86,15 @@ impl Signex {
         // workspace-close batch op). For the user-driven
         // close path, `CloseLibrary` is the entry point and
         // it diverts here automatically.
-        let library_name = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.display_name.clone())
-            .unwrap_or_else(|| {
+        let library_name = self.library.library_at(&library_path).map_or_else(
+            || {
                 library_path
                     .file_name()
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_else(|| library_path.display().to_string())
-            });
+            },
+            |lib| lib.display_name.clone(),
+        );
         self.library.close_library_confirm = Some(CloseLibraryConfirmState {
             library_path,
             library_name,

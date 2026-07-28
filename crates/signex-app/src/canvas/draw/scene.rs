@@ -1,4 +1,13 @@
-use super::super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::match_same_arms,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{CanvasState, ErcMarkerSeverity, Rectangle, Renderer, SchematicCanvas, canvas};
 
 impl SchematicCanvas {
     /// Layer 2 — the schematic content (cached unless panning/dragging).
@@ -67,7 +76,7 @@ impl SchematicCanvas {
         }
     }
 
-    /// Layer 2.5 — AutoFocus (F9) dim frame around the selection bbox.
+    /// Layer 2.5 — `AutoFocus` (F9) dim frame around the selection bbox.
     pub(in crate::canvas) fn draw_autofocus_dim(
         &self,
         state: &CanvasState,
@@ -192,10 +201,10 @@ impl SchematicCanvas {
                 }
             }
             if !xs.is_empty() && !ys.is_empty() {
-                let min_x = xs.iter().cloned().fold(f32::INFINITY, f32::min);
-                let max_x = xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                let min_y = ys.iter().cloned().fold(f32::INFINITY, f32::min);
-                let max_y = ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let min_x = xs.iter().copied().fold(f32::INFINITY, f32::min);
+                let max_x = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                let min_y = ys.iter().copied().fold(f32::INFINITY, f32::min);
+                let max_y = ys.iter().copied().fold(f32::NEG_INFINITY, f32::max);
                 let p_min = state
                     .camera
                     .world_to_screen(iced::Point::new(min_x, min_y), bounds);

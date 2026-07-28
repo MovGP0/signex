@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Confirmation modals — Remove-from-Project, Close-Project confirm, and
 //! Quit-app confirm.
 //!
@@ -5,7 +10,7 @@
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{Message, ProjectMsg, RemoveMsg, Signex};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
@@ -64,7 +69,7 @@ impl Signex {
                 let subtitle_owned = subtitle.to_string();
                 button(
                     column![
-                        text(format!("\u{2192} {}", title_owned))
+                        text(format!("\u{2192} {title_owned}"))
                             .size(12)
                             .color(text_c),
                         text(subtitle_owned).size(10).color(text_muted),

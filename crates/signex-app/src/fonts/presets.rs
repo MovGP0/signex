@@ -1,11 +1,18 @@
+#![expect(
+    clippy::or_fun_call,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Filter-preset preference IO. Split from `fonts.rs`.
 
-use super::*;
+use super::{prefs_path, write_pref_atomic};
 
 /// Read the user-defined custom selection-filter presets. Returns an
 /// empty `Vec` if the file is missing, malformed, or the key absent.
 /// Capped to `CUSTOM_FILTER_PRESET_LIMIT` entries on read so a hand-
 /// edited file with too many slots still loads cleanly.
+#[must_use]
 pub fn read_custom_filter_presets() -> Vec<crate::active_bar::CustomFilterPreset> {
     use crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
     let path = prefs_path();
@@ -47,6 +54,7 @@ pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPre
 /// edited file with too many slots still loads cleanly. Parallel to
 /// `read_custom_filter_presets` (schematic), but keyed on
 /// `FootprintFilterPreset` (Task 6).
+#[must_use]
 pub fn read_footprint_filter_presets() -> Vec<crate::active_bar::FootprintFilterPreset> {
     use crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
     let path = prefs_path();

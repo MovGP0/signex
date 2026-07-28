@@ -1,3 +1,10 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+#![expect(
+    clippy::too_many_lines,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Update logic for the standalone Symbol editor.
 //!
 //! [`apply_symbol_primitive_edit`] is a thin routing table over
@@ -60,7 +67,7 @@ fn push_undo_snapshot(editor: &mut SymEditor, snapshot: signex_library::Symbol) 
 }
 
 /// Record the first event of a drag gesture.
-/// Subsequent events in the same drag are no-ops (mid_drag stays true).
+/// Subsequent events in the same drag are no-ops (`mid_drag` stays true).
 fn begin_drag_if_needed(editor: &mut SymEditor) {
     if !editor.mid_drag {
         push_undo(editor);
@@ -112,7 +119,7 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
 /// structurally mutated (delete / undo / redo / part switch) so a
 /// picker keyed by a now-stale graphic index can't silently reopen on
 /// an unrelated shape that happens to reuse that index.
-pub(super) fn close_pickers(editor: &mut SymEditor) {
+pub(super) const fn close_pickers(editor: &mut SymEditor) {
     editor.graphic_fill_picker = None;
     editor.local_color_picker = None;
 }
@@ -212,7 +219,11 @@ fn collapse_consecutive_duplicate_vertices(raw: Vec<[f64; 2]>) -> Vec<[f64; 2]> 
             _ => points.push(p),
         }
     }
-    while points.len() > 1 && dist_sq(points[0], *points.last().unwrap()) <= eps_sq {
+    while points.len() > 1
+        && points
+            .last()
+            .is_some_and(|last| dist_sq(points[0], *last) <= eps_sq)
+    {
         points.pop();
     }
     points
@@ -221,7 +232,7 @@ fn collapse_consecutive_duplicate_vertices(raw: Vec<[f64; 2]>) -> Vec<[f64; 2]> 
 fn dist_sq(a: [f64; 2], b: [f64; 2]) -> f64 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];
-    dx * dx + dy * dy
+    dy.mul_add(dy, dx * dx)
 }
 
 /// `true` when every vertex in `points` lies within `eps` mm of the
@@ -249,12 +260,12 @@ fn polygon_is_collinear(points: &[[f64; 2]], eps: f64) -> bool {
         return true;
     };
     let dir = [p1[0] - p0[0], p1[1] - p0[1]];
-    let dir_len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
+    let dir_len = dir[0].hypot(dir[1]);
     points.iter().all(|&p| {
         // Perpendicular distance from p to the line through p0/p1:
         // |cross(dir, p - p0)| / |dir|.
         let v = [p[0] - p0[0], p[1] - p0[1]];
-        let cross = dir[0] * v[1] - dir[1] * v[0];
+        let cross = dir[1].mul_add(-v[0], dir[0] * v[1]);
         (cross / dir_len).abs() <= eps
     })
 }
@@ -290,7 +301,7 @@ pub(super) fn normalize_arc_commit_deg(start_deg: f64, end_deg: f64) -> (f64, f6
 /// against the path-keyed standalone state. Visibility is
 /// `pub(crate)` so unit tests in sibling modules can drive the editor
 /// through the same code path the dispatcher uses.
-pub(crate) fn apply_symbol_primitive_edit(
+pub fn apply_symbol_primitive_edit(
     editor: &mut crate::app::SymbolEditorState,
     msg: SymbolEditorMsg,
 ) {
@@ -413,7 +424,7 @@ pub(crate) fn apply_symbol_primitive_edit(
 
         // ── Selection ────────────────────────────────────────────
         SymbolEditorMsg::Select(_) | SymbolEditorMsg::Deselect => {
-            apply_symbol_selection(editor, msg)
+            apply_symbol_selection(editor, msg);
         }
 
         // ── Move (coalesced undo per drag gesture) ───────────────
@@ -448,7 +459,7 @@ pub(crate) fn apply_symbol_primitive_edit(
 
         // ── Undo / redo / drag-commit ────────────────────────────
         SymbolEditorMsg::Undo | SymbolEditorMsg::Redo | SymbolEditorMsg::DragCommit => {
-            apply_symbol_history(editor, msg)
+            apply_symbol_history(editor, msg);
         }
 
         // ── Right-click context menu ─────────────────────────────
@@ -469,7 +480,7 @@ pub(crate) fn apply_symbol_primitive_edit(
 
 /// Translate the pure-data [`SymbolContextTargetMsg`] into the
 /// canvas/state-side [`crate::library::editor::symbol::state::SymbolContextTarget`].
-fn context_target_msg_to_state(
+const fn context_target_msg_to_state(
     msg: SymbolContextTargetMsg,
 ) -> crate::library::editor::symbol::state::SymbolContextTarget {
     use crate::library::editor::symbol::state::SymbolContextTarget;
@@ -482,7 +493,7 @@ fn context_target_msg_to_state(
 
 /// Translate the pure-data [`SymbolContextSubmenuMsg`] into the
 /// canvas/state-side [`crate::library::editor::symbol::state::SymbolContextSubmenu`].
-fn context_submenu_msg_to_state(
+const fn context_submenu_msg_to_state(
     msg: SymbolContextSubmenuMsg,
 ) -> crate::library::editor::symbol::state::SymbolContextSubmenu {
     use crate::library::editor::symbol::state::SymbolContextSubmenu;
@@ -575,7 +586,7 @@ fn symbol_bbox(sym: &signex_library::Symbol) -> (f64, f64, f64, f64) {
 
 /// Translate the pure-data [`GraphicHandleMsg`] back into the
 /// canvas-side [`crate::library::editor::symbol::state::GraphicHandle`].
-fn graphic_handle_msg_to_state(
+const fn graphic_handle_msg_to_state(
     msg: GraphicHandleMsg,
 ) -> crate::library::editor::symbol::state::GraphicHandle {
     use crate::library::editor::symbol::state::GraphicHandle;
@@ -592,7 +603,7 @@ fn graphic_handle_msg_to_state(
 }
 
 /// Translate pure-data rotate pivot messages into Symbol-state pivot mode.
-fn rotate_pivot_msg_to_state(
+const fn rotate_pivot_msg_to_state(
     msg: SymbolRotatePivotMsg,
 ) -> crate::library::editor::symbol::state::GraphicRotationPivotMode {
     use crate::library::editor::symbol::state::GraphicRotationPivotMode;

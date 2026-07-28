@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::map_unwrap_or,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser tab — the main-window surface for working with
 //! library rows.
 //!
@@ -67,6 +74,7 @@ const LIFECYCLE_DOT_SIZE: f32 = 8.0;
 /// Render the Library Browser tab body. Returns an empty-state panel
 /// when the library isn't currently mounted (e.g. mount failed) so the
 /// tab still renders without panicking.
+#[must_use]
 pub fn view<'a>(
     library_path: &'a std::path::Path,
     library_state: &'a LibraryState,
@@ -121,13 +129,13 @@ pub fn view<'a>(
         // unset — matches the open-tab handler's seeding logic.
         let mut names: Vec<&String> = lib.tables.keys().collect();
         names.sort();
-        names.first().map(|s| s.as_str()).unwrap_or("")
+        names.first().map_or("", |s| s.as_str())
     });
 
     let rows: &[ComponentRow] = lib
         .tables
         .get(active_table)
-        .map(|v| v.as_slice())
+        .map(std::vec::Vec::as_slice)
         .unwrap_or(&[]);
 
     let needle = browser.search.trim().to_lowercase();
@@ -136,7 +144,7 @@ pub fn view<'a>(
     let mut visible: Vec<&ComponentRow> = rows
         .iter()
         .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| class_filter.map_or(true, |cls| r.class.as_str() == cls))
+        .filter(|r| class_filter.is_none_or(|cls| r.class.as_str() == cls))
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
@@ -150,15 +158,15 @@ pub fn view<'a>(
     // Stage 8: apply the user's sort selection to the visible rows
     // before grid rendering. The grid view is a pure projection of
     // `visible`, so sorting here doesn't ripple into the render path.
-    if let Some(sort) = browser.sort_by.as_ref() {
-        if let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key) {
-            visible.sort_by(|a, b| {
-                let ca = column.kind.cell_value(a);
-                let cb = column.kind.cell_value(b);
-                let ord = compare_cells(&ca, &cb);
-                if sort.descending { ord.reverse() } else { ord }
-            });
-        }
+    if let Some(sort) = browser.sort_by.as_ref()
+        && let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key)
+    {
+        visible.sort_by(|a, b| {
+            let ca = column.kind.cell_value(a);
+            let cb = column.kind.cell_value(b);
+            let ord = compare_cells(&ca, &cb);
+            if sort.descending { ord.reverse() } else { ord }
+        });
     }
 
     let grid = view_grid(

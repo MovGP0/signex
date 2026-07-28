@@ -1,3 +1,9 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser — detail preview pane (DEAD CODE, F15 final pass).
 //!
 //! `view_preview_pane` / `preview_panel` / `preview_panel_with_pick` /
@@ -7,7 +13,10 @@
 //! the equivalent. Pruning this block in the next cleanup pass.
 //! Moved verbatim from the former single-file `browser` module.
 
-use super::*;
+use super::{
+    Border, ComponentRow, Element, Length, LibraryMessage, LibraryState, RowId, Space, Theme,
+    ThemeTokens, button, container, row, scrollable, text, theme_ext,
+};
 use iced::widget::column;
 
 #[allow(dead_code)]
@@ -140,7 +149,7 @@ fn short_row_id(uuid: uuid::Uuid) -> String {
     if s.len() >= 8 {
         format!("row {}", &s[..8])
     } else {
-        format!("row {}", s)
+        format!("row {s}")
     }
 }
 

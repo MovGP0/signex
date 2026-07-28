@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Backdrop layers — background fill + fine/coarse grid, Altium-style
 //! guide lines, and the origin crosshair. Drawn first (bottom of the
 //! z-stack). Extracted verbatim from `Program::draw`.

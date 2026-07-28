@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser — the data grid view.
 //!
 //! Header row (click-to-sort) plus one editable/read-only row per
@@ -5,7 +10,12 @@
 //! Extracted verbatim from the former single-file `browser` module.
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
-use super::*;
+use super::{
+    BROWSER_HEADER_SIZE, BROWSER_TEXT_SIZE, Border, Column, ComponentRow, Element,
+    LIFECYCLE_DOT_GUTTER, LIFECYCLE_DOT_SIZE, Length, LibraryBrowserState, LibraryMessage,
+    LifecycleState, RowId, Space, Theme, ThemeTokens, button, container, mouse_area, row,
+    scrollable, text, text_input, theme_ext,
+};
 use iced::widget::column;
 
 pub(super) fn view_grid<'a>(

@@ -1,3 +1,16 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::implicit_hasher,
+    clippy::missing_const_for_fn,
+    clippy::missing_panics_doc,
+    clippy::option_if_let_else,
+    clippy::ref_option,
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Local schematic runtime used by `signex-app`.
 //!
 //! This module keeps schematic rendering, hit-test, and overlay behavior
@@ -50,7 +63,8 @@ impl RenderInvalidation {
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
-    pub fn intersects(self, mask: Self) -> bool {
+    #[must_use]
+    pub const fn intersects(self, mask: Self) -> bool {
         self.0 & mask.0 != 0
     }
 }
@@ -78,10 +92,11 @@ pub struct ScreenTransform {
 
 impl ScreenTransform {
     #[inline]
+    #[must_use]
     pub fn world_to_screen(&self, world: (f64, f64)) -> iced::Point {
         iced::Point::new(
-            world.0 as f32 * self.scale + self.offset_x,
-            world.1 as f32 * self.scale + self.offset_y,
+            (world.0 as f32).mul_add(self.scale, self.offset_x),
+            (world.1 as f32).mul_add(self.scale, self.offset_y),
         )
     }
 }
@@ -124,6 +139,7 @@ pub struct SchematicRenderCache {
 }
 
 impl SchematicRenderCache {
+    #[must_use]
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
         Self {
             sheet: Some(sheet.clone()),
@@ -136,26 +152,30 @@ impl SchematicRenderCache {
         self.preview = None;
     }
 
-    pub fn snapshot(&self) -> &SchematicSheet {
-        self.sheet
-            .as_ref()
-            .expect("SchematicRenderCache::snapshot called before initialization")
+    #[must_use]
+    pub const fn snapshot(&self) -> &SchematicSheet {
+        match self.sheet.as_ref() {
+            Some(sheet) => sheet,
+            None => panic!("render cache snapshot requested before initialization"),
+        }
     }
 
-    pub fn prepared_preview(&self) -> Option<&SchematicSheet> {
+    #[must_use]
+    pub const fn prepared_preview(&self) -> Option<&SchematicSheet> {
         self.preview.as_ref()
     }
 }
 
 #[inline]
+#[must_use]
 pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
     let x = local_point.x;
     let y = -local_point.y;
     let rad = -symbol.rotation.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
+    let mut rx = y.mul_add(-sin, x * cos);
+    let mut ry = y.mul_add(cos, x * sin);
     if symbol.mirror_y {
         rx = -rx;
     }
@@ -340,7 +360,7 @@ fn label_marker_polygon(
     }
 }
 
-fn renderer_id(uuid: uuid::Uuid) -> u64 {
+const fn renderer_id(uuid: uuid::Uuid) -> u64 {
     uuid.as_u128() as u64
 }
 
@@ -356,7 +376,7 @@ fn draw_renderer_snapshot(
     crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
         frame,
         &scene,
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        |point| transform.world_to_screen((f64::from(point[0]), f64::from(point[1]))),
         crate::renderer_scene_canvas::SceneDrawOptions {
             scale_px_per_mm: transform.scale,
             min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
@@ -367,7 +387,7 @@ fn draw_renderer_snapshot(
     );
 }
 
-fn to_rgba(color: Color) -> [f32; 4] {
+const fn to_rgba(color: Color) -> [f32; 4] {
     [color.r, color.g, color.b, color.a]
 }
 
@@ -377,7 +397,7 @@ fn stroke_world_mm(base_width_px_at_100: f32, scale: f32) -> f32 {
 }
 
 fn screen_px_to_world_mm(px: f32, scale: f32) -> f64 {
-    (px / scale.max(0.001)) as f64
+    f64::from(px / scale.max(0.001))
 }
 
 fn circle_vertices(center: [f64; 2], radius: f32, segments: usize) -> Vec<[f32; 2]> {
@@ -389,7 +409,7 @@ fn circle_vertices(center: [f64; 2], radius: f32, segments: usize) -> Vec<[f32; 
     (0..segment_count)
         .map(|step| {
             let theta = (step as f32 / segment_count as f32) * std::f32::consts::TAU;
-            [cx + theta.cos() * r, cy + theta.sin() * r]
+            [theta.cos().mul_add(r, cx), theta.sin().mul_add(r, cy)]
         })
         .collect()
 }
@@ -521,8 +541,8 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
                 child.position.y + child.size.1,
             ),
             anchor: Point::new(
-                child.position.x + child.size.0 * 0.5,
-                child.position.y + child.size.1 * 0.5,
+                child.size.0.mul_add(0.5, child.position.x),
+                child.size.1.mul_add(0.5, child.position.y),
             ),
         });
 
@@ -596,7 +616,12 @@ fn text_prop_aabb(symbol: &Symbol, text: &str, prop: &TextProp) -> Aabb {
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let w = h * 0.6 * chars;
     let (x, y) = instance_transform(symbol, &prop.position);
-    Aabb::new(x - w * 0.5, y - h * 0.5, x + w * 0.5, y + h * 0.5)
+    Aabb::new(
+        x - w * 0.5,
+        h.mul_add(-0.5, y),
+        x + w * 0.5,
+        h.mul_add(0.5, y),
+    )
 }
 
 fn note_aabb(note: &TextNote) -> Aabb {
@@ -606,9 +631,9 @@ fn note_aabb(note: &TextNote) -> Aabb {
     let w = h * 0.6 * note.text.chars().count().max(1) as f64;
     Aabb::new(
         note.position.x - w * 0.5,
-        note.position.y - h * 0.5,
+        h.mul_add(-0.5, note.position.y),
         note.position.x + w * 0.5,
-        note.position.y + h * 0.5,
+        h.mul_add(0.5, note.position.y),
     )
 }
 
@@ -621,7 +646,7 @@ fn label_aabb(label: &Label) -> Aabb {
         label.label_type,
         LabelType::Global | LabelType::Hierarchical
     ) {
-        w += h * 1.2;
+        w = h.mul_add(1.2, w);
     }
     Aabb::new(
         label.position.x - w * 0.5,
@@ -687,7 +712,7 @@ fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
 }
 
 fn to_iced(color: &ThemeColor) -> Color {
-    Color::from_rgba8(color.r, color.g, color.b, color.a as f32 / 255.0)
+    Color::from_rgba8(color.r, color.g, color.b, f32::from(color.a) / 255.0)
 }
 
 fn focus_color(base: Color, focus_set: Option<&HashSet<uuid::Uuid>>, uuid: uuid::Uuid) -> Color {
@@ -729,9 +754,9 @@ fn resolve_stroke_color(
     stroke_color: &Option<signex_types::schematic::StrokeColor>,
     fallback: Color,
 ) -> Color {
-    stroke_color
-        .map(|color| Color::from_rgba8(color.r, color.g, color.b, color.a as f32 / 255.0))
-        .unwrap_or(fallback)
+    stroke_color.map_or(fallback, |color| {
+        Color::from_rgba8(color.r, color.g, color.b, f32::from(color.a) / 255.0)
+    })
 }
 
 fn fill_color_for(

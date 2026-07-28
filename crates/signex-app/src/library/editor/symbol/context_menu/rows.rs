@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pure, declarative row data for the symbol-editor right-click
 //! context menu (data-to-menu, mirrors the app-level context-menu
 //! layer's `Vec<DropdownEntry>` pattern in
@@ -29,11 +34,16 @@ pub struct SymbolMenuRow {
     pub label: &'static str,
     pub enabled: bool,
     pub msg: Option<SymbolEditorMsg>,
-    pub submenu: Option<Vec<SymbolMenuRow>>,
+    pub submenu: Option<Vec<Self>>,
 }
 
 impl SymbolMenuRow {
-    fn item(id: &'static str, label: &'static str, enabled: bool, msg: SymbolEditorMsg) -> Self {
+    const fn item(
+        id: &'static str,
+        label: &'static str,
+        enabled: bool,
+        msg: SymbolEditorMsg,
+    ) -> Self {
         Self {
             id,
             label,
@@ -43,7 +53,7 @@ impl SymbolMenuRow {
         }
     }
 
-    fn submenu(id: &'static str, label: &'static str, children: Vec<SymbolMenuRow>) -> Self {
+    const fn submenu(id: &'static str, label: &'static str, children: Vec<Self>) -> Self {
         Self {
             id,
             label,
@@ -59,6 +69,7 @@ impl SymbolMenuRow {
 /// `enabled` (not row presence), so callers/tests get a stable id
 /// list regardless of selection state; the renderer greys out /
 /// disables clicks on a `enabled: false` row.
+#[must_use]
 pub fn build_symbol_context_menu_rows(
     sym: &Symbol,
     active_part: u8,
@@ -100,7 +111,7 @@ pub fn build_symbol_context_menu_rows(
 }
 
 /// `(id, label, tool)` for every `Place ▸` row — one per canvas
-/// placement tool, mirroring the SchLib Place menu / toolbar tool set
+/// placement tool, mirroring the `SchLib` Place menu / toolbar tool set
 /// (`SymbolTool`).
 pub const PLACE_TOOLS: &[(&str, &str, SymbolToolMsg)] = &[
     ("symbol.place-pin", "Pin", SymbolToolMsg::AddPin),

@@ -1,6 +1,14 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{
+    EditMsg, Message, MoveSelectionMsg, Signex, Tool, ToolMessage, selection_request,
+};
 
 impl Signex {
     pub(crate) fn handle_active_bar_action(
@@ -118,33 +126,29 @@ impl Signex {
                         .active_canvas()
                         .selected
                         .first()
-                        .cloned();
+                        .copied();
                     if let (Some(snapshot), Some(seed)) = (self.active_render_snapshot(), seed) {
                         let (wx, wy) = match seed.kind {
                             SelectedKind::Wire => snapshot
                                 .wires
                                 .iter()
                                 .find(|w| w.uuid == seed.uuid)
-                                .map(|w| (w.start.x, w.start.y))
-                                .unwrap_or((0.0, 0.0)),
+                                .map_or((0.0, 0.0), |w| (w.start.x, w.start.y)),
                             SelectedKind::Bus => snapshot
                                 .buses
                                 .iter()
                                 .find(|b| b.uuid == seed.uuid)
-                                .map(|b| (b.start.x, b.start.y))
-                                .unwrap_or((0.0, 0.0)),
+                                .map_or((0.0, 0.0), |b| (b.start.x, b.start.y)),
                             SelectedKind::Junction => snapshot
                                 .junctions
                                 .iter()
                                 .find(|j| j.uuid == seed.uuid)
-                                .map(|j| (j.position.x, j.position.y))
-                                .unwrap_or((0.0, 0.0)),
+                                .map_or((0.0, 0.0), |j| (j.position.x, j.position.y)),
                             SelectedKind::Label => snapshot
                                 .labels
                                 .iter()
                                 .find(|l| l.uuid == seed.uuid)
-                                .map(|l| (l.position.x, l.position.y))
-                                .unwrap_or((0.0, 0.0)),
+                                .map_or((0.0, 0.0), |l| (l.position.x, l.position.y)),
                             _ => (0.0, 0.0),
                         };
                         self.update(Message::Selection(

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dock library/editor panel message dispatcher. Routes the
 //! `DockMessage::Panel(PanelMsg::…)` variants that mutate the active
 //! `.snxsym` / `.snxfpt` container — SCH Library, Symbol editor,
@@ -26,7 +32,7 @@
 
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{GridPropertiesMsg, Message, SelectionFilterMsg, Signex};
 use crate::panels::PanelMsg;
 
 mod footprint;
@@ -327,24 +333,27 @@ impl Signex {
             }
             PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => self
                 .with_selected_pad(*idx, |pad| {
-                    pad.hole_tolerance_plus_mm = fp_parse_optional_mm(value)
+                    pad.hole_tolerance_plus_mm = fp_parse_optional_mm(value);
                 }),
             PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => self
                 .with_selected_pad(*idx, |pad| {
-                    pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
+                    pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value);
                 }),
-            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
-            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.copper_offset_x_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.copper_offset_y_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
+                self.with_selected_pad(*idx, |pad| {
+                    pad.hole_rotation_deg = value.trim().parse::<f64>().ok();
+                })
+            }
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => {
+                self.with_selected_pad(*idx, |pad| {
+                    pad.copper_offset_x_mm = fp_parse_optional_mm(value);
+                })
+            }
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => {
+                self.with_selected_pad(*idx, |pad| {
+                    pad.copper_offset_y_mm = fp_parse_optional_mm(value);
+                })
+            }
             PanelMsg::FpEditorToggleSelectedPadPlated { idx, value } => {
                 self.with_selected_pad(*idx, |pad| {
                     pad.kind = if *value {
@@ -408,23 +417,23 @@ impl Signex {
             }
             PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_tolerance_plus_mm = fp_parse_optional_mm(value)
+                    attr.hole_tolerance_plus_mm = fp_parse_optional_mm(value);
                 }),
             PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
+                    attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value);
                 }),
             PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_rotation_deg = value.trim().parse::<f64>().ok()
+                    attr.hole_rotation_deg = value.trim().parse::<f64>().ok();
                 }),
             PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
-                    attr.copper_offset_x_mm = fp_parse_optional_mm(value)
+                    attr.copper_offset_x_mm = fp_parse_optional_mm(value);
                 }),
             PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
-                    attr.copper_offset_y_mm = fp_parse_optional_mm(value)
+                    attr.copper_offset_y_mm = fp_parse_optional_mm(value);
                 }),
             PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
@@ -432,7 +441,7 @@ impl Signex {
                         .trim()
                         .parse::<f64>()
                         .ok()
-                        .filter(|v| (0.0..=50.0).contains(v))
+                        .filter(|v| (0.0..=50.0).contains(v));
                 }),
             PanelMsg::FpEditorEditPadInSketch { pad_idx } => {
                 self.handle_fp_editor_edit_pad_in_sketch(pad_idx)
@@ -592,12 +601,12 @@ impl Signex {
             PanelMsg::SymEditorSetPinFunctionCsv { pin_idx, value } => {
                 let parsed: Vec<String> = value
                     .split(',')
-                    .map(|s| s.trim())
+                    .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .map(String::from)
                     .collect();
                 self.sym_editor_mutate_pin(*pin_idx, move |pin| {
-                    pin.function = parsed.clone();
+                    pin.function = parsed;
                 })
             }
             PanelMsg::SymEditorTogglePinDesignatorVisible(pin_idx) => {
@@ -786,16 +795,16 @@ fn apply_graphic_field(
         // `normalize_arc_endpoints_deg`: its swap would collapse the visible
         // 270° to the 90° complement, the same round-trip loss in reverse.
         (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => {
-            *start_deg = value.rem_euclid(360.0)
+            *start_deg = value.rem_euclid(360.0);
         }
         (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => {
-            *end_deg = value.rem_euclid(360.0)
+            *end_deg = value.rem_euclid(360.0);
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => {
-            position[0] = value
+            position[0] = value;
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionY) => {
-            position[1] = value
+            position[1] = value;
         }
         (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value.max(0.1),
         _ => {}

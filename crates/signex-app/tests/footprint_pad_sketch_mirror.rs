@@ -1,3 +1,8 @@
+#![expect(
+    clippy::cast_precision_loss,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Pad ↔ sketch mirror regressions (issue #142 remediation).
 //!
 //! Split out of `regression.rs` rather than appended to it — that file

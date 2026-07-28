@@ -81,16 +81,13 @@ pub enum PadStackTab {
 }
 
 impl PadStackTab {
-    pub const ALL: &'static [PadStackTab] = &[
-        PadStackTab::Simple,
-        PadStackTab::TopMiddleBottom,
-        PadStackTab::FullStack,
-    ];
-    pub fn label(self) -> &'static str {
+    pub const ALL: &'static [Self] = &[Self::Simple, Self::TopMiddleBottom, Self::FullStack];
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PadStackTab::Simple => "Simple",
-            PadStackTab::TopMiddleBottom => "Top-Middle-Bottom",
-            PadStackTab::FullStack => "Full Stack",
+            Self::Simple => "Simple",
+            Self::TopMiddleBottom => "Top-Middle-Bottom",
+            Self::FullStack => "Full Stack",
         }
     }
 }

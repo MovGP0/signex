@@ -1,7 +1,7 @@
 //! Legacy Active Bar chrome — bespoke button + separator builders,
 //! superseded by `signex_widgets::active_bar::ActiveBarButton` /
 //! `ActiveBarItem::Separator`. Kept (dead) for one migration cycle so a
-//! follow-up can lift the chevron / mouse_area / tooltip details if the
+//! follow-up can lift the chevron / `mouse_area` / tooltip details if the
 //! generic widget needs them. Remove when the migration is fully bedded in.
 
 #![allow(dead_code)]
@@ -18,7 +18,7 @@ use super::{ActiveBarMsg, DISABLED_TEXT, action_enabled};
 /// Shows a small 45° chevron at bottom-right if button has a dropdown.
 /// Legacy bespoke button builder — superseded by
 /// `signex_widgets::active_bar::ActiveBarButton`. Kept here so a
-/// follow-up patch can lift the chevron / mouse_area details if
+/// follow-up patch can lift the chevron / `mouse_area` details if
 /// the generic widget needs them; remove when the migration is
 /// fully bedded in.
 #[allow(dead_code)]

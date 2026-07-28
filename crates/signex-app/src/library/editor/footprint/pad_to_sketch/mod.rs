@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Mint sketch entities for literal pads — bidirectional sketch ↔
 //! pads sync.
 //!
@@ -9,7 +14,7 @@
 //! Submodules:
 //! - [`helpers`] — small `push_point` / `push_line` / `push_arc_ccw`
 //!   primitives that collapse the repeated mint blocks.
-//! - [`attr`] — `EditorPad ↔ PadAttr` mapping and the BoardTop plane
+//! - [`attr`] — `EditorPad ↔ PadAttr` mapping and the `BoardTop` plane
 //!   helper.
 //! - [`mint`] — per-shape `mint_*_pad_geometry` functions.
 //! - [`remint_in_place`] — the id-preserving re-mint a live drag needs.
@@ -47,6 +52,7 @@ use mint::{
 /// identical string and the two persistence paths cannot drift.
 /// Emits an explicit `deg` unit; `signex_bake::pad` reads it back
 /// through the Angle unit family.
+#[must_use]
 pub fn rotation_expr(deg: f64) -> String {
     format!("{}deg", attr::format_f64(deg))
 }
@@ -65,6 +71,7 @@ pub use solve::{
 /// use it to tell the two cases apart: authored → auto-mint will never
 /// pick this pad up, mint it now; not authored → auto-mint still
 /// covers it, and minting early is what would break that.
+#[must_use]
 pub fn sketch_is_authored(footprint: &Footprint) -> bool {
     footprint
         .sketch
@@ -126,7 +133,7 @@ pub fn auto_mint_for_literal_pads(pads: &mut [EditorPad], footprint: &mut Footpr
 ///
 /// v0.24 Track A — branches on `pad.shape` so each shape mints its
 /// own parametric geometry: Round → Circle + diameter param;
-/// RoundRect → 4 anchors + 4 inset corners + 4 Lines + 4 Arcs
+/// `RoundRect` → 4 anchors + 4 inset corners + 4 Lines + 4 Arcs
 /// sharing `corner_r`; Oval → stadium with shared `width`/`height`;
 /// Chamfered → outline with shared `chamfer_len`. Other shapes get
 /// the v0.16 4-Line bbox outline.
@@ -211,7 +218,7 @@ pub fn remint_pad_geometry(pad: &mut EditorPad, footprint: &mut Footprint) -> bo
 }
 
 /// Branch on `pad.shape` to mint the correct sketch geometry — Circle
-/// for Round, parametric anchors+arcs for RoundRect, stadium for Oval,
+/// for Round, parametric anchors+arcs for `RoundRect`, stadium for Oval,
 /// chamfer outline for Chamfered, plain bbox-corner outline for Rect /
 /// Custom / etc. Writes `pad.corner_entity_ids` accordingly.
 ///
@@ -295,7 +302,7 @@ fn mint_shape_geometry_for(
 ///
 /// Translates the pad's WHOLE owned set
 /// ([`ownership::owned_sketch_entities`]) rather than just the centre
-/// and the four bbox corners. RoundRect's 8 edge anchors + 4 inset
+/// and the four bbox corners. `RoundRect`'s 8 edge anchors + 4 inset
 /// arc-centres, Oval's 4 anchors + 2 arc-centres and Chamfered's
 /// per-corner anchors are all minted NON-construction, so leaving them
 /// behind made the bake emit copper from the stranded geometry — and
@@ -423,6 +430,7 @@ pub fn warn_profile_pad_untransformed(op: &str, pad_number: &str) {
 /// otherwise reshapes pad copper must either transform the loop too or
 /// say out loud that it did not; silently leaving the loop put bakes
 /// the un-transformed shape.
+#[must_use]
 pub fn is_sketch_profile_pad(pad: &EditorPad, footprint: &Footprint) -> bool {
     let Some(centre) = pad.sketch_entity_id else {
         return false;
@@ -514,7 +522,7 @@ fn translate_profile_with_pad(
 /// sketch entity (and any constraints that referenced it).
 ///
 /// v0.24 Track A — also drop linked Circle / Arc entities and any
-/// sketch parameters keyed by the centre-Point UUID slug. RoundRect's
+/// sketch parameters keyed by the centre-Point UUID slug. `RoundRect`'s
 /// anchor / inset-corner Points are pulled into the drop set via a
 /// secondary sweep — they're referenced indirectly by Arcs whose
 /// `center` is the inset corner.
@@ -588,7 +596,10 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     // exist. It matters more now that re-mint runs this path on every
     // rotate and flip rather than only on a pad delete — the stale
     // rows would otherwise accumulate one transform at a time.
-    let dropped_ids: Vec<String> = drop_set.iter().map(|id| id.to_string()).collect();
+    let dropped_ids: Vec<String> = drop_set
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect();
     sketch.constraints.retain(|c| {
         let rendered = format!("{:?}", c.kind);
         !dropped_ids.iter().any(|id| rendered.contains(id))

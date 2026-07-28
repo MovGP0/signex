@@ -1,3 +1,13 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else,
+    clippy::similar_names,
+    clippy::suboptimal_flops,
+    clippy::too_many_lines,
+    clippy::useless_let_if_seq,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch updates — tool-click state machine (ADR-0001 D1/D2).
 //!
 //! `apply` resolves the click into a [`ToolClickCtx`] (the sketch plane, the
@@ -28,7 +38,7 @@ pub(super) struct ToolClickCtx {
 
 impl ToolClickCtx {
     /// Stamp the sticky construction / centerline flags onto a new entity.
-    fn flag(&self, mut e: Entity) -> Entity {
+    const fn flag(&self, mut e: Entity) -> Entity {
         e.construction = self.construction_mode;
         e.centerline = self.centerline_mode;
         e
@@ -186,7 +196,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
                         let dx = x_mm - fx;
                         let dy = y_mm - fy;
-                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        let cursor_len = dx.hypot(dy);
                         // World azimuth of the cursor relative to the
                         // first endpoint; 0 when the cursor sits exactly
                         // on `first` (no direction to read).
@@ -204,7 +214,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                             _ => cursor_len,
                         };
                         if len > 1e-9 {
-                            (fx + len * ang_rad.cos(), fy + len * ang_rad.sin(), true)
+                            (
+                                len.mul_add(ang_rad.cos(), fx),
+                                len.mul_add(ang_rad.sin(), fy),
+                                true,
+                            )
                         } else {
                             // Neither a typed length nor a usable cursor
                             // distance — fall back to the raw click.
@@ -226,11 +240,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     if let Some((cx, cy)) = resolve_point_xy(center, primitive) {
                         let dx = x_mm - cx;
                         let dy = y_mm - cy;
-                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        let cursor_len = dx.hypot(dy);
                         if cursor_len > 1e-9 {
                             let ux = dx / cursor_len;
                             let uy = dy / cursor_len;
-                            (cx + r * ux, cy + r * uy, true)
+                            (r.mul_add(ux, cx), r.mul_add(uy, cy), true)
                         } else {
                             // Cursor at centre → fall back; the user
                             // can re-position before clicking.
@@ -252,11 +266,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     if let Some((cx, cy)) = resolve_point_xy(center, primitive) {
                         let dx = x_mm - cx;
                         let dy = y_mm - cy;
-                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        let cursor_len = dx.hypot(dy);
                         if cursor_len > 1e-9 {
                             let ux = dx / cursor_len;
                             let uy = dy / cursor_len;
-                            (cx + r * ux, cy + r * uy, true)
+                            (r.mul_add(ux, cx), r.mul_add(uy, cy), true)
                         } else {
                             (x_mm, y_mm, false)
                         }
@@ -279,7 +293,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                         resolve_point_xy(start, primitive),
                     );
                     if let (Some((cx, cy)), Some((sx, sy))) = parts {
-                        let r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                        let r = (sx - cx).hypot(sy - cy);
                         if r > 1e-9 {
                             let start_ang = (sy - cy).atan2(sx - cx);
                             let end_ang = start_ang + deg.to_radians();
@@ -400,14 +414,11 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             // by handling cleanup inline.
             let mut consumed_by_repick = false;
             if let ToolPending::RepickPolarCenter { array_id } = editor.state.tool_pending {
-                if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                    if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                        if let signex_sketch::array::ArrayKind::Polar { center, .. } =
-                            &mut array.kind
-                        {
-                            *center = resolved_id;
-                        }
-                    }
+                if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                    && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
+                    && let signex_sketch::array::ArrayKind::Polar { center, .. } = &mut array.kind
+                {
+                    *center = resolved_id;
                 }
                 editor.with_parts(|state, primitive| {
                     apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
@@ -452,7 +463,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 // #372 — Break Track joins Fillet / Trim as a curve
                 // edit: a single click hit-tests a Line and splits it.
                 SketchTool::Fillet | SketchTool::Trim | SketchTool::BreakTrack => {
-                    edit::apply(editor, &ctx, tool)
+                    edit::apply(editor, &ctx, tool);
                 }
                 // #361 — Drag Track End is not a click-to-place gesture:
                 // it arms an endpoint drag on PRESS in the canvas

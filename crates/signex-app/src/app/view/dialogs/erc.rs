@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Electrical Rule Check (ERC) modal — per-rule severity override grid
 //! and the pin-connection matrix.
 //!
@@ -5,7 +12,7 @@
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{ErcMsg, Message, Signex};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
@@ -251,7 +258,7 @@ const ALL_RULES: &[signex_erc::RuleKind] = &[
 /// Info → Off → baseline. Overrides persist via
 /// `write_pin_matrix_overrides`. Currently 6×6 primary pin types;
 /// the full Altium 12-type grid lands when the rule engine learns
-/// the remaining variants (Open Collector, Open Emitter, HiZ, …).
+/// the remaining variants (Open Collector, Open Emitter, `HiZ`, …).
 fn pin_matrix_view(
     tokens: &signex_types::theme::ThemeTokens,
     overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,

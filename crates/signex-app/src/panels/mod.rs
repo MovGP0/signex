@@ -160,55 +160,58 @@ pub const ALL_PANELS: &[PanelKind] = &[
 
 impl PanelKind {
     /// Whether this panel requires a schematic document to be open.
-    pub fn needs_schematic(self) -> bool {
+    #[must_use]
+    pub const fn needs_schematic(self) -> bool {
         matches!(
             self,
-            PanelKind::Navigator
-                | PanelKind::Properties
-                | PanelKind::Filter
-                | PanelKind::Erc
-                | PanelKind::SchFilter
-                | PanelKind::SchList
-                | PanelKind::Signal
-                | PanelKind::Drc
-                | PanelKind::BomStudio
-                | PanelKind::Snippets
-                | PanelKind::Variants
-                | PanelKind::OutputJobs
+            Self::Navigator
+                | Self::Properties
+                | Self::Filter
+                | Self::Erc
+                | Self::SchFilter
+                | Self::SchList
+                | Self::Signal
+                | Self::Drc
+                | Self::BomStudio
+                | Self::Snippets
+                | Self::Variants
+                | Self::OutputJobs
         )
     }
 
     /// Whether this panel requires a PCB document to be open.
-    pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
+    #[must_use]
+    pub const fn needs_pcb(self) -> bool {
+        matches!(self, Self::LayerStack | Self::NetClasses)
     }
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PanelKind::Projects => "Projects",
-            PanelKind::Components => "Components",
-            PanelKind::Navigator => "Navigator",
-            PanelKind::Properties => "Properties",
-            PanelKind::Filter => "Filter",
-            PanelKind::Erc => "ERC",
-            PanelKind::Messages => "Messages",
-            PanelKind::Signal => "Signal",
-            PanelKind::Drc => "DRC",
-            PanelKind::LayerStack => "Layer Stack",
-            PanelKind::NetClasses => "Net Classes",
-            PanelKind::Variants => "Variants",
-            PanelKind::SchFilter => "SCH Filter",
-            PanelKind::SchList => "SCH List",
-            PanelKind::BomStudio => "BOM Studio",
-            PanelKind::Favorites => "Favorites",
-            PanelKind::Snippets => "Snippets",
-            PanelKind::Todo => "To-Do",
-            PanelKind::Wiki => "Wiki",
-            PanelKind::OutputJobs => "Output Jobs",
-            PanelKind::Library => "Library",
-            PanelKind::SchLibrary => "SCH Library",
-            PanelKind::FootprintLibrary => "Footprint Library",
-            PanelKind::History => "History",
+            Self::Projects => "Projects",
+            Self::Components => "Components",
+            Self::Navigator => "Navigator",
+            Self::Properties => "Properties",
+            Self::Filter => "Filter",
+            Self::Erc => "ERC",
+            Self::Messages => "Messages",
+            Self::Signal => "Signal",
+            Self::Drc => "DRC",
+            Self::LayerStack => "Layer Stack",
+            Self::NetClasses => "Net Classes",
+            Self::Variants => "Variants",
+            Self::SchFilter => "SCH Filter",
+            Self::SchList => "SCH List",
+            Self::BomStudio => "BOM Studio",
+            Self::Favorites => "Favorites",
+            Self::Snippets => "Snippets",
+            Self::Todo => "To-Do",
+            Self::Wiki => "Wiki",
+            Self::OutputJobs => "Output Jobs",
+            Self::Library => "Library",
+            Self::SchLibrary => "SCH Library",
+            Self::FootprintLibrary => "Footprint Library",
+            Self::History => "History",
         }
     }
 }
@@ -217,7 +220,8 @@ impl PanelKind {
 pub type CollapsedSections = std::collections::HashSet<String>;
 
 /// Render a panel's content.
-pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+#[must_use]
+pub fn view_panel(kind: PanelKind, ctx: &PanelContext) -> Element<'_, PanelMsg> {
     // Components has its own split scrollables — don't wrap again
     if kind == PanelKind::Components {
         return view_components(ctx);

@@ -1,3 +1,13 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::implicit_hasher,
+    clippy::match_same_arms,
+    clippy::match_wildcard_for_single_variants,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Altium-style Active Bar — floating toolbar centered at top of canvas.
 //!
 //! 12 icon buttons, each with an optional dropdown menu.
@@ -54,19 +64,26 @@ impl Drop for HasSelectionGuard {
 }
 
 fn current_has_selection() -> bool {
-    HAS_SELECTION_FOR_VIEW.with(|c| c.get())
+    HAS_SELECTION_FOR_VIEW.with(std::cell::Cell::get)
 }
 
 fn current_has_net_colors() -> bool {
-    HAS_NET_COLORS_FOR_VIEW.with(|c| c.get())
+    HAS_NET_COLORS_FOR_VIEW.with(std::cell::Cell::get)
 }
 
 /// Whether `action` needs at least one selected item to make sense.
+///
 /// Transform / align / distribute family — Altium greys these out when
 /// the selection is empty. Net-colour picks are excluded because the
-/// NetColor flow is "arm-then-apply", not "act on selection".
-pub fn requires_selection(action: &ActiveBarAction) -> bool {
-    use ActiveBarAction::*;
+/// `NetColor` flow is "arm-then-apply", not "act on selection".
+#[must_use]
+pub const fn requires_selection(action: &ActiveBarAction) -> bool {
+    use ActiveBarAction::{
+        AlignBottom, AlignHorizontalCenters, AlignLeft, AlignRight, AlignToGrid, AlignTop,
+        AlignVerticalCenters, BringToFront, BringToFrontOf, DistributeHorizontally,
+        DistributeVertically, Drag, DragSelection, FlipSelectedX, FlipSelectedY, MoveSelection,
+        MoveSelectionXY, MoveToFront, RotateSelection, RotateSelectionCW, SendToBack, SendToBackOf,
+    };
     matches!(
         action,
         Drag | DragSelection
@@ -95,10 +112,11 @@ pub fn requires_selection(action: &ActiveBarAction) -> bool {
 
 /// Whether `action` only makes sense when at least one net carries a
 /// custom colour override. The Clear / Clear-All Net Color actions go
-/// here; the seven NetColor pickers and Custom Color stay always-on
+/// here; the seven `NetColor` pickers and Custom Color stay always-on
 /// (they're the "arm" phase that paints colours onto nets).
-pub fn requires_net_color(action: &ActiveBarAction) -> bool {
-    use ActiveBarAction::*;
+#[must_use]
+pub const fn requires_net_color(action: &ActiveBarAction) -> bool {
+    use ActiveBarAction::{ClearAllNetColors, ClearNetColor};
     matches!(action, ClearNetColor | ClearAllNetColors)
 }
 
@@ -220,6 +238,7 @@ pub struct CustomFilterPreset {
 
 impl CustomFilterPreset {
     /// Snapshot the active filter set into a new preset with a default name.
+    #[must_use]
     pub fn capture(name: String, filters: &std::collections::HashSet<SelectionFilter>) -> Self {
         // Keep the canonical order of `SelectionFilter::ALL` so two
         // captures of the same set are byte-identical on disk.
@@ -233,6 +252,7 @@ impl CustomFilterPreset {
 
     /// Realize the preset's `Vec` into a `HashSet` for assignment back
     /// into `InteractionState::selection_filters`.
+    #[must_use]
     pub fn as_set(&self) -> std::collections::HashSet<SelectionFilter> {
         self.filters.iter().copied().collect()
     }
@@ -266,7 +286,7 @@ pub enum SelectionFilter {
 }
 
 impl SelectionFilter {
-    pub const ALL: &'static [SelectionFilter] = &[
+    pub const ALL: &'static [Self] = &[
         Self::Components,
         Self::Wires,
         Self::Buses,
@@ -281,7 +301,8 @@ impl SelectionFilter {
         Self::Other,
     ];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Components => "Components",
             Self::Wires => "Wires",
@@ -534,8 +555,7 @@ pub fn view_bar<'a>(
     let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
         last_tool
             .get(group)
-            .map(|a| action_icon(a, tid))
-            .unwrap_or(default_icon)
+            .map_or(default_icon, |a| action_icon(a, tid))
     };
 
     // Helper — build a button item with the schematic editor's
@@ -566,7 +586,7 @@ pub fn view_bar<'a>(
             enabled,
             selected,
             on_press: Some(left),
-            on_right_press: right.clone(),
+            on_right_press: right,
             dropdown_indicator,
         })
     };

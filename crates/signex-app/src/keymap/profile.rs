@@ -1,3 +1,10 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::similar_names,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use crate::keymap::{
     AppCommandId, KeyBindingSource, KeyStroke, ShortcutBinding, ShortcutBindingAction,
     ShortcutContext, ShortcutTrigger,
@@ -60,7 +67,8 @@ pub enum BuiltInProfile {
 }
 
 impl BuiltInProfile {
-    pub fn id(&self) -> &'static str {
+    #[must_use]
+    pub const fn id(&self) -> &'static str {
         match self {
             Self::Altium => "altium",
             Self::Classic => "classic",
@@ -104,18 +112,20 @@ impl ShortcutProfileSet {
         })
     }
 
+    #[must_use]
     pub fn active_profile(&self) -> &ShortcutProfile {
         self.profiles
             .get(&self.active_profile_id)
-            .expect("active profile is validated when profile set is constructed")
+            .unwrap_or_else(|| unreachable!("active profile is validated during construction"))
     }
 
     pub fn active_profile_mut(&mut self) -> &mut ShortcutProfile {
         self.profiles
             .get_mut(&self.active_profile_id)
-            .expect("active profile is validated when profile set is constructed")
+            .unwrap_or_else(|| unreachable!("active profile is validated during construction"))
     }
 
+    #[must_use]
     pub fn active_profile_id(&self) -> &str {
         &self.active_profile_id
     }
@@ -124,6 +134,7 @@ impl ShortcutProfileSet {
         self.profiles.values()
     }
 
+    #[must_use]
     pub fn profile(&self, id: &str) -> Option<&ShortcutProfile> {
         self.profiles.get(id)
     }
@@ -171,6 +182,7 @@ impl ShortcutProfileSet {
         Ok(())
     }
 
+    #[must_use]
     pub fn compile_active(&self) -> CompiledKeymap {
         CompiledKeymap::compile(self.active_profile())
     }
@@ -182,6 +194,7 @@ pub struct CompiledKeymap {
 }
 
 impl CompiledKeymap {
+    #[must_use]
     pub fn compile(profile: &ShortcutProfile) -> Self {
         let source = match profile.kind {
             ShortcutProfileKind::BuiltIn => KeyBindingSource::BuiltIn(profile.id.clone()),
@@ -203,6 +216,7 @@ impl CompiledKeymap {
         Self { bindings }
     }
 
+    #[must_use]
     pub fn lookup(&self, input: &[KeyStroke], contexts: &[ShortcutContext]) -> KeyLookup {
         let mut matches = self
             .bindings
@@ -261,26 +275,26 @@ impl CompiledKeymap {
             .filter(|binding| matches!(binding.action, ShortcutBindingAction::Command(_)))
         {
             let key = (binding.context, binding.sequence.clone());
-            if let Some(existing) = seen.insert(key, binding) {
-                if existing.action != binding.action {
-                    let Some(first_command) = existing.action.command().cloned() else {
-                        continue;
-                    };
-                    let Some(second_command) = binding.action.command().cloned() else {
-                        continue;
-                    };
-                    conflicts.push(BindingConflict {
-                        context: binding.context,
-                        trigger: binding
-                            .sequence
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(" "),
-                        first_command,
-                        second_command,
-                    });
-                }
+            if let Some(existing) = seen.insert(key, binding)
+                && existing.action != binding.action
+            {
+                let Some(first_command) = existing.action.command().cloned() else {
+                    continue;
+                };
+                let Some(second_command) = binding.action.command().cloned() else {
+                    continue;
+                };
+                conflicts.push(BindingConflict {
+                    context: binding.context,
+                    trigger: binding
+                        .sequence
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    first_command,
+                    second_command,
+                });
             }
         }
         conflicts
@@ -351,10 +365,12 @@ pub struct BindingConflict {
     pub second_command: AppCommandId,
 }
 
+#[must_use]
 pub fn config_path() -> Option<PathBuf> {
     crate::config_root::config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
 }
 
+#[must_use]
 pub fn config_path_for_dir(base: &Path) -> PathBuf {
     crate::config_root::config_root_for_dir(base).join(USER_SHORTCUTS_FILE_NAME)
 }

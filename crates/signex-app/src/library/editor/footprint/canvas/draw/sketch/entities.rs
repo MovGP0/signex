@@ -1,3 +1,15 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::manual_let_else,
+    clippy::many_single_char_names,
+    clippy::option_if_let_else,
+    clippy::suboptimal_flops,
+    clippy::too_many_lines,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sketch-entity overlay — points, lines, circles, and arcs drawn in
 //! the DOF / selection palette, layered above the constraint glyphs and
 //! the filled closed loops.
@@ -32,15 +44,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     ) -> Option<(f64, f64)> {
         // Prefer the solved state if available; fall back to the
         // entity's authored coords.
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some((x, y)) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some((x, y));
-            }
+            )
+        {
+            return Some((x, y));
         }
         sketch
             .entities
@@ -162,15 +174,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
                     // Dashed line via short segments.
                     let dx = p1.x - p0.x;
                     let dy = p1.y - p0.y;
-                    let len = (dx * dx + dy * dy).sqrt();
+                    let len = dx.hypot(dy);
                     if len > 0.0 {
                         let dash_len = 6.0_f32;
                         let n = (len / dash_len).floor() as i32;
                         for i in (0..n).step_by(2) {
                             let t0 = i as f32 / n as f32;
                             let t1 = ((i + 1) as f32 / n as f32).min(1.0);
-                            let q0 = Point::new(p0.x + dx * t0, p0.y + dy * t0);
-                            let q1 = Point::new(p0.x + dx * t1, p0.y + dy * t1);
+                            let q0 = Point::new(dx.mul_add(t0, p0.x), dy.mul_add(t0, p0.y));
+                            let q1 = Point::new(dx.mul_add(t1, p0.x), dy.mul_add(t1, p0.y));
                             frame.stroke(&Path::line(q0, q1), stroke);
                         }
                     }
@@ -181,28 +193,29 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
                     // per cycle. Matches Altium's centerline glyph.
                     let dx = p1.x - p0.x;
                     let dy = p1.y - p0.y;
-                    let len = (dx * dx + dy * dy).sqrt();
+                    let len = dx.hypot(dy);
                     if len > 0.5 {
                         let cycle = 21.5_f32;
                         let mut t = 0.0_f32;
                         while t < len {
                             let long_end = (t + 12.0).min(len);
-                            let q0 = Point::new(p0.x + dx * (t / len), p0.y + dy * (t / len));
+                            let q0 =
+                                Point::new(dx.mul_add(t / len, p0.x), dy.mul_add(t / len, p0.y));
                             let q1 = Point::new(
-                                p0.x + dx * (long_end / len),
-                                p0.y + dy * (long_end / len),
+                                dx.mul_add(long_end / len, p0.x),
+                                dy.mul_add(long_end / len, p0.y),
                             );
                             frame.stroke(&Path::line(q0, q1), stroke);
                             let dot_start = t + 16.0;
                             let dot_end = (dot_start + 1.5).min(len);
                             if dot_start < len {
                                 let q2 = Point::new(
-                                    p0.x + dx * (dot_start / len),
-                                    p0.y + dy * (dot_start / len),
+                                    dx.mul_add(dot_start / len, p0.x),
+                                    dy.mul_add(dot_start / len, p0.y),
                                 );
                                 let q3 = Point::new(
-                                    p0.x + dx * (dot_end / len),
-                                    p0.y + dy * (dot_end / len),
+                                    dx.mul_add(dot_end / len, p0.x),
+                                    dy.mul_add(dot_end / len, p0.y),
                                 );
                                 frame.stroke(&Path::line(q2, q3), stroke);
                             }
@@ -281,7 +294,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
                     Some(w) => w,
                     None => continue,
                 };
-                let r = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
+                let r = (s.0 - c.0).hypot(s.1 - c.1);
                 let a0 = (s.1 - c.1).atan2(s.0 - c.0);
                 let a1 = (e.1 - c.1).atan2(e.0 - c.0);
                 let mut delta = a1 - a0;
@@ -307,8 +320,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
                 };
                 let arc_width = if selected { 2.5 } else { 1.5 };
                 for i in 1..=segs {
-                    let t = (i as f64) / (segs as f64);
-                    let a = a0 + delta * t;
+                    let t = f64::from(i) / f64::from(segs);
+                    let a = delta.mul_add(t, a0);
                     let p = (c.0 + r * a.cos(), c.1 + r * a.sin());
                     let q = cstate.world_to_screen(p);
                     frame.stroke(

@@ -298,7 +298,7 @@ fn view_library_block<'a>(
 }
 
 /// Substring filter — case-insensitive match on mpn / manufacturer /
-/// internal_pn / library name. Empty needle = match everything.
+/// `internal_pn` / library name. Empty needle = match everything.
 /// Stage 9 deliberately keeps this trivial; the rich `mpn:` /
 /// `lifecycle:` syntax is a follow-up.
 fn row_matches(row: &ComponentRow, library_name: &str, needle: &str) -> bool {
@@ -315,14 +315,14 @@ fn row_matches(row: &ComponentRow, library_name: &str, needle: &str) -> bool {
 /// One row button — fires `OpenComponentRow` on click. Mirrors the
 /// row layout of the existing legacy Components panel so users see
 /// the same `(internal_pn — mpn)  manufacturer` shape.
-fn view_row_button<'a>(
+fn view_row_button(
     library_path: PathBuf,
     table: String,
-    row_data: &'a ComponentRow,
+    row_data: &ComponentRow,
     text_c: Color,
     muted: Color,
     hover_c: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let row_id = signex_library::RowId::from_uuid(row_data.row_id);
     let label_left = format!(
         "{} — {}",

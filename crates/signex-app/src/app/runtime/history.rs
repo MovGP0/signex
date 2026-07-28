@@ -1,4 +1,4 @@
-use super::super::*;
+use super::super::{Message, Signex, Task};
 
 impl Signex {
     /// Recompute the History panel's target path from the active tab,
@@ -29,7 +29,7 @@ impl Signex {
 
         self.document_state.history.generation =
             self.document_state.history.generation.wrapping_add(1);
-        self.document_state.history.active_path = new_active_path.clone();
+        self.document_state.history.active_path = new_active_path;
         self.document_state.history.entries = Vec::new();
 
         match target {
@@ -63,7 +63,7 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
 
                 let generation = self.document_state.history.generation;
-                let response_path = full_path.clone();
+                let response_path = full_path;
 
                 Task::perform(
                     async move {
@@ -93,7 +93,7 @@ impl Signex {
                         };
                         Message::HistoryLoaded {
                             generation,
-                            path: response_path.clone(),
+                            path: response_path,
                             result: mapped,
                         }
                     },
@@ -108,7 +108,7 @@ impl Signex {
 /// to walk; `Untracked` means we have an on-disk file but no
 /// `.git/` was found (the user hasn't enabled version control on
 /// this project yet); `None` means the active tab has no
-/// addressable file (no tabs at all, or a ComponentEditor tab).
+/// addressable file (no tabs at all, or a `ComponentEditor` tab).
 enum HistoryTarget {
     Tracked {
         project_dir: std::path::PathBuf,
@@ -123,9 +123,7 @@ enum HistoryTarget {
 impl HistoryTarget {
     fn full_path(&self) -> &std::path::Path {
         match self {
-            HistoryTarget::Tracked { full_path, .. } | HistoryTarget::Untracked { full_path } => {
-                full_path.as_path()
-            }
+            Self::Tracked { full_path, .. } | Self::Untracked { full_path } => full_path.as_path(),
         }
     }
 }
@@ -140,7 +138,7 @@ impl HistoryTarget {
 /// directory; for project files it sits at the project root.
 ///
 /// Returns `None` for tab kinds that don't correspond to an
-/// on-disk file we want to track (e.g. ComponentEditor — the
+/// on-disk file we want to track (e.g. `ComponentEditor` — the
 /// row-shaped editor doesn't write an addressable file in v1).
 fn resolve_history_target(app: &super::super::Signex) -> Option<HistoryTarget> {
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;

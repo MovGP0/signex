@@ -1,14 +1,23 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Generic Properties-panel form-field row builders — label/value rows,
 //! integer/mm/pick/check editors, grid rows, the canvas-font popup, and
 //! the B/I/U/T font-style row — shared by every Properties surface.
 //! Moved verbatim from the former single-file `properties_parameters`
 //! module.
 
-use super::super::*;
+use super::super::{
+    Background, Border, Color, Column, Element, LABEL_W, Length, NumberInput,
+    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, PanelMsg, Row, Space,
+    Theme, Unit, container, property_label, row, text,
+};
 use iced::widget::column;
 
 /// Thin 1px separator line. `pub(super)` so sibling modules
-/// (footprint_editor_properties, symbol_editor_properties, etc.)
+/// (`footprint_editor_properties`, `symbol_editor_properties`, etc.)
 /// extracted from this file can share the single implementation.
 pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
     container(Space::new())
@@ -79,7 +88,7 @@ pub fn form_input_row<'a, M: 'a>(
     .into()
 }
 
-/// Form row: label | integer text_input (no spinner buttons).
+/// Form row: label | integer `text_input` (no spinner buttons).
 pub fn form_int_edit_row<'a>(
     label: &str,
     value: u32,
@@ -89,7 +98,7 @@ pub fn form_int_edit_row<'a>(
     input_border: Color,
 ) -> Element<'a, PanelMsg> {
     let text_value = value.to_string();
-    let on_change_cl = on_change.clone();
+    let on_change_cl = on_change;
     container(
         row![
             property_label(label.to_string(), label_c),
@@ -122,7 +131,7 @@ pub fn form_int_edit_row<'a>(
     .into()
 }
 
-/// Form row: label | floating-point mm text_input (no spinner buttons).
+/// Form row: label | floating-point mm `text_input` (no spinner buttons).
 pub fn form_mm_edit_row<'a>(
     label: &str,
     value: f32,
@@ -132,7 +141,7 @@ pub fn form_mm_edit_row<'a>(
     input_border: Color,
 ) -> Element<'a, PanelMsg> {
     let text_value = format!("{value:.1}");
-    let on_change_cl = on_change.clone();
+    let on_change_cl = on_change;
     container(
         row![
             property_label(label.to_string(), label_c),
@@ -165,7 +174,7 @@ pub fn form_mm_edit_row<'a>(
     .into()
 }
 
-/// Form row: label | pick_list (dropdown).
+/// Form row: label | `pick_list` (dropdown).
 pub fn form_pick_row<'a, T>(
     label: &str,
     options: Vec<T>,
@@ -242,7 +251,7 @@ pub fn form_check_row<'a>(
     .into()
 }
 
-/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
+/// Form row: label | `pick_list` for grid size presets (2.54 mm multiples).
 #[allow(dead_code)]
 pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
     use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
@@ -268,8 +277,7 @@ pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, P
                     .iter()
                     .zip(GRID_SIZE_LABELS.iter())
                     .find(|(_, l)| **l == lbl)
-                    .map(|(v, _)| *v)
-                    .unwrap_or(2.54);
+                    .map_or(2.54, |(v, _)| *v);
                 PanelMsg::SetGridSize(mm)
             },)
             .text_size(11)
@@ -283,7 +291,7 @@ pub fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, P
     .into()
 }
 
-/// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
+/// Altium-style grid row: [Label] [checkbox toggle] [`pick_list`] [shortcut hint]
 /// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
 /// Labels and values are shown in the current `unit` (mm or mil).
 #[allow(clippy::too_many_arguments)]
@@ -318,8 +326,7 @@ pub fn form_grid_row(
             .chain(GRID_SIZE_LABELS_MIL.iter())
             .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
             .find(|(l, _)| **l == lbl)
-            .map(|(_, v)| *v)
-            .unwrap_or(2.54);
+            .map_or(2.54, |(_, v)| *v);
         on_size(mm)
     })
     .text_size(11)
@@ -408,7 +415,7 @@ pub fn form_font_link_row<'a>(
     _italic: bool,
     label_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let summary = format!("{current_family}, {:.0}px", current_size_px);
+    let summary = format!("{current_family}, {current_size_px:.0}px");
 
     container(
         row![
@@ -535,7 +542,7 @@ pub fn canvas_font_popup<'a>(
     .into()
 }
 
-/// Form row: label | NumberInput (iced_aw) with step/bounds.
+/// Form row: label | `NumberInput` (`iced_aw`) with step/bounds.
 #[allow(dead_code)]
 fn form_number_row<'a, T>(
     label: &str,
@@ -571,7 +578,7 @@ where
     .into()
 }
 
-/// Form row: label | editable text_input that emits a PanelMsg on input.
+/// Form row: label | editable `text_input` that emits a `PanelMsg` on input.
 pub fn form_edit_row<'a>(
     label: &str,
     value: &str,

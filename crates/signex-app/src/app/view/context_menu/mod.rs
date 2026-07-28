@@ -12,4 +12,7 @@ mod submenu;
 #[cfg(test)]
 mod tests;
 
-use super::*;
+use super::{
+    ContextAction, ContextMenuMsg, ContextSubmenu, Element, Length, Message, OverlayMsg,
+    PreferencesMsg, SUBMENU_ARROW, SUBMENU_ARROW_SIZE, Signex, UiMsg, container, menu_bar,
+};

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::redundant_closure_for_method_calls,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! "Library Options" modal — Stage 11 of
 //! `v0.9-snxlib-as-file-plan.md`.
 //!
@@ -25,6 +31,7 @@ use super::state::LibraryCreateOptionsState;
 
 const MODAL_W: f32 = 480.0;
 
+#[must_use]
 pub fn view<'a>(
     state: &'a LibraryCreateOptionsState,
     tokens: &'a ThemeTokens,
@@ -37,8 +44,7 @@ pub fn view<'a>(
         .lib_path
         .file_name()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| state.lib_path.display().to_string());
+        .map_or_else(|| state.lib_path.display().to_string(), |s| s.to_string());
 
     let header = container(
         row![

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Right-click context-menu builders for the canvas and tab strip, plus
 //! the grid-picker popup. (The project-tree menu lives in the sibling
 //! `project_tree` module.)
@@ -11,7 +17,10 @@
 //! tested without a GPU; the thin `&self` `view_*` shims resolve app
 //! state (selection, shortcuts) and call the widget.
 
-use super::*;
+use super::{
+    ContextAction, ContextMenuMsg, ContextSubmenu, Element, Message, OverlayMsg, PreferencesMsg,
+    SUBMENU_ARROW, Signex, UiMsg, container, menu_bar,
+};
 
 use super::items::{dd_disabled, dd_kb, dd_msg, submenu_launcher};
 use crate::icons as ic;
@@ -72,9 +81,7 @@ impl Signex {
 
         let mut col = column![].spacing(0).width(iced::Length::Fixed(200.0));
         for (label, step_mm) in LADDER {
-            let is_active = active_step
-                .map(|s| (s - step_mm).abs() < 1e-9)
-                .unwrap_or(false);
+            let is_active = active_step.is_some_and(|s| (s - step_mm).abs() < 1e-9);
             let lbl_color = if is_active { primary } else { muted };
             let row_label = *label;
             let row_step = *step_mm;

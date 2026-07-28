@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pin-map override edits for a Component Preview row.
 //!
 //! The pin map defaults to a 1:1 symbol-pin → footprint-pad mapping by

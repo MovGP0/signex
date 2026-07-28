@@ -1,7 +1,16 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::unreadable_literal,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Procedural 3D preview pane.
 //!
 //! Stub-quality CPU isometric render of the footprint's pads
-//! (extruded as boxes), the courtyard outline, and the Body3D box
+//! (extruded as boxes), the courtyard outline, and the `Body3D` box
 //! straight from `Footprint::body_3d`. The render is intentionally
 //! cheap — a single `iced::widget::Canvas` with no GPU pipeline.
 //!
@@ -16,7 +25,8 @@ use signex_library::{BodyShape, Footprint};
 use crate::library::messages::LibraryMessage;
 
 /// Render the procedural 3D preview as an iced canvas widget.
-pub fn view<'a>(fp: &'a Footprint) -> Element<'a, LibraryMessage> {
+#[must_use]
+pub fn view(fp: &Footprint) -> Element<'_, LibraryMessage> {
     let program = Preview3D { fp };
     iced::widget::Canvas::new(program)
         .width(Length::Fill)
@@ -28,7 +38,7 @@ struct Preview3D<'a> {
     fp: &'a Footprint,
 }
 
-impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
+impl canvas::Program<LibraryMessage> for Preview3D<'_> {
     type State = ();
 
     fn draw(
@@ -59,8 +69,8 @@ impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
         // 30-degree iso (cos30 / sin30 ~= 0.866 / 0.5) so the body box
         // pops as a parallelepiped without a perspective camera.
         let pad = 18.0_f32;
-        let avail_w = (bounds.width - pad * 2.0).max(40.0);
-        let avail_h = (bounds.height - pad * 2.0).max(40.0);
+        let avail_w = pad.mul_add(-2.0, bounds.width).max(40.0);
+        let avail_h = pad.mul_add(-2.0, bounds.height).max(40.0);
         let scale = (avail_w / world_w as f32 * 0.85)
             .min(avail_h / world_h as f32 * 0.55)
             .max(2.0);
@@ -77,7 +87,7 @@ impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
             let ys = y as f32 * scale;
             let zs = z as f32 * scale;
             let sx = (xs - ys) * cos30;
-            let sy = -(xs + ys) * sin30 - zs;
+            let sy = (-(xs + ys)).mul_add(sin30, -zs);
             Point::new(cx + sx, cy + sy)
         };
 
@@ -150,8 +160,8 @@ impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
         // Body3D box.
         let body = &self.fp.body_3d;
         let body_bbox = body_bbox(self.fp);
-        let bz = body.offset_z_mm as f64;
-        let tz = bz + body.height_mm as f64;
+        let bz = f64::from(body.offset_z_mm);
+        let tz = bz + f64::from(body.height_mm);
         let (bx0, by0, bx1, by1) = body_bbox;
         let bottom = [
             project(bx0, by0, bz),
@@ -193,7 +203,7 @@ impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
                 let cx_p = (top[0].x + top[2].x) * 0.5;
                 let cy_p = (top[0].y + top[2].y) * 0.5;
                 let rx = (top[1].x - top[0].x).abs() * 0.5;
-                let ry = (top[1].y - top[0].y).abs() * 0.5 + body.height_mm * scale * 0.5;
+                let ry = (body.height_mm * scale).mul_add(0.5, (top[1].y - top[0].y).abs() * 0.5);
                 let dome = Path::new(|b| {
                     b.move_to(Point::new(cx_p - rx, cy_p));
                     // Half-ellipse (top half).
@@ -309,7 +319,10 @@ fn body_bbox(fp: &Footprint) -> (f64, f64, f64, f64) {
 fn pad_color(pad: &signex_library::Pad) -> Color {
     // Pick a colour from the pad's primary layer name. Falls back to
     // a generic copper colour for unknown layers.
-    let name = pad.layers.first().map(|l| l.as_str()).unwrap_or("F.Cu");
+    let name = pad
+        .layers
+        .first()
+        .map_or("F.Cu", signex_library::LayerId::as_str);
     match name {
         "F.Cu" => Color::from_rgba(0.85, 0.55, 0.20, 1.0),
         "B.Cu" => Color::from_rgba(0.30, 0.45, 0.90, 1.0),

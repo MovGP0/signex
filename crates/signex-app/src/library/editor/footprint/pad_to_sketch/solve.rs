@@ -1,3 +1,11 @@
+#![expect(
+    clippy::doc_lazy_continuation,
+    clippy::implicit_hasher,
+    clippy::option_if_let_else,
+    clippy::type_complexity,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Post-solve "reverse mirror" helpers — when a solver run rewrites
 //! a sketch parameter (e.g. via the parameter table), these helpers
 //! propagate the resolved value back into the literal pad-stack
@@ -15,14 +23,14 @@ use signex_sketch::sketch::SketchData;
 use super::super::state::FootprintEditorState;
 use super::helpers::set_point_xy;
 
-/// v0.24 Phase 3 (Track A4) — RoundRect: re-derive the
+/// v0.24 Phase 3 (Track A4) — `RoundRect`: re-derive the
 /// `EditorPad.stack.corner_radius_pct` value from the live
 /// `corner_r_<slug>` parameter in `resolved`.
 pub fn mirror_solve_to_pad_stack(
     state: &mut FootprintEditorState,
     resolved: &HashMap<String, f64>,
 ) {
-    for pad in state.pads.iter_mut() {
+    for pad in &mut state.pads {
         let Some(parameter_name) = pad.shape_params.get("corner_r") else {
             continue;
         };
@@ -59,7 +67,7 @@ pub fn mirror_solve_to_oval_size(
     state: &mut FootprintEditorState,
     resolved: &HashMap<String, f64>,
 ) {
-    for pad in state.pads.iter_mut() {
+    for pad in &mut state.pads {
         let Some(width_param) = pad.shape_params.get("width") else {
             continue;
         };
@@ -104,7 +112,7 @@ pub fn mirror_solve_to_chamfer_anchors(
     sketch: &mut SketchData,
     resolved: &HashMap<String, f64>,
 ) {
-    for pad in state.pads.iter() {
+    for pad in &state.pads {
         let Some(parameter_name) = pad.shape_params.get("chamfer_len") else {
             continue;
         };
@@ -160,7 +168,7 @@ pub fn mirror_solve_to_chamfer_anchors(
     }
 }
 
-/// v0.24 Phase 6 — RoundRect: rewrite the per-corner Arc-centre Point
+/// v0.24 Phase 6 — `RoundRect`: rewrite the per-corner Arc-centre Point
 /// + the two adjacent anchor Points so the rendered geometry matches
 /// the resolved radius.
 pub fn mirror_solve_to_round_rect_geometry(
@@ -168,7 +176,7 @@ pub fn mirror_solve_to_round_rect_geometry(
     sketch: &mut SketchData,
     resolved: &HashMap<String, f64>,
 ) {
-    for pad in state.pads.iter() {
+    for pad in &state.pads {
         let Some(shared_param) = pad.shape_params.get("corner_r") else {
             continue;
         };
@@ -222,7 +230,7 @@ pub fn mirror_solve_to_round_rect_geometry(
             };
             let r = r.max(0.0).min(half_min);
 
-            let Some(arc_id) = sidecar_to_id(pad, *arc_key) else {
+            let Some(arc_id) = sidecar_to_id(pad, arc_key) else {
                 continue;
             };
 
@@ -256,7 +264,7 @@ pub fn mirror_solve_to_oval_geometry(
     sketch: &mut SketchData,
     resolved: &HashMap<String, f64>,
 ) {
-    for pad in state.pads.iter() {
+    for pad in &state.pads {
         let Some(width_param) = pad.shape_params.get("width") else {
             continue;
         };
@@ -301,13 +309,13 @@ pub fn mirror_solve_to_oval_geometry(
         .map(|(x, y)| pad.local_to_world_mm(x, y));
         let centre_positions: [(f64, f64); 2] = if wide {
             [
-                (xmin + inset, (ymin + ymax) / 2.0),
-                (xmax - inset, (ymin + ymax) / 2.0),
+                (xmin + inset, f64::midpoint(ymin, ymax)),
+                (xmax - inset, f64::midpoint(ymin, ymax)),
             ]
         } else {
             [
-                ((xmin + xmax) / 2.0, ymin + inset),
-                ((xmin + xmax) / 2.0, ymax - inset),
+                (f64::midpoint(xmin, xmax), ymin + inset),
+                (f64::midpoint(xmin, xmax), ymax - inset),
             ]
         }
         .map(|(x, y)| pad.local_to_world_mm(x, y));

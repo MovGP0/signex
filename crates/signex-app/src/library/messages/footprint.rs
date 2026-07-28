@@ -2,7 +2,7 @@
 //! the former flat `PrimitiveEditorMsg` (ADR-0001 D3). Reached through
 //! [`super::PrimitiveEdit::Footprint`]; matched by `apply_footprint_primitive_edit`.
 
-use super::*;
+use super::{RoleTag, SketchConstraintTag};
 
 #[derive(Debug, Clone)]
 pub enum FootprintEditorMsg {
@@ -186,7 +186,7 @@ pub enum FootprintEditorMsg {
     ContextMenuAction(crate::library::editor::footprint::state::FootprintContextAction),
 
     /// v0.26-C — canvas signals that the pending Fit-to-Window
-    /// request has been honoured. See EditorMsg::Footprint(FootprintEditorMsg::FitConsumed).
+    /// request has been honoured. See `EditorMsg::Footprint(FootprintEditorMsg::FitConsumed)`.
     FitConsumed,
 
     /// v0.26-E — clipboard ops on the selected pad.
@@ -216,7 +216,7 @@ pub enum FootprintEditorMsg {
     SketchMakePadFromProfile,
 
     /// v0.24 Phase 3 (Track A3) — Right-click action on an Arc that
-    /// belongs to a RoundRect pad's corner outline. Mints a fresh
+    /// belongs to a `RoundRect` pad's corner outline. Mints a fresh
     /// per-corner sketch parameter (`corner_r_<slug>_<corner>`),
     /// copies the current shared parameter's value into it, and
     /// records the per-corner override on the owning pad's
@@ -229,7 +229,7 @@ pub enum FootprintEditorMsg {
         arc_entity_id: signex_sketch::id::SketchEntityId,
     },
 
-    /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
+    /// v0.15 — Pads-mode tool switch (Select / `PlacePad`). Right-
     /// click cancels back to Select via the same dispatch.
     SetPadsTool(crate::library::editor::footprint::state::PadsTool),
 
@@ -249,7 +249,7 @@ pub enum FootprintEditorMsg {
 
     /// Stub for "coming soon" Place / Move / Drag / Selection / 3D
     /// Body / Text / Shapes dropdown items. Carries the label so the
-    /// dispatcher can log a single warn() per click without minting
+    /// dispatcher can log a single `warn()` per click without minting
     /// a separate variant per item.
     ActiveBarStub(&'static str),
 
@@ -271,7 +271,7 @@ pub enum FootprintEditorMsg {
     /// Snap-options toggle from the active-bar Snap dropdown.
     /// Equivalent to `PanelMsg::FpEditorToggleSnapOption` but flows
     /// through the editor-event path so the dropdown overlay stays
-    /// in the LibraryMessage envelope.
+    /// in the `LibraryMessage` envelope.
     ActiveBarToggleSnap(crate::panels::SnapOptionFlag),
 
     /// Snapping-mode pick from the active-bar Snap dropdown
@@ -388,7 +388,7 @@ pub enum FootprintEditorMsg {
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate
-    /// `SketchEdit` (AddEntity Line / Circle / Arc) when the gesture
+    /// `SketchEdit` (`AddEntity` Line / Circle / Arc) when the gesture
     /// completes. `snap_id` carries the sketch Point under the cursor
     /// (within `SNAP_RADIUS_PX`) for auto-Coincident snap.
     SketchToolClick {
@@ -398,7 +398,7 @@ pub enum FootprintEditorMsg {
     },
 
     /// v0.13.2 — Escape during a multi-click gesture: discard
-    /// `tool_pending` without emitting a SketchEdit.
+    /// `tool_pending` without emitting a `SketchEdit`.
     SketchToolEscape,
 
     /// v0.24 Track D — append a typed character to
@@ -459,7 +459,7 @@ pub enum FootprintEditorMsg {
     },
 
     /// v0.27 — Resize a Round pad's diameter via the east-edge
-    /// handle drag in Sketch mode. The dispatcher updates pad.size_mm
+    /// handle drag in Sketch mode. The dispatcher updates `pad.size_mm`
     /// and the matching Circle entity + diameter parameter.
     SketchResizeRoundPad {
         pad_idx: usize,

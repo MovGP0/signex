@@ -1,10 +1,28 @@
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::match_same_arms,
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dock area state: construction, panel management, and update handling.
 
-use super::types::*;
+use super::types::{DockArea, DockMessage, DockRegion, FloatingPanel, PanelPosition};
 use crate::panels::{self, PanelKind};
 
+impl Default for DockArea {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DockArea {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             left: DockRegion {
                 panels: Vec::new(),
@@ -221,7 +239,8 @@ impl DockArea {
     }
 
     /// Check if a dock region is collapsed.
-    pub fn is_collapsed(&self, position: PanelPosition) -> bool {
+    #[must_use]
+    pub const fn is_collapsed(&self, position: PanelPosition) -> bool {
         match position {
             PanelPosition::Left => self.left.collapsed,
             PanelPosition::Right => self.right.collapsed,
@@ -230,7 +249,8 @@ impl DockArea {
     }
 
     /// Check if a dock region currently contains any panels.
-    pub fn has_panels(&self, position: PanelPosition) -> bool {
+    #[must_use]
+    pub const fn has_panels(&self, position: PanelPosition) -> bool {
         match position {
             PanelPosition::Left => !self.left.panels.is_empty(),
             PanelPosition::Right => !self.right.panels.is_empty(),
@@ -240,6 +260,7 @@ impl DockArea {
 
     /// Panels currently docked in `position`, in display order. Used
     /// by the Panels menu to mark open panels with a ✓.
+    #[must_use]
     pub fn panel_kinds(&self, position: PanelPosition) -> &[panels::PanelKind] {
         match position {
             PanelPosition::Left => &self.left.panels,

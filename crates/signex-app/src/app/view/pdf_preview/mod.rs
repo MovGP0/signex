@@ -5,7 +5,7 @@
 //! #164) as pure code motion — no behaviour change. These are methods
 //! of the same `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{Element, Length, Message, PrintPreviewMsg, Signex, view};
 
 mod preview;
 mod settings;

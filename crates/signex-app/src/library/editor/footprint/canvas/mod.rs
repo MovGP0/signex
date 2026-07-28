@@ -1,3 +1,15 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    clippy::many_single_char_names,
+    clippy::missing_const_for_fn,
+    clippy::suboptimal_flops,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint editor 2D canvas — pure CPU rendering via
 //! `iced::widget::Canvas`. Pads are drawn as axis-aligned rectangles
 //! coloured by their primary layer; courtyard renders as a yellow
@@ -87,7 +99,7 @@ pub struct FootprintCanvasState {
     /// release.
     box_select_anchor_screen: Option<Point>,
     /// v0.26-I — current cursor screen position during a box-select
-    /// drag. Updated per CursorMoved tick so the draw pass can
+    /// drag. Updated per `CursorMoved` tick so the draw pass can
     /// render the rubber-band rectangle to the live cursor.
     box_select_current_screen: Option<Point>,
     /// Drag state — `Some` while the user is mid-drag on a pad.
@@ -107,7 +119,7 @@ pub struct FootprintCanvasState {
     /// `FootprintSketchResizeRoundPad`. Cleared on release.
     round_resize_drag: Option<usize>,
     /// v0.27 — most recent modifier state from the iced
-    /// ModifiersChanged event. Mouse events don't carry modifiers
+    /// `ModifiersChanged` event. Mouse events don't carry modifiers
     /// on iced 0.14, so we track them out-of-band and read on press
     /// for Ctrl/Cmd-click toggle + Shift-click extend semantics.
     current_modifiers: keyboard::Modifiers,
@@ -122,11 +134,11 @@ struct DragState {
     pad_idx: usize,
     /// v0.16 — `Some(id)` when the drag originated on a sketch
     /// `Point` entity. Active in Sketch mode + Select tool;
-    /// per-tick CursorMoved publishes `FootprintSketchMovePoint`
+    /// per-tick `CursorMoved` publishes `FootprintSketchMovePoint`
     /// with the world-mm delta.
     sketch_point: Option<signex_sketch::id::SketchEntityId>,
     /// v0.27 — `Some(id)` when the drag originated on a sketch
-    /// `Line` entity. Per-tick CursorMoved publishes
+    /// `Line` entity. Per-tick `CursorMoved` publishes
     /// `FootprintSketchMoveLine` with the world-mm delta; the
     /// dispatcher translates both endpoints in one solver pass.
     sketch_line: Option<signex_sketch::id::SketchEntityId>,
@@ -135,7 +147,7 @@ struct DragState {
     /// centre OR (for sketch Point drags) compute the per-tick
     /// delta `(world - grab_offset_mm) - last_pos`.
     grab_offset_mm: (f64, f64),
-    /// World-mm position from the previous CursorMoved tick — used
+    /// World-mm position from the previous `CursorMoved` tick — used
     /// by sketch-Point drags to compute the per-tick delta the
     /// dispatcher's `FootprintSketchMovePoint` handler expects.
     last_world: (f64, f64),
@@ -168,15 +180,15 @@ impl Default for FootprintCanvasState {
 impl FootprintCanvasState {
     fn world_to_screen(&self, world: (f64, f64)) -> Point {
         Point::new(
-            world.0 as f32 * self.scale + self.offset.x,
-            world.1 as f32 * self.scale + self.offset.y,
+            (world.0 as f32).mul_add(self.scale, self.offset.x),
+            (world.1 as f32).mul_add(self.scale, self.offset.y),
         )
     }
 
     fn screen_to_world(&self, screen: Point) -> (f64, f64) {
         (
-            ((screen.x - self.offset.x) / self.scale) as f64,
-            ((screen.y - self.offset.y) / self.scale) as f64,
+            f64::from((screen.x - self.offset.x) / self.scale),
+            f64::from((screen.y - self.offset.y) / self.scale),
         )
     }
 
@@ -185,13 +197,13 @@ impl FootprintCanvasState {
         let w = (max_x - min_x).max(1e-3);
         let h = (max_y - min_y).max(1e-3);
         let pad = 12.0_f32;
-        let avail_w = (viewport.width - pad * 2.0).max(1.0);
-        let avail_h = (viewport.height - pad * 2.0).max(1.0);
+        let avail_w = pad.mul_add(-2.0, viewport.width).max(1.0);
+        let avail_h = pad.mul_add(-2.0, viewport.height).max(1.0);
         let scale_x = avail_w / w as f32;
         let scale_y = avail_h / h as f32;
         self.scale = scale_x.min(scale_y).clamp(MIN_SCALE, MAX_SCALE);
-        let cx = ((min_x + max_x) / 2.0) as f32;
-        let cy = ((min_y + max_y) / 2.0) as f32;
+        let cx = f64::midpoint(min_x, max_x) as f32;
+        let cy = f64::midpoint(min_y, max_y) as f32;
         self.offset = Point::new(
             viewport.width / 2.0 - cx * self.scale,
             viewport.height / 2.0 - cy * self.scale,
@@ -223,7 +235,7 @@ pub struct FootprintCanvas<'a> {
     pub silk_b: &'a [signex_library::primitive::footprint::FpGraphic],
 }
 
-impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
+impl canvas::Program<LibraryMessage> for FootprintCanvas<'_> {
     type State = FootprintCanvasState;
 
     fn update(
@@ -330,55 +342,55 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         // for horizontal edges). Drag actually works since v0.16.1.1
         // — this is the visual hint Caner asked for.
         use crate::library::editor::footprint::state::EditorMode;
-        if self.state.mode == EditorMode::Sketch {
-            if let Some(c) = cursor.position_in(bounds) {
-                const CORNER_TOL: f32 = 6.0;
-                const EDGE_TOL: f32 = 4.0;
-                for pad in &self.state.pads {
-                    if pad.corner_entity_ids.is_none() {
-                        continue;
-                    }
-                    let (cx, cy) = pad.position_mm;
-                    let (w, h) = pad.size_mm;
-                    let half_w = w * 0.5;
-                    let half_h = h * 0.5;
-                    let nw = cstate.world_to_screen((cx - half_w, cy - half_h));
-                    let ne = cstate.world_to_screen((cx + half_w, cy - half_h));
-                    let se = cstate.world_to_screen((cx + half_w, cy + half_h));
-                    let sw = cstate.world_to_screen((cx - half_w, cy + half_h));
+        if self.state.mode == EditorMode::Sketch
+            && let Some(c) = cursor.position_in(bounds)
+        {
+            const CORNER_TOL: f32 = 6.0;
+            const EDGE_TOL: f32 = 4.0;
+            for pad in &self.state.pads {
+                if pad.corner_entity_ids.is_none() {
+                    continue;
+                }
+                let (cx, cy) = pad.position_mm;
+                let (w, h) = pad.size_mm;
+                let half_w = w * 0.5;
+                let half_h = h * 0.5;
+                let nw = cstate.world_to_screen((cx - half_w, cy - half_h));
+                let ne = cstate.world_to_screen((cx + half_w, cy - half_h));
+                let se = cstate.world_to_screen((cx + half_w, cy + half_h));
+                let sw = cstate.world_to_screen((cx - half_w, cy + half_h));
 
-                    // Corners take priority over edges. Diagonal sign
-                    // (relative to the centre) picks the cursor:
-                    // (dx * dy > 0) => NW or SE => DiagonallyDown (↘)
-                    // (dx * dy < 0) => NE or SW => DiagonallyUp (↗)
-                    let corners = [(nw, true), (ne, false), (se, true), (sw, false)];
-                    for (corner_pt, is_down) in corners {
-                        let dx = (c.x - corner_pt.x).abs();
-                        let dy = (c.y - corner_pt.y).abs();
-                        if dx <= CORNER_TOL && dy <= CORNER_TOL {
-                            return if is_down {
-                                mouse::Interaction::ResizingDiagonallyDown
-                            } else {
-                                mouse::Interaction::ResizingDiagonallyUp
-                            };
-                        }
+                // Corners take priority over edges. Diagonal sign
+                // (relative to the centre) picks the cursor:
+                // (dx * dy > 0) => NW or SE => DiagonallyDown (↘)
+                // (dx * dy < 0) => NE or SW => DiagonallyUp (↗)
+                let corners = [(nw, true), (ne, false), (se, true), (sw, false)];
+                for (corner_pt, is_down) in corners {
+                    let dx = (c.x - corner_pt.x).abs();
+                    let dy = (c.y - corner_pt.y).abs();
+                    if dx <= CORNER_TOL && dy <= CORNER_TOL {
+                        return if is_down {
+                            mouse::Interaction::ResizingDiagonallyDown
+                        } else {
+                            mouse::Interaction::ResizingDiagonallyUp
+                        };
                     }
+                }
 
-                    // Edges — point lies within the bbox AND within
-                    // EDGE_TOL of one of the four edge lines.
-                    let inside_x = c.x >= nw.x - EDGE_TOL && c.x <= se.x + EDGE_TOL;
-                    let inside_y = c.y >= nw.y - EDGE_TOL && c.y <= se.y + EDGE_TOL;
-                    if inside_x && inside_y {
-                        let near_top = (c.y - nw.y).abs() <= EDGE_TOL;
-                        let near_bottom = (c.y - se.y).abs() <= EDGE_TOL;
-                        let near_left = (c.x - nw.x).abs() <= EDGE_TOL;
-                        let near_right = (c.x - se.x).abs() <= EDGE_TOL;
-                        if near_top || near_bottom {
-                            return mouse::Interaction::ResizingVertically;
-                        }
-                        if near_left || near_right {
-                            return mouse::Interaction::ResizingHorizontally;
-                        }
+                // Edges — point lies within the bbox AND within
+                // EDGE_TOL of one of the four edge lines.
+                let inside_x = c.x >= nw.x - EDGE_TOL && c.x <= se.x + EDGE_TOL;
+                let inside_y = c.y >= nw.y - EDGE_TOL && c.y <= se.y + EDGE_TOL;
+                if inside_x && inside_y {
+                    let near_top = (c.y - nw.y).abs() <= EDGE_TOL;
+                    let near_bottom = (c.y - se.y).abs() <= EDGE_TOL;
+                    let near_left = (c.x - nw.x).abs() <= EDGE_TOL;
+                    let near_right = (c.x - se.x).abs() <= EDGE_TOL;
+                    if near_top || near_bottom {
+                        return mouse::Interaction::ResizingVertically;
+                    }
+                    if near_left || near_right {
+                        return mouse::Interaction::ResizingHorizontally;
                     }
                 }
             }
@@ -399,7 +411,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 {
                     const LINE_HIT_TOL_PX: f32 = 6.0;
                     let world = cstate.screen_to_world(c);
-                    let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                    let tol_mm = f64::from(LINE_HIT_TOL_PX / cstate.scale.max(1.0));
                     let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
                         if let Some(solve) = self.state.last_solve.as_ref()
                             && let Some(p) = signex_sketch::solver::state::point_xy(
@@ -426,15 +438,15 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         {
                             let dx = b.0 - a.0;
                             let dy = b.1 - a.1;
-                            let llen2 = dx * dx + dy * dy;
+                            let llen2 = dy.mul_add(dy, dx * dx);
                             if llen2 <= 1e-12 {
                                 continue;
                             }
-                            let t = ((world.0 - a.0) * dx + (world.1 - a.1) * dy) / llen2;
+                            let t = (world.1 - a.1).mul_add(dy, (world.0 - a.0) * dx) / llen2;
                             let tc = t.clamp(0.0, 1.0);
                             let px = a.0 + tc * dx;
                             let py = a.1 + tc * dy;
-                            let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                            let d2 = (py - world.1).mul_add(py - world.1, (px - world.0).powi(2));
                             if d2 <= tol_mm * tol_mm {
                                 // v0.27 — line-hover resize cue is
                                 // drawn in-canvas as a rotated
@@ -513,7 +525,7 @@ pub(super) fn silk_f_hit_at(
             FpGraphicKind::Circle { center, radius } => {
                 let dx = x - center[0];
                 let dy = y - center[1];
-                let dist = (dx * dx + dy * dy).sqrt();
+                let dist = dx.hypot(dy);
                 if g.filled {
                     dist <= *radius + t
                 } else {
@@ -528,7 +540,7 @@ pub(super) fn silk_f_hit_at(
             } => {
                 let dx = x - center[0];
                 let dy = y - center[1];
-                let dist = (dx * dx + dy * dy).sqrt();
+                let dist = dx.hypot(dy);
                 if (dist - *radius).abs() > t {
                     false
                 } else {

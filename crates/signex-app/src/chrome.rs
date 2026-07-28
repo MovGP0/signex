@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::ptr_as_ptr,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! OS-specific chrome polish for the borderless main window.
 //!
 //! The borderless main window (see `bootstrap.rs` — `decorations: false`)
@@ -41,7 +48,7 @@ pub fn apply_rounded_corners<M: 'static + Send>(id: Id) -> Task<M> {
 /// `PostMessageW(WM_NCLBUTTONDOWN)` silently no-ops on borderless
 /// Windows. Verified empirically: iced's `window::drag` actually
 /// works on `decorations: false` windows on the current pinned
-/// winit version. Reverted (2026-05-02) — the SC_MOVE/SC_SIZE
+/// winit version. Reverted (2026-05-02) — the `SC_MOVE/SC_SIZE`
 /// path entered Windows' modal sizing loop, starving iced's
 /// runtime and producing the resize-stretch regression bisected
 /// to that commit (see `docs/internal/TEST_CHECKLIST_v0.10_v0.11.md`
@@ -54,7 +61,7 @@ pub fn start_window_drag<M: 'static + Send>(id: Id) -> Task<M> {
 /// user grabbed (one of the eight cardinal / corner edges). Uses
 /// iced's `window::drag_resize` (winit's `drag_resize_window`) on
 /// all platforms. See `start_window_drag` for the rationale behind
-/// dropping the Win32 SC_SIZE detour.
+/// dropping the Win32 `SC_SIZE` detour.
 pub fn start_window_resize<M: 'static + Send>(id: Id, direction: Direction) -> Task<M> {
     iced::window::drag_resize(id, direction)
 }
@@ -79,7 +86,7 @@ mod windows_impl {
             let _ = DwmSetWindowAttribute(
                 hwnd,
                 DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-                &pref as *const u32 as *const _,
+                &raw const pref as *const _,
                 std::mem::size_of::<u32>() as u32,
             );
         }

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::needless_pass_by_value,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Footprint editor tests.
 //!
 //! Coverage focuses on the layer visibility helpers + the pad

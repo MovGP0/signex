@@ -1,4 +1,9 @@
-use super::super::*;
+#![expect(
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{CanvasEvent, CanvasState, Message, Rectangle, SchematicCanvas, canvas, mouse};
 
 impl SchematicCanvas {
     /// Consume a pending fit-to-content target and apply it to the camera.

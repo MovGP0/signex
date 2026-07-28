@@ -1,10 +1,15 @@
+#![expect(
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Close-Project + app-quit lifecycle for the project-navigation dock.
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::{Message, Signex, Task};
 
 impl Signex {
     /// Close every tab backed by the project whose root is at
@@ -25,7 +30,7 @@ impl Signex {
         let Some(project) = self.document_state.projects.get(project_idx) else {
             return Task::none();
         };
-        let project_dir = project.path.parent().map(|p| p.to_path_buf());
+        let project_dir = project.path.parent().map(std::path::Path::to_path_buf);
         // Collect dirty paths inside this project's directory tree.
         // `dirty_paths` is project-scoped by ancestor check —
         // primitive editors live under `<project>/<lib>.snxlib/
@@ -170,10 +175,10 @@ impl Signex {
             // repo. Best-effort, no-op when `enable_git` is off — the
             // primitive and project legs already do the equivalent
             // internally, so the three routes stay uniform.
-            let label = path
-                .file_name()
-                .map(|f| f.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
+            let label = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |f| f.to_string_lossy().into_owned(),
+            );
             self.commit_save_to_project_git(path, &format!("Save {label}"));
             return Ok(());
         }

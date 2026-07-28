@@ -1,3 +1,8 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! UI-surface state — theme, tool overlays, modal flags, dropdown and
 //! command-palette state. Split from `app/state.rs` as pure code motion.
 
@@ -192,7 +197,7 @@ pub struct UiState {
     /// another round-trip through state plumbing.
     #[allow(dead_code)]
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
-    /// AutoFocus mode — when true, non-selected items dim on the canvas.
+    /// `AutoFocus` mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
     /// Annotate dialog open flag. When true, the Annotate-Schematics modal
     /// covers the canvas with its preview + confirm-apply UI.
@@ -210,7 +215,7 @@ pub struct UiState {
     /// closes so reopening a dialog lands where it was last placed.
     pub modal_offsets: std::collections::HashMap<ModalId, (f32, f32)>,
     /// Active modal drag: which modal is being dragged + the last mouse
-    /// position so the delta can be computed from the next DragMove event.
+    /// position so the delta can be computed from the next `DragMove` event.
     pub modal_dragging: Option<(ModalId, f32, f32)>,
     /// Active tab drag: which document tab is being dragged + the last
     /// mouse position. Used by auto-detach — when the cursor crosses the
@@ -223,7 +228,7 @@ pub struct UiState {
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
     /// Active "pick a reference item" mode for z-order operations
-    /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
+    /// (`BringToFrontOf` / `SendToBackOf`). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
     pub reorder_picker: Option<ReorderPicker>,
     /// Pin-connection matrix overrides — sparse map keyed by (row, col)
@@ -237,13 +242,13 @@ pub struct UiState {
     /// skips these uuids in `annotate_with_seed_and_locks`.
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
     /// Altium-style rubber-band selection mode. Drives how the box
-    /// drag classifies hits (Inside / Outside / TouchingLine).
+    /// drag classifies hits (Inside / Outside / `TouchingLine`).
     pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
     /// Net-color override armed from the Active Bar palette. When Some,
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected
     /// wire. Cleared after the click applies, or by Escape. Colors are
-    /// render-time only — they do NOT write back to the .standard_sch.
+    /// render-time only — they do NOT write back to the .`standard_sch`.
     pub pending_net_color: Option<signex_types::theme::Color>,
     /// Per-wire color overrides keyed by wire uuid. Populated by the
     /// net-color click; consulted when drawing wires. Not serialised.
@@ -260,7 +265,7 @@ pub struct UiState {
     /// shouldn't mix with document mutations.
     pub net_color_undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
     /// Custom net-color picker state. When `show = true`, a floating
-    /// iced_aw ColorPicker appears anchored to the Active Bar button;
+    /// `iced_aw` `ColorPicker` appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.
     pub net_color_custom: NetColorCustomState,
     /// Id of the primary app window — set once `iced::window::open` for
@@ -292,6 +297,7 @@ impl UiState {
     /// the 7 appearance drafts, the component-class table and the keymap
     /// working copy — so an appearance recompute can't report "clean" while
     /// a pending rebind or class edit would be lost on close.
+    #[must_use]
     pub fn preferences_draft_differs(&self) -> bool {
         self.preferences_draft_theme != self.theme_id
             || self.preferences_draft_font != self.ui_font_name
@@ -310,6 +316,7 @@ impl UiState {
     /// the Save/Discard footer + every dirty-close guard. The draft
     /// comparator plus the sticky flag for imperative edits it can't see
     /// (see [`Self::preferences_dirty_sticky`]).
+    #[must_use]
     pub fn preferences_has_unsaved_changes(&self) -> bool {
         self.preferences_dirty_sticky || self.preferences_draft_differs()
     }

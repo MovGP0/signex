@@ -1,6 +1,12 @@
+#![expect(
+    clippy::format_push_string,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Place-from-library flow handler.
 //!
-//! v0.9-refactor-2 (DBLib model): the place flow is keyed by
+//! v0.9-refactor-2 (`DBLib` model): the place flow is keyed by
 //! `(library_path, table, row_id)`. Resolution path:
 //!
 //!   1. Look up the open library by path → grab its `library_id`.
@@ -79,7 +85,7 @@ impl Signex {
         };
 
         let symbol = self.library.set.resolve_symbol(&row.symbol_ref);
-        let pin_count = symbol.as_ref().map(|s| s.pins.len()).unwrap_or(0);
+        let pin_count = symbol.as_ref().map_or(0, |s| s.pins.len());
 
         tracing::warn!(
             target: "signex::library",
@@ -114,7 +120,7 @@ fn hex_short(hash: &[u8; 32]) -> String {
 /// and the dispatcher's "what message do I emit?" logic lives next
 /// to the rest of the place-flow code.
 #[allow(dead_code)]
-pub(crate) fn place_message_from_picker(
+pub const fn place_message_from_picker(
     library_path: PathBuf,
     table: String,
     row_id: RowId,

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::advanced::text as advanced_text;
 use iced::alignment;
 use iced::widget::canvas;
@@ -33,14 +38,14 @@ impl SceneDrawOptions {
     }
 }
 
-fn color_from_rgba(rgba: [f32; 4]) -> Color {
+const fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
 fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32, color: Color) {
     let dx = p1.x - p0.x;
     let dy = p1.y - p0.y;
-    let length = (dx * dx + dy * dy).sqrt();
+    let length = dx.hypot(dy);
     if length <= 0.0001 {
         return;
     }
@@ -53,8 +58,8 @@ fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32,
 
     while dist < length {
         let seg_end = (dist + dash).min(length);
-        let sp = Point::new(p0.x + ux * dist, p0.y + uy * dist);
-        let ep = Point::new(p0.x + ux * seg_end, p0.y + uy * seg_end);
+        let sp = Point::new(ux.mul_add(dist, p0.x), uy.mul_add(dist, p0.y));
+        let ep = Point::new(ux.mul_add(seg_end, p0.x), uy.mul_add(seg_end, p0.y));
         let path = canvas::Path::line(sp, ep);
         frame.stroke(
             &path,
@@ -250,7 +255,7 @@ fn draw_polygon_bucket<F>(
     }
 }
 
-fn to_text_h_align(align: TextHAlign) -> advanced_text::Alignment {
+const fn to_text_h_align(align: TextHAlign) -> advanced_text::Alignment {
     match align {
         TextHAlign::Left => advanced_text::Alignment::Left,
         TextHAlign::Center => advanced_text::Alignment::Center,
@@ -258,7 +263,7 @@ fn to_text_h_align(align: TextHAlign) -> advanced_text::Alignment {
     }
 }
 
-fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
+const fn to_text_v_align(align: TextVAlign) -> alignment::Vertical {
     match align {
         TextVAlign::Top => alignment::Vertical::Top,
         TextVAlign::Center => alignment::Vertical::Center,

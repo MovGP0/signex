@@ -1,11 +1,23 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Properties surface for a single selected schematic element.
 //!
-//! Routes between Symbol / Reference-or-Value field / Label / TextNote
-//! / Drawing / ChildSheet contexts. Moved verbatim from the former
+//! Routes between Symbol / Reference-or-Value field / Label / `TextNote`
+//! / Drawing / `ChildSheet` contexts. Moved verbatim from the former
 //! single-file `element_properties` module — pure view code, zero
 //! behaviour change.
 
-use super::super::*;
+use super::super::{
+    Color, Column, Element, Length, PanelContext, PanelMsg, Space, collapsible_section, container,
+    empty_section_row, font_style_row, form_check_row, form_edit_row, form_input_row, form_label,
+    form_pick_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
+    net_params_tabs, prop_kv_row, scrollable, text, thin_sep, view_child_sheet_properties,
+    view_drawing_properties,
+};
 
 pub(in crate::panels) fn view_selected_element_properties<'a>(
     ctx: &'a PanelContext,
@@ -21,8 +33,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         .selection_info
         .iter()
         .find(|(k, _)| k == "Type")
-        .map(|(_, v)| v.as_str())
-        .unwrap_or("Object");
+        .map_or("Object", |(_, v)| v.as_str());
 
     let uuid = ctx.selected_uuid;
     let selected_kind = ctx.selected_kind;
@@ -90,7 +101,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         .collect();
 
         // ── Location ──
-        let pos_loc = position.clone();
+        let pos_loc = position;
         let rot_current = rotation_deg;
         col = col.push(collapsible_section(
             "sel_location",
@@ -109,7 +120,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     "180 Degrees".into(),
                     "270 Degrees".into(),
                 ];
-                let rot_label = format!("{:.0} Degrees", rot_current);
+                let rot_label = format!("{rot_current:.0} Degrees");
                 c = c.push(form_pick_row(
                     "Rotation",
                     rotation_opts,
@@ -130,7 +141,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
         // ── Properties (Name, Style) ──
         let name_val = value.clone();
-        let base_lib = lib_id.clone();
+        let base_lib = lib_id;
         col = col.push(collapsible_section(
             "sel_props",
             "Properties",
@@ -171,10 +182,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             && !base_lib.to_lowercase().contains("earth");
                         let new_gnd = new_lib.to_lowercase().contains("gnd")
                             && !new_lib.to_lowercase().contains("earth");
-                        let target_rot = if old_gnd != new_gnd {
-                            (current_rot + 180.0).rem_euclid(360.0)
-                        } else {
+                        let target_rot = if old_gnd == new_gnd {
                             current_rot
+                        } else {
+                            (current_rot + 180.0).rem_euclid(360.0)
                         };
                         PanelMsg::EditPowerPortStyle {
                             symbol_id: id,
@@ -213,7 +224,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 ));
                 let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
                     .iter()
-                    .map(|n| n.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect();
                 c = c.push(form_pick_row(
                     "Size",
@@ -231,7 +242,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         ));
 
         // ── General (Net) — informational ──
-        let phys_name = value.clone();
+        let phys_name = value;
         col = col.push(collapsible_section(
             "sel_net",
             "General (Net)",
@@ -442,7 +453,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 } else {
                     format!("Parameters ({})", params.len())
                 };
-                let section_params = params.clone();
+                let section_params = params;
                 col = col.push(collapsible_section(
                     "sel_parameters",
                     &header_label,
@@ -470,8 +481,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 ));
             }
         }
-        Some(signex_types::schematic::SelectedKind::SymbolRefField)
-        | Some(signex_types::schematic::SelectedKind::SymbolValField) => {
+        Some(
+            signex_types::schematic::SelectedKind::SymbolRefField
+            | signex_types::schematic::SelectedKind::SymbolValField,
+        ) => {
             let text_value = get("Text");
             let position = get("Position");
             let rotation = get("Rotation");
@@ -586,7 +599,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
             if let Some(id) = uuid {
                 // ── Location ──
-                let pos_clone = position.clone();
+                let pos_clone = position;
                 let rot_current = rotation_deg;
                 col = col.push(collapsible_section(
                     "sel_location",
@@ -605,7 +618,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             "180 Degrees".into(),
                             "270 Degrees".into(),
                         ];
-                        let rot_label = format!("{:.0} Degrees", rot_current);
+                        let rot_label = format!("{rot_current:.0} Degrees");
                         c = c.push(form_pick_row(
                             "Rotation",
                             rotation_opts,
@@ -625,7 +638,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 ));
 
                 // ── Properties (Net Name, Font, Justification) ──
-                let net_name = label_text.clone();
+                let net_name = label_text;
                 col = col.push(collapsible_section(
                     "sel_props",
                     "Properties",
@@ -654,7 +667,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         let size_opts: Vec<String> =
                             [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
                                 .iter()
-                                .map(|n| n.to_string())
+                                .map(std::string::ToString::to_string)
                                 .collect();
                         c = c.push(form_pick_row(
                             "Font Size",

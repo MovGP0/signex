@@ -1,3 +1,11 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::missing_const_for_fn,
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Editor-side `Pad` mirror, pad-stack overrides, side enum, and
 //! courtyard rect. Pure data types — no canvas state, no tool state.
 
@@ -103,6 +111,7 @@ impl Default for PadStackUi {
 }
 
 impl EditorPad {
+    #[must_use]
     pub fn new_default(number: String, position_mm: (f64, f64)) -> Self {
         Self {
             number,
@@ -139,6 +148,7 @@ impl EditorPad {
 
     /// v0.18.12 — non-plated through hole. No copper / mask / paste
     /// layers; the drill is the visible footprint feature.
+    #[must_use]
     pub fn new_npt_hole(number: String, position_mm: (f64, f64), drill_mm: f64) -> Self {
         let d = drill_mm.max(0.05);
         Self {
@@ -171,6 +181,7 @@ impl EditorPad {
     }
 
     /// Layer the pad lives on for hit-testing / toggle gating.
+    #[must_use]
     pub fn primary_layer(&self) -> FpLayer {
         self.layers
             .first()
@@ -178,8 +189,8 @@ impl EditorPad {
             .unwrap_or(FpLayer::FCu)
     }
 
-    /// Un-rotated, axis-aligned half-extent box (min_x, min_y, max_x,
-    /// max_y) in mm.
+    /// Un-rotated, axis-aligned half-extent box (`min_x`, `min_y`, `max_x`,
+    /// `max_y`) in mm.
     ///
     /// This is the PAD-LOCAL frame — `rotation_deg` is deliberately
     /// ignored. Only callers that reason in the pad's own frame want
@@ -189,6 +200,7 @@ impl EditorPad {
     /// [`Self::rotated_corners_mm`] instead — reading the un-rotated
     /// box is what left hit-test, courtyard, rubber-band and the pad
     /// renderer all disagreeing with the drawn copper.
+    #[must_use]
     pub fn bbox_mm(&self) -> (f64, f64, f64, f64) {
         let (cx, cy) = self.position_mm;
         let (w, h) = self.size_mm;
@@ -197,21 +209,23 @@ impl EditorPad {
 
     /// Rotate a free VECTOR (a delta — no translation applied) from the
     /// pad's own frame into world mm.
+    #[must_use]
     pub fn rotate_delta_to_world_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
         if self.rotation_deg == 0.0 {
             return (dx, dy);
         }
         let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
-        (dx * cos - dy * sin, dx * sin + dy * cos)
+        (dy.mul_add(-sin, dx * cos), dy.mul_add(cos, dx * sin))
     }
 
     /// Inverse of [`Self::rotate_delta_to_world_mm`].
+    #[must_use]
     pub fn rotate_delta_to_local_mm(&self, dx: f64, dy: f64) -> (f64, f64) {
         if self.rotation_deg == 0.0 {
             return (dx, dy);
         }
         let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
-        (dx * cos + dy * sin, -dx * sin + dy * cos)
+        (dy.mul_add(sin, dx * cos), dy.mul_add(cos, -dx * sin))
     }
 
     /// Map a POINT given in the pad's own frame — the frame
@@ -222,6 +236,7 @@ impl EditorPad {
     /// targets) has to come back through here, or the derived geometry
     /// stays axis-aligned while the corners it is supposed to join turn
     /// with the pad, and the outline no longer closes.
+    #[must_use]
     pub fn local_to_world_mm(&self, x: f64, y: f64) -> (f64, f64) {
         let (cx, cy) = self.position_mm;
         let (dx, dy) = self.rotate_delta_to_world_mm(x - cx, y - cy);
@@ -231,6 +246,7 @@ impl EditorPad {
     /// Inverse of [`Self::local_to_world_mm`] — takes a world point into
     /// the pad's own frame, where the axis-aligned reasoning that
     /// `bbox_mm` supports is valid again.
+    #[must_use]
     pub fn world_to_local_mm(&self, x: f64, y: f64) -> (f64, f64) {
         let (cx, cy) = self.position_mm;
         let (dx, dy) = self.rotate_delta_to_local_mm(x - cx, y - cy);
@@ -240,6 +256,7 @@ impl EditorPad {
     /// The four half-extent corners rotated about `position_mm` by
     /// `rotation_deg`, in `[ne, se, sw, nw]` order — the order the
     /// sketch-mirror corner code already assumes.
+    #[must_use]
     pub fn rotated_corners_mm(&self) -> [(f64, f64); 4] {
         let (xmin, ymin, xmax, ymax) = self.bbox_mm();
         // [ne, se, sw, nw].
@@ -250,6 +267,7 @@ impl EditorPad {
     /// Axis-aligned bounding box of the ROTATED pad, in mm. Equals
     /// [`Self::bbox_mm`] at zero rotation and grows to enclose the
     /// turned copper otherwise.
+    #[must_use]
     pub fn rotated_aabb_mm(&self) -> (f64, f64, f64, f64) {
         if self.rotation_deg == 0.0 {
             return self.bbox_mm();
@@ -287,7 +305,7 @@ impl EditorPad {
                 std::mem::swap(&mut corners.bottom_left, &mut corners.bottom_right);
             }
             PadShape::Custom(poly) => {
-                for p in poly.points.iter_mut() {
+                for p in &mut poly.points {
                     p[0] = -p[0];
                 }
             }
@@ -301,6 +319,7 @@ impl EditorPad {
     /// probe into the pad's own frame and compares against the half
     /// extents, so a turned pad is hit on its real copper rather than
     /// on the axis-aligned box it would occupy unrotated.
+    #[must_use]
     pub fn contains_mm(&self, x: f64, y: f64) -> bool {
         let (cx, cy) = self.position_mm;
         let (hw, hh) = (self.size_mm.0 / 2.0, self.size_mm.1 / 2.0);
@@ -407,12 +426,13 @@ pub enum PadSide {
 }
 
 impl PadSide {
-    pub const ALL_OPTIONS: &'static [PadSide] = &[PadSide::Top, PadSide::Bottom, PadSide::All];
-    pub fn label(self) -> &'static str {
+    pub const ALL_OPTIONS: &'static [Self] = &[Self::Top, Self::Bottom, Self::All];
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PadSide::Top => "Top Layer",
-            PadSide::Bottom => "Bottom Layer",
-            PadSide::All => "Multi-Layer",
+            Self::Top => "Top Layer",
+            Self::Bottom => "Bottom Layer",
+            Self::All => "Multi-Layer",
         }
     }
 }
@@ -426,9 +446,9 @@ impl std::fmt::Display for PadSide {
 impl From<signex_sketch::attr::PadSide> for PadSide {
     fn from(value: signex_sketch::attr::PadSide) -> Self {
         match value {
-            signex_sketch::attr::PadSide::Top => PadSide::Top,
-            signex_sketch::attr::PadSide::Bottom => PadSide::Bottom,
-            signex_sketch::attr::PadSide::All => PadSide::All,
+            signex_sketch::attr::PadSide::Top => Self::Top,
+            signex_sketch::attr::PadSide::Bottom => Self::Bottom,
+            signex_sketch::attr::PadSide::All => Self::All,
         }
     }
 }
@@ -436,9 +456,9 @@ impl From<signex_sketch::attr::PadSide> for PadSide {
 impl From<PadSide> for signex_sketch::attr::PadSide {
     fn from(value: PadSide) -> Self {
         match value {
-            PadSide::Top => signex_sketch::attr::PadSide::Top,
-            PadSide::Bottom => signex_sketch::attr::PadSide::Bottom,
-            PadSide::All => signex_sketch::attr::PadSide::All,
+            PadSide::Top => Self::Top,
+            PadSide::Bottom => Self::Bottom,
+            PadSide::All => Self::All,
         }
     }
 }
@@ -685,7 +705,7 @@ pub(super) fn relink_pads_to_sketch(pads: &mut [EditorPad], fp: &signex_library:
 /// aliasing bug with extra steps.
 type PosKey = (u64, u64);
 
-fn pos_key(x: f64, y: f64) -> PosKey {
+const fn pos_key(x: f64, y: f64) -> PosKey {
     (x.to_bits(), y.to_bits())
 }
 

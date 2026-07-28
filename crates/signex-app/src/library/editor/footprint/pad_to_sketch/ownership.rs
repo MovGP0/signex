@@ -1,3 +1,8 @@
+#![expect(
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Which sketch entities a pad OWNS.
 //!
 //! The DURABLE answer is [`signex_sketch::attr::PadAttr::owned`], a
@@ -10,7 +15,7 @@
 //! they have no home on `Pad`:
 //! - `sketch_entity_id` — the centre `Point` carrying the `PadAttr`.
 //! - `corner_entity_ids` — the four bbox-corner Points.
-//! - `shape_params` — the per-shape sidecar ledger. RoundRect records
+//! - `shape_params` — the per-shape sidecar ledger. `RoundRect` records
 //!   its four corner Arcs (`corner_r_*_arc`), Oval its anchors /
 //!   arc-centres / Lines / Arcs (`oval_*`), Chamfered its per-corner
 //!   anchors (`chamfer_*_anchor*`).
@@ -20,7 +25,7 @@
 //! are all it has within the minting session.
 //!
 //! Any operation that acts on "the pad's geometry" has to consult all
-//! four. Handling a subset is what stranded RoundRect anchors on a
+//! four. Handling a subset is what stranded `RoundRect` anchors on a
 //! move and leaked constraints / parameters on a delete — this module
 //! exists so move and delete cannot drift apart again.
 
@@ -38,7 +43,7 @@ use super::super::state::EditorPad;
 /// a seeded `Line` also owns its `start` / `end`, an `Arc` its
 /// `center` / `start` / `end`, a `Circle` its `center`. One pass is
 /// enough because Points are leaves, and forward expansion alone is
-/// complete for every shape — RoundRect's four sidecar Arcs yield
+/// complete for every shape — `RoundRect`'s four sidecar Arcs yield
 /// exactly its 4 inset centres + 8 edge anchors, while Oval and
 /// Chamfered record their anchors directly.
 ///

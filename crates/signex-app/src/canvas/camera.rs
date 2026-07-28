@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_const_for_fn,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Camera system — Altium-style pan/zoom with cursor-centered scaling.
 //!
 //! World coordinates are in mm (Standard internal units).
@@ -32,14 +37,16 @@ impl Camera {
     pub const ZOOM_FACTOR: f32 = 1.1;
 
     /// Convert world coordinates (mm) to screen coordinates (pixels).
+    #[must_use]
     pub fn world_to_screen(&self, world: Point, _bounds: Rectangle) -> Point {
         Point::new(
-            world.x * self.scale + self.offset.x,
-            world.y * self.scale + self.offset.y,
+            world.x.mul_add(self.scale, self.offset.x),
+            world.y.mul_add(self.scale, self.offset.y),
         )
     }
 
     /// Convert screen coordinates (pixels) to world coordinates (mm).
+    #[must_use]
     pub fn screen_to_world(&self, screen: Point, _bounds: Rectangle) -> Point {
         Point::new(
             (screen.x - self.offset.x) / self.scale,
@@ -74,8 +81,8 @@ impl Camera {
         let actual_factor = new_scale / self.scale;
 
         // Adjust offset so the point under the cursor stays fixed
-        self.offset.x = screen_pos.x - (screen_pos.x - self.offset.x) * actual_factor;
-        self.offset.y = screen_pos.y - (screen_pos.y - self.offset.y) * actual_factor;
+        self.offset.x = (screen_pos.x - self.offset.x).mul_add(-actual_factor, screen_pos.x);
+        self.offset.y = (screen_pos.y - self.offset.y).mul_add(-actual_factor, screen_pos.y);
         self.scale = new_scale;
         true
     }
@@ -102,7 +109,9 @@ impl Camera {
     }
 
     /// Current zoom percentage for display.
+    #[must_use]
     pub fn zoom_percent(&self) -> f64 {
-        (self.scale as f64 / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE as f64) * 100.0
+        (f64::from(self.scale) / f64::from(signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE))
+            * 100.0
     }
 }

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — pan / zoom / fit / cursor camera update logic.
 
 use super::{SymEditor, symbol_bbox};

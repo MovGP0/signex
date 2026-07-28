@@ -1,8 +1,15 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::needless_pass_by_ref_mut,
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! ERC/annotate dialogs, modal drag, undock/detach handlers. Split from `handlers/erc.rs`.
 
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{Message, Signex, WindowMsg};
 
 impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {

@@ -1,5 +1,13 @@
-//! Placement-tool cursor ghosts — the PlacePad pre-placement preview
-//! (shape-aware outline + drill) and the PlaceVia disc. Drawn above
+#![expect(
+    clippy::branches_sharing_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Placement-tool cursor ghosts — the `PlacePad` pre-placement preview
+//! (shape-aware outline + drill) and the `PlaceVia` disc. Drawn above
 //! the footprint content, below the sketch overlays. Extracted
 //! verbatim from `Program::draw`.
 
@@ -161,7 +169,7 @@ impl FootprintCanvas<'_> {
             // punch BEFORE clicking.
             if let Some(d) = defaults
                 .drill_diameter_mm
-                .filter(|d| *d > f32::EPSILON as f64)
+                .filter(|d| *d > f64::from(f32::EPSILON))
             {
                 let r_px = (d / 2.0) as f32 * cstate.scale;
                 if r_px > 0.5 {
@@ -190,7 +198,7 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// v0.27 — PlaceVia ghost preview: a translucent green disc with a
+    /// v0.27 — `PlaceVia` ghost preview: a translucent green disc with a
     /// black drilled hole, off hardcoded via geometry (Round 0.6 mm
     /// copper / 0.3 mm drill).
     pub(in crate::library::editor::footprint::canvas) fn draw_place_via_ghost(

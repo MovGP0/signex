@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::manual_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sketch hit-test helpers — find the nearest sketch entity (or
 //! Point only) under a click for the Select tool + auto-Coincident
 //! snap behaviour.
@@ -61,7 +67,7 @@ pub(super) fn sketch_hit_other(
                 let centre = cstate.world_to_screen(c);
                 let dx = click_screen.x - centre.x;
                 let dy = click_screen.y - centre.y;
-                let dist = (dx * dx + dy * dy).sqrt();
+                let dist = dx.hypot(dy);
                 let r_screen = (radius as f32) * cstate.scale;
                 let edge_dist = (dist - r_screen).abs();
                 edge_dist * edge_dist
@@ -79,7 +85,7 @@ pub(super) fn sketch_hit_other(
                 let centre = cstate.world_to_screen(c);
                 let dx = click_screen.x - centre.x;
                 let dy = click_screen.y - centre.y;
-                let dist = (dx * dx + dy * dy).sqrt();
+                let dist = dx.hypot(dy);
                 let radius = (s.0 - c.0).hypot(s.1 - c.1);
                 let r_screen = (radius as f32) * cstate.scale;
                 let edge_dist = (dist - r_screen).abs();
@@ -116,7 +122,7 @@ pub(super) fn sketch_snap(
             let p = cstate.world_to_screen((x, y));
             let dx = p.x - click_screen.x;
             let dy = p.y - click_screen.y;
-            let dist_sq = dx * dx + dy * dy;
+            let dist_sq = dy.mul_add(dy, dx * dx);
             if dist_sq <= radius_sq {
                 match best {
                     Some((b, _)) if b <= dist_sq => {}

@@ -73,13 +73,13 @@ fn embed_windows_exe_icon() {
 
     let mut res = winres::WindowsResource::new();
     if has_ico {
-        res.set_icon(ico.to_str().expect("ico path is valid UTF-8"));
+        res.set_icon(&ico.to_string_lossy());
     }
     if has_manifest {
         // Per-monitor v2 DPI awareness so Windows renders the wgpu
         // surface at native device pixels instead of bitmap-stretching
         // it at >100 % scaling or on high-DPI ultrawides.
-        res.set_manifest_file(manifest.to_str().expect("manifest path is valid UTF-8"));
+        res.set_manifest_file(&manifest.to_string_lossy());
     }
     if let Err(e) = res.compile() {
         // Don't fail the build over this — the app still runs, just without

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 //! Project/document lifecycle: modals, git pipeline, exit guard, open-gating.
 
 use signex_app::app::{
@@ -574,8 +576,7 @@ fn f13_register_pending_rejects_existing_path() {
     let lib_path = tmp.path().join("Existing.snxlib");
     fs::create_dir_all(&lib_path).unwrap();
 
-    let result =
-        signex_app::library::commands::register_pending_library(lib_path, false, false);
+    let result = signex_app::library::commands::register_pending_library(lib_path, false, false);
     assert!(result.is_err(), "must reject paths that already exist");
 }
 

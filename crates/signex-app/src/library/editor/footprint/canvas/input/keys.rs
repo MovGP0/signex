@@ -1,3 +1,9 @@
+#![expect(
+    clippy::trivially_copy_pass_by_ref,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Keyboard input — modifier tracking, clipboard shortcuts, Space /
 //! X (rotate / flip) on the selected pad, and the Sketch-mode live
 //! numeric placement input.
@@ -18,7 +24,7 @@ impl FootprintCanvas<'_> {
     /// press handlers can branch on Ctrl/Cmd + Shift (iced 0.14 mouse
     /// events don't carry modifiers). Returns None so the rest of the
     /// app still receives the event.
-    pub(in crate::library::editor::footprint::canvas) fn on_modifiers_changed(
+    pub(in crate::library::editor::footprint::canvas) const fn on_modifiers_changed(
         &self,
         cstate: &mut FootprintCanvasState,
         mods: &keyboard::Modifiers,
@@ -201,8 +207,7 @@ impl FootprintCanvas<'_> {
                     .state
                     .placement_input
                     .as_ref()
-                    .map(|p| p.kind.is_tab_switchable())
-                    .unwrap_or(false);
+                    .is_some_and(|p| p.kind.is_tab_switchable());
                 if switch_fields {
                     return publish(EditorMsg::Footprint(
                         FootprintEditorMsg::SketchPlacementInputTab,
@@ -222,8 +227,7 @@ impl FootprintCanvas<'_> {
                         || (ch == '-'
                             && kind_for_active
                                 .or_else(|| self.state.placement_input.as_ref().map(|p| p.kind))
-                                .map(|k| k.allows_negative())
-                                .unwrap_or(false));
+                                .is_some_and(crate::library::editor::footprint::state::placement::PlacementInputKind::allows_negative));
                     if useful {
                         return publish(EditorMsg::Footprint(
                             FootprintEditorMsg::SketchPlacementInputChar(ch),

@@ -1,9 +1,20 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Drawing (Line / Rectangle / Circle / Arc / Polygon) properties
 //! surface plus its per-field row builders (numeric row, stroke-colour
 //! swatch row, fill-type row). Moved verbatim from the former
 //! single-file `element_properties` module.
 
-use super::super::*;
+use super::super::{
+    Background, Border, Color, Column, DrawingFieldId, Element, Length, PROPERTY_ROW_PAD_X,
+    PanelContext, PanelMsg, Theme, collapsible_section, container, prop_kv_row, row,
+    shape_icon_handle, text, thin_sep,
+};
 use super::drawing_preview::DrawingPreview;
 
 pub(in crate::panels) fn view_drawing_properties<'a>(
@@ -382,7 +393,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
 }
 
 /// Buffer-backed numeric row — survives empty / partial input so the
-/// user can erase and retype the whole value. Emits DrawingFieldTyping
+/// user can erase and retype the whole value. Emits `DrawingFieldTyping`
 /// on every keystroke; the handler commits to the engine when the
 /// string parses as f64.
 fn drawing_num_row<'a>(
@@ -416,7 +427,7 @@ fn drawing_num_row<'a>(
 /// Altium-style stroke colour swatch row. A small preset palette
 /// (Theme/Red/Green/Blue/Yellow/Orange/White/Black) lets the user
 /// recolour a placed shape without committing to a full colour
-/// picker. Each tile dispatches UpdateDrawingEdit::StrokeColor.
+/// picker. Each tile dispatches `UpdateDrawingEdit::StrokeColor`.
 fn drawing_stroke_color_row<'a>(
     current: Option<signex_types::schematic::StrokeColor>,
     muted: Color,

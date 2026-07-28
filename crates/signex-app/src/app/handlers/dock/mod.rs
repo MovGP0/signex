@@ -2,7 +2,7 @@ use iced::Task;
 
 use crate::dock::DockMessage;
 
-use super::super::*;
+use super::super::{Message, Signex};
 
 mod floating_layout;
 mod library_browser;

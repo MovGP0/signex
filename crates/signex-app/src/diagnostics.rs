@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -17,7 +22,8 @@ pub enum DiagnosticLevel {
 }
 
 impl DiagnosticLevel {
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Error => "ERROR",
             Self::Warning => "WARN",
@@ -77,10 +83,11 @@ pub fn log_error(context: &str, error: &anyhow::Error) {
     error!("{context}: {error:#}");
 }
 
+#[must_use]
 pub fn recent_entries() -> Vec<DiagnosticEntry> {
     entries()
         .lock()
-        .expect("diagnostics mutex poisoned")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .iter()
         .cloned()
         .collect()
@@ -90,6 +97,7 @@ pub fn configured_level() -> LevelFilter {
     *CONFIGURED_LEVEL.get_or_init(resolve_configured_level)
 }
 
+#[must_use]
 pub fn configured_level_label() -> &'static str {
     match configured_level() {
         LevelFilter::Off => "off",
@@ -135,7 +143,9 @@ fn entries() -> &'static Mutex<VecDeque<DiagnosticEntry>> {
 }
 
 fn push_entry(entry: DiagnosticEntry) {
-    let mut entries = entries().lock().expect("diagnostics mutex poisoned");
+    let mut entries = entries()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
         entries.pop_front();
     }
@@ -217,7 +227,7 @@ fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
         let suffix = if formats.len() > 4 { "..." } else { "" };
         return Some((
             "GPU-SURFACE-FORMATS".to_string(),
-            format!("Surface formats available: {}{}", preview, suffix),
+            format!("Surface formats available: {preview}{suffix}"),
         ));
     }
 

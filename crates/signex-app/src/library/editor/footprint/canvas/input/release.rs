@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Left-release commit arms — box-select rubber-band commit, Place
 //! Text Frame commit, the not-moved click-add tool dispatch (sketch
 //! click / place pad / via / hole / string / track / arc / polygon)
@@ -65,8 +70,7 @@ impl FootprintCanvas<'_> {
             let anchor = drag.grab_offset_mm;
             let release_world = cursor
                 .position_in(bounds)
-                .map(|p| cstate.screen_to_world(p))
-                .unwrap_or(anchor);
+                .map_or(anchor, |p| cstate.screen_to_world(p));
             let x_mm = anchor.0.min(release_world.0);
             let y_mm = anchor.1.min(release_world.1);
             let w_mm = (release_world.0 - anchor.0).abs();
@@ -122,10 +126,10 @@ impl FootprintCanvas<'_> {
         };
         // v0.27 — Sketch-mode rubber-band: pick every entity whose
         // bbox is inside the rect.
-        if matches!(self.state.mode, EditorMode::Sketch) {
-            if let Some(sketch) = self.sketch {
-                return self.box_select_sketch(sketch, x0, y0, x1, y1);
-            }
+        if matches!(self.state.mode, EditorMode::Sketch)
+            && let Some(sketch) = self.sketch
+        {
+            return self.box_select_sketch(sketch, x0, y0, x1, y1);
         }
         self.box_select_pads(cstate, x0, y0, x1, y1)
     }
@@ -166,7 +170,7 @@ impl FootprintCanvas<'_> {
                 EntityKind::Arc { center, start, .. } => {
                     let c = resolve(center)?;
                     let s = resolve(start)?;
-                    let r = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
+                    let r = (s.0 - c.0).hypot(s.1 - c.1);
                     Some((c.0 - r, c.1 - r, c.0 + r, c.1 + r))
                 }
             }

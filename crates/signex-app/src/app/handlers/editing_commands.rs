@@ -1,4 +1,10 @@
-use super::super::*;
+#![expect(
+    clippy::assigning_clones,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::Signex;
 
 impl Signex {
     pub(crate) fn handle_selection_delete_requested(&mut self) {
@@ -21,17 +27,17 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-                if let Some(snapshot) = editor.undo_snapshots.pop() {
-                    let current = editor.primitive().clone();
-                    editor.redo_snapshots.push(current);
-                    *editor.primitive_mut() = snapshot;
-                    editor.mid_drag = false;
-                    editor.selected = None;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                    self.refresh_panel_ctx();
-                }
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+                && let Some(snapshot) = editor.undo_snapshots.pop()
+            {
+                let current = editor.primitive().clone();
+                editor.redo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                self.refresh_panel_ctx();
             }
             return;
         }
@@ -41,13 +47,13 @@ impl Signex {
         // editor's per-instance history stack instead of the
         // schematic engine. Schematic + PCB tabs continue to use
         // the engine path below.
-        if let Some(path) = self.active_footprint_editor_path() {
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                if editor.undo() {
-                    self.refresh_panel_ctx();
-                }
-                return;
+        if let Some(path) = self.active_footprint_editor_path()
+            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+        {
+            if editor.undo() {
+                self.refresh_panel_ctx();
             }
+            return;
         }
 
         // Net-colour floods aren't persisted to the Standard document so
@@ -76,29 +82,29 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-                if let Some(snapshot) = editor.redo_snapshots.pop() {
-                    let current = editor.primitive().clone();
-                    editor.undo_snapshots.push(current);
-                    *editor.primitive_mut() = snapshot;
-                    editor.mid_drag = false;
-                    editor.selected = None;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                    self.refresh_panel_ctx();
-                }
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+                && let Some(snapshot) = editor.redo_snapshots.pop()
+            {
+                let current = editor.primitive().clone();
+                editor.undo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                self.refresh_panel_ctx();
             }
             return;
         }
 
         // v0.24 Phase 1 (Track B) — same fork as undo.
-        if let Some(path) = self.active_footprint_editor_path() {
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                if editor.redo() {
-                    self.refresh_panel_ctx();
-                }
-                return;
+        if let Some(path) = self.active_footprint_editor_path()
+            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+        {
+            if editor.redo() {
+                self.refresh_panel_ctx();
             }
+            return;
         }
         let redone = self.apply_engine_redo(true);
 
@@ -192,8 +198,8 @@ impl Signex {
 }
 
 /// Patch a `SchDrawing` with a single field edit. Mutates a cloned
-/// copy in place to avoid rebuilding every SchDrawing variant — and
-/// to preserve every future field (stroke_color et al) automatically.
+/// copy in place to avoid rebuilding every `SchDrawing` variant — and
+/// to preserve every future field (`stroke_color` et al) automatically.
 /// Returns `None` when the edit is incompatible with the drawing
 /// variant (e.g. `ArcRadius` on a Rect). Arc edits convert the
 /// Altium-style (center, radius, start/end angle) fields back to
@@ -316,10 +322,13 @@ fn apply_drawing_edit(
                     }
                 };
                 let ccw = norm_ccw(normalize_rad(nsa), normalize_rad(nea));
-                let mid_angle = nsa + ccw * orig_sweep;
-                *start = Point::new(ncx + nr * nsa.cos(), ncy + nr * nsa.sin());
-                *mid = Point::new(ncx + nr * mid_angle.cos(), ncy + nr * mid_angle.sin());
-                *end = Point::new(ncx + nr * nea.cos(), ncy + nr * nea.sin());
+                let mid_angle = ccw.mul_add(orig_sweep, nsa);
+                *start = Point::new(nr.mul_add(nsa.cos(), ncx), nr.mul_add(nsa.sin(), ncy));
+                *mid = Point::new(
+                    nr.mul_add(mid_angle.cos(), ncx),
+                    nr.mul_add(mid_angle.sin(), ncy),
+                );
+                *end = Point::new(nr.mul_add(nea.cos(), ncx), nr.mul_add(nea.sin(), ncy));
             }
         }
         _ => return None,

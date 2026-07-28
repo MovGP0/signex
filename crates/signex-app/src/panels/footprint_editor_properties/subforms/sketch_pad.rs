@@ -1,3 +1,9 @@
+#![expect(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sketch-mode Pad Attributes sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, text};
@@ -11,8 +17,8 @@ use super::super::{fp_is_collapsed, props_section_header};
 /// selected sketch entity carries a `PadAttr`. Mirrors the
 /// Altium-parity Pad Properties / Pad Stack / Pad Features fields
 /// surfaced for Pads-mode placement, but bound to the sketch
-/// entity's PadAttr rather than the flat-pad list. Geometry-shaping
-/// fields (size_x_expr / size_y_expr / mask_margin_expr / etc.)
+/// entity's `PadAttr` rather than the flat-pad list. Geometry-shaping
+/// fields (`size_x_expr` / `size_y_expr` / `mask_margin_expr` / etc.)
 /// stay sketch-parameterised — those are authored via the Sketch
 /// parameter editor, not this form.
 pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<'a>(

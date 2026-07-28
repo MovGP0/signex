@@ -1,10 +1,16 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::manual_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Rename flows for the project-navigation dock — file rename and
 //!
 //! Extracted verbatim from the project-navigation dock handlers
 //! (`handlers/dock/project_navigation`); pure code motion, zero
 //! behaviour change.
 
-use super::*;
+use super::{Message, Signex};
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
@@ -71,12 +77,11 @@ impl Signex {
             self.set_rename_error("Name cannot contain path separators.");
             return iced::Task::none();
         }
-        let parent = match state.target_path.parent() {
-            Some(p) => p,
-            None => {
-                self.set_rename_error("Target file has no parent directory.");
-                return iced::Task::none();
-            }
+        let parent = if let Some(p) = state.target_path.parent() {
+            p
+        } else {
+            self.set_rename_error("Target file has no parent directory.");
+            return iced::Task::none();
         };
         let new_path = parent.join(new_name);
         if new_path == state.target_path {
@@ -105,7 +110,7 @@ impl Signex {
             .target_path
             .file_name()
             .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         // Mutate the *owning* project's data via the dialog's
         // tree_path[0], not the active project — renaming a sheet of
         // project B while project A is active should still touch B.
@@ -114,7 +119,7 @@ impl Signex {
         if let (Some(old), Some(idx)) = (old_filename.as_ref(), owner_idx)
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
-            for entry in loaded.data.sheets.iter_mut() {
+            for entry in &mut loaded.data.sheets {
                 if &entry.filename == old {
                     entry.filename = new_name.to_string();
                 }
@@ -128,7 +133,7 @@ impl Signex {
         // old path. Do this before `refresh_panel_ctx` so the tree
         // rebuild sees the new filenames.
         let old_path = state.target_path.clone();
-        for tab in self.document_state.tabs.iter_mut() {
+        for tab in &mut self.document_state.tabs {
             if tab.path == old_path {
                 tab.path = new_path.clone();
                 if let Some(stem) = new_path.file_stem().and_then(|s| s.to_str()) {
@@ -140,7 +145,7 @@ impl Signex {
             self.document_state.engines.insert(new_path.clone(), engine);
         }
         if self.document_state.active_path.as_ref() == Some(&old_path) {
-            self.document_state.active_path = Some(new_path.clone());
+            self.document_state.active_path = Some(new_path);
         }
 
         self.ui_state.rename_dialog = None;
@@ -175,19 +180,17 @@ impl Signex {
             self.set_rename_error("Name cannot contain '/', '\\', or '.'.");
             return iced::Task::none();
         }
-        let dir = match state.target_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => {
-                self.set_rename_error("Project file has no parent directory.");
-                return iced::Task::none();
-            }
+        let dir = if let Some(d) = state.target_path.parent() {
+            d.to_path_buf()
+        } else {
+            self.set_rename_error("Project file has no parent directory.");
+            return iced::Task::none();
         };
-        let old_stem = match state.target_path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => {
-                self.set_rename_error("Project file has no stem.");
-                return iced::Task::none();
-            }
+        let old_stem = if let Some(s) = state.target_path.file_stem().and_then(|s| s.to_str()) {
+            s.to_string()
+        } else {
+            self.set_rename_error("Project file has no stem.");
+            return iced::Task::none();
         };
         if new_stem == old_stem {
             self.ui_state.rename_dialog = None;
@@ -218,8 +221,8 @@ impl Signex {
         }
 
         let from = state.target_path.clone();
-        let to = new_prj.clone();
-        for tab in self.document_state.tabs.iter_mut() {
+        let to = new_prj;
+        for tab in &mut self.document_state.tabs {
             if tab.path == from {
                 tab.path = to.clone();
                 if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
@@ -234,7 +237,7 @@ impl Signex {
             self.document_state.active_path = Some(to.clone());
         }
         if self.document_state.dirty_paths.remove(&from) {
-            self.document_state.dirty_paths.insert(to.clone());
+            self.document_state.dirty_paths.insert(to);
         }
 
         self.ui_state.rename_dialog = None;

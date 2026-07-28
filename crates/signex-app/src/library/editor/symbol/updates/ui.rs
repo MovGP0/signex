@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — toolbar / active-bar / selection-filter UI update logic.
 
 use super::{SymEditor, commit_or_discard_polygon};

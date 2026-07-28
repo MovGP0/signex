@@ -1,3 +1,5 @@
+#![allow(clippy::float_cmp)]
+
 //! Phase 5.4 + 7.3 dispatcher tests.
 //!
 //! These run as inline tests under `#[cfg(test)]` so they exercise
@@ -114,7 +116,7 @@ mod tests {
         assert!(state.last_solve.is_some());
         assert_eq!(fp.pads.len(), 2);
         let p2_pad = fp.pads.iter().find(|p| p.number == "2").unwrap();
-        let dist = (p2_pad.position[0].powi(2) + p2_pad.position[1].powi(2)).sqrt();
+        let dist = p2_pad.position[0].hypot(p2_pad.position[1]);
         assert!(
             (dist - 5.0).abs() < 1e-6,
             "expected P2 at distance 5, got {dist}"
@@ -965,8 +967,8 @@ mod tests {
         let (ex, ey) = point_xy(&editor, end_id);
         assert!((sx - 0.0).abs() < 1e-9 && (sy - 0.0).abs() < 1e-9);
         assert!((ex - 2.0).abs() < 1e-9 && (ey - 0.0).abs() < 1e-9);
-        let r_start = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
-        let r_end = ((ex - cx).powi(2) + (ey - cy).powi(2)).sqrt();
+        let r_start = (sx - cx).hypot(sy - cy);
+        let r_end = (ex - cx).hypot(ey - cy);
         assert!(
             (r_start - 1.0).abs() < 1e-9,
             "start must sit at r=1, got {r_start}"

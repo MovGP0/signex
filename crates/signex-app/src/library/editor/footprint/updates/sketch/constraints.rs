@@ -1,3 +1,9 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch updates — parameters & constraints concern.
 //!
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
@@ -167,8 +173,8 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 // EqualRadius spans any two of Circle / Arc.
                 (
                     SketchConstraintTag::EqualRadius,
-                    Some("Circle") | Some("Arc"),
-                    Some("Circle") | Some("Arc"),
+                    Some("Circle" | "Arc"),
+                    Some("Circle" | "Arc"),
                     Some(e1),
                     Some(e2),
                 ) => Some(ConstraintKind::EqualRadius { e1, e2 }),
@@ -213,7 +219,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 (
                     SketchConstraintTag::DistancePtCircle,
                     Some("Point"),
-                    Some("Circle") | Some("Arc"),
+                    Some("Circle" | "Arc"),
                     Some(point),
                     Some(circle),
                 ) => dim_target.map(|t| ConstraintKind::DistancePtCircle {
@@ -223,7 +229,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 }),
                 (
                     SketchConstraintTag::DistancePtCircle,
-                    Some("Circle") | Some("Arc"),
+                    Some("Circle" | "Arc"),
                     Some("Point"),
                     Some(circle),
                     Some(point),

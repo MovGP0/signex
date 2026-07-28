@@ -1,9 +1,20 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Net-attribute rows and the Parameters (Net) section chrome (tabs /
 //! header / empty-state / add-bar) plus the two 3x3 justification-grid
 //! pickers. Moved verbatim from the former single-file
 //! `properties_parameters` module.
 
-use super::super::*;
+use super::super::{
+    Background, Border, Color, Element, Length, PROPERTY_ROW_PAD_X, PanelMsg, Space, Theme,
+    container, property_label, row, text,
+};
 
 /// Net-attribute row: label | checkbox | text value | unit. Used for
 /// "Power Net = 0.000 V" and "High Speed = 0.000 Hz".

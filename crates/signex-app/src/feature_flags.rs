@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Compile-time feature gates for shipping incomplete subsystems dark.
 //!
 //! These are plain `const bool`s, not Cargo features — the code stays

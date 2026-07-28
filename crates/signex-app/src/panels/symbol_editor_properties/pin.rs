@@ -1,3 +1,10 @@
+#![expect(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pin-selection Properties rows for the symbol editor.
 
 use iced::widget::{Column, column, container, row, text};
@@ -5,7 +12,7 @@ use iced::{Color, Element, Length};
 
 use super::super::{PanelMsg, SymbolPinSummary};
 
-/// IEEE-symbol pick_list row used four times (Inside / Inside Edge /
+/// IEEE-symbol `pick_list` row used four times (Inside / Inside Edge /
 /// Outside Edge / Outside) on the pin Properties surface. `slot`
 /// matches the `SymEditorSetPinSymbol::slot` numbering: 0 / 1 / 2 / 3.
 fn view_pin_symbol_picker<'a>(
@@ -38,14 +45,12 @@ fn view_pin_symbol_picker<'a>(
     let current_label = options
         .iter()
         .find(|(_, v)| *v == current)
-        .map(|(l, _)| l.to_string())
-        .unwrap_or_else(|| "None".to_string());
+        .map_or_else(|| "None".to_string(), |(l, _)| l.to_string());
     let picker = iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
         let value = lookup
             .iter()
             .find(|(l, _)| l == &chosen)
-            .map(|(_, v)| *v)
-            .unwrap_or(K::None);
+            .map_or(K::None, |(_, v)| *v);
         PanelMsg::SymEditorSetPinSymbol {
             pin_idx,
             slot,
@@ -142,8 +147,7 @@ pub(super) fn view_pin_selection<'a>(
     let current_label = electrical_options
         .iter()
         .find(|(_, v)| format!("{:?}", v) == pin.electrical)
-        .map(|(label, _)| label.to_string())
-        .unwrap_or_else(|| pin.electrical.clone());
+        .map_or_else(|| pin.electrical.clone(), |(label, _)| label.to_string());
     let labels: Vec<String> = electrical_options
         .iter()
         .map(|(label, _)| label.to_string())
@@ -157,8 +161,7 @@ pub(super) fn view_pin_selection<'a>(
             let value = labels_for_msg
                 .iter()
                 .find(|(label, _)| label == &chosen)
-                .map(|(_, v)| *v)
-                .unwrap_or(signex_library::PinDirection::Unspecified);
+                .map_or(signex_library::PinDirection::Unspecified, |(_, v)| *v);
             PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
         })
         .padding([2, 4])
@@ -188,7 +191,7 @@ pub(super) fn view_pin_selection<'a>(
                 .size(10)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pos_x))
+            iced::widget::text_input("mm", &format!("{pos_x:.3}"))
                 .padding([2, 4])
                 .size(11)
                 .on_input(move |s| {
@@ -214,7 +217,7 @@ pub(super) fn view_pin_selection<'a>(
                 .size(10)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pos_y))
+            iced::widget::text_input("mm", &format!("{pos_y:.3}"))
                 .padding([2, 4])
                 .size(11)
                 .on_input(move |s| {
@@ -244,8 +247,7 @@ pub(super) fn view_pin_selection<'a>(
     let current_orient = orientation_options
         .iter()
         .find(|(_, v)| format!("{:?}", v) == pin.orientation)
-        .map(|(label, _)| label.to_string())
-        .unwrap_or_else(|| pin.orientation.clone());
+        .map_or_else(|| pin.orientation.clone(), |(label, _)| label.to_string());
     let orient_labels: Vec<String> = orientation_options
         .iter()
         .map(|(label, _)| label.to_string())
@@ -261,8 +263,7 @@ pub(super) fn view_pin_selection<'a>(
             let value = orient_msg_lookup
                 .iter()
                 .find(|(label, _)| label == &chosen)
-                .map(|(_, v)| *v)
-                .unwrap_or(signex_library::PinOrientation::Right);
+                .map_or(signex_library::PinOrientation::Right, |(_, v)| *v);
             PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
         },
     )

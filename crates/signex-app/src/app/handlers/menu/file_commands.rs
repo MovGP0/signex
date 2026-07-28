@@ -1,6 +1,15 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{
+    ExportMsg, FileMsg, MenuMessage, Message, PrintPreviewMsg, Signex, WindowMsg,
+};
 
 impl Signex {
     pub(super) fn handle_menu_file_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
@@ -29,10 +38,7 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                |path| {
-                    path.map(|p| Message::File(FileMsg::SaveAs(p)))
-                        .unwrap_or(Message::Noop)
-                },
+                |path| path.map_or(Message::Noop, |p| Message::File(FileMsg::SaveAs(p))),
             )),
             MenuMessage::NewProject => Some(Task::perform(
                 async {
@@ -70,17 +76,16 @@ impl Signex {
                         .find(|p| p.id == id)
                         .map(|p| p.path.clone())
                 });
-                match path {
-                    Some(path) => Some(self.update(Message::Library(
+                if let Some(path) = path {
+                    Some(self.update(Message::Library(
                         crate::library::LibraryMessage::CreateLibraryAt(path),
-                    ))),
-                    None => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            "Add Component Library: no active project to attach to"
-                        );
-                        Some(iced::Task::none())
-                    }
+                    )))
+                } else {
+                    tracing::warn!(
+                        target: "signex::library",
+                        "Add Component Library: no active project to attach to"
+                    );
+                    Some(iced::Task::none())
                 }
             }
             // Library node → Add New ▸ Component fires through the

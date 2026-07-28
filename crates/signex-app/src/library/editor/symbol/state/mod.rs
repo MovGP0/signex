@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::match_same_arms,
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol-tab editor state.
 //!
 //! The editor mutates a typed [`signex_library::Symbol`] primitive
@@ -29,14 +37,15 @@ pub enum PinKind {
 }
 
 impl PinKind {
+    #[must_use]
     pub fn from_ai_stub(s: &str) -> Self {
         match s.to_ascii_lowercase().as_str() {
-            "input" => PinKind::Input,
-            "output" => PinKind::Output,
-            "bidirectional" | "bidir" => PinKind::Bidirectional,
-            "power" | "power_in" | "power_out" => PinKind::Power,
-            "passive" => PinKind::Passive,
-            _ => PinKind::Unknown,
+            "input" => Self::Input,
+            "output" => Self::Output,
+            "bidirectional" | "bidir" => Self::Bidirectional,
+            "power" | "power_in" | "power_out" => Self::Power,
+            "passive" => Self::Passive,
+            _ => Self::Unknown,
         }
     }
 }
@@ -132,24 +141,17 @@ pub enum GraphicHandle {
 
 /// Map a [`GraphicHandle`] to the mouse cursor that should be shown
 /// while the cursor hovers over or drags that handle.
-pub fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
+#[must_use]
+pub const fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
     match handle {
         // TL and BR corners — resize along the \ diagonal.
-        GraphicHandle::RectCorner(0) | GraphicHandle::RectCorner(2) => {
-            mouse::Interaction::ResizingDiagonallyDown
-        }
+        GraphicHandle::RectCorner(0 | 2) => mouse::Interaction::ResizingDiagonallyDown,
         // TR and BL corners — resize along the / diagonal.
-        GraphicHandle::RectCorner(1) | GraphicHandle::RectCorner(3) => {
-            mouse::Interaction::ResizingDiagonallyUp
-        }
+        GraphicHandle::RectCorner(1 | 3) => mouse::Interaction::ResizingDiagonallyUp,
         // Top and bottom edge midpoints — resize vertically.
-        GraphicHandle::RectEdge(0) | GraphicHandle::RectEdge(2) => {
-            mouse::Interaction::ResizingVertically
-        }
+        GraphicHandle::RectEdge(0 | 2) => mouse::Interaction::ResizingVertically,
         // Left and right edge midpoints — resize horizontally.
-        GraphicHandle::RectEdge(1) | GraphicHandle::RectEdge(3) => {
-            mouse::Interaction::ResizingHorizontally
-        }
+        GraphicHandle::RectEdge(1 | 3) => mouse::Interaction::ResizingHorizontally,
         GraphicHandle::LineEndpoint(_) | GraphicHandle::TextAnchor => mouse::Interaction::Grab,
         GraphicHandle::CircleRadius | GraphicHandle::ArcStart | GraphicHandle::ArcEnd => {
             mouse::Interaction::Crosshair
@@ -161,7 +163,7 @@ pub fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
 /// Default new-pin layout: place new pins to the right of the body.
 const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
 
-/// v0.13 — SchLib editor active-bar dropdown menu identifier. One
+/// v0.13 — `SchLib` editor active-bar dropdown menu identifier. One
 /// per chevron-bearing button on the unified active bar. Mirrors the
 /// footprint editor's `FpActiveBarMenu`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,12 +178,12 @@ pub enum SymActiveBarMenu {
     /// String / Text Frame.
     Text,
     /// Line / Arc / Ellipse / Polygon / Rectangle / Round Rectangle /
-    /// Bezier — full SchLib shape set.
+    /// Bezier — full `SchLib` shape set.
     Shapes,
 }
 
-/// v0.13 — Per-kind selectable flags for the SchLib editor.
-/// Mirrors the footprint editor's SelectionFilter struct.
+/// v0.13 — Per-kind selectable flags for the `SchLib` editor.
+/// Mirrors the footprint editor's `SelectionFilter` struct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SymbolSelectionFilter {
     pub pins: bool,
@@ -219,7 +221,7 @@ pub enum SymbolFilterKind {
 }
 
 impl SymbolFilterKind {
-    pub const ALTIUM_PILLS: &'static [SymbolFilterKind] = &[
+    pub const ALTIUM_PILLS: &'static [Self] = &[
         Self::Pins,
         Self::Drawings,
         Self::Texts,
@@ -229,7 +231,8 @@ impl SymbolFilterKind {
         Self::Other,
     ];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Pins => "Pins",
             Self::Drawings => "Drawings",
@@ -243,7 +246,8 @@ impl SymbolFilterKind {
 }
 
 impl SymbolSelectionFilter {
-    pub fn get(&self, kind: SymbolFilterKind) -> bool {
+    #[must_use]
+    pub const fn get(&self, kind: SymbolFilterKind) -> bool {
         match kind {
             SymbolFilterKind::Pins => self.pins,
             SymbolFilterKind::Drawings => self.drawings,
@@ -255,7 +259,7 @@ impl SymbolSelectionFilter {
         }
     }
 
-    pub fn toggle(&mut self, kind: SymbolFilterKind) {
+    pub const fn toggle(&mut self, kind: SymbolFilterKind) {
         match kind {
             SymbolFilterKind::Pins => self.pins = !self.pins,
             SymbolFilterKind::Drawings => self.drawings = !self.drawings,
@@ -276,6 +280,7 @@ impl SymbolSelectionFilter {
 /// navigate + save. Returns `1` for symbols with no pins or only Part
 /// Zero pins so multi-part wiring still has a sensible "current max
 /// part = 1" baseline.
+#[must_use]
 pub fn max_part_number(sym: &Symbol) -> u8 {
     let pin_max = sym
         .pins
@@ -307,7 +312,7 @@ pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
         return count.max(1);
     }
     sym.pins.retain(|pin| pin.part_number != part);
-    for pin in sym.pins.iter_mut() {
+    for pin in &mut sym.pins {
         if pin.part_number > part {
             pin.part_number -= 1;
         }
@@ -317,7 +322,7 @@ pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
     // body geometry and higher units' bodies stay aligned with their
     // pins. Shared graphics (part 0) are untouched.
     sym.graphics.retain(|g| g.part_number != part);
-    for g in sym.graphics.iter_mut() {
+    for g in &mut sym.graphics {
         if g.part_number > part {
             g.part_number -= 1;
         }
@@ -330,7 +335,8 @@ pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
 
 /// A graphic is visible/editable on `active_part` when it is shared
 /// (part 0) or scoped to that exact unit — mirrors pin part visibility.
-pub fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bool {
+#[must_use]
+pub const fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bool {
     g.part_number == 0 || g.part_number == active_part
 }
 
@@ -341,6 +347,7 @@ pub fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bo
 /// the selected polygon only — see `hit_test_graphic_handle`'s doc
 /// comment) so the two can never disagree about which graphic is
 /// selected.
+#[must_use]
 pub fn graphic_is_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
     match sel {
         Some(SymbolSelection::Graphic(i)) => *i == idx,
@@ -367,6 +374,7 @@ pub fn graphic_is_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
 /// degenerate/self-intersecting ring, where the area-weighted formula
 /// divides by ~zero) and for the empty list (should not occur —
 /// placement always commits >= 3 vertices).
+#[must_use]
 pub fn polygon_centroid(vertices: &[[f64; 2]]) -> [f64; 2] {
     if vertices.is_empty() {
         return [0.0, 0.0];
@@ -378,10 +386,10 @@ pub fn polygon_centroid(vertices: &[[f64; 2]]) -> [f64; 2] {
     for i in 0..n {
         let [x0, y0] = vertices[i];
         let [x1, y1] = vertices[(i + 1) % n];
-        let cross = x0 * y1 - x1 * y0;
+        let cross = x1.mul_add(-y0, x0 * y1);
         area_x2 += cross;
-        cx += (x0 + x1) * cross;
-        cy += (y0 + y1) * cross;
+        cx = (x0 + x1).mul_add(cross, cx);
+        cy = (y0 + y1).mul_add(cross, cy);
     }
     if area_x2.abs() < 1e-9 {
         return polygon_vertex_mean(vertices);
@@ -404,7 +412,8 @@ fn polygon_vertex_mean(vertices: &[[f64; 2]]) -> [f64; 2] {
 /// Zero) or scoped to that exact unit — the interaction-side mirror of
 /// `SymbolCanvas::pin_visible_on_active_part`, so click / box-select /
 /// handle hit-tests match what the canvas actually draws.
-pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
+#[must_use]
+pub const fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
     pin.part_number == 0 || pin.part_number == active_part
 }
 
@@ -420,6 +429,7 @@ pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
 /// which disabled Join on a perfect ring the user had just selected
 /// in full. `Pin` / `Field` still resolve to empty: neither names a
 /// graphic.
+#[must_use]
 pub fn join_source_indices(
     sym: &Symbol,
     active_part: u8,
@@ -444,12 +454,13 @@ pub fn join_source_indices(
 /// *why* a selection is ineligible (as opposed to just gating on it)
 /// can tell a kind mismatch apart from the part-number mismatch
 /// [`common_graphic_part_number`] checks.
+#[must_use]
 pub fn selection_kinds_are_line_or_arc(sym: &Symbol, indices: &[usize]) -> bool {
     !indices.is_empty()
         && indices.iter().all(|&idx| {
             matches!(
                 sym.graphics.get(idx).map(|g| &g.kind),
-                Some(SymbolGraphicKind::Line { .. }) | Some(SymbolGraphicKind::Arc { .. })
+                Some(SymbolGraphicKind::Line { .. } | SymbolGraphicKind::Arc { .. })
             )
         })
 }
@@ -462,6 +473,7 @@ pub fn selection_kinds_are_line_or_arc(sym: &Symbol, indices: &[usize]) -> bool 
 /// box-select on every unit (see `graphic_on_part`), so a non-uniform
 /// result disqualifies the whole selection rather than picking a part
 /// number to overwrite the other sources with.
+#[must_use]
 pub fn common_graphic_part_number(sym: &Symbol, indices: &[usize]) -> Option<u8> {
     let mut parts = indices
         .iter()
@@ -479,6 +491,7 @@ pub fn common_graphic_part_number(sym: &Symbol, indices: &[usize]) -> Option<u8>
 /// single `Line` can never close on its own; surfacing that as a
 /// chain `OpenChain`/degenerate error would be misleading, so it's
 /// disqualified outright instead.
+#[must_use]
 pub fn selection_has_enough_join_sources(sym: &Symbol, indices: &[usize]) -> bool {
     match indices {
         [] => false,
@@ -500,6 +513,7 @@ pub fn selection_has_enough_join_sources(sym: &Symbol, indices: &[usize]) -> boo
 /// unit-specific sources disqualifies the whole op too, surfaced by
 /// the caller as a distinct status message rather than a silent
 /// no-op).
+#[must_use]
 pub fn selection_is_join_eligible(
     sym: &Symbol,
     active_part: u8,
@@ -517,12 +531,15 @@ pub fn selection_is_join_eligible(
 /// a wasted undo snapshot — mirroring how [`selection_is_join_eligible`]
 /// lets `apply_symbol_join` validate before it takes one — and to grey
 /// out the context-menu Delete row for a selection it cannot act on.
-pub fn selected_is_deletable(selected: &Option<SymbolSelection>) -> bool {
+#[must_use]
+pub const fn selected_is_deletable(selected: &Option<SymbolSelection>) -> bool {
     matches!(
         selected,
-        Some(SymbolSelection::Pin(_))
-            | Some(SymbolSelection::Graphic(_))
-            | Some(SymbolSelection::Multiple { .. })
+        Some(
+            SymbolSelection::Pin(_)
+                | SymbolSelection::Graphic(_)
+                | SymbolSelection::Multiple { .. }
+        )
     )
 }
 
@@ -534,7 +551,8 @@ pub fn selected_is_deletable(selected: &Option<SymbolSelection>) -> bool {
 /// canvas position of its own yet). Callers gate the undo snapshot on
 /// this so a no-op Align To Grid press stays clean, mirroring how
 /// [`selected_is_deletable`] gates Delete.
-pub fn selected_is_alignable(selected: &Option<SymbolSelection>) -> bool {
+#[must_use]
+pub const fn selected_is_alignable(selected: &Option<SymbolSelection>) -> bool {
     !matches!(selected, None | Some(SymbolSelection::Field(_)))
 }
 

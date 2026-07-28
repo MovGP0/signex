@@ -1,3 +1,13 @@
+#![expect(
+    clippy::default_trait_access,
+    clippy::manual_let_else,
+    clippy::match_same_arms,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Phase 5.4 + 7.3 — solve-on-edit dispatcher.
 //!
 //! Applies a [`SketchEdit`] to the footprint's `Option<SketchData>`,
@@ -255,7 +265,8 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
 /// `*Attr` slot is populated. Returns `RoleTag::Unassigned` when no
 /// role attr is set (the default for fresh entities). Used by the
 /// inspector to highlight the active dropdown value.
-pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
+#[must_use]
+pub const fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
     use signex_types::layer::SignexLayer;
 
     if entity.pad.is_some() {
@@ -327,12 +338,12 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
                 .retain(|c| !format!("{:?}", c.kind).contains(&id.to_string()));
         }
         SketchEdit::MovePoint { id, dx, dy } => {
-            for ent in sketch.entities.iter_mut() {
-                if ent.id == id {
-                    if let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind {
-                        *x += dx;
-                        *y += dy;
-                    }
+            for ent in &mut sketch.entities {
+                if ent.id == id
+                    && let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind
+                {
+                    *x += dx;
+                    *y += dy;
                 }
             }
         }

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pattern (array) role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, button, container, pick_list, row, text};
@@ -16,7 +21,7 @@ const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
 /// expressions for a Linear / Grid / Polar [`signex_sketch::array`]
 /// when the selected sketch entity is its source. Each text input
 /// emits a [`PanelMsg::FpEditorEditArrayParam`]; the numbering
-/// pick_list emits [`PanelMsg::FpEditorSetArrayNumberingScheme`]; the
+/// `pick_list` emits [`PanelMsg::FpEditorSetArrayNumberingScheme`]; the
 /// Delete button emits [`PanelMsg::FpEditorDeleteArray`]; the Re-pick
 /// centre button (Polar only) emits
 /// [`PanelMsg::FpEditorBeginRepickPolarCenter`].
@@ -260,7 +265,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             // "Re-pick" button arms ToolPending so the next sketch
             // click on a Point overwrites the centre.
             let centre_label = match center_position_mm {
-                Some([x, y]) => format!("({:.3}, {:.3}) mm", x, y),
+                Some([x, y]) => format!("({x:.3}, {y:.3}) mm"),
                 None => "(centre lost)".to_string(),
             };
             col = col.push(
@@ -322,7 +327,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 );
                 let mut grid_row = iced::widget::Row::new().spacing(2).padding([0, 8]);
                 for i in 0..count {
-                    let suppressed = suppressed_instances.iter().any(|si| *si == i);
+                    let suppressed = suppressed_instances.contains(&i);
                     let on = !suppressed;
                     let cb =
                         iced::widget::checkbox(on)

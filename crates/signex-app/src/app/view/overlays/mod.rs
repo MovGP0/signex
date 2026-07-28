@@ -1,3 +1,9 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Floating overlay builders — the symbol hover tooltip, the chrome-strip
 //! command-palette dropdown, and the shared click-outside-to-dismiss
 //! layer.
@@ -8,7 +14,10 @@
 //! entry point `collect_overlays` stays in `view/mod.rs` alongside the
 //! other composition-core methods.
 
-use super::*;
+use super::{
+    CommandPaletteMsg, ContextMenuMsg, ContextSubmenu, Element, ExportMsg, Length, Message,
+    NetColorMsg, OverlayMsg, PreferencesMsg, Signex, TextEditMsg, ToolMessage, UiMsg, container,
+};
 
 mod bars;
 mod modals;
@@ -364,8 +373,8 @@ impl Signex {
         // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
         // lands too close to an edge.
         let (win_w, win_h) = self.ui_state.window_size;
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
-        let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
+        let est_menu_h: f32 = 22.0f32.mul_add(22.0, 8.0);
         let edge_margin: f32 = 4.0;
         let x = if ctx_menu.x + menu_w + edge_margin > win_w {
             (win_w - menu_w - edge_margin).max(0.0)
@@ -422,11 +431,11 @@ impl Signex {
             const TOP_PAD: f32 = 4.0;
             let launcher_y = match submenu_kind {
                 // Above Place: 3 always-visible rows + 1 separator.
-                ContextSubmenu::Place => TOP_PAD + 3.0 * ROW_H + SEP_H,
+                ContextSubmenu::Place => 3.0f32.mul_add(ROW_H, TOP_PAD) + SEP_H,
                 // Align is only shown when something is selected;
                 // above Align: the same 3 rows + 1 sep, then
                 // Place / Part Actions / Sheet Actions / References.
-                ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                ContextSubmenu::Align => 7.0f32.mul_add(ROW_H, TOP_PAD) + SEP_H,
                 // AddNewToProject only fires from the project-tree
                 // menu, never from the canvas menu — fall through
                 // to a safe placeholder if the state somehow leaks
@@ -464,8 +473,8 @@ impl Signex {
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
-        let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
+        let est_menu_h: f32 = 5.0f32.mul_add(22.0, 8.0);
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;
         let x = if tab_ctx.x + menu_w + edge_margin > win_w {
@@ -493,7 +502,7 @@ impl Signex {
         ]
     }
 
-    /// Projects-panel tree right-click menu (+ its AddNewToProject
+    /// Projects-panel tree right-click menu (+ its `AddNewToProject`
     /// submenu). Pushes dismiss, menu, then the optional submenu.
     pub(super) fn project_tree_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
@@ -507,8 +516,8 @@ impl Signex {
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look
         // consistent.
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
-        let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
+        let est_menu_h: f32 = 6.0f32.mul_add(22.0, 8.0);
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;
         let x = if tree_ctx.x + menu_w + edge_margin > win_w {
@@ -542,7 +551,7 @@ impl Signex {
         // above — pop to the right of the parent (or left if the
         // right edge would overflow), align top to the launcher
         // row's y inside the parent menu.
-        if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
+        if interaction.context_submenu == Some(ContextSubmenu::AddNewToProject) {
             let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject);
             let submenu = iced::widget::mouse_area(submenu)
                 .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
@@ -560,7 +569,7 @@ impl Signex {
             // → top + 2 rows, no separator above the launcher.
             const ROW_H: f32 = 22.0;
             const TOP_PAD: f32 = 4.0;
-            let launcher_y = TOP_PAD + 2.0 * ROW_H;
+            let launcher_y = 2.0f32.mul_add(ROW_H, TOP_PAD);
             let sub_y = (y + launcher_y - 4.0).max(0.0);
             out.push(
                 column![
@@ -591,7 +600,7 @@ impl Signex {
         };
         let menu = self.view_grid_picker_menu();
         let menu_w: f32 = 200.0;
-        let est_menu_h: f32 = 13.0 * 22.0 + 8.0; // 13 rows + padding
+        let est_menu_h: f32 = 13.0f32.mul_add(22.0, 8.0); // 13 rows + padding
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;
         let x = if picker.x + menu_w + edge_margin > win_w {

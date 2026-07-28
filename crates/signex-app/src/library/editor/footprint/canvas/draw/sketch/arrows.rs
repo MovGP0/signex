@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::manual_let_else,
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! DOF direction-arrow overlay — for every under-constrained Point,
 //! draws a short arrow along its free degree of freedom.
 
@@ -24,9 +32,9 @@ use crate::library::editor::footprint::state::FootprintEditorState;
 /// the perpendicular (smallest-eigenvalue eigenvector).
 ///
 /// Closed-form for a 2×2 symmetric matrix:
-/// - λ_min = (a+d)/2 − √(((a-d)/2)² + b²)
-/// - eigenvector for λ_min:
-///     - if |b| > ε: (b, λ_min − a), normalized
+/// - `λ_min` = (a+d)/2 − √(((a-d)/2)² + b²)
+/// - eigenvector for `λ_min`:
+///     - if |b| > ε: (b, `λ_min` − a), normalized
 ///     - else (already diagonal): pick whichever column is smaller
 /// - if all of a, b, d ≈ 0 (Point isn't touched by any constraint):
 ///   default to (1, 0) so the arrow still gives visual feedback.
@@ -87,15 +95,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
             }
             let cx = row[xi];
             let cy = row[yi];
-            a += cx * cx;
-            d += cy * cy;
-            b += cx * cy;
+            a = cx.mul_add(cx, a);
+            d = cy.mul_add(cy, d);
+            b = cx.mul_add(cy, b);
         }
         let (mut dirx, mut diry) = if a.abs() < 1e-12 && d.abs() < 1e-12 && b.abs() < 1e-12 {
             (1.0, 0.0)
         } else {
             let half = (a + d) * 0.5;
-            let radicand = ((a - d) * 0.5).powi(2) + b * b;
+            let radicand = b.mul_add(b, ((a - d) * 0.5).powi(2));
             let lam_min = half - radicand.sqrt();
             if b.abs() > 1e-12 {
                 (b, lam_min - a)
@@ -105,7 +113,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
                 (0.0, 1.0)
             }
         };
-        let mag = (dirx * dirx + diry * diry).sqrt();
+        let mag = dirx.hypot(diry);
         if mag < 1e-12 {
             dirx = 1.0;
             diry = 0.0;
@@ -142,12 +150,12 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
 
         // Arrow head: two short strokes at ±HEAD_SPREAD_RAD from the
         // shaft direction.
-        let dir_angle = (dy_s as f64).atan2(dx_s as f64);
+        let dir_angle = f64::from(dy_s).atan2(f64::from(dx_s));
         for sign in [-1.0_f64, 1.0_f64] {
-            let a = dir_angle + std::f64::consts::PI - sign * HEAD_SPREAD_RAD;
+            let a = sign.mul_add(-HEAD_SPREAD_RAD, dir_angle + std::f64::consts::PI);
             let head_end = Point::new(
-                tip.x + (a.cos() as f32) * HEAD_LEN_PX,
-                tip.y + (a.sin() as f32) * HEAD_LEN_PX,
+                (a.cos() as f32).mul_add(HEAD_LEN_PX, tip.x),
+                (a.sin() as f32).mul_add(HEAD_LEN_PX, tip.y),
             );
             frame.stroke(&Path::line(tip, head_end), stroke);
         }

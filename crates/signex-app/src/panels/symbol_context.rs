@@ -1,6 +1,12 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol-editor panel context and its summary view-models.
 
-use super::*;
+use super::SheetColor;
 
 /// Context handed to the right-dock Properties panel and the SCH-Library
 /// left-dock panel when the active tab is a `.snxsym` standalone editor.
@@ -110,7 +116,7 @@ impl Default for SymbolDisplayOptions {
 }
 
 /// One symbol's row entry in the SCH Library panel's components list.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolFileEntry {
     pub idx: usize,
     pub name: String,
@@ -123,7 +129,7 @@ pub struct SymbolFileEntry {
 /// Extended pin fields surfaced on the Properties panel — flows
 /// alongside [`SymbolPinSummary`] so the panel doesn't have to
 /// reach back into the editor state to read them. Mirrors the
-/// Altium SchLib Pin Properties layout.
+/// Altium `SchLib` Pin Properties layout.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolPinDetails {
     pub description: String,

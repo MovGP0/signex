@@ -1,4 +1,9 @@
-use super::super::*;
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::{CanvasState, Color, Rectangle, SchematicCanvas, canvas};
 
 impl SchematicCanvas {
     /// Two-click shape rubber-band (line / rect / circle).
@@ -18,11 +23,11 @@ impl SchematicCanvas {
             let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
-                    (cursor_world.x as f64 / g).round() * g,
-                    (cursor_world.y as f64 / g).round() * g,
+                    (f64::from(cursor_world.x) / g).round() * g,
+                    (f64::from(cursor_world.y) / g).round() * g,
                 )
             } else {
-                (cursor_world.x as f64, cursor_world.y as f64)
+                (f64::from(cursor_world.x), f64::from(cursor_world.y))
             };
             let p_a = state
                 .camera
@@ -52,7 +57,7 @@ impl SchematicCanvas {
                 crate::canvas::ShapePreviewKind::Circle => {
                     let dx = p_b.x - p_a.x;
                     let dy = p_b.y - p_a.y;
-                    let r = (dx * dx + dy * dy).sqrt().max(0.5);
+                    let r = dx.hypot(dy).max(0.5);
                     frame.stroke(&canvas::Path::circle(p_a, r), stroke);
                     // Small center dot for Altium-style feedback.
                     frame.fill(&canvas::Path::circle(p_a, 2.0), accent);
@@ -89,11 +94,11 @@ impl SchematicCanvas {
                 let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let g = self.snap_grid_mm;
                     (
-                        (cursor_world.x as f64 / g).round() * g,
-                        (cursor_world.y as f64 / g).round() * g,
+                        (f64::from(cursor_world.x) / g).round() * g,
+                        (f64::from(cursor_world.y) / g).round() * g,
                     )
                 } else {
-                    (cursor_world.x as f64, cursor_world.y as f64)
+                    (f64::from(cursor_world.x), f64::from(cursor_world.y))
                 };
                 let p1 = state
                     .camera
@@ -127,11 +132,11 @@ impl SchematicCanvas {
             let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                 let g = self.snap_grid_mm;
                 (
-                    (cursor_world.x as f64 / g).round() * g,
-                    (cursor_world.y as f64 / g).round() * g,
+                    (f64::from(cursor_world.x) / g).round() * g,
+                    (f64::from(cursor_world.y) / g).round() * g,
                 )
             } else {
-                (cursor_world.x as f64, cursor_world.y as f64)
+                (f64::from(cursor_world.x), f64::from(cursor_world.y))
             };
             let dashed = canvas::Stroke::default()
                 .with_color(Color { a: 0.6, ..accent })
@@ -197,11 +202,11 @@ impl SchematicCanvas {
                 let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let g = self.snap_grid_mm;
                     (
-                        (cursor_world.x as f64 / g).round() * g,
-                        (cursor_world.y as f64 / g).round() * g,
+                        (f64::from(cursor_world.x) / g).round() * g,
+                        (f64::from(cursor_world.y) / g).round() * g,
                     )
                 } else {
-                    (cursor_world.x as f64, cursor_world.y as f64)
+                    (f64::from(cursor_world.x), f64::from(cursor_world.y))
                 };
                 let p1 = state
                     .camera
@@ -269,11 +274,11 @@ impl SchematicCanvas {
                 let (snap_x, snap_y) = if self.snap_enabled && self.snap_grid_mm > 0.0 {
                     let g = self.snap_grid_mm;
                     (
-                        (cursor_world.x as f64 / g).round() * g,
-                        (cursor_world.y as f64 / g).round() * g,
+                        (f64::from(cursor_world.x) / g).round() * g,
+                        (f64::from(cursor_world.y) / g).round() * g,
                     )
                 } else {
-                    (cursor_world.x as f64, cursor_world.y as f64)
+                    (f64::from(cursor_world.x), f64::from(cursor_world.y))
                 };
                 let start = signex_types::schematic::Point::new(last.x, last.y);
                 let end = signex_types::schematic::Point::new(snap_x, snap_y);
@@ -311,8 +316,8 @@ impl SchematicCanvas {
                             let sx = if dx > 0.0 { 1.0 } else { -1.0 };
                             let sy = if dy > 0.0 { 1.0 } else { -1.0 };
                             let diag_end = signex_types::schematic::Point::new(
-                                start.x + d * sx,
-                                start.y + d * sy,
+                                d.mul_add(sx, start.x),
+                                d.mul_add(sy, start.y),
                             );
                             if adx > ady {
                                 vec![

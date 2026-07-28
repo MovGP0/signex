@@ -1,6 +1,12 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! History restore + reload-from-disk handlers. Split from `handlers/document_files.rs`.
 
-use super::super::super::*;
+use super::super::super::Signex;
 
 impl Signex {
     /// v0.22 Phase 8.5 — Resolve the active tab's path and project,
@@ -88,14 +94,14 @@ impl Signex {
     ///   replace the engine via `sync_engine_from_schematic`, refresh
     ///   the canvas.
     /// - **PCB**: re-parse `.snxpcb` via `SnxPcb::parse`, replace
-    ///   the tab's cached_document, refresh the renderer snapshot.
-    /// - **FootprintEditor**: re-parse the `.snxfpt` JSON, replace
+    ///   the tab's `cached_document`, refresh the renderer snapshot.
+    /// - **`FootprintEditor`**: re-parse the `.snxfpt` JSON, replace
     ///   the entry in `document_state.footprint_editors`, clear the
     ///   canvas cache.
-    /// - **SymbolEditor**: re-parse the `.snxsym` JSON, replace the
+    /// - **`SymbolEditor`**: re-parse the `.snxsym` JSON, replace the
     ///   entry in `document_state.symbol_editors`, clear the canvas
     ///   cache.
-    /// - **LibraryBrowser / ComponentEditor**: deferred — these tabs
+    /// - **`LibraryBrowser` / `ComponentEditor`**: deferred — these tabs
     ///   read from the library adapter which has its own refresh
     ///   path; restore-to-historical-version on these would need a
     ///   library-side reload.
@@ -212,7 +218,7 @@ impl Signex {
                 match signex_library::SymbolFile::from_bytes(&bytes) {
                     Ok(file) if !file.symbols.is_empty() => {
                         let state = crate::app::SymbolEditorState::new(p.clone(), file);
-                        self.document_state.symbol_editors.insert(p.clone(), state);
+                        self.document_state.symbol_editors.insert(p, state);
                     }
                     Ok(_) => {
                         crate::diagnostics::log_warning(format!(

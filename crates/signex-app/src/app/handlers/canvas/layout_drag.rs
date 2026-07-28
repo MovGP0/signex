@@ -1,4 +1,9 @@
-use super::super::super::*;
+#![expect(
+    clippy::items_after_statements,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::super::super::{DragTarget, PanelPosition, Signex};
 use crate::dock::DockMessage;
 
 impl Signex {
@@ -83,7 +88,7 @@ impl Signex {
                         DragTarget::RightPanel => self.ui_state.right_width = new_val,
                         DragTarget::BottomPanel => self.ui_state.bottom_height = new_val,
                         DragTarget::ComponentsSplit => {
-                            self.document_state.panel_ctx.components_split = new_val
+                            self.document_state.panel_ctx.components_split = new_val;
                         }
                     }
                 }
@@ -100,7 +105,7 @@ impl Signex {
             // Vertical exit keeps previous behavior, and a large horizontal
             // sweep also counts as exit so users can drag a right-docked tab
             // directly toward the left edge to re-dock there.
-            let moved_far = (dx * dx + dy * dy).sqrt() > 60.0;
+            let moved_far = dx.hypot(dy) > 60.0;
             let left_strip_vertically = dy.abs() > 28.0;
             let left_strip_horizontally = dx.abs() > 180.0;
             let left_strip = left_strip_vertically || left_strip_horizontally;
@@ -168,7 +173,7 @@ impl Signex {
     /// bar, watch the cursor; if it crosses the main window boundary by
     /// more than `EDGE_THRESHOLD`, pop the modal out into its own OS
     /// window. Returns the modal that should detach, if any, so the
-    /// dispatcher can chain a `DetachModal` task onto the DragMove path.
+    /// dispatcher can chain a `DetachModal` task onto the `DragMove` path.
     pub(crate) fn check_modal_auto_detach(
         &self,
         cursor_x: f32,

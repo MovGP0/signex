@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.14 — "Move Selection By X, Y…" typed-delta modal for the
 //! footprint editor.
 //!

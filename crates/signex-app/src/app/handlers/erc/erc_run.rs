@@ -1,8 +1,15 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! ERC run + diagnostics handlers. Split from `handlers/erc.rs`.
 
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{Message, Signex};
 
 impl Signex {
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
@@ -99,7 +106,7 @@ impl Signex {
             by_path.insert(path.clone(), violations);
         }
 
-        let total: usize = by_path.values().map(|v| v.len()).sum();
+        let total: usize = by_path.values().map(std::vec::Vec::len).sum();
         crate::diagnostics::log_info(format!(
             "ERC: {} total violations across {} sheet(s)",
             total,
@@ -207,10 +214,10 @@ impl Signex {
 
         let mut out = Vec::new();
         for path in paths {
-            let sheet_name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| path.display().to_string());
+            let sheet_name = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |n| n.to_string_lossy().to_string(),
+            );
             if let Some(list) = self.ui_state.erc_violations_by_path.get(&path) {
                 for v in list {
                     out.push(crate::panels::ErcDiagnosticEntry {
@@ -270,29 +277,26 @@ impl Signex {
         // scroll to the offending point.
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
-        match target.rule_kind {
-            signex_erc::RuleKind::UnusedPin => {
-                let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
-                    position: signex_types::schematic::Point::new(target.world_x, target.world_y),
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceNoConnect { no_connect: nc },
-                    false,
-                    false,
-                );
-                // Re-run ERC so the cleared violation drops out of
-                // the panel without forcing the user to press F8.
-                let _ = self.handle_run_erc();
-                // Focus the cleared point so the new NoConnect marker
-                // is visible — a small but reassuring "the fix landed
-                // here" cue.
-                self.handle_focus_at(target.world_x, target.world_y, None)
-            }
-            _ => {
-                self.ui_state.erc_focus_global_index = Some(clamped);
-                self.handle_focus_at(target.world_x, target.world_y, target.select)
-            }
+        if target.rule_kind == signex_erc::RuleKind::UnusedPin {
+            let nc = signex_types::schematic::NoConnect {
+                uuid: uuid::Uuid::new_v4(),
+                position: signex_types::schematic::Point::new(target.world_x, target.world_y),
+            };
+            self.apply_engine_command(
+                signex_engine::Command::PlaceNoConnect { no_connect: nc },
+                false,
+                false,
+            );
+            // Re-run ERC so the cleared violation drops out of
+            // the panel without forcing the user to press F8.
+            let _ = self.handle_run_erc();
+            // Focus the cleared point so the new NoConnect marker
+            // is visible — a small but reassuring "the fix landed
+            // here" cue.
+            self.handle_focus_at(target.world_x, target.world_y, None)
+        } else {
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            self.handle_focus_at(target.world_x, target.world_y, target.select)
         }
     }
 
@@ -330,8 +334,7 @@ impl Signex {
         let is_schematic = path
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| matches!(e, "snxsch"))
-            .unwrap_or(false);
+            .is_some_and(|e| matches!(e, "snxsch"));
         if !is_schematic {
             return;
         }
@@ -353,8 +356,7 @@ impl Signex {
         };
         let title = path
             .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "sheet".to_string());
+            .map_or_else(|| "sheet".to_string(), |s| s.to_string_lossy().to_string());
         self.open_schematic_tab(path.clone(), title, sheet);
         self.sync_active_tab();
     }

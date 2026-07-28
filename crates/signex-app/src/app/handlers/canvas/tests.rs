@@ -16,7 +16,7 @@ use signex_types::project::{ProjectData, SheetEntry};
 /// `top.snxsch` and `sub/mid.snxsch`, and one tab focused on `focused`.
 ///
 /// Both sheets are *listed*, which matters: it is what makes
-/// `active_document_project()` resolve to ProjectA, which is what made the old
+/// `active_document_project()` resolve to `ProjectA`, which is what made the old
 /// project-relative base directory fire. A fixture whose focused sheet is
 /// unowned falls through to the loose-document branch and cannot go red.
 fn app_focused_on(focused: &str) -> Signex {

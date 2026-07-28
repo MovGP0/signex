@@ -158,7 +158,8 @@ pub enum RotatePivotMode {
 }
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
-/// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
+///
+/// Mirrors the `SchLib` Place menu: Pin / Line / Rectangle / Ellipse
 /// (Circle) / Arc / Text / Polygon are the working tools;
 /// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active Bar
 /// as stubs and are deferred to v0.9.x.
@@ -179,16 +180,17 @@ pub enum SymbolTool {
 }
 
 impl SymbolTool {
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            SymbolTool::Select => "Select",
-            SymbolTool::AddPin => "Add Pin",
-            SymbolTool::PlaceRectangle => "Rectangle",
-            SymbolTool::PlaceLine => "Line",
-            SymbolTool::PlaceCircle => "Ellipse",
-            SymbolTool::PlaceArc => "Arc",
-            SymbolTool::PlaceText => "Text",
-            SymbolTool::PlacePolygon => "Polygon",
+            Self::Select => "Select",
+            Self::AddPin => "Add Pin",
+            Self::PlaceRectangle => "Rectangle",
+            Self::PlaceLine => "Line",
+            Self::PlaceCircle => "Ellipse",
+            Self::PlaceArc => "Arc",
+            Self::PlaceText => "Text",
+            Self::PlacePolygon => "Polygon",
         }
     }
 }

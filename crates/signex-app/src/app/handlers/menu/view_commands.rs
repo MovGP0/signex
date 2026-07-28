@@ -1,6 +1,6 @@
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{MenuMessage, Message, Signex};
 
 impl Signex {
     pub(super) fn handle_menu_view_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {

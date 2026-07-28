@@ -1,6 +1,15 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{
+    GridPropertiesMsg, MenuMessage, Message, OverlayMsg, SelectionFilterMsg, Signex,
+    StatusBarRequest, UiMsg, WindowMsg,
+};
 
 impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
@@ -100,16 +109,17 @@ impl Signex {
             }
             UiMsg::GridPickerSelect(step_mm) => {
                 self.interaction_state.grid_picker = None;
-                if let Some(editor) = self.active_footprint_editor_mut() {
-                    if step_mm > 0.0 && step_mm.is_finite() {
-                        editor.state.snap_options.grid_step_mm = step_mm;
-                        // v0.18.21 — mirror onto active grid row.
-                        let idx = editor.state.active_grid_idx;
-                        if let Some(row) = editor.state.grids.get_mut(idx) {
-                            row.step_mm = step_mm;
-                        }
-                        editor.canvas_cache.clear();
+                if let Some(editor) = self.active_footprint_editor_mut()
+                    && step_mm > 0.0
+                    && step_mm.is_finite()
+                {
+                    editor.state.snap_options.grid_step_mm = step_mm;
+                    // v0.18.21 — mirror onto active grid row.
+                    let idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(idx) {
+                        row.step_mm = step_mm;
                     }
+                    editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
                 self.finish_update()
@@ -315,10 +325,11 @@ impl Signex {
                     .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x {
-                        if step > 0.0 && step.is_finite() {
-                            opts.grid_step_mm = step;
-                        }
+                    if let Some(step) = parsed_x
+                        && step > 0.0
+                        && step.is_finite()
+                    {
+                        opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
                     opts.coarse_grid_display = d.coarse_display;
@@ -391,25 +402,24 @@ impl Signex {
         // Resolve the target tab path. Non-tab windows (detached
         // modals, detached panels) can't host a canvas today, so an
         // event from one is nonsensical — drop it.
-        let target_path = match self.ui_state.windows.get(&window_id) {
-            Some(WindowKind::UndockedTab { path, .. }) => path.clone(),
-            _ => {
-                debug_assert!(
-                    false,
-                    "CanvasEventInWindow for a non-UndockedTab window: {window_id:?}"
-                );
-                return iced::Task::none();
-            }
+        let target_path = if let Some(WindowKind::UndockedTab { path, .. }) =
+            self.ui_state.windows.get(&window_id)
+        {
+            path.clone()
+        } else {
+            debug_assert!(
+                false,
+                "CanvasEventInWindow for a non-UndockedTab window: {window_id:?}"
+            );
+            return iced::Task::none();
         };
 
         // Swap the per-window canvas into the main slot and retarget
         // `active_path` so the handler's engine + canvas accesses hit
         // the window's tab.
-        let mut swapped_canvas = self
-            .interaction_state
-            .canvases
-            .remove(&window_id)
-            .expect("canvases entry checked above");
+        let Some(mut swapped_canvas) = self.interaction_state.canvases.remove(&window_id) else {
+            return iced::Task::none();
+        };
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
         let saved_active_path = self.document_state.active_path.take();
         self.document_state.active_path = Some(target_path);

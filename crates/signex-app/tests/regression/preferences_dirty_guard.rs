@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 //! Review #308 findings 1 + 2 — Preferences dirty-tracking must not miss an
 //! imperative edit, and no dismiss route may discard unsaved changes without
 //! the user being asked (or at least without being allowed to silently

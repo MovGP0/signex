@@ -1,6 +1,11 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use anyhow::Result;
 
-use super::super::super::*;
+use super::super::super::{Signex, helpers};
 
 impl Signex {
     pub(super) fn handle_dock_library_browser_message(

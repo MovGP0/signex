@@ -1,3 +1,12 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::redundant_closure_for_method_calls,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Browser grid-interaction handlers — active-table / row
 //! selection, search, sort, per-cell edit buffers, the lifecycle and
 //! class filters, and the distributor pricing-refresh stubs.
@@ -5,7 +14,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{Message, RowId, Signex, Task};
 
 impl Signex {
     /// Active table change inside a Library Browser tab.
@@ -132,7 +141,7 @@ impl Signex {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.class_filter = match state.class_filter.as_deref() {
                 Some(current) if current == key => None,
-                _ => Some(key.clone()),
+                _ => Some(key),
             };
             // Reset selected_row in case the previously-selected row
             // is filtered out.
@@ -171,8 +180,7 @@ impl Signex {
         let count = self
             .library
             .library_at(&library_path)
-            .map(|lib| lib.total_rows())
-            .unwrap_or(0);
+            .map_or(0, |library| library.total_rows());
         tracing::info!(
             target: "signex::library",
             path = %library_path.display(),

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library Updates Available — scanning the open schematic for placed
 //! Symbols whose `library_version` drifted from the source row, and
 //! applying the updates.
@@ -5,7 +11,7 @@
 //! Extracted verbatim from the library dispatcher (`dispatch/library`);
 //! pure code motion, zero behaviour change.
 
-use super::*;
+use super::{Message, RowId, Signex, Task};
 
 // ─────────────────────────────────────────────────────────────────────
 // Stage 16 — Library Updates Available scan + apply (§3.5)
@@ -201,16 +207,16 @@ impl Signex {
         }
 
         // Surface the Team-mode entries via the modal state.
-        if !team_entries.is_empty() {
+        if team_entries.is_empty() {
+            // Re-scan with no drift — clear any persistent indicator
+            // tied to this schematic.
+            self.library.skipped_updates_for.remove(&schematic_path);
+        } else {
             let state = crate::library::updates_dialog::LibraryUpdatesState::new(
                 schematic_path.clone(),
                 team_entries,
             );
             self.library.library_updates = Some(state);
-        } else {
-            // Re-scan with no drift — clear any persistent indicator
-            // tied to this schematic.
-            self.library.skipped_updates_for.remove(&schematic_path);
         }
     }
 

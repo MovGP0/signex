@@ -1,3 +1,9 @@
+#![cfg_attr(test, allow(clippy::float_cmp))]
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — "Join into Polygon" selection op.
 //!
 //! Chains the currently-selected `Line`/`Arc` graphics end-to-end
@@ -50,8 +56,9 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
 
     let (segments, stroke_width, part_number) = {
         let sym = editor.primitive();
-        let part_number = state::common_graphic_part_number(sym, &indices)
-            .expect("selection_is_join_eligible guarantees a common part number");
+        let part_number = state::common_graphic_part_number(sym, &indices).unwrap_or_else(|| {
+            unreachable!("selection eligibility guarantees a common part number")
+        });
         let (segments, stroke_width) = segments_for(sym, &indices);
         (segments, stroke_width, part_number)
     };

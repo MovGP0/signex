@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — undo / redo / drag-commit update logic.
 
 use super::{SymEditor, close_pickers, mark_dirty};

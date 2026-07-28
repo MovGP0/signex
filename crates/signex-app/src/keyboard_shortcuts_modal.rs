@@ -1,8 +1,14 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Help ▸ Keyboard Shortcuts modal — single-page reference grouped by
 //! category. Reachable from the Help menu and from F1 (which also closes
 //! the modal when it's already open).
 //!
-//! Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.2 ("Hotkey discoverability").
+//! Closes `UX_IMPROVEMENTS_OVER_ALTIUM` §4.2 ("Hotkey discoverability").
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
@@ -20,6 +26,7 @@ const MODAL_H: f32 = 600.0;
 const KEY_COL_W: f32 = 140.0;
 const SECTION_HEADER_GAP_TOP: f32 = 14.0;
 
+#[must_use]
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     theme_id: ThemeId,

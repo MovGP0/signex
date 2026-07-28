@@ -1,6 +1,6 @@
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex};
 
 mod action_groups;
 mod filter_controls;

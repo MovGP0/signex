@@ -1,3 +1,8 @@
+#![expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint-editor component-level property handlers — the methods
 //! behind the `FpEditor*` dock-panel messages that edit the active
 //! `.snxfpt` footprint's own metadata (name, description, default
@@ -10,7 +15,7 @@
 
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex, fp_parse_optional_mm};
 
 impl Signex {
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_auto_fit_courtyard(
@@ -22,26 +27,26 @@ impl Signex {
         // `FootprintToggleAutoFit` dispatch so the toggle
         // shares its dirty / panel-refresh behaviour with
         // the active-bar button.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            if let Some(path) = active_tab.kind.as_footprint_editor() {
-                let path = path.clone();
-                follow = self.update(Message::Library(
-                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                        path,
-                        msg: crate::library::messages::PrimitiveEdit::Footprint(
-                            crate::library::messages::FootprintEditorMsg::ToggleAutoFit,
-                        ),
-                    },
-                ));
-                // v0.16.x — rebuild the panel context so the
-                // pill's pressed-state style reflects the new
-                // `auto_fit_courtyard` bool. Without this the
-                // button click looked like a no-op because
-                // `PanelContext.footprint_editor.auto_fit_courtyard`
-                // was stale until the next unrelated panel
-                // refresh.
-                self.refresh_panel_ctx();
-            }
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                        crate::library::messages::FootprintEditorMsg::ToggleAutoFit,
+                    ),
+                },
+            ));
+            // v0.16.x — rebuild the panel context so the
+            // pill's pressed-state style reflects the new
+            // `auto_fit_courtyard` bool. Without this the
+            // button click looked like a no-op because
+            // `PanelContext.footprint_editor.auto_fit_courtyard`
+            // was stale until the next unrelated panel
+            // refresh.
+            self.refresh_panel_ctx();
         }
         follow
     }
@@ -57,22 +62,22 @@ impl Signex {
         // the standard PrimitiveEditorEvent path so the role
         // mutation goes through `apply_sketch_role_with_warnings`
         // (clears all attrs, sets matching one, runs solve+bake).
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            if let Some(path) = active_tab.kind.as_footprint_editor() {
-                let path = path.clone();
-                follow = self.update(Message::Library(
-                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                        path,
-                        msg: crate::library::messages::PrimitiveEdit::Footprint(
-                            crate::library::messages::FootprintEditorMsg::SketchSetRole {
-                                id: *id,
-                                role: *role,
-                            },
-                        ),
-                    },
-                ));
-                self.refresh_panel_ctx();
-            }
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                        crate::library::messages::FootprintEditorMsg::SketchSetRole {
+                            id: *id,
+                            role: *role,
+                        },
+                    ),
+                },
+            ));
+            self.refresh_panel_ctx();
         }
         follow
     }

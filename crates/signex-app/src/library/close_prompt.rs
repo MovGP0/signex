@@ -23,6 +23,7 @@ use super::state::{CloseLibraryConfirmState, LibraryState};
 const MODAL_W: f32 = 520.0;
 const MODAL_H: f32 = 380.0;
 
+#[must_use]
 pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
@@ -62,11 +63,10 @@ pub fn view<'a>(
     // while it's up.
     let mut rows: Vec<Element<'_, LibraryMessage>> = Vec::new();
     for address in &confirm.dirty_editors {
-        let label = state
-            .editors
-            .get(address)
-            .map(|st| st.row.internal_pn.as_str().to_string())
-            .unwrap_or_else(|| format!("({} / {})", address.table, address.row_id));
+        let label = state.editors.get(address).map_or_else(
+            || format!("({} / {})", address.table, address.row_id),
+            |st| st.row.internal_pn.as_str().to_string(),
+        );
         rows.push(
             container(text(label).size(11).color(text_c))
                 .padding([4, 8])
@@ -120,12 +120,12 @@ pub fn view<'a>(
     .into()
 }
 
-fn secondary_btn<'a>(
-    label: &'a str,
+fn secondary_btn(
+    label: &str,
     message: LibraryMessage,
     text_color: iced::Color,
     border: iced::Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     button(container(text(label.to_string()).size(11).color(text_color)).padding([4, 14]))
         .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -143,7 +143,7 @@ fn secondary_btn<'a>(
         .into()
 }
 
-fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
+fn primary_btn(label: &str, message: LibraryMessage) -> Element<'_, LibraryMessage> {
     let bg = iced::Color::from_rgb(0.00, 0.47, 0.84);
     let fg = iced::Color::WHITE;
     button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]))

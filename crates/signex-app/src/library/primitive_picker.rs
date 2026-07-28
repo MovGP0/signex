@@ -1,3 +1,9 @@
+#![expect(
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Primitive picker modal — Pick Symbol / Pick Footprint.
 //!
 //! Listing source: every mounted library's primitives surfaced via
@@ -32,6 +38,7 @@ use super::state::{LibraryState, PrimitivePickerState};
 const PICKER_W: f32 = 640.0;
 const PICKER_H: f32 = 520.0;
 
+#[must_use]
 pub fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
@@ -130,7 +137,7 @@ pub fn view<'a>(
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    text(format!("(uuid {}…)", short_uuid))
+                    text(format!("(uuid {short_uuid}…)"))
                         .size(10)
                         .color(muted)
                         .width(Length::FillPortion(2)),

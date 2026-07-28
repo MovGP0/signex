@@ -26,7 +26,7 @@ fn is_target(sym: &Symbol) -> bool {
 fn prefix_of(reference: &str) -> String {
     reference
         .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
+        .take_while(char::is_ascii_alphabetic)
         .collect()
 }
 

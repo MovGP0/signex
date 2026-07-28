@@ -1,3 +1,8 @@
+#![expect(
+    clippy::implicit_hasher,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
 use iced::widget::{Row, container, mouse_area, row, text};
@@ -22,6 +27,7 @@ pub enum TabMessage {
     ContextMenu(usize),
 }
 
+#[must_use]
 pub fn view<'a>(
     tabs: &[TabInfo],
     active: usize,

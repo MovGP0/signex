@@ -1,8 +1,14 @@
+#![expect(
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library subsystem dispatcher. Routes
 //! [`crate::library::LibraryMessage`] to the right side-effecting
 //! handler.
 //!
-//! In the DBLib model the Component view is preview-only.
+//! In the `DBLib` model the Component view is preview-only.
 //! Symbol/Footprint/Sim render read-only here; the standalone
 //! `.snxsym` / `.snxfpt` / `.snxsim` document tabs own actual
 //! editing. The dispatcher's editor handlers are scoped to the five
@@ -16,7 +22,7 @@
 
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex};
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
 use crate::library::editor::footprint::updates::{

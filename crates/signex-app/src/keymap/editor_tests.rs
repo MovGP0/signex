@@ -105,8 +105,7 @@ fn rows_carry_the_command_group_from_metadata() {
             .command
             .as_ref()
             .and_then(metadata_for)
-            .map(|metadata| metadata.group)
-            .unwrap_or(CommandGroup::General);
+            .map_or(CommandGroup::General, |metadata| metadata.group);
         assert_eq!(row.group, expected, "row `{}` mis-grouped", row.label);
     }
 }

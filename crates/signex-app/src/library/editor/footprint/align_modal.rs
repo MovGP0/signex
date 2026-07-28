@@ -183,14 +183,14 @@ fn cancel_msg(path: &Path) -> LibraryMessage {
 
 /// One mutually-exclusive option chip. `selected` fills it with the
 /// accent colour; otherwise it is a bordered, muted, transparent chip.
-fn option_chip<'a>(
-    label: &'a str,
+fn option_chip(
+    label: &str,
     selected: bool,
     message: LibraryMessage,
     accent: Color,
     text_muted: Color,
     border: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let (bg, fg) = if selected {
         (accent, Color::WHITE)
     } else {

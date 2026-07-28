@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Annotate-Schematics modal — order pick-list + preview of proposed
 //! changes, plus the reset-annotations confirm.
 //!
@@ -5,7 +10,7 @@
 //! code motion — no behaviour change. These are methods of the same
 //! `Signex` view impl, split across sibling files.
 
-use super::*;
+use super::{AnnotateMsg, Message, Signex};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
@@ -69,8 +74,7 @@ impl Signex {
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .map(|t| t.title.clone())
-            .unwrap_or_else(|| "Current Sheet".to_string());
+            .map_or_else(|| "Current Sheet".to_string(), |t| t.title.clone());
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──

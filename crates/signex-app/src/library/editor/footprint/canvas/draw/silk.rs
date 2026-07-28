@@ -1,3 +1,13 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::similar_names,
+    clippy::single_match_else,
+    clippy::too_many_lines,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Silk-layer graphics renderer. Used for both `silk_f` (front) and
 //! `silk_b` (back) passes; the layer colour follows whichever layer
 //! the caller passes.
@@ -80,14 +90,14 @@ pub(super) fn draw_silk_graphics(
                 }
                 let segments = 64;
                 let path = Path::new(|builder| {
-                    let p0_x = c.x + r_px * start_rad.cos();
-                    let p0_y = c.y + r_px * start_rad.sin();
+                    let p0_x = r_px.mul_add(start_rad.cos(), c.x);
+                    let p0_y = r_px.mul_add(start_rad.sin(), c.y);
                     builder.move_to(Point::new(p0_x, p0_y));
                     for i in 1..=segments {
                         let t = (i as f32) / (segments as f32);
-                        let a = start_rad + sweep * t;
-                        let p_x = c.x + r_px * a.cos();
-                        let p_y = c.y + r_px * a.sin();
+                        let a = sweep.mul_add(t, start_rad);
+                        let p_x = r_px.mul_add(a.cos(), c.x);
+                        let p_y = r_px.mul_add(a.sin(), c.y);
                         builder.line_to(Point::new(p_x, p_y));
                     }
                 });
@@ -113,8 +123,10 @@ pub(super) fn draw_silk_graphics(
                     // frame simply overruns it horizontally, exactly
                     // like Altium's non-autosize text frames.
                     Some((w, h)) => {
-                        let p1 = cstate
-                            .world_to_screen((position[0] + *w as f64, position[1] + *h as f64));
+                        let p1 = cstate.world_to_screen((
+                            position[0] + f64::from(*w),
+                            position[1] + f64::from(*h),
+                        ));
                         let rect = Path::rectangle(
                             Point::new(p.x.min(p1.x), p.y.min(p1.y)),
                             iced::Size::new((p1.x - p.x).abs(), (p1.y - p.y).abs()),

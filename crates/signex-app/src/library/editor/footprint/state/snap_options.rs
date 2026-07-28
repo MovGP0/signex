@@ -1,3 +1,8 @@
+#![expect(
+    clippy::struct_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Snap-related configuration types: `SnapOptions`, `SnapSubTab`,
 //! `SnappingMode`, `GridDisplay`, `GridDef`, `Guide`, `GuideAxis`.
 
@@ -101,7 +106,7 @@ pub enum GuideAxis {
 }
 
 /// v0.18.21 — One row in the Cartesian Grid Manager. Each grid is a
-/// named (step / fine_display / coarse_display / multiplier) bundle.
+/// named (step / `fine_display` / `coarse_display` / multiplier) bundle.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GridDef {
     pub name: String,
@@ -125,8 +130,9 @@ impl Default for GridDef {
 
 impl GridDef {
     /// Seed the implicit "Global Snap Grid" row from a `SnapOptions`
-    /// snapshot. Used when the FootprintEditorState first materialises
+    /// snapshot. Used when the `FootprintEditorState` first materialises
     /// to keep the legacy single-grid behaviour intact.
+    #[must_use]
     pub fn from_snap_options(opts: &SnapOptions) -> Self {
         Self {
             name: "Global Snap Grid".into(),

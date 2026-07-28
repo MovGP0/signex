@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Library subsystem message tree.
 //!
 //! Mirrors the existing `Message` → dispatcher → handler split used across
@@ -54,7 +59,7 @@ pub enum EditorMsg {
     SaveDraft,
     /// Same as [`SaveDraft`] for the Component Preview surface — kept
     /// distinct so future Commit semantics (lifecycle promotion etc.)
-    /// can layer in without renaming the SaveDraft message.
+    /// can layer in without renaming the `SaveDraft` message.
     Commit,
     /// Open the review-request UI.
     SubmitForReview,
@@ -118,7 +123,7 @@ pub enum EditorMsg {
         pin: String,
     },
     /// Fire-and-forget save of the active symbol primitive — typically
-    /// chained off SaveDraft via the dispatcher. Boxed so the
+    /// chained off `SaveDraft` via the dispatcher. Boxed so the
     /// containing enum stays cheap to clone and propagate.
     SaveSymbol(uuid::Uuid, Box<signex_library::Symbol>),
     // ── Footprint canvas (used by the standalone .snxfpt tab) ──
@@ -260,9 +265,9 @@ pub enum EditorMsg {
     /// `SimModel` and binds it via `Revision::sim_ref`; `false` clears
     /// both `editor.sim` and `editor.draft.sim_ref`.
     SimSetEnabled(bool),
-    /// SPICE dialect picker — Spice3 / Ngspice / LtSpice / VerilogA.
+    /// SPICE dialect picker — Spice3 / Ngspice / `LtSpice` / `VerilogA`.
     SimSetKind(SimKind),
-    /// Live edit of the SimModel `name` field.
+    /// Live edit of the `SimModel` `name` field.
     SimSetName(String),
     /// Multi-line edit on the SPICE deck `text_editor`. Action is
     /// applied to `editor.sim_body`; the resulting text mirrors back
@@ -274,7 +279,7 @@ pub enum EditorMsg {
         pin_number: String,
         value: String,
     },
-    /// Fire-and-forget save of the active SimModel primitive.
+    /// Fire-and-forget save of the active `SimModel` primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
 }
 
@@ -307,7 +312,7 @@ pub enum SymbolToolMsg {
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
 /// resolves these against the editor's primary + secondary
 /// selection slots into the matching `ConstraintKind` and emits the
-/// SketchEdit. Tags that don't apply to the current selection are
+/// `SketchEdit`. Tags that don't apply to the current selection are
 /// no-ops in the dispatcher.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SketchConstraintTag {
@@ -315,7 +320,7 @@ pub enum SketchConstraintTag {
     Fixed,
     /// 2 Points selected → make them coincident.
     Coincident,
-    /// 2 Points selected + dimension input → DistancePtPt(target_mm).
+    /// 2 Points selected + dimension input → `DistancePtPt(target_mm)`.
     DistancePtPt,
     /// 1 Line selected → horizontal.
     Horizontal,
@@ -335,17 +340,17 @@ pub enum SketchConstraintTag {
     TangentLineArc,
     /// 2 Arcs selected → arcs tangent to each other (external).
     TangentArcArc,
-    /// 2 Lines selected + dimension input → Angle(target_deg).
+    /// 2 Lines selected + dimension input → `Angle(target_deg)`.
     Angle,
     /// 2 Circles/Arcs selected → equal radius.
     EqualRadius,
     /// 1 Point + 1 Arc selected → point on arc.
     PointOnArc,
     /// 1 Point + 1 Line selected + dimension input →
-    /// DistancePtLine(target_mm).
+    /// `DistancePtLine(target_mm)`.
     DistancePtLine,
     /// 1 Point + 1 Circle/Arc selected + dimension input →
-    /// DistancePtCircle(target_mm).
+    /// `DistancePtCircle(target_mm)`.
     DistancePtCircle,
     /// 2 Points + 1 Line (in the extra slot) → symmetric about line.
     SymmetricAboutLine,
@@ -375,7 +380,7 @@ pub enum RoleTag {
     SilkBottom,
     /// `CourtyardAttr` — closed loop becomes the courtyard polygon.
     Courtyard,
-    /// `KeepoutAttr` with `NO_ROUTING` defaults on TopCopper.
+    /// `KeepoutAttr` with `NO_ROUTING` defaults on `TopCopper`.
     Keepout,
     /// `BoardCutoutAttr { through: true }` — board cutout polygon.
     Cutout,
@@ -398,44 +403,45 @@ pub enum RoleTag {
 }
 
 impl RoleTag {
-    /// Display order for the inspector's pick_list. Mirrors the
+    /// Display order for the inspector's `pick_list`. Mirrors the
     /// docstring order on the enum.
-    pub const ALL: &'static [RoleTag] = &[
-        RoleTag::Unassigned,
-        RoleTag::Pad,
-        RoleTag::SilkTop,
-        RoleTag::SilkBottom,
-        RoleTag::Courtyard,
-        RoleTag::Keepout,
-        RoleTag::Cutout,
-        RoleTag::MaskOpeningTop,
-        RoleTag::MaskOpeningBottom,
-        RoleTag::MaskExcludeTop,
-        RoleTag::MaskExcludeBottom,
-        RoleTag::PourTop,
-        RoleTag::PourBottom,
-        RoleTag::PasteApertureTop,
-        RoleTag::PasteApertureBottom,
+    pub const ALL: &'static [Self] = &[
+        Self::Unassigned,
+        Self::Pad,
+        Self::SilkTop,
+        Self::SilkBottom,
+        Self::Courtyard,
+        Self::Keepout,
+        Self::Cutout,
+        Self::MaskOpeningTop,
+        Self::MaskOpeningBottom,
+        Self::MaskExcludeTop,
+        Self::MaskExcludeBottom,
+        Self::PourTop,
+        Self::PourBottom,
+        Self::PasteApertureTop,
+        Self::PasteApertureBottom,
     ];
 
     /// Human-readable label rendered in the inspector dropdown.
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            RoleTag::Unassigned => "Unassigned",
-            RoleTag::Pad => "Pad",
-            RoleTag::SilkTop => "Silk · Top",
-            RoleTag::SilkBottom => "Silk · Bottom",
-            RoleTag::Courtyard => "Courtyard",
-            RoleTag::Keepout => "Keepout",
-            RoleTag::Cutout => "Board Cutout",
-            RoleTag::MaskOpeningTop => "Mask Opening · Top",
-            RoleTag::MaskOpeningBottom => "Mask Opening · Bottom",
-            RoleTag::MaskExcludeTop => "Mask Exclude · Top",
-            RoleTag::MaskExcludeBottom => "Mask Exclude · Bottom",
-            RoleTag::PourTop => "Pour · Top",
-            RoleTag::PourBottom => "Pour · Bottom",
-            RoleTag::PasteApertureTop => "Paste · Top",
-            RoleTag::PasteApertureBottom => "Paste · Bottom",
+            Self::Unassigned => "Unassigned",
+            Self::Pad => "Pad",
+            Self::SilkTop => "Silk · Top",
+            Self::SilkBottom => "Silk · Bottom",
+            Self::Courtyard => "Courtyard",
+            Self::Keepout => "Keepout",
+            Self::Cutout => "Board Cutout",
+            Self::MaskOpeningTop => "Mask Opening · Top",
+            Self::MaskOpeningBottom => "Mask Opening · Bottom",
+            Self::MaskExcludeTop => "Mask Exclude · Top",
+            Self::MaskExcludeBottom => "Mask Exclude · Bottom",
+            Self::PourTop => "Pour · Top",
+            Self::PourBottom => "Pour · Bottom",
+            Self::PasteApertureTop => "Paste · Top",
+            Self::PasteApertureBottom => "Paste · Bottom",
         }
     }
 }

@@ -1,9 +1,16 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::super::*;
+use super::super::super::{DragTarget, Message, Signex};
 
 impl Signex {
-    /// Push the effective paper dimensions from PanelContext into the canvas so
+    /// Push the effective paper dimensions from `PanelContext` into the canvas so
     /// the background / grid track Page Options changes immediately. Also
     /// called from the document-load path so an opened sheet's stored paper
     /// size drives the drawn sheet, not the previous tab's leftovers.
@@ -137,7 +144,7 @@ impl Signex {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.font_size_pt = *pt;
                 }
-                let fs_mm = *pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM;
+                let fs_mm = f64::from(*pt) * signex_types::schematic::SCHEMATIC_PT_TO_MM;
                 if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
                     g.font_size = fs_mm;
                 }
@@ -259,7 +266,7 @@ impl Signex {
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
-                self.interaction_state.active_canvas_mut().snap_grid_mm = *size as f64;
+                self.interaction_state.active_canvas_mut().snap_grid_mm = f64::from(*size);
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 crate::fonts::write_grid_size_mm_pref(*size);
@@ -267,8 +274,8 @@ impl Signex {
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
-                self.interaction_state.active_canvas_mut().visible_grid_mm = *size as f64;
-                self.interaction_state.pcb_canvas.visible_grid_mm = *size as f64;
+                self.interaction_state.active_canvas_mut().visible_grid_mm = f64::from(*size);
+                self.interaction_state.pcb_canvas.visible_grid_mm = f64::from(*size);
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }

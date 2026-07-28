@@ -1,3 +1,8 @@
+#![expect(
+    clippy::match_same_arms,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint content layers — silk graphics, courtyard outline, pads,
 //! and the Array source-pad "+N" badges. Drawn above the backdrop and
 //! below the interaction ghosts / overlays. Extracted verbatim from
@@ -137,7 +142,7 @@ impl FootprintCanvas<'_> {
                 });
 
             if !array_source_counts.is_empty() && cstate.scale >= 12.0 {
-                for pad in self.state.pads.iter() {
+                for pad in &self.state.pads {
                     let Some(entity_id) = pad.sketch_entity_id else {
                         continue;
                     };

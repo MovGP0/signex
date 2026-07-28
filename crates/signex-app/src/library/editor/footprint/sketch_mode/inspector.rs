@@ -1,16 +1,25 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::manual_let_else,
+    clippy::match_same_arms,
+    clippy::needless_late_init,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.13.1 Phase 6.5 — sketch inspector (lite).
 //!
 //! Three sections, displayed as a horizontal strip below the
 //! footprint toolbar when [`EditorMode::Sketch`] is active:
 //!
 //! 1. **DOF readout** — `state.len()` / constraint count / rank
-//!    (free DoF) + last solve elapsed_ms + auto-pause status.
+//!    (free `DoF`) + last solve `elapsed_ms` + auto-pause status.
 //! 2. **Parameter table** — list of file-local parameters; each row
 //!    is editable in place. New rows are appended via the `+ Add`
 //!    button.
 //! 3. **Solve warnings** — pad-bake warnings surfaced from the most
-//!    recent solve (Castellated bakes as Tht, Chamfered → RoundRect,
-//!    PasteAperturePattern Grid/Custom deferred, etc.).
+//!    recent solve (Castellated bakes as Tht, Chamfered → `RoundRect`,
+//!    `PasteAperturePattern` Grid/Custom deferred, etc.).
 //!
 //! Selection editing (per-entity coords, attached constraints with
 //! delete buttons, auto-Coincident toggle) is deferred to v0.13.2 —
@@ -214,12 +223,12 @@ fn view_tool_palette<'a>(
 /// v0.14.2: superseded by the Active Bar in
 /// `crate::library::editor::footprint::sketch_mode::active_bar`.
 #[allow(dead_code)]
-fn view_constraint_submenu<'a>(
-    editor: &'a FootprintEditorState,
+fn view_constraint_submenu(
+    editor: &FootprintEditorState,
     text_c: Color,
     muted: Color,
     border: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     use crate::library::messages::SketchConstraintTag;
     use signex_sketch::entity::EntityKind;
 
@@ -344,7 +353,7 @@ fn view_constraint_submenu<'a>(
         pill_row = pill_row.push(input);
     }
 
-    if let Some(_) = primary {
+    if primary.is_some() {
         let clear_path = editor.path.clone();
         pill_row = pill_row.push(Space::new().width(Length::Fixed(8.0)));
         let clear = button(text("Deselect").size(10).color(muted))
@@ -386,19 +395,17 @@ fn view_constraint_submenu<'a>(
         .into()
 }
 
-fn view_dof<'a>(
-    editor: &'a FootprintEditorState,
+fn view_dof(
+    editor: &FootprintEditorState,
     text_c: Color,
     muted: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let last = editor.state.last_solve.as_ref();
-    let n_state = last.map(|o| o.result.state.len()).unwrap_or(0);
-    let m_residual = last
-        .map(|o| o.jacobian.iter().map(|_| 1usize).sum::<usize>())
-        .unwrap_or(0);
-    let n_over = last.map(|o| o.over_constraints.len()).unwrap_or(0);
-    let elapsed = last.map(|o| o.result.elapsed_ms).unwrap_or(0);
-    let iters = last.map(|o| o.result.iterations).unwrap_or(0);
+    let n_state = last.map_or(0, |o| o.result.state.len());
+    let m_residual = last.map_or(0, |o| o.jacobian.iter().map(|_| 1usize).sum::<usize>());
+    let n_over = last.map_or(0, |o| o.over_constraints.len());
+    let elapsed = last.map_or(0, |o| o.result.elapsed_ms);
+    let iters = last.map_or(0, |o| o.result.iterations);
 
     column![
         text("DOF").size(11).color(text_c),
@@ -415,12 +422,12 @@ fn view_dof<'a>(
     .into()
 }
 
-fn view_params<'a>(
-    editor: &'a FootprintEditorState,
+fn view_params(
+    editor: &FootprintEditorState,
     text_c: Color,
     muted: Color,
     border: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let mut col = column![text("Parameters").size(11).color(text_c)].spacing(2);
 
     if let Some(sketch) = editor.primitive().sketch.as_ref() {
@@ -482,11 +489,11 @@ fn view_params<'a>(
     scrollable(col).height(Length::Fixed(80.0)).into()
 }
 
-fn view_warnings<'a>(
-    editor: &'a FootprintEditorState,
+fn view_warnings(
+    editor: &FootprintEditorState,
     text_c: Color,
     muted: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     let mut col = column![text("Solve warnings").size(11).color(text_c)].spacing(2);
     if editor.state.solve_warnings.is_empty() {
         col = col.push(text("(none)").size(10).color(muted));
@@ -506,17 +513,17 @@ fn view_warnings<'a>(
 }
 
 /// v0.16.2 — Role-assignment dropdown. Visible only when a sketch
-/// entity is selected; pick_list value mirrors the entity's
+/// entity is selected; `pick_list` value mirrors the entity's
 /// currently-attached `*Attr` slot (or `Unassigned`). Picking a new
 /// value emits [`FootprintEditorMsg::SketchSetRole`] which
 /// the dispatcher routes through `apply_sketch_role_with_warnings`
 /// (clears all attrs, sets the matching one with defaults, runs
 /// solve + bake).
-fn view_role<'a>(
-    editor: &'a FootprintEditorState,
+fn view_role(
+    editor: &FootprintEditorState,
     text_c: Color,
     muted: Color,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'_, LibraryMessage> {
     use crate::library::editor::footprint::sketch_dispatch::current_role_of;
     use crate::library::messages::RoleTag;
     use signex_sketch::entity::EntityKind;
@@ -534,19 +541,18 @@ fn view_role<'a>(
 
     let mut col = column![text("Role").size(11).color(text_c)].spacing(4);
 
-    let entity = match selected_entity {
-        Some(e) => e,
-        None => {
-            col = col.push(
-                text("(select a sketch entity in Sketch mode)")
-                    .size(10)
-                    .color(muted),
-            );
-            return col.into();
-        }
+    let entity = if let Some(e) = selected_entity {
+        e
+    } else {
+        col = col.push(
+            text("(select a sketch entity in Sketch mode)")
+                .size(10)
+                .color(muted),
+        );
+        return col.into();
     };
 
-    let id = primary.unwrap();
+    let id = entity.id;
     let current = current_role_of(entity);
     let path = editor.path.clone();
 

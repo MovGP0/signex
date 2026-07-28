@@ -1,3 +1,10 @@
+#![expect(
+    clippy::too_many_lines,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Left-press per-tool gesture arms — the `ButtonPressed(Left)` branch
 //! of the canvas `Program::update` god-function, extracted verbatim as
 //! an `impl SymbolCanvas` method. Select-tool hit-testing (resize
@@ -5,7 +12,10 @@
 //! identical conditions, coordinate math, and `Action` capture/publish
 //! sites.
 
-use super::super::*;
+use super::super::{
+    CanvasAction, CanvasState, SymbolCanvas, SymbolSelection, SymbolTool, item_in_selection,
+    selection_anchor, state, world_for, world_unsnapped,
+};
 use iced::Rectangle;
 use iced::mouse;
 use iced::widget::canvas;
@@ -31,7 +41,7 @@ impl SymbolCanvas<'_> {
                 // Resize handles win over everything else.
                 // Use a screen-pixel-based tolerance so handles are
                 // equally easy to hit at any zoom level.
-                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
+                let tol_mm = f64::from((8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0));
                 if let Some((idx, handle)) = state::hit_test_graphic_handle(
                     self.symbol,
                     ux,
@@ -64,7 +74,7 @@ impl SymbolCanvas<'_> {
                     let in_group = self
                         .selected
                         .as_ref()
-                        .map_or(false, |s| item_in_selection(s, &sel));
+                        .is_some_and(|s| item_in_selection(s, &sel));
                     if in_group {
                         state.dragging = true;
                         state.last_drag_world_pos = Some((wx, wy));
@@ -143,7 +153,7 @@ impl SymbolCanvas<'_> {
                     // Second click — commit the circle.
                     let dx = wx - center_x;
                     let dy = wy - center_y;
-                    let radius = (dx * dx + dy * dy).sqrt().max(0.1);
+                    let radius = dx.hypot(dy).max(0.1);
                     state.circle_cursor = None;
                     Some(
                         canvas::Action::publish(CanvasAction::AddCircle {
@@ -206,7 +216,7 @@ impl SymbolCanvas<'_> {
                     // Second click — define radius + start angle.
                     let dx = wx - cx;
                     let dy = wy - cy;
-                    let radius = (dx * dx + dy * dy).sqrt().max(0.1);
+                    let radius = dx.hypot(dy).max(0.1);
                     let start_deg = dy.atan2(dx).to_degrees();
                     state.arc_radius_start = Some((radius, start_deg));
                     // Seed the unwrapped tracker at the start angle so
@@ -264,10 +274,10 @@ impl SymbolCanvas<'_> {
         if self.polygon_vertices.len() >= 3
             && let Some(&(fx, fy)) = self.polygon_vertices.first()
         {
-            let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
+            let tol_mm = f64::from((8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0));
             let dx = ux - fx;
             let dy = uy - fy;
-            if dx * dx + dy * dy <= tol_mm * tol_mm {
+            if dy.mul_add(dy, dx * dx) <= tol_mm * tol_mm {
                 return Some(self.publish_polygon_commit(state));
             }
         }

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — multi-part (prev/next/new/remove) update logic.
 
 use super::{SymEditor, close_pickers, commit_or_discard_polygon, mark_dirty, push_undo};

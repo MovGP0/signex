@@ -1,3 +1,10 @@
+#![allow(clippy::float_cmp)]
+#![expect(
+    clippy::items_after_statements,
+    clippy::needless_pass_by_value,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 use super::*;
 use signex_library::primitive::footprint::Footprint;
 use signex_library::primitive::footprint::PadShape as LibPadShape;
@@ -170,7 +177,7 @@ fn mirror_delete_pad_drops_sketch_entity() {
 }
 
 /// Build a footprint whose sketch holds a closed rectangle profile and a
-/// centre Point carrying a `SketchProfile` PadAttr seeded from one of the
+/// centre Point carrying a `SketchProfile` `PadAttr` seeded from one of the
 /// rectangle's Lines — the shape produced by "Make Pad from Profile".
 ///
 /// Returns the pad (linked to the centre) and the four profile-corner ids
@@ -239,7 +246,7 @@ fn footprint_with_profile_pad() -> (Footprint, EditorPad, [SketchEntityId; 4]) {
 /// Moving a `SketchProfile` pad must carry its profile geometry along.
 ///
 /// Regression for the v0.14 bug: `mirror_move_pad_in_sketch` moved only the
-/// centre Point and the `corner_entity_ids` bbox outline. A SketchProfile pad
+/// centre Point and the `corner_entity_ids` bbox outline. A `SketchProfile` pad
 /// has `corner_entity_ids: None`, so the profile stayed at its original
 /// coordinates — visibly, the sketch rectangle did not follow the pad. The
 /// silent half was worse: `signex_bake` bakes the profile as
@@ -312,11 +319,11 @@ fn sidecar(pad: &EditorPad, key: &str) -> SketchEntityId {
     SketchEntityId(uuid::Uuid::parse_str(slug).expect("sidecar is a UUID slug"))
 }
 
-/// Moving a RoundRect pad must carry its arc anchors and inset
+/// Moving a `RoundRect` pad must carry its arc anchors and inset
 /// arc-centres along.
 ///
 /// Regression: `mirror_move_pad_in_sketch` repositioned only the centre
-/// Point and the four `corner_entity_ids`. RoundRect additionally mints
+/// Point and the four `corner_entity_ids`. `RoundRect` additionally mints
 /// 8 edge anchors + 4 inset arc-centres, all NON-construction, so they
 /// stayed at the old coordinates and the bake emitted copper from the
 /// stranded geometry. Nothing downstream repaired it —
@@ -965,16 +972,16 @@ fn in_place_remint_records_the_ledger_against_the_real_sketch() {
 
 /// #434 — every existing in-place-remint assertion above used a
 /// Chamfered pad, whose anchors are named directly on `shape_params`
-/// so `pair_sidecar_entities` finds them in one step. RoundRect's 4
+/// so `pair_sidecar_entities` finds them in one step. `RoundRect`'s 4
 /// inset arc centres are the one sidecar geometry reachable only by
 /// descending through its 4 `Arc` entities' `center` field (the Arc
-/// arm in `pair_sidecar_entities`, remint_in_place.rs ~167-184). Oval,
+/// arm in `pair_sidecar_entities`, `remint_in_place.rs` ~167-184). Oval,
 /// by contrast, seeds its 2 arc centres (`oval_centre_0`/
 /// `oval_centre_1`) as direct sidecars exactly like Chamfered — it
 /// exercises no Arc-descent path here, and stays in this walk only for
 /// its own from-scratch-equality coverage. Parameterised over all four
 /// pad shapes so the next shape added to this walk has to earn the
-/// same coverage; the RoundRect case additionally asserts that the
+/// same coverage; the `RoundRect` case additionally asserts that the
 /// PRE-REMINT ids themselves survive, since a from-scratch-equality
 /// check alone stays green even when the pairing silently falls back
 /// to a full re-mint under fresh ids.
@@ -1018,7 +1025,7 @@ fn owned_point_positions(pad: &EditorPad, fp: &Footprint) -> Vec<(f64, f64)> {
     points
 }
 
-/// The `center` Point of each of RoundRect's 4 corner Arcs, resolved
+/// The `center` Point of each of `RoundRect`'s 4 corner Arcs, resolved
 /// through the same `corner_r_{c}_arc` sidecar keys
 /// `mirror_move_roundrect_translates_anchors_and_arc_centres` uses —
 /// independent of `pair_sidecar_entities`'s own internal traversal, so

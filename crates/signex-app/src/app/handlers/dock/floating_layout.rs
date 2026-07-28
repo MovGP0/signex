@@ -1,6 +1,6 @@
 use crate::dock::{DockMessage, PanelPosition};
 
-use super::super::super::*;
+use super::super::super::Signex;
 
 impl Signex {
     pub(super) fn handle_dock_floating_layout_message(

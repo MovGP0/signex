@@ -1,3 +1,12 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::items_after_statements,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Grid renderer — dot grid with configurable spacing, visibility, snap.
 
 use iced::widget::canvas;
@@ -9,17 +18,17 @@ use super::camera::Camera;
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 
-/// Human-readable labels for GRID_SIZES_MM (same order).
+/// Human-readable labels for `GRID_SIZES_MM` (same order).
 pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 mm"];
 
-/// Human-readable labels for GRID_SIZES_MM when displaying in mils (1 mm ≈ 39.3701 mils exactly).
+/// Human-readable labels for `GRID_SIZES_MM` when displaying in mils (1 mm ≈ 39.3701 mils exactly).
 /// 0.635 mm = 25 mil, 1.27 mm = 50 mil, 2.54 mm = 100 mil, 5.08 mm = 200 mil.
 pub const GRID_SIZE_LABELS_MIL: &[&str] = &["25 mil", "50 mil", "100 mil", "200 mil"];
 
 /// Grid state — size, visibility, snap.
 #[derive(Debug, Clone)]
 pub struct GridState {
-    /// Index into GRID_SIZES_MM.
+    /// Index into `GRID_SIZES_MM`.
     pub size_index: usize,
     /// Whether snap-to-grid is enabled.
     #[allow(dead_code)]
@@ -37,19 +46,20 @@ impl Default for GridState {
 
 impl GridState {
     /// Current grid size in mm.
+    #[must_use]
     pub fn size_mm(&self) -> f32 {
         GRID_SIZES_MM[self.size_index]
     }
 
     /// Cycle to next grid size (wraps around).
     #[allow(dead_code)]
-    pub fn cycle_forward(&mut self) {
+    pub const fn cycle_forward(&mut self) {
         self.size_index = (self.size_index + 1) % GRID_SIZES_MM.len();
     }
 
     /// Cycle to previous grid size (wraps around).
     #[allow(dead_code)]
-    pub fn cycle_backward(&mut self) {
+    pub const fn cycle_backward(&mut self) {
         if self.size_index == 0 {
             self.size_index = GRID_SIZES_MM.len() - 1;
         } else {
@@ -59,6 +69,7 @@ impl GridState {
 
     /// Snap a world-space coordinate to the nearest grid point.
     #[allow(dead_code)]
+    #[must_use]
     pub fn snap_world(&self, world: Point) -> Point {
         if !self.snap {
             return world;
@@ -131,7 +142,7 @@ pub fn draw_grid(
     // Safety cap (adaptive step makes this very rare, but keep it).
     let cols = ((wx_max - start_x) / minor_mm) as i32 + 1;
     let rows = ((wy_max - start_y) / minor_mm) as i32 + 1;
-    if (cols as i64) * (rows as i64) > 40_000 {
+    if i64::from(cols) * i64::from(rows) > 40_000 {
         return;
     }
 
@@ -157,7 +168,7 @@ pub fn draw_grid(
         let line_x_left = page_left.max(0.0);
         let line_x_right = page_right.min(bounds.width);
         let mut wx = start_x;
-        while wx <= wx_max + minor_mm * 0.5 {
+        while wx <= minor_mm.mul_add(0.5, wx_max) {
             if wx >= 0.0 {
                 let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
                 if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
@@ -169,7 +180,7 @@ pub fn draw_grid(
             wx += minor_mm;
         }
         let mut wy = start_y;
-        while wy <= wy_max + minor_mm * 0.5 {
+        while wy <= minor_mm.mul_add(0.5, wy_max) {
             if wy >= 0.0 {
                 let sy = camera.world_to_screen(Point::new(0.0, wy), bounds).y;
                 if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
@@ -184,10 +195,10 @@ pub fn draw_grid(
         }
     } else {
         let mut wy = start_y;
-        while wy <= wy_max + minor_mm * 0.5 {
+        while wy <= minor_mm.mul_add(0.5, wy_max) {
             if wy >= 0.0 {
                 let mut wx = start_x;
-                while wx <= wx_max + minor_mm * 0.5 {
+                while wx <= minor_mm.mul_add(0.5, wx_max) {
                     if wx >= 0.0 {
                         let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
                         if screen.x >= -dot_radius

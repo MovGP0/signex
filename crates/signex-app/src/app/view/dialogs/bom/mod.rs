@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! BOM (Bill of Materials) preview modal — the modal shell (header, toolbar
 //! strip, footer) that stitches together the data grid (`table`) and the
 //! Properties sidebar (`sidebar`).
@@ -7,7 +12,7 @@
 //! motion — the final `column!`/`row!` child order is preserved byte-for-byte,
 //! so the rendered modal is pixel-identical.
 
-use super::*;
+use super::{BomPreviewMsg, Message, Signex};
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length};
 
@@ -93,14 +98,14 @@ impl Signex {
             .unwrap_or_else(|| "Base".to_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let status_label = format!("{} of {} lines visible", row_count, total_count);
-        let variant_label = format!("Current variant: {}", active_variant_label);
+        let status_label = format!("{row_count} of {total_count} lines visible");
+        let variant_label = format!("Current variant: {active_variant_label}");
 
         // Variant dropdown for the top toolbar — placeholder in the
         // header strip area, sits to the left. (i) info badge sits
         // on the right.
         let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
-            text(format!("Variant: {}", active_variant_label))
+            text(format!("Variant: {active_variant_label}"))
                 .size(11)
                 .color(text_muted)
                 .into()
@@ -108,7 +113,7 @@ impl Signex {
             container(
                 row![
                     Space::new().width(Length::Fill),
-                    text(active_variant_label.clone()).size(11).color(text_c),
+                    text(active_variant_label).size(11).color(text_c),
                     Space::new().width(Length::Fill),
                     text("\u{25BE}").size(10).color(text_c),
                 ]

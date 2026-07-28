@@ -1,8 +1,14 @@
+#![expect(
+    clippy::needless_collect,
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Project git-commit handlers. Split from `handlers/document_files.rs`.
 
 use anyhow::Result;
 
-use super::super::super::*;
+use super::super::super::Signex;
 
 impl Signex {
     /// v0.22 Phase 8.4 — auto-commit a saved file into the owning
@@ -97,7 +103,7 @@ impl Signex {
             .map(|pending| {
                 let project_root = pending.project_root.clone();
                 let rel_path = pending.rel_path.clone();
-                let message = pending.message.clone();
+                let message = pending.message;
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
                 iced::Task::perform(
@@ -125,7 +131,7 @@ impl Signex {
                     move |result| {
                         crate::app::Message::Project(crate::app::ProjectMsg::GitCommitDone {
                             project_root: response_root.clone(),
-                            rel_path: response_rel.clone(),
+                            rel_path: response_rel,
                             result,
                         })
                     },

@@ -29,13 +29,13 @@ pub struct InteractionState {
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
     /// 3-click arc placement buffer. Holds the first two clicks
-    /// (start, mid); the third click commits as SchDrawing::Arc.
+    /// (start, mid); the third click commits as `SchDrawing::Arc`.
     pub arc_points: Vec<signex_types::schematic::Point>,
     /// Freehand polygon placement buffer. Accumulates clicks until
     /// the user presses Enter / double-clicks / right-clicks.
     pub polyline_points: Vec<signex_types::schematic::Point>,
     /// Two-click shape placement: first click sets the anchor, second
-    /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
+    /// click commits. Used by `Tool::Line`, `Tool::Rectangle`, `Tool::Circle`.
     pub shape_anchor: Option<signex_types::schematic::Point>,
     pub clipboard_wires: Vec<signex_types::schematic::Wire>,
     pub clipboard_buses: Vec<signex_types::schematic::Bus>,
@@ -119,7 +119,7 @@ pub struct InteractionState {
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
-    /// hover tooltip overlay (designator + value + footprint + lib_id).
+    /// hover tooltip overlay (designator + value + footprint + `lib_id`).
     pub hover_symbol_uuid: Option<uuid::Uuid>,
     /// Wall-clock timestamp at which `hover_symbol_uuid` was first set
     /// to its current value. Used by the view to gate the tooltip
@@ -134,11 +134,11 @@ pub struct InteractionState {
 }
 
 impl InteractionState {
-    pub fn active_canvas(&self) -> &SchematicCanvas {
+    pub const fn active_canvas(&self) -> &SchematicCanvas {
         &self.canvas
     }
 
-    pub fn active_canvas_mut(&mut self) -> &mut SchematicCanvas {
+    pub const fn active_canvas_mut(&mut self) -> &mut SchematicCanvas {
         &mut self.canvas
     }
 

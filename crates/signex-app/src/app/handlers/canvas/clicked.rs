@@ -1,7 +1,15 @@
+#![expect(
+    clippy::assigning_clones,
+    clippy::match_wildcard_for_single_variants,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
 use super::super::super::helpers::constrain_segments;
-use super::super::super::*;
+use super::super::super::{Message, Signex, Tool, selection_request};
 use super::pre_placement_shape;
 
 impl Signex {
@@ -104,19 +112,19 @@ impl Signex {
                     ) -> bool {
                         let dx = bx - ax;
                         let dy = by - ay;
-                        let len2 = dx * dx + dy * dy;
+                        let len2 = dy.mul_add(dy, dx * dx);
                         if len2 == 0.0 {
                             let ddx = px - ax;
                             let ddy = py - ay;
-                            return (ddx * ddx + ddy * ddy).sqrt() < 0.05;
+                            return ddx.hypot(ddy) < 0.05;
                         }
-                        let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+                        let t = (py - ay).mul_add(dy, (px - ax) * dx) / len2;
                         let t = t.clamp(0.0, 1.0);
                         let cx = ax + t * dx;
                         let cy = ay + t * dy;
                         let ddx = px - cx;
                         let ddy = py - cy;
-                        (ddx * ddx + ddy * ddy).sqrt() < 0.05
+                        ddx.hypot(ddy) < 0.05
                     }
                     let hit = snapshot.wires.iter().find_map(|w| {
                         if point_on_segment(hit_x, hit_y, w.start.x, w.start.y, w.end.x, w.end.y) {
@@ -269,7 +277,7 @@ impl Signex {
             return Task::none();
         }
         let (wx, wy) = if self.ui_state.snap_enabled {
-            let gs = self.ui_state.grid_size_mm as f64;
+            let gs = f64::from(self.ui_state.grid_size_mm);
             ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
         } else {
             (world_x, world_y)
@@ -303,7 +311,7 @@ impl Signex {
                     if !wire_commands.is_empty() {
                         self.apply_engine_commands(wire_commands, false, false);
                     }
-                    let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
+                    let end_pt = segments.last().map_or(pt, |s| s.1);
                     self.interaction_state.wire_points = vec![end_pt];
                     self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
                 }
@@ -334,7 +342,7 @@ impl Signex {
                     if !bus_commands.is_empty() {
                         self.apply_engine_commands(bus_commands, false, false);
                     }
-                    let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
+                    let end_pt = segments.last().map_or(pt, |s| s.1);
                     self.interaction_state.wire_points = vec![end_pt];
                     self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
                 }
@@ -506,7 +514,7 @@ impl Signex {
                     Some(center) => {
                         let dx = p.x - center.x;
                         let dy = p.y - center.y;
-                        let radius = (dx * dx + dy * dy).sqrt();
+                        let radius = dx.hypot(dy);
                         if radius > 0.01 {
                             let drawing = signex_types::schematic::SchDrawing::Circle {
                                 uuid: uuid::Uuid::new_v4(),
@@ -574,8 +582,7 @@ impl Signex {
                     .panel_ctx
                     .pre_placement
                     .as_ref()
-                    .map(|pp| pp.label_text.clone())
-                    .unwrap_or_else(|| "Text".to_string());
+                    .map_or_else(|| "Text".to_string(), |pp| pp.label_text.clone());
                 let tn = signex_types::schematic::TextNote {
                     uuid: uuid::Uuid::new_v4(),
                     text: note_text,
@@ -621,25 +628,24 @@ impl Signex {
                 // Pick up the rotation / font size / justification
                 // the user edited in the TAB pre-placement form so
                 // the first click matches what they configured.
-                let (pp_rot, pp_fs_mm, pp_justify_h, pp_justify_v) = self
-                    .document_state
-                    .panel_ctx
-                    .pre_placement
-                    .as_ref()
-                    .map(|pp| {
+                let (pp_rot, pp_fs_mm, pp_justify_h, pp_justify_v) =
+                    self.document_state.panel_ctx.pre_placement.as_ref().map_or(
                         (
-                            pp.rotation,
-                            pp.font_size_pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM,
-                            pp.justify_h,
-                            pp.justify_v,
-                        )
-                    })
-                    .unwrap_or((
-                        0.0,
-                        signex_types::schematic::SCHEMATIC_TEXT_MM,
-                        signex_types::schematic::HAlign::Left,
-                        signex_types::schematic::VAlign::Bottom,
-                    ));
+                            0.0,
+                            signex_types::schematic::SCHEMATIC_TEXT_MM,
+                            signex_types::schematic::HAlign::Left,
+                            signex_types::schematic::VAlign::Bottom,
+                        ),
+                        |pp| {
+                            (
+                                pp.rotation,
+                                f64::from(pp.font_size_pt)
+                                    * signex_types::schematic::SCHEMATIC_PT_TO_MM,
+                                pp.justify_h,
+                                pp.justify_v,
+                            )
+                        },
+                    );
                 let label = signex_types::schematic::Label {
                     uuid: uuid::Uuid::new_v4(),
                     text,

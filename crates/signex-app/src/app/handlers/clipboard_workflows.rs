@@ -1,8 +1,13 @@
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::Task;
 
-use super::super::*;
+use super::super::{Message, Signex};
 
-fn union_bounds(
+const fn union_bounds(
     current: Option<signex_types::schematic::Aabb>,
     next: signex_types::schematic::Aabb,
 ) -> Option<signex_types::schematic::Aabb> {
@@ -128,7 +133,7 @@ fn smart_paste_offset(app: &Signex) -> (f64, f64) {
         return (default_offset, default_offset);
     };
 
-    let margin = app.ui_state.grid_size_mm.max(2.54) as f64;
+    let margin = f64::from(app.ui_state.grid_size_mm.max(2.54));
     let offset_x = (content_bounds.max_x - clipboard_bounds.min_x) + margin;
     (offset_x, margin)
 }

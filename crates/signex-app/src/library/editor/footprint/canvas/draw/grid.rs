@@ -1,3 +1,8 @@
+#![expect(
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Background grid renderers — line-grid + dot-grid variants.
 
 use iced::widget::canvas::{self, Path, Stroke};

@@ -1,4 +1,9 @@
-use super::*;
+#![expect(
+    clippy::option_if_let_else,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use super::{Signex, Theme, ThemeId};
 
 /// Load the 256×256 PNG bundled by `installer/build-icons.sh` into an
 /// [`iced::window::Icon`]. When `has_bundled_icon` isn't set (i.e. the PNG
@@ -67,7 +72,7 @@ impl Signex {
         Self::id_to_iced_theme(id, self.ui_state.custom_theme.as_ref())
     }
 
-    /// Map a ThemeId to an iced::Theme with a properly tuned palette.
+    /// Map a `ThemeId` to an `iced::Theme` with a properly tuned palette.
     fn id_to_iced_theme(
         id: ThemeId,
         custom: Option<&signex_types::theme::CustomThemeFile>,

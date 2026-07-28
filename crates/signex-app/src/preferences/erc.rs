@@ -1,14 +1,19 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Electrical Rules section — per-rule severity override chips and the
 //! reset-to-defaults action. Moved verbatim from the former single-file
 //! `preferences` module.
 
-use super::*;
+use super::{PrefMsg, primary_button_style, text_muted, text_primary};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-pub(super) fn content_erc<'a>(
-    overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-) -> Element<'a, PrefMsg> {
+pub(super) fn content_erc(
+    overrides: &std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+) -> Element<'_, PrefMsg> {
     use signex_erc::{RuleKind, Severity};
     const RULES: &[RuleKind] = &[
         RuleKind::UnusedPin,
@@ -131,7 +136,7 @@ pub(super) fn content_erc<'a>(
     column![header, rows_col, reset_row].spacing(0).into()
 }
 
-fn severity_label(sev: signex_erc::Severity) -> &'static str {
+const fn severity_label(sev: signex_erc::Severity) -> &'static str {
     match sev {
         signex_erc::Severity::Error => "Error",
         signex_erc::Severity::Warning => "Warning",
@@ -140,7 +145,7 @@ fn severity_label(sev: signex_erc::Severity) -> &'static str {
     }
 }
 
-fn severity_bg(sev: signex_erc::Severity) -> Color {
+const fn severity_bg(sev: signex_erc::Severity) -> Color {
     match sev {
         signex_erc::Severity::Error => Color::from_rgb(0.58, 0.20, 0.22),
         signex_erc::Severity::Warning => Color::from_rgb(0.55, 0.45, 0.12),

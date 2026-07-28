@@ -1,6 +1,12 @@
+#![expect(
+    clippy::or_fun_call,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Misc UI preference IO (first-run tour, component filter, browser searches). Split from `fonts.rs`.
 
-use super::*;
+use super::{PathBuf, prefs_path, write_pref_atomic};
 
 // ──────────────────────────────────────────────────────────────────────────
 // First-run tour (UX_IMPROVEMENTS_OVER_ALTIUM §4.3)
@@ -10,6 +16,7 @@ use super::*;
 /// fresh install shows the card on first launch; once dismissed (via the
 /// X button, Esc, or any canvas interaction) the flag flips to `true`
 /// and stays that way for the lifetime of the prefs file.
+#[must_use]
 pub fn read_first_run_tour_dismissed() -> bool {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -41,6 +48,7 @@ pub fn write_first_run_tour_dismissed(dismissed: bool) {
 /// Read the last-typed Components-panel filter, if any. Empty string
 /// when missing or malformed — that's the same as a fresh session for
 /// the panel.
+#[must_use]
 pub fn read_component_filter() -> String {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -66,9 +74,11 @@ pub fn write_component_filter(query: &str) {
 }
 
 /// Read the persisted per-`.snxlib` Library Browser search queries.
+///
 /// Keyed by the absolute path's display string; entries for libraries
 /// that no longer exist on disk are harmless — they're loaded but only
 /// touched again when the user reopens that library.
+#[must_use]
 pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, String> {
     let mut out = std::collections::HashMap::new();
     let path = prefs_path();
@@ -104,10 +114,13 @@ pub fn write_library_browser_search(library_path: &std::path::Path, query: &str)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(serde_json::json!({}));
+    if !json.is_object() {
+        json = serde_json::json!({});
+    }
     let key = library_path.display().to_string();
-    let map = json
-        .as_object_mut()
-        .expect("prefs root is always an object");
+    let Some(map) = json.as_object_mut() else {
+        return;
+    };
     let entry = map
         .entry("library_browser_searches".to_string())
         .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! v0.26 — right-click canvas context menu state.
 
 /// `(x, y)` are **window-absolute** screen coords (already include

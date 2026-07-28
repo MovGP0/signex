@@ -1,17 +1,27 @@
+#![expect(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::match_same_arms,
+    clippy::similar_names,
+    clippy::suboptimal_flops,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pin-rendering helpers — the sheet-derived colour palette, the pin
 //! text layout constants, and the per-pin render geometry. Pure code
 //! motion out of `mod.rs`; consumed by `build_symbol_renderer_snapshot`
 //! and `SymbolCanvas::new` (both still in the parent `canvas` module),
 //! so the types carry `pub(super)` visibility.
 
-use super::*;
+use super::{Color, HAlign, SymbolPin};
 use signex_types::anchor2d::rotate_vec;
 use signex_types::rotation2d::Vec2d;
 
 /// Palette derived from the active sheet colour — picks a content
 /// foreground that reads correctly on the sheet bg. Two flavours:
-/// dark-on-light (Cream / White / LightGray) and light-on-dark
-/// (Black / DarkGray). Mirrors Altium's per-sheet contrast rule.
+/// dark-on-light (Cream / White / `LightGray`) and light-on-dark
+/// (Black / `DarkGray`). Mirrors Altium's per-sheet contrast rule.
 pub(super) struct SymbolPalette {
     pub(super) body: Color,
     pub(super) pin: Color,
@@ -24,7 +34,7 @@ pub(super) struct SymbolPalette {
 impl SymbolPalette {
     pub(super) fn for_sheet(sheet: Color) -> Self {
         // Rec. 601 luma — perceptually-weighted brightness.
-        let luma = 0.299 * sheet.r + 0.587 * sheet.g + 0.114 * sheet.b;
+        let luma = 0.587f32.mul_add(sheet.g, 0.299 * sheet.r) + 0.114 * sheet.b;
         if luma > 0.5 {
             // Light sheet: dark text + the Altium signature blue body.
             Self {
@@ -93,7 +103,7 @@ impl Aabb {
     }
 
     /// A degenerate, never-containing box — the guard for empty labels.
-    fn empty() -> Self {
+    const fn empty() -> Self {
         Self {
             min: [f64::INFINITY, f64::INFINITY],
             max: [f64::NEG_INFINITY, f64::NEG_INFINITY],
@@ -131,7 +141,10 @@ impl PinRenderGeometry {
 
         let tip = Vec2d::new(pin.position[0], pin.position[1]);
         let unit = rotate_vec(Vec2d::new(1.0, 0.0), angle_rad);
-        let body_end = Vec2d::new(tip.x + unit.x * pin.length, tip.y + unit.y * pin.length);
+        let body_end = Vec2d::new(
+            unit.x.mul_add(pin.length, tip.x),
+            unit.y.mul_add(pin.length, tip.y),
+        );
 
         // Outer normal: 90° CCW from unit = (-unit.y, unit.x).
         // Pick the side that is visually "outer": prefer +y, break ties with -x.
@@ -172,17 +185,19 @@ impl PinRenderGeometry {
         // the name still extends away from the tip.
         let name_h_align = if flipped { HAlign::Right } else { HAlign::Left };
 
-        let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
-            * PIN_TEXT_LAYOUT.number_offset_ratio_of_pitch as f64;
-        let along_mm = pin.length * PIN_TEXT_LAYOUT.number_along_ratio as f64;
+        let number_offset_mm = f64::from(PIN_TEXT_LAYOUT.pin_pitch_mm)
+            * f64::from(PIN_TEXT_LAYOUT.number_offset_ratio_of_pitch);
+        let along_mm = pin.length * f64::from(PIN_TEXT_LAYOUT.number_along_ratio);
 
         let number_pos = Vec2d::new(
-            tip.x + unit.x * along_mm + normal.x * number_offset_mm,
-            tip.y + unit.y * along_mm + normal.y * number_offset_mm,
+            unit.x.mul_add(along_mm, tip.x) + normal.x * number_offset_mm,
+            unit.y.mul_add(along_mm, tip.y) + normal.y * number_offset_mm,
         );
         let name_pos = Vec2d::new(
-            tip.x + unit.x * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
-            tip.y + unit.y * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
+            unit.x
+                .mul_add(pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64, tip.x),
+            unit.y
+                .mul_add(pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64, tip.y),
         );
 
         Self {
@@ -215,13 +230,13 @@ impl PinRenderGeometry {
         let number_box = Self::text_box(
             &pin.number,
             self.number_pos,
-            PIN_TEXT_LAYOUT.number_size_mm as f64,
+            f64::from(PIN_TEXT_LAYOUT.number_size_mm),
             horizontal,
         );
         let name_box = Self::text_box(
             &pin.name,
             self.name_pos,
-            PIN_TEXT_LAYOUT.name_size_mm as f64,
+            f64::from(PIN_TEXT_LAYOUT.name_size_mm),
             horizontal,
         );
         [number_box, name_box]

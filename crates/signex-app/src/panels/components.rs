@@ -1,6 +1,15 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Components panel view.
 
-use super::*;
+use super::{
+    Background, Border, Color, Column, Element, Length, LibrarySymbolEntry, PanelContext, PanelMsg,
+    Space, Theme, container, form_input_row, row, scrollable, section_hdr, text, theme_ext,
+    thin_sep,
+};
 use iced::widget::column;
 
 // ─── Components Panel (matched to Altium Designer) ───────────
@@ -167,9 +176,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .library_symbols
             .iter()
             .find(|entry| &entry.lib_id == comp_id);
-        let comp_name = selected_entry
-            .map(|entry| entry.symbol_name.as_str())
-            .unwrap_or(comp_id.as_str());
+        let comp_name = selected_entry.map_or(comp_id.as_str(), |entry| entry.symbol_name.as_str());
         detail_col = detail_col.push(section_hdr(
             &format!("\u{25BC} Details  {comp_name}"),
             primary,
@@ -179,8 +186,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .library_symbols
             .iter()
             .find(|entry| entry.lib_id == *comp_id)
-            .map(|entry| entry.pin_count)
-            .unwrap_or(0);
+            .map_or(0, |entry| entry.pin_count);
         detail_col = detail_col.push(form_input_row(
             "Symbol", comp_name, muted, input_bg, input_bdr,
         ));
@@ -211,7 +217,7 @@ pub fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 container(
                     container(
                         signex_widgets::symbol_preview::symbol_preview(lib_sym.clone(), 120.0)
-                            .map(|_: ()| PanelMsg::ToggleGrid),
+                            .map(|(): ()| PanelMsg::ToggleGrid),
                     )
                     .width(Length::Fill)
                     .style(move |_: &Theme| container::Style {

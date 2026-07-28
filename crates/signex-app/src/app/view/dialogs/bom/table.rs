@@ -1,17 +1,25 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! BOM preview — the spreadsheet-style data grid (row-number gutter,
 //! draggable/resizable/sortable column headers, and the scrollable body
 //! rows). Extracted from `dialogs/bom.rs` (ADR-0001, issue #164) as pure
 //! code motion — the child-push order inside every row/column is preserved
 //! byte-for-byte, so the rendered table is pixel-identical.
 
-use super::super::*;
+use super::super::{BomPreviewMsg, Message, Signex};
 use iced::widget::{Row, Space, column, container, row, scrollable, text};
 use iced::{Background, Color, Element, Length, Theme};
 
 /// First designator of a BOM row — the key the export pipeline orders rows by,
 /// so the preview's Designator sort matches the exported file exactly.
 fn first_reference(row: &signex_output::BomRow) -> &str {
-    row.references.first().map(String::as_str).unwrap_or("")
+    row.references.first().map_or("", String::as_str)
 }
 
 /// Rendered text of one cell — also the sort key for the text columns.
@@ -385,7 +393,10 @@ mod tests {
 
     fn row(references: &[&str], qty: u32, value: &str) -> BomRow {
         BomRow {
-            references: references.iter().map(|r| r.to_string()).collect(),
+            references: references
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
             qty,
             value: value.to_string(),
             ..BomRow::default()

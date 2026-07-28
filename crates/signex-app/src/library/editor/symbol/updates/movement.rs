@@ -1,3 +1,8 @@
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol editor — move / drag update logic (coalesced undo per gesture).
 
 use super::{SymEditor, begin_drag_if_needed, graphic_handle_msg_to_state, mark_dirty};

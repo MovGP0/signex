@@ -1,3 +1,14 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    clippy::manual_let_else,
+    clippy::map_unwrap_or,
+    clippy::needless_pass_by_value,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Footprint sketch updates — sketch↔pad bridge (roles / profile / corner radius) concern.
 //!
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
@@ -38,8 +49,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 .sketch
                 .as_ref()
                 .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                .map(|e| e.pad.is_some())
-                .unwrap_or(false);
+                .is_some_and(|e| e.pad.is_some());
             let existing_idx = editor
                 .state
                 .pads
@@ -53,15 +63,14 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                         .sketch
                         .as_ref()
                         .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                        .map(|e| {
+                        .map_or((0.0, 0.0, String::new()), |e| {
                             let (x, y) = match e.kind {
                                 EntityKind::Point { x, y } => (x, y),
                                 _ => (0.0, 0.0),
                             };
                             let num = e.pad.as_ref().map(|a| a.number.clone()).unwrap_or_default();
                             (x, y, num)
-                        })
-                        .unwrap_or((0.0, 0.0, String::new()));
+                        });
                     editor.state.pads.push(EditorPad {
                         number,
                         position_mm: (x, y),
@@ -95,10 +104,10 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     editor.state.pads.remove(idx);
                     if editor.state.selected_pad == Some(idx) {
                         editor.state.selected_pad = None;
-                    } else if let Some(sel) = editor.state.selected_pad {
-                        if sel > idx {
-                            editor.state.selected_pad = Some(sel - 1);
-                        }
+                    } else if let Some(sel) = editor.state.selected_pad
+                        && sel > idx
+                    {
+                        editor.state.selected_pad = Some(sel - 1);
                     }
                 }
                 _ => {}
@@ -165,7 +174,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                     .state
                     .selected_sketch
                     .into_iter()
-                    .chain(editor.state.selected_sketch_secondary.into_iter())
+                    .chain(editor.state.selected_sketch_secondary)
                     .chain(editor.state.selected_sketch_extra.iter().copied())
                     .collect();
 
@@ -198,31 +207,29 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                         .map(|e| e.id)
                 });
 
-                match direct_line.or(incident_line).or(any_line) {
-                    Some(id) => id,
-                    None => {
-                        editor.state.solve_warnings.push(
-                            "Make Pad from Profile: no Lines in the sketch — draw a closed shape first"
-                                .into(),
-                        );
-                        editor.canvas_cache.clear();
-                        return;
-                    }
-                }
-            };
-
-            // Walk the loop to compute the centroid; needs a fresh
-            // solve so vertex positions are accurate.
-            let solve = match editor.state.last_solve.as_ref() {
-                Some(s) => s,
-                None => {
+                if let Some(id) = direct_line.or(incident_line).or(any_line) {
+                    id
+                } else {
                     editor.state.solve_warnings.push(
-                        "Make Pad from Profile: no solve has run yet — interact briefly to trigger a solve, then retry"
+                        "Make Pad from Profile: no Lines in the sketch — draw a closed shape first"
                             .into(),
                     );
                     editor.canvas_cache.clear();
                     return;
                 }
+            };
+
+            // Walk the loop to compute the centroid; needs a fresh
+            // solve so vertex positions are accurate.
+            let solve = if let Some(s) = editor.state.last_solve.as_ref() {
+                s
+            } else {
+                editor.state.solve_warnings.push(
+                    "Make Pad from Profile: no solve has run yet — interact briefly to trigger a solve, then retry"
+                        .into(),
+                );
+                editor.canvas_cache.clear();
+                return;
             };
             let sketch_for_walk = match editor.primitive().sketch.as_ref() {
                 Some(s) => s,
@@ -264,10 +271,10 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             for i in 0..n_v {
                 let (x0, y0) = (vertices[i][0], vertices[i][1]);
                 let (x1, y1) = (vertices[(i + 1) % n_v][0], vertices[(i + 1) % n_v][1]);
-                let cross = x0 * y1 - x1 * y0;
+                let cross = x1.mul_add(-y0, x0 * y1);
                 signed_area += cross;
-                cx_acc += (x0 + x1) * cross;
-                cy_acc += (y0 + y1) * cross;
+                cx_acc = (x0 + x1).mul_add(cross, cx_acc);
+                cy_acc = (y0 + y1).mul_add(cross, cy_acc);
             }
             let area = signed_area * 0.5;
             let (cx, cy) = if area.abs() > 1e-12 {
@@ -312,14 +319,16 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 .entities
                 .iter()
                 .find(|e| e.id == line_id)
-                .map(|e| e.plane)
-                .unwrap_or_else(|| {
-                    sketch_for_walk
-                        .planes
-                        .first()
-                        .map(|p| p.id)
-                        .unwrap_or_else(PlaneId::new)
-                });
+                .map_or_else(
+                    || {
+                        sketch_for_walk
+                            .planes
+                            .first()
+                            .map(|p| p.id)
+                            .unwrap_or_else(PlaneId::new)
+                    },
+                    |e| e.plane,
+                );
             // Ensure plane exists (defensive — almost always already
             // in `sketch.planes`).
             let _ = Plane {
@@ -346,8 +355,8 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                 shape: PadShape::Custom(CustomPadShape::SketchProfile {
                     source: vec![line_id],
                 }),
-                size_x_expr: format!("{:.3}mm", bbox_w),
-                size_y_expr: format!("{:.3}mm", bbox_h),
+                size_x_expr: format!("{bbox_w:.3}mm"),
+                size_y_expr: format!("{bbox_h:.3}mm"),
                 rotation_expr: None,
                 offset_x_expr: None,
                 offset_y_expr: None,
@@ -408,7 +417,10 @@ pub(in crate::library::editor::footprint::updates) fn apply(
                         ("corner_r_nw_arc", "corner_r_nw"),
                     ];
                     for (sidecar_key, corner_key) in arc_keys {
-                        if pad.shape_params.get(sidecar_key).map(|s| s.as_str())
+                        if pad
+                            .shape_params
+                            .get(sidecar_key)
+                            .map(std::string::String::as_str)
                             == Some(arc_id_str.as_str())
                         {
                             return Some((idx, corner_key));
@@ -440,20 +452,19 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             }
 
             // Resolve the shared parameter name + current value.
-            let shared_name = match editor.state.pads[pad_idx]
+            let shared_name = if let Some(n) = editor.state.pads[pad_idx]
                 .shape_params
                 .get("corner_r")
                 .cloned()
             {
-                Some(n) => n,
-                None => {
-                    tracing::warn!(
-                        target: "signex::v024",
-                        "FootprintSketchUnlinkCornerRadius: pad {pad_idx} has no shared \
-                         corner_r binding; ignoring"
-                    );
-                    return;
-                }
+                n
+            } else {
+                tracing::warn!(
+                    target: "signex::v024",
+                    "FootprintSketchUnlinkCornerRadius: pad {pad_idx} has no shared \
+                     corner_r binding; ignoring"
+                );
+                return;
             };
             let shared_value = editor
                 .primitive()

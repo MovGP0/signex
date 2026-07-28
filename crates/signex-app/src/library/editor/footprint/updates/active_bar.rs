@@ -1,7 +1,15 @@
-//! Footprint editor — active_bar update logic.
+#![expect(
+    clippy::default_trait_access,
+    clippy::option_if_let_else,
+    clippy::too_many_lines,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+//! Footprint editor — `active_bar` update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
-//! The router delegates all active_bar `FootprintEditorMsg` variants here;
+//! The router delegates all `active_bar` `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
 use super::align_pads;
@@ -74,12 +82,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             match flag {
                 SnapOptionFlag::PointHit => opts.point_hit = !opts.point_hit,
                 SnapOptionFlag::HorizontalVertical => {
-                    opts.horizontal_vertical = !opts.horizontal_vertical
+                    opts.horizontal_vertical = !opts.horizontal_vertical;
                 }
                 SnapOptionFlag::Angle => opts.angle = !opts.angle,
                 SnapOptionFlag::Grid => opts.grid = !opts.grid,
                 SnapOptionFlag::TrackVertices => {
-                    opts.snap_track_vertices = !opts.snap_track_vertices
+                    opts.snap_track_vertices = !opts.snap_track_vertices;
                 }
                 SnapOptionFlag::TrackLines => opts.snap_track_lines = !opts.snap_track_lines,
                 SnapOptionFlag::ArcCenters => opts.snap_arc_centers = !opts.snap_arc_centers,
@@ -91,10 +99,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 SnapOptionFlag::Texts => opts.snap_texts = !opts.snap_texts,
                 SnapOptionFlag::Regions => opts.snap_regions = !opts.snap_regions,
                 SnapOptionFlag::FootprintOrigins => {
-                    opts.snap_footprint_origins = !opts.snap_footprint_origins
+                    opts.snap_footprint_origins = !opts.snap_footprint_origins;
                 }
                 SnapOptionFlag::Body3dPoints => {
-                    opts.snap_3d_body_points = !opts.snap_3d_body_points
+                    opts.snap_3d_body_points = !opts.snap_3d_body_points;
                 }
                 SnapOptionFlag::SnapToGrids => opts.snap_to_grids = !opts.snap_to_grids,
                 SnapOptionFlag::SnapToGuides => opts.snap_to_guides = !opts.snap_to_guides,
@@ -200,7 +208,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
             }
         }
         FootprintEditorMsg::MoveByConfirm => {
-            if let Some((dx, dy)) = editor.state.move_by_modal.as_ref().and_then(|m| m.parsed()) {
+            if let Some((dx, dy)) = editor
+                .state
+                .move_by_modal
+                .as_ref()
+                .and_then(super::super::state::MoveByModal::parsed)
+            {
                 footprint_nudge_selection(editor, dx, dy);
             }
             editor.state.move_by_modal = None;
@@ -234,8 +247,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                 .state
                 .align_modal
                 .as_ref()
-                .map(|m| (m.horizontal, m.vertical))
-                .unwrap_or((None, None));
+                .map_or((None, None), |m| (m.horizontal, m.vertical));
 
             // Collect + dedup the selection indices up front so we can
             // decide whether ANY chosen op can apply before touching
@@ -344,7 +356,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     let step = state.snap_options.grid_step_mm.max(0.001);
                     let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
                         Vec::with_capacity(state.pads.len());
-                    for pad in state.pads.iter_mut() {
+                    for pad in &mut state.pads {
                         let (x, y) = pad.position_mm;
                         pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
                         snapshots.push(pad.clone());

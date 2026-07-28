@@ -1,11 +1,11 @@
-//! BoardCutout role sub-form. Split from `subforms.rs`.
+//! `BoardCutout` role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 
-/// v0.16.4 — BoardCutout role sub-form. Edge-radius expression input
+/// v0.16.4 — `BoardCutout` role sub-form. Edge-radius expression input
 /// + through-vs-partial-depth toggle.
 pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
     mut col: Column<'a, PanelMsg>,

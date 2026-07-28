@@ -1,6 +1,18 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::missing_errors_doc,
+    clippy::missing_fields_in_debug,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `LibraryState` / `OpenLibrary` methods (open/close/refresh/reload).
 
-use super::*;
+use super::{
+    Arc, ComponentPreviewState, ComponentRow, ComponentSummary, ComponentsMountSource,
+    ComponentsPanelState, DistributorSettings, EditorAddress, HashMap, LibraryAdapter,
+    LibraryError, LibrarySet, LibraryState, LocalGitAdapter, Path, PathBuf, PrimitiveSummary,
+    RowId, SheetColor, TemplateRegistry, Unit, UseSite, Uuid, WhereUsedIndex,
+};
 
 impl Default for LibraryState {
     fn default() -> Self {
@@ -36,6 +48,7 @@ impl Default for LibraryState {
 
 impl LibraryState {
     /// Look up an open library by its on-disk root path.
+    #[must_use]
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)
     }
@@ -54,20 +67,17 @@ impl LibraryState {
     /// is against the `.snxlib`'s *parent directory*, not the file
     /// itself, so `<root_dir>/symbols/foo.snxsym` correctly resolves
     /// to its library.
+    #[must_use]
     pub fn containing_library(&self, child_path: &Path) -> Option<&OpenLibrary> {
-        self.open_libraries.iter().find(|lib| {
-            lib.root_dir()
-                .map(|d| child_path.starts_with(d))
-                .unwrap_or(false)
-        })
+        self.open_libraries
+            .iter()
+            .find(|lib| lib.root_dir().is_some_and(|d| child_path.starts_with(d)))
     }
 
     pub fn containing_library_mut(&mut self, child_path: &Path) -> Option<&mut OpenLibrary> {
-        self.open_libraries.iter_mut().find(|lib| {
-            lib.root_dir()
-                .map(|d| child_path.starts_with(d))
-                .unwrap_or(false)
-        })
+        self.open_libraries
+            .iter_mut()
+            .find(|lib| lib.root_dir().is_some_and(|d| child_path.starts_with(d)))
     }
 
     /// Open the `*.snxlib/` at `root`, mounting the adapter under its
@@ -202,6 +212,7 @@ impl LibraryState {
 
     /// Aggregate every open library's cached components — used by the
     /// picker modal to flatten across libraries.
+    #[must_use]
     pub fn all_components(&self) -> Vec<(PathBuf, ComponentSummary)> {
         let mut out = Vec::new();
         for lib in &self.open_libraries {
@@ -215,7 +226,7 @@ impl LibraryState {
     /// Replace the Where-Used entries for one `(project, sheet)` with
     /// `refs` — `(row_id, instance_id)` tuples. The index keys by
     /// `RowId` directly; revisions and per-instance version pins are
-    /// not part of the DBLib model.
+    /// not part of the `DBLib` model.
     #[allow(dead_code)]
     pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
         let trimmed: Vec<(RowId, String)> = refs
@@ -226,11 +237,13 @@ impl LibraryState {
     }
 
     /// Look up the use-sites for a row.
+    #[must_use]
     pub fn where_used_for(&self, row_id: RowId) -> Vec<UseSite> {
         self.where_used.where_used(row_id)
     }
 
     /// Editor addresses currently pointing at `root` that have unsaved edits.
+    #[must_use]
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
         let mut keys: Vec<EditorAddress> = self
             .editors
@@ -252,6 +265,7 @@ impl LibraryState {
     /// libraries take precedence over Installed/Global so a global
     /// library that's also referenced by the active project
     /// surfaces under the "Project" header.
+    #[must_use]
     pub fn mount_source_for(
         &self,
         path: &Path,
@@ -274,6 +288,7 @@ impl LibraryState {
 
     /// Existing editor for `(library_root, table, row_id)`, if any.
     #[allow(dead_code)]
+    #[must_use]
     pub fn editor_for(
         &self,
         library_root: &Path,
@@ -386,6 +401,7 @@ impl OpenLibrary {
     /// library's working tree (e.g. "is this `.snxsym` inside this
     /// library?") or join sibling paths
     /// (`root_dir().join("symbols")`).
+    #[must_use]
     pub fn root_dir(&self) -> Option<&Path> {
         self.root.parent()
     }
@@ -481,8 +497,9 @@ impl OpenLibrary {
     }
 
     /// Total number of rows across every cached table.
+    #[must_use]
     pub fn total_rows(&self) -> usize {
-        self.tables.values().map(|v| v.len()).sum()
+        self.tables.values().map(std::vec::Vec::len).sum()
     }
 }
 

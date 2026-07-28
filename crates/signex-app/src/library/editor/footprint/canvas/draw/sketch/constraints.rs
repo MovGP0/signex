@@ -1,3 +1,10 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Constraint-glyph overlay — each constraint's Unicode glyph rendered
 //! at the centroid of the entities it touches, tinted red when the
 //! constraint is over-constrained.
@@ -29,15 +36,15 @@ pub(super) fn draw_constraint_icons(
         .unwrap_or_default();
 
     let point_world_local = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some(p) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some(p) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some(p);
-            }
+            )
+        {
+            return Some(p);
         }
         sketch
             .entities
@@ -279,7 +286,7 @@ pub(super) fn draw_constraint_icons(
         if n == 0 {
             continue;
         }
-        let centroid = (sum_x / n as f64, sum_y / n as f64);
+        let centroid = (sum_x / f64::from(n), sum_y / f64::from(n));
         let p = cstate.world_to_screen(centroid);
         // v0.23 — per-row precision in the Conflicts list. When the
         // user hovers a specific row, only that constraint renders

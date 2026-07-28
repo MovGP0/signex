@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! STEP file attachment helper.
 //!
 //! Handles the file-pick → SHA-256 → copy-into-`step/<hash>.step` flow
@@ -21,6 +26,7 @@ use crate::library::messages::{EditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
 
 /// Render the STEP attachment row in the Body 3D pane.
+#[must_use]
 pub fn view<'a>(
     fp: &'a Footprint,
     tokens: &'a ThemeTokens,
@@ -54,7 +60,7 @@ pub fn view<'a>(
 
     let body: Element<'a, LibraryMessage> = match fp.step_attachment.as_ref() {
         Some(att) => {
-            let remove_addr = address.clone();
+            let remove_addr = address;
             let remove_btn =
                 button(container(text("Remove").size(10).color(text_c)).padding([3, 8]))
                     .on_press(LibraryMessage::EditorEvent {
@@ -126,7 +132,7 @@ fn hash_hex(bytes: &[u8]) -> String {
     hasher.update(bytes);
     let result = hasher.finalize();
     let mut out = String::with_capacity(64);
-    for byte in result.iter() {
+    for byte in &result {
         use std::fmt::Write as _;
         let _ = write!(&mut out, "{byte:02x}");
     }
