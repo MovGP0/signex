@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 description = "STEP / VRML / GLTF → GLB conversion pipeline for signex-renderer"
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror.workspace = true
 serde.workspace = true

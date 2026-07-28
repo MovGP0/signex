@@ -53,6 +53,12 @@ rust-version = "1.97"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
 
+[workspace.lints.clippy]
+pedantic = "warn"
+nursery = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+
 [workspace.dependencies]
 # UI framework
 iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio"] }
