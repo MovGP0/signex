@@ -177,7 +177,7 @@ fn one_undo_reverses_the_whole_multi_pad_rotate() {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = Some(0);
         editor.state.selected_pads_extra = vec![1, 2];
-        for pad in editor.state.pads.iter_mut() {
+        for pad in &mut editor.state.pads {
             pad.rotation_deg = 45.0;
         }
     }
@@ -268,7 +268,7 @@ fn flip_mirrors_every_mirror_sensitive_field_of_every_selected_pad() {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = Some(0);
         editor.state.selected_pads_extra = vec![1, 2];
-        for pad in editor.state.pads.iter_mut() {
+        for pad in &mut editor.state.pads {
             pad.rotation_deg = 45.0;
             pad.shape = PadShape::Chamfered {
                 chamfer_ratio: 0.25,

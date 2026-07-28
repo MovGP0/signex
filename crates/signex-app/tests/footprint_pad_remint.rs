@@ -11,7 +11,7 @@
 //! These tests are written against a PARAMETRIC shape on purpose. The
 //! bbox-corner mover is correct for `Rect` by construction, so
 //! `Rect`-only coverage cannot see the defect at all: for `Rect` the
-//! outline IS the four bbox corners, while a Chamfered / RoundRect /
+//! outline IS the four bbox corners, while a Chamfered / `RoundRect` /
 //! Oval pad also owns anchors and arc centres that the corner mover
 //! never touches.
 

@@ -75,13 +75,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn count_sketch_pads(fp: &Footprint) -> usize {
     fp.sketch
         .as_ref()
-        .map(|s| {
+        .map_or(0, |s| {
             s.entities
                 .iter()
                 .filter(|e| e.pad.is_some() && matches!(e.kind, EntityKind::Point { .. }))
                 .count()
         })
-        .unwrap_or(0)
 }
 
 /// Helper: author one SMD Point with a `PadAttr`. Anchored at
@@ -204,7 +203,7 @@ fn build_soic8() -> Footprint {
 // ───────────────────── QFN-16 ─────────────────────
 
 /// QFN-16: 0.5 mm pitch, 4 pads per side around a 3 × 3 mm body.
-/// Side rows are at ±row_offset from origin; pad copper 0.3 × 0.6 mm
+/// Side rows are at ±`row_offset` from origin; pad copper 0.3 × 0.6 mm
 /// (long axis radial). Pin 1 is the top-left of the west side
 /// (CCW numbering): W4..W1, S4..S1, E1..E4, N1..N4 → labelled 1..16.
 fn build_qfn16() -> Footprint {

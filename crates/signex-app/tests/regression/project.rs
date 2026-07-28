@@ -330,7 +330,7 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     // Second add — silent no-op, list size unchanged.
     let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
         project_idx: 0,
-        paths: Some(vec![new_sheet.clone()]),
+        paths: Some(vec![new_sheet]),
     }));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
@@ -575,7 +575,7 @@ fn f13_register_pending_rejects_existing_path() {
     fs::create_dir_all(&lib_path).unwrap();
 
     let result =
-        signex_app::library::commands::register_pending_library(lib_path.clone(), false, false);
+        signex_app::library::commands::register_pending_library(lib_path, false, false);
     assert!(result.is_err(), "must reject paths that already exist");
 }
 
@@ -655,8 +655,8 @@ fn project_git_commit_done_clears_inflight_entry() {
     // Failure path also clears (data is on disk regardless of git).
     app.document_state.inflight_git_commits.insert(key.clone());
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
-        project_root: project_root.clone(),
-        rel_path: rel_path.clone(),
+        project_root,
+        rel_path,
         result: Err("commit_path: …".to_string()),
     }));
     assert!(
@@ -1020,7 +1020,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     // no-ops and the post-delete `selected.clear()` never runs.
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "cut-gating".to_string(),
-        path: path.clone(),
+        path,
         cached_document: None,
         dirty: false,
         project_id: None,

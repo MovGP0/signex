@@ -343,8 +343,7 @@ fn placement_input_line_length_pins_second_click_at_exact_distance() {
 
     assert!(
         (start_pt.0 - 0.0).abs() < 1e-9 && (start_pt.1 - 0.0).abs() < 1e-9,
-        "first endpoint should remain at the origin; got {:?}",
-        start_pt
+        "first endpoint should remain at the origin; got {start_pt:?}"
     );
     assert!(
         (end_pt.0 - 10.0).abs() < 1e-9,
@@ -817,8 +816,7 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
             .primitive()
             .sketch
             .as_ref()
-            .map(|s| s.entities.len())
-            .unwrap_or(0);
+            .map_or(0, |s| s.entities.len());
         (
             n,
             matches!(
@@ -863,8 +861,7 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
         .primitive()
         .sketch
         .as_ref()
-        .map(|s| s.entities.len())
-        .unwrap_or(0);
+        .map_or(0, |s| s.entities.len());
     assert_eq!(
         count_after, count_before,
         "paused commit click must mint no geometry; entity count changed {count_before} -> {count_after}"
@@ -1441,7 +1438,7 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
         .expect("rounded-rect mints corner arcs");
     let (cx, cy) = resolve(arc.0).expect("arc centre resolves");
     let (sx, sy) = resolve(arc.1).expect("arc start resolves");
-    let arc_r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+    let arc_r = (sx - cx).hypot(sy - cy);
     assert!(
         (arc_r - 1.5).abs() < 1e-9,
         "corner radius should be the typed 1.5 mm; got {arc_r}"

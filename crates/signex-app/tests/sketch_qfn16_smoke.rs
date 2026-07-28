@@ -1,6 +1,6 @@
 //! Phase 8.1 — QFN-16 end-to-end author smoke.
 //!
-//! Programmatically builds a SketchData representing one row of a
+//! Programmatically builds a `SketchData` representing one row of a
 //! QFN-16 footprint (4 pads on the east side, 0.5 mm pitch), runs the
 //! solve-on-edit dispatcher, asserts the baked Pad coordinates match
 //! to within 1 µm, then mutates `pad_pitch` to 0.65 mm and re-asserts
@@ -61,7 +61,7 @@ fn build_qfn_row(pad_pitch_expr: &str) -> (Footprint, Vec<SketchEntityId>) {
                 size_y_expr: "0.3mm".into(),
                 rotation_expr: None,
                 offset_x_expr: None,
-                offset_y_expr: Some(format!("{} * pad_pitch", idx)),
+                offset_y_expr: Some(format!("{idx} * pad_pitch")),
                 drill: None,
                 mask_margin_expr: None,
                 paste_margin_expr: None,
@@ -182,8 +182,7 @@ fn qfn16_solve_warnings_empty_on_clean_sketch() {
         .collect();
     assert!(
         unrelated_warnings.is_empty(),
-        "expected no error warnings, got {:?}",
-        unrelated_warnings
+        "expected no error warnings, got {unrelated_warnings:?}"
     );
     assert!(state.last_solve.is_some());
 }

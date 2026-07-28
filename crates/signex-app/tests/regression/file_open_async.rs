@@ -168,7 +168,7 @@ fn schematic_open_finished_err_opens_no_tab_and_does_not_panic() {
 
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
-        path: path.clone(),
+        path,
         title: "broken".to_string(),
         result: Err("parse broken.snxsch: TSV block malformed".to_string()),
     }));
@@ -195,7 +195,7 @@ fn reopening_an_already_open_schematic_tab_activates_it_instead_of_duplicating()
         result: Ok(Box::new(empty_schematic_sheet())),
     }));
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
-        path: second_path.clone(),
+        path: second_path,
         title: "second".to_string(),
         result: Ok(Box::new(empty_schematic_sheet())),
     }));
@@ -320,7 +320,7 @@ fn pcb_open_finished_err_opens_no_tab_and_does_not_panic() {
 
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
-        path: path.clone(),
+        path,
         title: "broken".to_string(),
         result: Err("parse broken.snxpcb: TSV block malformed".to_string()),
     }));

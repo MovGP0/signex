@@ -52,7 +52,7 @@ fn v026e_copy_with_no_selection_is_noop() {
             .is_none()
     );
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
+        path,
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CopyPad),
     }));
     assert!(
@@ -296,7 +296,7 @@ fn v026g_flip_selection_swaps_top_to_bottom_layers() {
         let before: Vec<&str> = editor.state.pads[0]
             .layers
             .iter()
-            .map(|l| l.as_str())
+            .map(signex_library::LayerId::as_str)
             .collect();
         assert_eq!(before, vec!["F.Cu", "F.Mask", "F.Paste"]);
     }
@@ -328,7 +328,7 @@ fn v026g_flip_selection_swaps_top_to_bottom_layers() {
     let round_trip: Vec<&str> = editor.state.pads[0]
         .layers
         .iter()
-        .map(|l| l.as_str())
+        .map(signex_library::LayerId::as_str)
         .collect();
     assert_eq!(
         round_trip,

@@ -82,7 +82,7 @@ fn point_xy(sketch: &SketchData, id: SketchEntityId) -> Option<(f64, f64)> {
 /// because none has a home on `Pad`. So on reopen the pad owned
 /// nothing AND had no link at all, and `mirror_move_pad_in_sketch`
 /// early-returned on the missing link before ownership even mattered.
-/// The pad's whole RoundRect outline stayed where it was minted while
+/// The pad's whole `RoundRect` outline stayed where it was minted while
 /// the pad moved away, and the bake resolves copper from the sketch —
 /// so the exported footprint had the copper in the old place.
 ///

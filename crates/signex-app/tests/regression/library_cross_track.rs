@@ -100,9 +100,9 @@ fn editor_state_proj(app: &Signex, path: &std::path::Path) -> EditorStateProj {
     let sketch = primitive.sketch.as_ref();
     EditorStateProj {
         pads: editor.state.pads.len(),
-        entities: sketch.map(|s| s.entities.len()).unwrap_or(0),
-        constraints: sketch.map(|s| s.constraints.len()).unwrap_or(0),
-        parameters: sketch.map(|s| s.parameters.0.len()).unwrap_or(0),
+        entities: sketch.map_or(0, |s| s.entities.len()),
+        constraints: sketch.map_or(0, |s| s.constraints.len()),
+        parameters: sketch.map_or(0, |s| s.parameters.0.len()),
     }
 }
 
@@ -130,7 +130,7 @@ fn set_pad_defaults(
 // Cross-track: undo/redo of placement flows (Track A + Track B)
 // ─────────────────────────────────────────────────────────────────
 
-/// Phase-5 #1 — `FootprintAddPad` placing a RoundRect pad runs
+/// Phase-5 #1 — `FootprintAddPad` placing a `RoundRect` pad runs
 /// through `apply_footprint_primitive_edit`'s
 /// `mutates_footprint_state` gate, which classifies it as mutating
 /// state and calls `push_history()` first. A subsequent
@@ -196,13 +196,13 @@ fn place_round_rect_then_undo_restores_pre_place_state() {
     );
 }
 
-/// Phase-5 #8 — Drive a TangentArc gesture end-to-end via the
+/// Phase-5 #8 — Drive a `TangentArc` gesture end-to-end via the
 /// dispatcher (no manual `tool_pending` seeding); then issue
 /// `Message::Edit(EditMsg::Undo)`. Both clicks should roll back: the Arc, its
 /// auto-generated `TangentLineArc` constraint, and any anchor / centre
 /// Points the dispatcher minted on the way. The seed Line stays.
 ///
-/// The dispatcher's TangentArc handler emits two separate
+/// The dispatcher's `TangentArc` handler emits two separate
 /// `mutates_footprint_state` messages (one per click), so the second
 /// click's `push_history` snapshot covers exactly the click-2 work
 /// (mint arc + tangent constraint). A single `Message::Edit(EditMsg::Undo)` rolls
@@ -369,7 +369,7 @@ fn ctrl_z_during_tangent_arc_undoes_last_segment() {
 /// only persisted footprint / sketch state (`file`, `pads`,
 /// `selected_*`); `state.placement_input` is intentionally absent.
 /// This pins that contract: after placing a Line via the
-/// placement_input flow + undo, the line is gone AND
+/// `placement_input` flow + undo, the line is gone AND
 /// `state.placement_input` is `None` (not `Some("5")`).
 #[test]
 fn placement_input_does_not_corrupt_history_on_undo() {
@@ -480,7 +480,7 @@ fn placement_input_does_not_corrupt_history_on_undo() {
     );
 }
 
-/// Phase-5 #10 — Place a RoundRect pad, dispatch
+/// Phase-5 #10 — Place a `RoundRect` pad, dispatch
 /// `FootprintSketchUnlinkCornerRadius` for one of its corner Arcs,
 /// then issue `Message::Edit(EditMsg::Undo)`. The unlink action's snapshot should
 /// roll back: the per-corner override key (e.g. `corner_r_ne`) is
@@ -601,13 +601,13 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
 /// Properties-panel dispatch path. The parameter table rewrites
 /// cleanly and solve resolves the new value for every consumer; the
 /// `pad.stack.corner_radius_pct` mirror (Track A4) re-derives from the
-/// resolved corner_r so the Pads-mode "Corner radius %" input stays
+/// resolved `corner_r` so the Pads-mode "Corner radius %" input stays
 /// in sync with sketch-side edits.
 ///
 /// NOTE: the v0.24 A2 mint stores arc-anchor / inset-corner Point
 /// coordinates as literals; no constraint binds them to the shared
 /// `corner_r` parameter, and there's no post-solve mirror analogous
-/// to `mirror_solve_to_chamfer_anchors` for RoundRect arcs. So a
+/// to `mirror_solve_to_chamfer_anchors` for `RoundRect` arcs. So a
 /// shared-param edit DOES propagate through resolved-parameters +
 /// the pad-stack pct mirror, but the Arc geometry stays at the
 /// literal mint-time radius until either (a) constraints bind the
@@ -615,7 +615,7 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
 /// `mirror_solve_to_round_rect_arcs` lands. **Deferred to Phase 6**
 /// — flagged in the report. This test pins the surfaces that DO work
 /// today: parameter rewrite + resolved-parameters propagation +
-/// corner_radius_pct mirror.
+/// `corner_radius_pct` mirror.
 #[test]
 fn editing_corner_r_via_properties_updates_all_4_arcs() {
     use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
@@ -744,7 +744,7 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
 /// NOTE: the Arc geometry doesn't currently re-read the parameter
 /// table on solve (no constraint binds anchor / inset Points to the
 /// shared / per-corner parameters; no post-solve mirror analogous
-/// to `mirror_solve_to_chamfer_anchors` for RoundRect arcs). So this
+/// to `mirror_solve_to_chamfer_anchors` for `RoundRect` arcs). So this
 /// test pins the **parameter-table** independence — the surface the
 /// future Phase-6 constraint or mirror would read from. The Phase-6
 /// follow-up will add direct geometry-radius assertions; **deferred
@@ -821,8 +821,7 @@ fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
             .expect("per-corner corner_r_ne minted");
         assert_ne!(
             per_corner_name, shared_param_name,
-            "per-corner parameter name must differ from shared (got both = `{}`)",
-            shared_param_name
+            "per-corner parameter name must differ from shared (got both = `{shared_param_name}`)"
         );
         per_corner_name
     };
@@ -1128,8 +1127,8 @@ fn type_5_during_line_draw_commits_at_5mm() {
 }
 
 /// Phase-5 #3 — Drive a Line gesture to completion, then switch to
-/// the TangentArc tool and chain off the line's end. The dispatcher's
-/// TangentArc handler must auto-emit a `TangentLineArc` constraint
+/// the `TangentArc` tool and chain off the line's end. The dispatcher's
+/// `TangentArc` handler must auto-emit a `TangentLineArc` constraint
 /// linking the freshly minted Arc to the trailing Line.
 ///
 /// Pure dispatcher routing — no `tool_pending` seeding. Mirrors the
@@ -1266,14 +1265,14 @@ fn tangent_arc_after_line_creates_tangent_constraint() {
 }
 
 /// Phase-5 #7 — Place a Chamfered pad with exactly two corners
-/// enabled (top_left + top_right). The mint should produce exactly
+/// enabled (`top_left` + `top_right`). The mint should produce exactly
 /// 2 chamfer-cut Lines (one per enabled corner) plus 4 outline edge
 /// Lines = 6 total. Each disabled corner should NOT contribute a
 /// chamfer-cut; the bbox corner Points stay as 90° angles in the
 /// outline.
 ///
-/// Cross-track: drives the FootprintAddPad dispatcher (Track A6
-/// mint) end-to-end with a non-default ChamferedCorners flagset, so
+/// Cross-track: drives the `FootprintAddPad` dispatcher (Track A6
+/// mint) end-to-end with a non-default `ChamferedCorners` flagset, so
 /// the placement flow's path-keyed state lookup + Pads-mode-aware
 /// mirror branch + per-corner sidecar bookkeeping all run together.
 #[test]

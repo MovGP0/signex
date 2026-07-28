@@ -15,7 +15,7 @@ use std::path::PathBuf;
 // scheme so the field mutates land somewhere the test can read back.
 // ─────────────────────────────────────────────────────────────────
 
-/// Build a footprint editor with one Linear array + BgaRowCol numbering,
+/// Build a footprint editor with one Linear array + `BgaRowCol` numbering,
 /// plant it as the active tab, and return the array's id so the test
 /// can target it by id (the dispatcher matches arrays by id).
 fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array::ArrayId) {
@@ -69,14 +69,14 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
         cached_document: None,
         dirty: false,
         project_id: None,
-        kind: TabKind::FootprintEditor(path.clone()),
+        kind: TabKind::FootprintEditor(path),
     });
     app.document_state.active_tab = 0;
     (app, array_id)
 }
 
-/// Read back the current BgaRowCol triple from the active footprint
-/// editor's first array. Panics if the array isn't BgaRowCol — that
+/// Read back the current `BgaRowCol` triple from the active footprint
+/// editor's first array. Panics if the array isn't `BgaRowCol` — that
 /// would indicate the test setup got clobbered.
 fn read_bga_config(app: &Signex) -> (bool, char, u32) {
     use signex_sketch::array::NumberingScheme;
@@ -113,9 +113,8 @@ fn v025_bga_set_skip_letters_round_trips_bool() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-skip");
-    assert_eq!(
+    assert!(
         read_bga_config(&app).0,
-        true,
         "fixture seeds skip_letters=true"
     );
     let _ = app.update(Message::Dock(DockMessage::Panel(
@@ -124,9 +123,8 @@ fn v025_bga_set_skip_letters_round_trips_bool() {
             value: false,
         },
     )));
-    assert_eq!(
-        read_bga_config(&app).0,
-        false,
+    assert!(
+        !read_bga_config(&app).0,
         "FpEditorSetBgaSkipLetters must round-trip the bool into the array"
     );
 }
@@ -164,7 +162,7 @@ fn v025_bga_set_start_row_rejects_non_alphabetic_input() {
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaStartRow {
             array_id,
-            value: "".to_string(),
+            value: String::new(),
         },
     )));
     assert_eq!(

@@ -206,7 +206,7 @@ fn mirror_add_round_rect_pad_mints_4_arcs_linked_to_corner_r() {
             .expect("Arc.start references a Point");
         let dx = start_pos.0 - center_pos.0;
         let dy = start_pos.1 - center_pos.1;
-        arc_radii.push((dx * dx + dy * dy).sqrt());
+        arc_radii.push(dx.hypot(dy));
     }
     let first = arc_radii[0];
     for r in &arc_radii {
@@ -225,8 +225,8 @@ fn mirror_add_round_rect_pad_mints_4_arcs_linked_to_corner_r() {
 // v0.24 Phase 3 — A2/A3/A4 Properties row + Unlink + reverse-mirror
 // ─────────────────────────────────────────────────────────────────
 
-/// v0.24 Phase 3 (Track A2) — placing a RoundRect pad in Pads mode
-/// registers a `corner_r` shape_params binding that the panel
+/// v0.24 Phase 3 (Track A2) — placing a `RoundRect` pad in Pads mode
+/// registers a `corner_r` `shape_params` binding that the panel
 /// context surfaces as a `PadShapeParamSummary` so the Properties
 /// panel can render an editable "Corner radius" row.
 #[test]
@@ -275,7 +275,7 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
     // (FootprintSelectPad re-selects the pad and triggers
     // refresh_panel_ctx in the post-dispatch flow).
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
+        path,
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectPad(Some(0))),
     }));
 
@@ -306,7 +306,7 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
     );
 }
 
-/// v0.24 Phase 3 (Track A2) — dispatching FpEditorEditPadShapeParam
+/// v0.24 Phase 3 (Track A2) — dispatching `FpEditorEditPadShapeParam`
 /// rewrites the bound sketch parameter and triggers a solve+rebake
 /// (warnings list stays empty).
 #[test]
@@ -382,9 +382,9 @@ fn editing_corner_radius_updates_all_4_arcs() {
     );
 }
 
-/// v0.24 Phase 3 (Track A3) — dispatching FootprintSketchUnlinkCornerRadius
+/// v0.24 Phase 3 (Track A3) — dispatching `FootprintSketchUnlinkCornerRadius`
 /// for one of the 4 corner Arcs mints a per-corner parameter and
-/// records the override on `pad.shape_params`. The shared corner_r
+/// records the override on `pad.shape_params`. The shared `corner_r`
 /// binding stays in place so the other 3 corners follow it.
 #[test]
 fn unlink_corner_radius_mints_per_corner_param() {
@@ -421,8 +421,7 @@ fn unlink_corner_radius_mints_per_corner_param() {
         .entities
         .iter()
         .find(|e| e.id == arc_entity_id)
-        .map(|e| matches!(e.kind, EntityKind::Arc { .. }))
-        .unwrap_or(false);
+        .is_some_and(|e| matches!(e.kind, EntityKind::Arc { .. }));
     assert!(arc_kind, "sidecar UUID points at an Arc entity");
 
     let file = FootprintFile::from_footprint(fp);
@@ -489,7 +488,7 @@ fn unlink_corner_radius_mints_per_corner_param() {
 
 /// v0.24 Phase 3 (Track A4) — after every solve, the reverse mirror
 /// re-derives `EditorPad.stack.corner_radius_pct` from the resolved
-/// corner_r parameter so the Pads-mode "Corner radius %" input stays
+/// `corner_r` parameter so the Pads-mode "Corner radius %" input stays
 /// in sync with sketch-side edits.
 #[test]
 fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
@@ -699,7 +698,7 @@ fn mirror_add_oval_pad_mints_2_arcs_2_lines_with_w_and_h_params() {
             .expect("Arc.start references a Point");
         let dx = start_pos.0 - center_pos.0;
         let dy = start_pos.1 - center_pos.1;
-        arc_radii.push((dx * dx + dy * dy).sqrt());
+        arc_radii.push(dx.hypot(dy));
     }
     assert!(
         (arc_radii[0] - arc_radii[1]).abs() < 1e-9,
@@ -826,8 +825,8 @@ fn editing_oval_width_param_propagates_through_solve() {
 // ─────────────────────────────────────────────────────────────────
 
 /// v0.24 Track A6 — placing a Chamfered pad in Pads mode mirrors
-/// into the sketch as a parametric outline. With only the top_left +
-/// top_right corners enabled, the mint should:
+/// into the sketch as a parametric outline. With only the `top_left` +
+/// `top_right` corners enabled, the mint should:
 ///   - 1 centre Point + 4 bbox corner Points = 5 Points (baseline).
 ///   - Per ENABLED corner: 2 anchor Points (8 entries' worth ÷ 2
 ///     corners = 4 anchor Points total).
@@ -963,11 +962,11 @@ fn mirror_add_chamfered_pad_mints_anchors_per_enabled_corner() {
 }
 
 /// v0.24 Track A6 — editing the shared `chamfer_len_<slug>`
-/// parameter routes through the FootprintSketchEditParameter
+/// parameter routes through the `FootprintSketchEditParameter`
 /// dispatch path: rewrites the sketch parameter, runs a fresh
 /// solve+rebake, and the post-solve chamfer-anchor mirror
 /// (`mirror_solve_to_chamfer_anchors`) rewrites the anchor Point
-/// coordinates from the resolved chamfer_len value. Verifies that
+/// coordinates from the resolved `chamfer_len` value. Verifies that
 /// the shared-parameter wiring is end-to-end live (parameter
 /// rewrite → solve → entity-position update).
 #[test]
