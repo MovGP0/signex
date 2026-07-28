@@ -25,15 +25,24 @@ use uuid::Uuid;
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 /// 1 µm integer bucket — the union-find key space and the single definition of
-/// "same point" for the whole derivation (D5.5). `pub` so `signex-erc`'s rules
+/// "same point" for the whole derivation (D5.5).
+///
+/// `pub` so `signex-erc`'s rules
 /// can compare positions with the exact same metric instead of hand-rolling a
 /// second float-epsilon `same()` (issue #388).
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "schematic coordinates are deliberately quantized to integer micrometres"
+)]
 pub fn pt_key(p: &Point) -> Key {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer
-/// key space. A zero cross-product (computed in `i128` so large micron
+/// key space.
+///
+/// A zero cross-product (computed in `i128` so large micron
 /// coordinates can't overflow) plus a bounding-box containment check.
 ///
 /// Collinearity is **exact** in the 1 µm bucket space (D5.5): `p` must sit
@@ -50,9 +59,10 @@ pub fn pt_key(p: &Point) -> Key {
 /// point to a wire's interior the same way [`merged_sheet_parent`] anchors
 /// labels, instead of re-deriving an endpoint-only approximation that
 /// disagrees with the netlist on mid-wire taps (issue #388).
+#[must_use]
 pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
-    let cross =
-        (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
+    let cross = i128::from(b.0 - a.0) * i128::from(p.1 - a.1)
+        - i128::from(b.1 - a.1) * i128::from(p.0 - a.0);
     if cross != 0 {
         return false;
     }
@@ -82,7 +92,7 @@ pub fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
 /// The old inline form — union into the first matching segment, then `break` —
 /// broke both: at a junction-less T it bridged or not depending purely on which
 /// wire the slice yielded first.
-pub(crate) fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[(Point, Point)]) {
+pub fn anchor_point(parent: &mut HashMap<Key, Key>, pk: Key, segments: &[(Point, Point)]) {
     let keyed = || segments.iter().map(|(a, b)| (pt_key(a), pt_key(b)));
 
     if keyed().any(|(ak, bk)| pk == ak || pk == bk) {
@@ -123,7 +133,7 @@ fn point_is_connected(pos: &Point, sheet: &SchematicSheet) -> bool {
 
 /// Selection priority of a label kind for naming a net: `Global > Power >
 /// Hierarchical > Net`.
-pub(crate) fn label_priority(kind: LabelType) -> u8 {
+pub const fn label_priority(kind: LabelType) -> u8 {
     match kind {
         LabelType::Global => 3,
         LabelType::Power => 2,
@@ -138,7 +148,7 @@ pub(crate) fn label_priority(kind: LabelType) -> u8 {
 /// the last candidate in (label-document order, then power-carrier order),
 /// matching the previous `max_by_key` tie-break — so label-only nets keep their
 /// exact names and the single-sheet equivalence gate holds.
-pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {
+pub fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {
     let mut best: Option<(u8, String)> = None;
     for l in labels {
         if l.text.is_empty() {
@@ -166,7 +176,7 @@ pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<
 /// already reads them so, while `build_netlist` used to ignore them; cross-sheet
 /// supply rails and same-sheet power-only nets both depend on this. `parent`
 /// must already be fully merged ([`merged_sheet_parent`]).
-pub(crate) fn power_name_carriers(
+pub fn power_name_carriers(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
 ) -> Vec<(Key, String)> {
@@ -192,7 +202,9 @@ pub(crate) fn power_name_carriers(
 }
 
 /// The electrical connectivity of a single sheet: a union-find over wire
-/// endpoints with junction T-merges. This is the shared core both
+/// endpoints with junction T-merges.
+///
+/// This is the shared core both
 /// [`build_netlist`] and the net-colour flood ([`flood_net_elements`]) read,
 /// so they can never disagree on which points sit on the same net. The app
 /// previously hand-rolled its own coarser copy (0.01 mm buckets, no interior
@@ -207,6 +219,7 @@ impl SheetConnectivity {
     /// including a wire that ends on another wire's interior (a T-junction).
     /// Union-find over endpoints alone never merges that case, so the junction
     /// is what asserts the connection. Regression: issue #107.
+    #[must_use]
     pub fn build(sheet: &SchematicSheet) -> Self {
         let wires: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
         let junctions: Vec<Point> = sheet.junctions.iter().map(|j| j.position).collect();
@@ -219,6 +232,7 @@ impl SheetConnectivity {
     /// connectivity primitive shared across the crate boundary — the ERC context
     /// feeds its own snapshot geometry through here so it derives net membership
     /// identically instead of hand-rolling a second union-find.
+    #[must_use]
     pub fn from_segments(wires: &[(Point, Point)], junctions: &[Point]) -> Self {
         let mut parent: HashMap<Key, Key> = HashMap::new();
         for (start, end) in wires {
@@ -319,13 +333,16 @@ pub struct FloodElements {
 
 /// Every wire and junction on the same net as `target_wire`, for the
 /// net-colour flood. Returns `None` when `target_wire` is not a wire in
-/// `sheet`. Uses the same [`merged_connectivity`] as [`build_netlist`], so the
+/// `sheet`.
+///
+/// Uses the same [`merged_connectivity`] as [`build_netlist`], so the
 /// highlight follows the real net exactly — it can neither bleed across nets
 /// (the old 0.01 mm-bucket over-merge) nor miss a T-junction the way the app's
 /// previous inline union-find did, and it paints *every* wire on the net,
 /// including a physically disjoint one joined only by a same-name label
 /// (issue #404 — a physical-only flood contradicted the netlist it claims to
 /// colour).
+#[must_use]
 pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<FloodElements> {
     let target = sheet.wires.iter().find(|w| w.uuid == target_wire)?;
     let mut conn = merged_connectivity(sheet);
@@ -351,7 +368,7 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
 /// (wire, junction, and label anchoring) completes here, before any root is
 /// sampled: sampling a root and then mutating the map again is a correctness
 /// hazard the two-level stitcher relies on this to avoid.
-pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
+pub fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     merged_connectivity(sheet).parent
 }
 
@@ -386,7 +403,7 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
 /// Group each sheet label under its merged net root, so the highest-priority
 /// label can name the net. `parent` must already be fully merged
 /// ([`merged_sheet_parent`]).
-pub(crate) fn collect_net_labels<'a>(
+pub fn collect_net_labels<'a>(
     sheet: &'a SchematicSheet,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, Vec<&'a Label>> {
@@ -402,7 +419,7 @@ pub(crate) fn collect_net_labels<'a>(
 /// [`Terminal`] under its net root. A pin counts only if something lands on its
 /// tip (wire/bus/label/no-connect) — see [`point_is_connected`]. `parent` must
 /// already be fully merged ([`merged_sheet_parent`]).
-pub(crate) fn collect_terminals(
+pub fn collect_terminals(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, Vec<Terminal>> {
@@ -422,10 +439,10 @@ pub(crate) fn collect_terminals(
                 continue;
             }
             // Pin id: prefer the pin number when present, else fall back to its name.
-            let pin = if !lp.pin.number.is_empty() {
-                lp.pin.number.clone()
-            } else {
+            let pin = if lp.pin.number.is_empty() {
                 lp.pin.name.clone()
+            } else {
+                lp.pin.number.clone()
             };
             let root = uf_find(parent, pt_key(&world_pos));
             net_terms.entry(root).or_default().push(Terminal {
@@ -442,7 +459,7 @@ pub(crate) fn collect_terminals(
 /// membership of the net (what the net-flood highlights and the ratsnest read).
 /// Wires and junctions are kept in document order for determinism. `parent`
 /// must already be fully merged ([`merged_sheet_parent`]).
-pub(crate) fn collect_membership(
+pub fn collect_membership(
     sheet: &SchematicSheet,
     parent: &mut HashMap<Key, Key>,
 ) -> HashMap<Key, (Vec<Uuid>, Vec<Uuid>)> {
@@ -483,7 +500,7 @@ pub(crate) fn collect_membership(
 /// names they emit agree. Returns each base name that collided, in net order,
 /// for callers that surface it (the stitcher's `NameCollision`); single-sheet
 /// callers discard it.
-pub(crate) fn dedup_net_names(nets: &mut [Net]) -> Vec<String> {
+pub fn dedup_net_names(nets: &mut [Net]) -> Vec<String> {
     let mut used: HashSet<String> = HashSet::with_capacity(nets.len());
     let mut collided: Vec<String> = Vec::new();
     let mut reported: HashSet<String> = HashSet::new();
@@ -524,6 +541,7 @@ pub(crate) fn dedup_net_names(nets: &mut [Net]) -> Vec<String> {
 /// the net their tip lands on. Output is deterministic: nets are numbered
 /// `1..=N` in sorted-root order and each net's terminals are sorted by
 /// `(reference, pin)`.
+#[must_use]
 pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     let mut parent = merged_sheet_parent(sheet);
     let net_labels = collect_net_labels(sheet, &mut parent);
@@ -553,16 +571,14 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
         .into_iter()
         .enumerate()
         .map(|(idx, root)| {
-            let id = NetId(idx as u32 + 1);
-            let labels = net_labels.get(&root).map(Vec::as_slice).unwrap_or(&[]);
+            let id = NetId(u32::try_from(idx).map_or(u32::MAX, |index| index.saturating_add(1)));
+            let labels = net_labels.get(&root).map_or(&[][..], Vec::as_slice);
             let power_vals: Vec<&str> = power_by_root
                 .get(&root)
                 .map(|v| v.iter().map(String::as_str).collect())
                 .unwrap_or_default();
             let selected = best_net_name(labels, &power_vals);
-            let name = selected
-                .map(|(_, t)| t)
-                .unwrap_or_else(|| format!("N${}", id.0));
+            let name = selected.map_or_else(|| format!("N${}", id.0), |(_, t)| t);
 
             let (wires, junctions) = membership.remove(&root).unwrap_or_default();
             let mut terminals = net_terms.remove(&root).unwrap_or_default();

@@ -757,8 +757,8 @@ fn terminals_order_designators_and_pins_naturally() {
     );
     for n in 1..=10 {
         // Mid-span pins need a junction to count as terminals.
-        sheet.junctions.push(junction(pt(n as f64, 0.0)));
-        place(&mut sheet, &format!("R{n}"), "R", pt(n as f64, 0.0));
+        sheet.junctions.push(junction(pt(f64::from(n), 0.0)));
+        place(&mut sheet, &format!("R{n}"), "R", pt(f64::from(n), 0.0));
     }
     sheet.junctions.push(junction(pt(50.0, 0.0)));
     place(&mut sheet, "U1", "MULTI", pt(50.0, 0.0));

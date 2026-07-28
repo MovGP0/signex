@@ -771,8 +771,8 @@ fn project_terminals_order_designators_naturally() {
     add_lib(&mut sheet, "R");
     for n in 1..=10 {
         // Mid-span pins need a junction to count as terminals.
-        sheet.junctions.push(junction(pt(n as f64, 0.0)));
-        place(&mut sheet, &format!("R{n}"), "R", pt(n as f64, 0.0));
+        sheet.junctions.push(junction(pt(f64::from(n), 0.0)));
+        place(&mut sheet, &format!("R{n}"), "R", pt(f64::from(n), 0.0));
     }
 
     let project = build_project_netlist(&sheet, &HashMap::new(), None);

@@ -122,8 +122,10 @@ struct Analysis<'a> {
 }
 
 /// Build the whole-project [`Netlist`] by stitching the root sheet to its
-/// children — plus, per #430, any `children` entry the root's hierarchy never
-/// reaches, stitched in as its own independent top-level page.
+/// children.
+///
+/// Per #430, any `children` entry the root's hierarchy never reaches is
+/// stitched in as its own independent top-level page.
 ///
 /// `children` is keyed by the exact `ChildSheet.filename` string as written on
 /// the parent for a sheet reached by a real reference (not a basename); a
@@ -134,6 +136,13 @@ struct Analysis<'a> {
 /// known — lets a child that re-references the root be caught as a cycle. See
 /// the module docs for the stitching rules. `build_project_netlist(root, &{},
 /// None).netlist` equals `build_netlist(root)` byte-for-byte.
+#[must_use]
+#[expect(
+    clippy::implicit_hasher,
+    clippy::needless_collect,
+    clippy::too_many_lines,
+    reason = "the public snapshot API uses HashMap and keys must be owned before path compression"
+)]
 pub fn build_project_netlist(
     root: &SchematicSheet,
     children: &HashMap<String, SchematicSheet>,
@@ -269,7 +278,7 @@ pub fn build_project_netlist(
         .into_iter()
         .enumerate()
         .map(|(idx, r)| {
-            let id = NetId(idx as u32 + 1);
+            let id = NetId(u32::try_from(idx).map_or(u32::MAX, |index| index.saturating_add(1)));
             let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
             let mut terminals = r.terminals;
             terminals.sort_by(|a, b| {
@@ -469,7 +478,7 @@ fn visit<'a>(
     occs.push(Occ {
         sheet,
         name_chain,
-        filename: this_key.map(|k| k.to_string()),
+        filename: this_key.map(std::string::ToString::to_string),
     });
     if let Some(k) = this_key {
         path.push(k.to_string());
@@ -519,12 +528,11 @@ fn visit<'a>(
 /// Union `node` into the level-2 class of `name`, seeding the bucket the first
 /// time a name is seen.
 fn bucket_join(l2: &mut HashMap<L2, L2>, bucket: &mut HashMap<String, L2>, name: &str, node: L2) {
-    match bucket.get(name).copied() {
-        Some(rep) => uf_union(l2, node, rep),
-        None => {
-            bucket.insert(name.to_string(), node);
-            uf_find(l2, node);
-        }
+    if let Some(rep) = bucket.get(name).copied() {
+        uf_union(l2, node, rep);
+    } else {
+        bucket.insert(name.to_string(), node);
+        uf_find(l2, node);
     }
 }
 

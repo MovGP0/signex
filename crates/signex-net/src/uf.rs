@@ -13,7 +13,9 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Bucketed point key — quantised mm coordinate so coincident-up-to-eps
-/// endpoints hash to the same node. The 1 µm bucket (`* 1000.0`) matches
+/// endpoints hash to the same node.
+///
+/// The 1 µm bucket (`* 1000.0`) matches
 /// the schematic's underlying nm precision and is finer than any real
 /// snap step (smallest is 25.4 µm = 1 mil).
 pub type Key = (i64, i64);
@@ -23,7 +25,10 @@ pub type Key = (i64, i64);
 /// thread stack.
 ///
 /// Inserts `x` into `parent` if it isn't already present.
-pub fn find<K: Eq + Hash + Copy>(parent: &mut HashMap<K, K>, x: K) -> K {
+pub fn find<K: Eq + Hash + Copy, S: ::std::hash::BuildHasher>(
+    parent: &mut HashMap<K, K, S>,
+    x: K,
+) -> K {
     parent.entry(x).or_insert(x);
     // Pass 1: walk to the root, recording every node along the chain.
     let mut visited: Vec<K> = Vec::new();
@@ -53,7 +58,11 @@ pub fn find<K: Eq + Hash + Copy>(parent: &mut HashMap<K, K>, x: K) -> K {
 /// leaks union order into the root, and `build_netlist` numbers nets by sorted
 /// root, so reversing document wire order could permute `NetId`s and `N$k`
 /// names for an otherwise identical partition (issue #402).
-pub fn union<K: Eq + Hash + Copy + Ord>(parent: &mut HashMap<K, K>, a: K, b: K) {
+pub fn union<K: Eq + Hash + Copy + Ord, S: ::std::hash::BuildHasher>(
+    parent: &mut HashMap<K, K, S>,
+    a: K,
+    b: K,
+) {
     let ra = find(parent, a);
     let rb = find(parent, b);
     if ra != rb {
