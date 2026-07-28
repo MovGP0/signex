@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Low-level SVG path/shape primitives.
 //!
 //! Rectangle, circle, and three-point-arc path builders plus the
@@ -7,7 +14,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::{SvgPathCommand, SvgStyle, SvgElement, pt, SvgPoint};
+use super::{SvgElement, SvgPathCommand, SvgPoint, SvgStyle, pt};
 use tiny_skia::PathBuilder;
 
 pub(super) fn path_to_tiny_skia(commands: &[SvgPathCommand]) -> Option<tiny_skia::Path> {

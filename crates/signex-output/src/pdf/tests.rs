@@ -25,8 +25,8 @@ fn empty_sheet() -> SchematicSheet {
         bus_entries: vec![],
         drawings: vec![],
         no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
+        title_block: std::collections::HashMap::default(),
+        lib_symbols: std::collections::HashMap::default(),
     }
 }
 

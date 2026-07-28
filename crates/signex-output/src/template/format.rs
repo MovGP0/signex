@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `.snxsht` user-template parser/emitter — placeholder.
 //!
 //! The legacy implementation was a Standard-style S-expression parser

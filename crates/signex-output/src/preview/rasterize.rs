@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `tiny-skia` CPU rasteriser for the preview pipeline via SVG context.
 
 use super::PreviewOptions;

@@ -20,7 +20,6 @@ impl PageSize {
             "A1" => Self::IsoA1,
             "A2" => Self::IsoA2,
             "A3" => Self::IsoA3,
-            "A4" => Self::IsoA4,
             "A5" => Self::IsoA5,
             "B5" => Self::Custom {
                 width_mm: 257.0,
@@ -31,10 +30,8 @@ impl PageSize {
             "C" => Self::AnsiC,
             "D" => Self::AnsiD,
             "E" => Self::AnsiE,
-            "USLetter" => Self::UsLetter,
-            "USLegal" => Self::UsLegal,
-            "Letter" => Self::UsLetter,
-            "Legal" => Self::UsLegal,
+            "USLetter" | "Letter" => Self::UsLetter,
+            "USLegal" | "Legal" => Self::UsLegal,
             "Tabloid" => Self::Custom {
                 width_mm: 431.8,
                 height_mm: 279.4,
@@ -71,12 +68,11 @@ impl PageSize {
             Self::IsoA3 => (297.0, 420.0),
             Self::IsoA4 => (210.0, 297.0),
             Self::IsoA5 => (148.0, 210.0),
-            Self::AnsiA => (215.9, 279.4),
+            Self::AnsiA | Self::UsLetter => (215.9, 279.4),
             Self::AnsiB => (279.4, 431.8),
             Self::AnsiC => (431.8, 558.8),
             Self::AnsiD => (558.8, 863.6),
             Self::AnsiE => (863.6, 1117.6),
-            Self::UsLetter => (215.9, 279.4),
             Self::UsLegal => (215.9, 355.6),
             Self::Custom {
                 width_mm,
@@ -91,14 +87,17 @@ impl PageSize {
     pub const fn dimensions_mm(self, orientation: Orientation) -> (f64, f64) {
         let (w, h) = self.portrait_dimensions_mm();
         match (self, orientation) {
-            (Self::Custom { .. }, _) => (w, h),
-            (_, Orientation::Portrait) => (w, h),
+            (Self::Custom { .. }, _) | (_, Orientation::Portrait) => (w, h),
             (_, Orientation::Landscape) => (h, w),
         }
     }
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "page-size tests compare exact standard dimensions"
+)]
 mod tests {
     use super::*;
 

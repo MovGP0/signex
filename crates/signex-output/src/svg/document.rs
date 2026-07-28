@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! The `SvgRenderContext` public surface and document serializers.
 //!
 //! `from_sheet` composes a schematic page into the `SvgElement` list
@@ -18,7 +26,11 @@ use super::symbols::{
     field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
 };
 use super::text::draw_text_outline;
-use super::{SvgRenderContext, SvgEvaluatorInputs, SvgStyle, SvgElement, SvgPathCommand, pt, normalize_standard_text, SvgTextAlign, SvgTextVAlign, normalize_standard_text_with_ctx, map_colour_mode, rgb_to_color};
+use super::{
+    SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgStyle, SvgTextAlign,
+    SvgTextVAlign, map_colour_mode, normalize_standard_text, normalize_standard_text_with_ctx, pt,
+    rgb_to_color,
+};
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};
@@ -26,6 +38,7 @@ use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::LabelType;
 use std::collections::HashMap;
 use std::fmt::Write as _;
+use tiny_skia::Transform;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
 
 impl SvgRenderContext {
@@ -413,7 +426,7 @@ impl SvgRenderContext {
                                 &path,
                                 &paint,
                                 FillRule::Winding,
-                                Default::default(),
+                                Transform::default(),
                                 None,
                             );
                         }
@@ -426,7 +439,7 @@ impl SvgRenderContext {
                                 width: style.stroke_width.max(0.5),
                                 ..Stroke::default()
                             };
-                            pixmap.stroke_path(&path, &paint, &stroke, Default::default(), None);
+                            pixmap.stroke_path(&path, &paint, &stroke, Transform::default(), None);
                         }
                     }
                 }
@@ -473,10 +486,8 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
         match element {
             SvgElement::Path { commands, style } => {
                 let d = to_svg_path_d(commands);
-                let stroke = style
-                    .stroke_rgb.map_or_else(|| "none".to_string(), rgb_css);
-                let fill = style
-                    .fill_rgb.map_or_else(|| "none".to_string(), rgb_css);
+                let stroke = style.stroke_rgb.map_or_else(|| "none".to_string(), rgb_css);
+                let fill = style.fill_rgb.map_or_else(|| "none".to_string(), rgb_css);
                 let _ = writeln!(
                     out,
                     "  <path d=\"{}\" stroke=\"{}\" fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",

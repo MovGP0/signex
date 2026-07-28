@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! RFC 4180 CSV emitter for BOM export.
 //!
 //! Emits with UTF-8 BOM prefix and CRLF line endings for Windows compatibility.
@@ -13,7 +18,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
     // Write header row
     let headers: Vec<&str> = columns.iter().map(super::BomColumn::header).collect();
-    write_csv_row(&mut output, &headers)?;
+    write_csv_row(&mut output, &headers);
     output.extend_from_slice(b"\r\n");
 
     // Write data rows
@@ -34,7 +39,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             fields.push(value);
         }
 
-        write_csv_row(&mut output, &fields)?;
+        write_csv_row(&mut output, &fields);
         output.extend_from_slice(b"\r\n");
     }
 
@@ -42,7 +47,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 }
 
 /// Write a single CSV row with proper quoting and escaping per RFC 4180.
-fn write_csv_row(output: &mut Vec<u8>, fields: &[impl AsRef<str>]) -> Result<(), BomError> {
+fn write_csv_row(output: &mut Vec<u8>, fields: &[impl AsRef<str>]) {
     for (i, field) in fields.iter().enumerate() {
         let s = field.as_ref();
 
@@ -66,6 +71,4 @@ fn write_csv_row(output: &mut Vec<u8>, fields: &[impl AsRef<str>]) -> Result<(),
             output.push(b',');
         }
     }
-
-    Ok(())
 }

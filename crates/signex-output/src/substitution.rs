@@ -86,15 +86,21 @@ pub fn resolve(input: &str, ctx: &SubstitutionContext<'_>) -> String {
     let mut out = String::with_capacity(input.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{'
-            && let Some((token, end)) = scan_token(bytes, i + 2) {
-                let value = ctx.lookup(token).unwrap_or_default();
-                out.push_str(&value);
-                i = end + 1;
-                continue;
-            }
-        out.push(input[i..].chars().next().unwrap());
-        i += input[i..].chars().next().unwrap().len_utf8();
+        if bytes[i] == b'$'
+            && i + 1 < bytes.len()
+            && bytes[i + 1] == b'{'
+            && let Some((token, end)) = scan_token(bytes, i + 2)
+        {
+            let value = ctx.lookup(token).unwrap_or_default();
+            out.push_str(&value);
+            i = end + 1;
+            continue;
+        }
+        let Some(character) = input[i..].chars().next() else {
+            break;
+        };
+        out.push(character);
+        i += character.len_utf8();
     }
     out
 }

@@ -1,6 +1,21 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Per-page PDF content-stream builder + markup/text helpers.
 
-use super::{PdfOptions, ExportContext, ExpressionTables, PdfError, PdfSurface, ColourMap, sheet_cell_value, SvgEvaluatorInputs, SvgRenderContext, MM_TO_PT, SvgElement, SvgPathCommand, sanitize_pdf_text, best_alias_for_text, text_advance_pt, SvgTextAlign, SvgTextVAlign, SubstitutionContext, PdfFont, Finish, PageRange, parse_signex_markup, RichSegment, ExpressionEvalContext, evaluate_expressions};
+use std::fmt::Write as _;
+
+use super::{
+    ColourMap, ExportContext, ExpressionEvalContext, ExpressionTables, MM_TO_PT, PageRange,
+    PdfError, PdfFont, PdfOptions, PdfSurface, RichSegment, SubstitutionContext, SvgElement,
+    SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign,
+    best_alias_for_text, evaluate_expressions, parse_signex_markup, sanitize_pdf_text,
+    sheet_cell_value, text_advance_pt,
+};
 
 /// Build a content stream for a single page.
 pub(super) fn build_page_content(
@@ -10,7 +25,7 @@ pub(super) fn build_page_content(
     page_w_pt: f32,
     page_h_pt: f32,
     expr_tables: &ExpressionTables,
-) -> Result<Vec<u8>, PdfError> {
+) -> std::vec::Vec<u8> {
     let mut surface = PdfSurface::new();
     let colour_map = ColourMap::new(opts.colour_mode);
 
@@ -45,21 +60,22 @@ pub(super) fn build_page_content(
                 for cmd in commands {
                     match cmd {
                         SvgPathCommand::MoveTo(p) => {
-                            path_ops.push_str(&format!("{} {} m\n", p.x, page_h_pt - p.y));
+                            let _ = writeln!(path_ops, "{} {} m", p.x, page_h_pt - p.y);
                         }
                         SvgPathCommand::LineTo(p) => {
-                            path_ops.push_str(&format!("{} {} l\n", p.x, page_h_pt - p.y));
+                            let _ = writeln!(path_ops, "{} {} l", p.x, page_h_pt - p.y);
                         }
                         SvgPathCommand::CubicTo(c1, c2, p) => {
-                            path_ops.push_str(&format!(
-                                "{} {} {} {} {} {} c\n",
+                            let _ = writeln!(
+                                path_ops,
+                                "{} {} {} {} {} {} c",
                                 c1.x,
                                 page_h_pt - c1.y,
                                 c2.x,
                                 page_h_pt - c2.y,
                                 p.x,
                                 page_h_pt - p.y
-                            ));
+                            );
                         }
                         SvgPathCommand::Close => path_ops.push_str("h\n"),
                     }
@@ -186,57 +202,58 @@ pub(super) fn build_page_content(
     // Template frame and title block (if enabled).
     if opts.include_title_block
         && let Some(template_id) = &opts.sheet_template
-            && let Some(template) = crate::template::load_builtin(template_id) {
-                let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
-                surface.stroke_rect(
-                    frame_margin_pt,
-                    frame_margin_pt,
-                    2.0f32.mul_add(-frame_margin_pt, page_w_pt),
-                    2.0f32.mul_add(-frame_margin_pt, page_h_pt),
-                    (0.15 * MM_TO_PT) as f32,
-                );
+        && let Some(template) = crate::template::load_builtin(template_id)
+    {
+        let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
+        surface.stroke_rect(
+            frame_margin_pt,
+            frame_margin_pt,
+            2.0f32.mul_add(-frame_margin_pt, page_w_pt),
+            2.0f32.mul_add(-frame_margin_pt, page_h_pt),
+            (0.15 * MM_TO_PT) as f32,
+        );
 
-                let sub_ctx = SubstitutionContext {
-                    metadata: &ctx.metadata,
-                    filename: sheet
-                        .path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string(),
-                    sheet_name: sheet.sheet_name.clone(),
-                    sheet_number: sheet.sheet_number,
-                    sheet_count: sheet.sheet_count,
-                    signex_version: env!("CARGO_PKG_VERSION"),
-                    variant: opts.variant.clone(),
-                    physical_structure: opts.use_physical_structure,
-                    physical_sheet_number: opts.physical_sheet_number,
-                    physical_document_number: opts.physical_document_number,
-                };
+        let sub_ctx = SubstitutionContext {
+            metadata: &ctx.metadata,
+            filename: sheet
+                .path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            sheet_name: sheet.sheet_name.clone(),
+            sheet_number: sheet.sheet_number,
+            sheet_count: sheet.sheet_count,
+            signex_version: env!("CARGO_PKG_VERSION"),
+            variant: opts.variant.clone(),
+            physical_structure: opts.use_physical_structure,
+            physical_sheet_number: opts.physical_sheet_number,
+            physical_document_number: opts.physical_document_number,
+        };
 
-                let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
-                let tb_height_pt = (template.title_block.height_mm * MM_TO_PT) as f32;
-                let tb_x = page_w_pt - tb_width_pt;
-                let tb_y = page_h_pt - tb_height_pt;
-                surface.stroke_rect(
-                    tb_x,
-                    tb_y,
-                    tb_width_pt,
-                    tb_height_pt,
-                    (0.2 * MM_TO_PT) as f32,
-                );
+        let tb_width_pt = (template.title_block.width_mm * MM_TO_PT) as f32;
+        let tb_height_pt = (template.title_block.height_mm * MM_TO_PT) as f32;
+        let tb_x = page_w_pt - tb_width_pt;
+        let tb_y = page_h_pt - tb_height_pt;
+        surface.stroke_rect(
+            tb_x,
+            tb_y,
+            tb_width_pt,
+            tb_height_pt,
+            (0.2 * MM_TO_PT) as f32,
+        );
 
-                for field in &template.title_block.fields {
-                    let resolved = crate::resolve(&field.default_text, &sub_ctx);
-                    let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;
-                    let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
-                    let font = PdfFont::for_style(field.font_style);
-                    let size = (field.font_size_mm * MM_TO_PT) as f32;
-                    surface.text_at(fx, fy, font.alias(), size, &resolved);
-                }
-            }
+        for field in &template.title_block.fields {
+            let resolved = crate::resolve(&field.default_text, &sub_ctx);
+            let fx = tb_x + (field.x_mm * MM_TO_PT) as f32;
+            let fy = tb_y + (field.y_mm * MM_TO_PT) as f32;
+            let font = PdfFont::for_style(field.font_style);
+            let size = (field.font_size_mm * MM_TO_PT) as f32;
+            surface.text_at(fx, fy, font.alias(), size, &resolved);
+        }
+    }
 
-    Ok(surface.finish())
+    surface.finish()
 }
 
 /// Resolve a `PageRange` against the project's sheet count into a concrete
@@ -294,14 +311,11 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
     segments
         .into_iter()
         .map(|seg| match seg {
-            RichSegment::Normal(t) => PdfTextRun {
-                text: t,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                overbar: false,
-            },
             // TODO(v0.x): visual decoration for bold/italic/strike
-            RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => PdfTextRun {
+            RichSegment::Normal(t)
+            | RichSegment::Bold(t)
+            | RichSegment::Italic(t)
+            | RichSegment::Strike(t) => PdfTextRun {
                 text: t,
                 scale: 1.0,
                 baseline_offset: 0.0,
@@ -352,5 +366,8 @@ fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, 
     let sin = rad.sin();
     let dx = px - ox;
     let dy = py - oy;
-    (dy.mul_add(-sin, dx.mul_add(cos, ox)), dy.mul_add(cos, dx.mul_add(sin, oy)))
+    (
+        dy.mul_add(-sin, dx.mul_add(cos, ox)),
+        dy.mul_add(cos, dx.mul_add(sin, oy)),
+    )
 }

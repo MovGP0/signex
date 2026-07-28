@@ -1,3 +1,8 @@
+#![expect(
+    clippy::redundant_closure,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! QA harness — exercise every v0.8 exporter against a real Signex
 //! project and report sizes / sheet counts / validation issues.
 //!
@@ -7,6 +12,11 @@
 //! drives `PdfExporter` / `NetlistExporter` / `BomExporter` (CSV / HTML / XLSX),
 //! and prints a one-line summary per artefact plus any BOM validation
 //! issues. Exits non-zero if any export panics or returns Err.
+
+#![expect(
+    clippy::expect_used,
+    reason = "the manual QA harness intentionally fails fast on setup and artifact I/O errors"
+)]
 
 use std::path::{Path, PathBuf};
 
@@ -20,10 +30,13 @@ use signex_types::project::parse_project;
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let project_path = if let Some(p) = args.next() { PathBuf::from(p) } else {
-        eprintln!("usage: qa_harness <project.snxprj> [out_dir]");
-        std::process::exit(2);
-    };
+    let project_path = args.next().map_or_else(
+        || {
+            eprintln!("usage: qa_harness <project.snxprj> [out_dir]");
+            std::process::exit(2);
+        },
+        |p| PathBuf::from(p),
+    );
     let out_dir = PathBuf::from(args.next().unwrap_or_else(|| {
         std::env::temp_dir()
             .join("signex_qa")

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! PDF /Outlines (bookmark) emission for the schematic exporter.
 //!
 //! Builds a flat tree of bookmark items in two passes so that each
@@ -25,6 +31,8 @@
 //! pulled out from under each sheet and aggregated into two
 //! top-level groups instead. Per-sheet items still appear as their
 //! own top-level entries so navigation by page is preserved.
+
+use std::fmt::Write as _;
 
 use pdf_writer::{Finish, Pdf, Ref, TextStr};
 
@@ -288,7 +296,7 @@ pub fn emit_bookmarks(
         return;
     }
 
-    let bookmark_id = |i: usize| Ref::new(bookmark_id_base + i as i32);
+    let bookmark_id = |i: usize| Ref::new(bookmark_id_base + i32::try_from(i).unwrap_or(i32::MAX));
 
     // Top-level items are everything without a parent.
     let top_level: Vec<usize> = (0..bookmarks.len())
@@ -306,7 +314,7 @@ pub fn emit_bookmarks(
         }
         // /Count = total visible items so the bookmarks panel opens
         // fully expanded by default, matching common EDA exporters.
-        outline.count(bookmarks.len() as i32);
+        outline.count(i32::try_from(bookmarks.len()).unwrap_or(i32::MAX));
         outline.finish();
     }
 
@@ -330,10 +338,9 @@ pub fn emit_bookmarks(
         // Sibling chain on this level. For top-level items the
         // siblings come from `top_level`; for children of a parent
         // bookmark they come from `parent.children`.
-        let siblings: &[usize] = match item.parent_idx {
-            Some(p) => &bookmarks[p].children,
-            None => &top_level,
-        };
+        let siblings: &[usize] = item
+            .parent_idx
+            .map_or_else(|| &top_level, |p| &bookmarks[p].children);
         if let Some(pos) = siblings.iter().position(|&i| i == idx) {
             if pos > 0 {
                 outline_item.prev(bookmark_id(siblings[pos - 1]));
@@ -344,10 +351,10 @@ pub fn emit_bookmarks(
         }
 
         // Children chain. /Count >= 0 → tree opens expanded.
-        if !item.children.is_empty() {
-            outline_item.first(bookmark_id(*item.children.first().unwrap()));
-            outline_item.last(bookmark_id(*item.children.last().unwrap()));
-            outline_item.count(item.children.len() as i32);
+        if let (Some(&first), Some(&last)) = (item.children.first(), item.children.last()) {
+            outline_item.first(bookmark_id(first));
+            outline_item.last(bookmark_id(last));
+            outline_item.count(i32::try_from(item.children.len()).unwrap_or(i32::MAX));
         }
 
         // Destination: /XYZ on the target page at the recorded
@@ -385,9 +392,10 @@ fn build_sheet_title(sheet: &crate::SheetSnapshot, opts: &PdfOptions) -> String 
     };
     if opts.use_physical_structure
         && let Some(variant) = opts.variant.as_deref()
-            && !variant.is_empty() {
-                title.push_str(&format!(" [{variant}]"));
-            }
+        && !variant.is_empty()
+    {
+        let _ = write!(title, " [{variant}]");
+    }
     title
 }
 

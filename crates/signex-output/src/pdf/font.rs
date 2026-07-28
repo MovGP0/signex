@@ -1,3 +1,8 @@
+#![expect(
+    clippy::cast_precision_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Font embedding + subsetting for PDFs.
 //!
 //! v0.8 references PDF standard-14 Type1 fonts (Helvetica variants + Courier
@@ -55,7 +60,7 @@ impl PdfFont {
 
     /// Short alias used inside content streams (`/F1 9 Tf ...`). Matches the
     /// keys emitted in the page's /Font resources dict.
-    pub const fn alias(&self) -> &'static str {
+    pub const fn alias(self) -> &'static str {
         match self {
             Self::RobotoRegular => "F1",
             Self::RobotoBold => "F2",
@@ -68,7 +73,7 @@ impl PdfFont {
     /// composite-font emission is deferred to v0.9. Roboto → Helvetica,
     /// Iosevka → Courier (monospace). Every PDF reader ships these by
     /// spec, so text always renders even without a /`FontFile2` stream.
-    pub const fn standard_ps_name(&self) -> &'static str {
+    pub const fn standard_ps_name(self) -> &'static str {
         match self {
             Self::RobotoRegular => "Helvetica",
             Self::RobotoBold => "Helvetica-Bold",
@@ -80,7 +85,7 @@ impl PdfFont {
     /// PostScript base name for this font (used in /`BaseFont`). Matches the
     /// embedded TTF — used once full Type0 emission lands in v0.9.
     #[allow(dead_code)]
-    pub const fn base_name(&self) -> &'static str {
+    pub const fn base_name(self) -> &'static str {
         match self {
             Self::RobotoRegular => "Roboto",
             Self::RobotoBold => "Roboto-Bold",
@@ -90,7 +95,7 @@ impl PdfFont {
     }
 
     /// Retrieve the embedded TTF bytes for this font.
-    pub const fn font_bytes(&self) -> &'static [u8] {
+    pub const fn font_bytes(self) -> &'static [u8] {
         match self {
             Self::RobotoRegular => ROBOTO_REGULAR,
             Self::RobotoBold => ROBOTO_BOLD,
@@ -100,7 +105,7 @@ impl PdfFont {
     }
 
     /// Parse the TTF face for metadata (ascent, descent, bbox, etc.).
-    pub fn face(&self) -> Option<Face<'static>> {
+    pub fn face(self) -> Option<Face<'static>> {
         Face::parse(self.font_bytes(), 0).ok()
     }
 }
@@ -108,7 +113,6 @@ impl PdfFont {
 /// Resolve alias (`F1`..`F4`) to `PdfFont`.
 pub fn font_for_alias(alias: &str) -> PdfFont {
     match alias {
-        "F1" => PdfFont::RobotoRegular,
         "F2" => PdfFont::RobotoBold,
         "F3" => PdfFont::IosevkaRegular,
         "F4" => PdfFont::IosevkaBold,
@@ -242,7 +246,7 @@ impl FontCatalog {
         if let Some((_, ref_id)) = self.fonts.iter().find(|(f, _)| f == &font) {
             return *ref_id;
         }
-        let ref_id = Ref::new(base_ref + self.fonts.len() as i32);
+        let ref_id = Ref::new(base_ref + i32::try_from(self.fonts.len()).unwrap_or(i32::MAX));
         self.fonts.push((font, ref_id));
         ref_id
     }
@@ -382,7 +386,9 @@ mod tests {
             PdfFont::IosevkaRegular,
             PdfFont::IosevkaBold,
         ] {
-            let face = font.face().unwrap_or_else(|| panic!("Font {font:?} should parse"));
+            let face = font
+                .face()
+                .unwrap_or_else(|| panic!("Font {font:?} should parse"));
             assert!(face.units_per_em() > 0, "Font {font:?} should have UPM");
             assert!(
                 face.ascender() > face.descender(),

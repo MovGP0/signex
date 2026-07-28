@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::if_same_then_else,
+    clippy::used_underscore_binding,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Colour mode transformations for PDF export.
 //!
 //! Maps RGB colours through a transformation based on `ColourMode`:
@@ -23,7 +30,10 @@ impl ColourMap {
         match self.mode {
             ColourMode::Colour => (r, g, b),
             ColourMode::Grayscale => {
-                let luminance = 0.114f64.mul_add(f64::from(b), 0.587f64.mul_add(f64::from(g), 0.299 * f64::from(r)));
+                let luminance = 0.114f64.mul_add(
+                    f64::from(b),
+                    0.587f64.mul_add(f64::from(g), 0.299 * f64::from(r)),
+                );
                 let lum_f32 = luminance.clamp(0.0, 1.0) as f32;
                 (lum_f32, lum_f32, lum_f32)
             }

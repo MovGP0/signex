@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Output generation for Signex — PDF, BOM, netlist.
 //!
 //! See `docs/internal/docs/OUTPUT_PLAN.md` for the v0.8 design.

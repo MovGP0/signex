@@ -1,3 +1,9 @@
+#![expect(
+    clippy::or_fun_call,
+    clippy::too_many_arguments,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Text rasterization — glyph outlining, markup runs, and fonts.
 //!
 //! Rasterizes an `SvgElement::Text` into `tiny_skia` glyph paths:
@@ -7,9 +13,9 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::{SvgTextAlign, SvgTextVAlign, rgb_to_color, normalize_standard_text};
+use super::{SvgTextAlign, SvgTextVAlign, normalize_standard_text, rgb_to_color};
 use signex_types::markup::{RichSegment, parse_signex_markup};
-use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke};
+use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
 pub(super) fn draw_text_outline(
@@ -71,7 +77,7 @@ pub(super) fn draw_text_outline(
                 if face.outline_glyph(gid, &mut builder).is_some()
                     && let Some(path) = builder.finish()
                 {
-                    pixmap.fill_path(&path, &paint, FillRule::Winding, Default::default(), None);
+                    pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::default(), None);
                 }
                 pen_x += glyph_advance(&face, gid, run_scale);
             } else {
@@ -91,7 +97,7 @@ pub(super) fn draw_text_outline(
                     width: (run_size * 0.08).max(0.5),
                     ..Stroke::default()
                 };
-                pixmap.stroke_path(&path, &paint, &stroke, Default::default(), None);
+                pixmap.stroke_path(&path, &paint, &stroke, Transform::default(), None);
             }
         }
     }
@@ -143,14 +149,11 @@ fn markup_runs(input: &str) -> Vec<MarkupRun> {
     segments
         .into_iter()
         .map(|seg| match seg {
-            RichSegment::Normal(t) => MarkupRun {
-                text: t,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                overbar: false,
-            },
             // TODO(v0.x): visual decoration for bold/italic/strike
-            RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => MarkupRun {
+            RichSegment::Normal(t)
+            | RichSegment::Bold(t)
+            | RichSegment::Italic(t)
+            | RichSegment::Strike(t) => MarkupRun {
                 text: t,
                 scale: 1.0,
                 baseline_offset: 0.0,
@@ -193,12 +196,17 @@ fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, 
     let sin = rad.sin();
     let dx = px - ox;
     let dy = py - oy;
-    (dy.mul_add(-sin, dx.mul_add(cos, ox)), dy.mul_add(cos, dx.mul_add(sin, oy)))
+    (
+        dy.mul_add(-sin, dx.mul_add(cos, ox)),
+        dy.mul_add(cos, dx.mul_add(sin, oy)),
+    )
 }
 
 fn glyph_advance(face: &Face<'_>, gid: GlyphId, scale: f32) -> f32 {
     face.glyph_hor_advance(gid)
-        .map_or(0.5 * f32::from(face.units_per_em()) * scale, |v| f32::from(v) * scale)
+        .map_or(0.5 * f32::from(face.units_per_em()) * scale, |v| {
+            f32::from(v) * scale
+        })
 }
 
 fn face_for_alias(alias: &str) -> Option<Face<'static>> {

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! XLSX emitter for BOM export via `rust_xlsxwriter`.
 //!
 //! Produces an Excel workbook with frozen header row, auto-fit column widths,
@@ -25,12 +30,12 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     // Create header format: bold, light grey background
     let _header_format = Format::new()
         .set_bold()
-        .set_background_color(Color::RGB(0xF0F0F0))
+        .set_background_color(Color::RGB(0x00F0_F0F0))
         .set_border(FormatBorder::Thin);
 
     // Write header row
     for (col, column) in columns.iter().enumerate() {
-        let col = col as u16;
+        let col = column_index(col)?;
         let header_text = column.header();
         let width = match column {
             BomColumn::Name => COL_WIDTH_NAME,
@@ -52,10 +57,10 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
     // Write data rows
     for (row_idx, bom_row) in table.rows.iter().enumerate() {
-        let row = (row_idx + 1) as u32;
+        let row = row_index(row_idx + 1)?;
 
         for (col_idx, column) in columns.iter().enumerate() {
-            let col = col_idx as u16;
+            let col = column_index(col_idx)?;
             let value = match column {
                 BomColumn::Name => bom_row.name.clone(),
                 BomColumn::Designator | BomColumn::Reference => bom_row.references.join(", "),
@@ -86,4 +91,14 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
         .map_err(|e| BomError::Xlsx(format!("Failed to save workbook: {e}")))?;
 
     Ok(bytes)
+}
+
+fn column_index(index: usize) -> Result<u16, BomError> {
+    u16::try_from(index)
+        .map_err(|error| BomError::Xlsx(format!("column index {index} is out of range: {error}")))
+}
+
+fn row_index(index: usize) -> Result<u32, BomError> {
+    u32::try_from(index)
+        .map_err(|error| BomError::Xlsx(format!("row index {index} is out of range: {error}")))
 }

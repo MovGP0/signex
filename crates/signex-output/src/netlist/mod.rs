@@ -139,7 +139,7 @@ mod tests {
     fn ctx_with(netlist: Option<Netlist>) -> ExportContext {
         ExportContext {
             sheets: Vec::new(),
-            metadata: Default::default(),
+            metadata: crate::ProjectMetadata::default(),
             netlist,
         }
     }

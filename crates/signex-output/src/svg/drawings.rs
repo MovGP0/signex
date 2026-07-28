@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Free-standing schematic drawing emitter.
 //!
 //! Converts each `SchDrawing` (line / rect / polyline / circle / arc)
@@ -7,7 +13,7 @@
 //! motion, zero behaviour change.
 
 use super::geometry::{arc_path_commands, circle_path, rect_path};
-use super::{SvgElement, SvgPathCommand, pt, SvgStyle, fill_to_rgb};
+use super::{SvgElement, SvgPathCommand, SvgStyle, fill_to_rgb, pt};
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::schematic::{FillType, SchDrawing};

@@ -142,6 +142,11 @@ const fn pt(x: f32, y: f32) -> SvgPoint {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "tests use bounded pixel dimensions for compact fixtures"
+)]
 mod tests {
     use std::path::PathBuf;
 
@@ -173,8 +178,8 @@ mod tests {
                 bus_entries: vec![],
                 drawings: vec![],
                 no_erc_directives: vec![],
-                title_block: Default::default(),
-                lib_symbols: Default::default(),
+                title_block: HashMap::default(),
+                lib_symbols: HashMap::default(),
             },
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,

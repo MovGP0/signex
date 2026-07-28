@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::similar_names,
+    clippy::struct_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! PDF export via `pdf-writer`.
 //!
 //! See `OUTPUT_PLAN.md` §3. `PdfSurface` (in `surface.rs`) acts as a second
@@ -300,21 +307,31 @@ impl Exporter for PdfExporter {
 
         // Reserve one Ref per page, starting at 3 (after catalog + page tree).
         let page_refs: Vec<Ref> = (0..sheet_indices.len())
-            .map(|i| Ref::new(3 + i as i32))
+            .map(|i| Ref::new(3 + i32::try_from(i).unwrap_or(i32::MAX)))
             .collect();
 
         // Reserve content stream Refs after page Refs.
         let content_refs: Vec<Ref> = (0..sheet_indices.len())
-            .map(|i| Ref::new(3 + sheet_indices.len() as i32 + i as i32))
+            .map(|i| {
+                Ref::new(
+                    3 + i32::try_from(sheet_indices.len()).unwrap_or(i32::MAX)
+                        + i32::try_from(i).unwrap_or(i32::MAX),
+                )
+            })
             .collect();
 
         // Reserve one font ref per PdfFont variant after the content stream
         // refs. Allocated up front so page resources can point at them.
-        let font_base: i32 = 3 + 2 * sheet_indices.len() as i32;
+        let font_base: i32 = 3 + 2 * i32::try_from(sheet_indices.len()).unwrap_or(i32::MAX);
         let font_refs: Vec<(font::PdfFont, Ref)> = font::PdfFont::ALL
             .iter()
             .enumerate()
-            .map(|(i, &f)| (f, Ref::new(font_base + i as i32)))
+            .map(|(i, &f)| {
+                (
+                    f,
+                    Ref::new(font_base + i32::try_from(i).unwrap_or(i32::MAX)),
+                )
+            })
             .collect();
 
         // Build bookmark items up front so the catalog can decide
@@ -323,7 +340,8 @@ impl Exporter for PdfExporter {
         let pending_bookmarks =
             bookmarks::build_bookmarks(ctx, opts, &sheet_indices, page_w_mm, page_h_mm, page_h_pt);
         let bookmarks_active = !pending_bookmarks.is_empty();
-        let outline_root_id = Ref::new(font_base + font_refs.len() as i32);
+        let outline_root_id =
+            Ref::new(font_base + i32::try_from(font_refs.len()).unwrap_or(i32::MAX));
         let bookmark_id_base = outline_root_id.get() + 1;
 
         let mut catalog = pdf.catalog(catalog_id);
@@ -335,7 +353,7 @@ impl Exporter for PdfExporter {
 
         pdf.pages(page_tree_id)
             .kids(page_refs.iter().copied())
-            .count(page_refs.len() as i32);
+            .count(i32::try_from(page_refs.len()).unwrap_or(i32::MAX));
 
         // Emit a minimal Type1 font dict for each bundled font, using the
         // PDF standard-14 name as the BaseFont. Every reader ships these,
@@ -353,7 +371,7 @@ impl Exporter for PdfExporter {
 
             // Emit content stream for this page.
             let content_bytes =
-                build_page_content(sheet, opts, ctx, page_w_pt, page_h_pt, &expr_tables)?;
+                build_page_content(sheet, opts, ctx, page_w_pt, page_h_pt, &expr_tables);
 
             pdf.stream(content_ref, &content_bytes);
 

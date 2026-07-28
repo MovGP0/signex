@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Page layout helpers: bounding box, fit-to-page scale, coordinate mapping.
 //!
 //! Both the PDF exporter and the preview rasteriser use the same logic so

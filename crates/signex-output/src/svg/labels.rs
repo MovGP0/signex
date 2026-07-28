@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Label + field text placement helpers.
 //!
 //! Label font sizing, per-label colour, the spin/justify geometry that
@@ -7,7 +13,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::{normalize_standard_text, SvgTextAlign, SvgTextVAlign};
+use super::{SvgTextAlign, SvgTextVAlign, normalize_standard_text};
 use crate::pdf::PdfScale;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::{RichSegment, parse_signex_markup};
@@ -23,7 +29,10 @@ pub(super) fn label_size_pt(font_size_mm: f64, mm_to_unit: f64, scale: &PdfScale
     }
 }
 
-pub(super) const fn label_colour(label_type: LabelType, palette: &SchematicPalette) -> (f32, f32, f32) {
+pub(super) const fn label_colour(
+    label_type: LabelType,
+    palette: &SchematicPalette,
+) -> (f32, f32, f32) {
     match label_type {
         LabelType::Net => palette.net_label,
         LabelType::Global => palette.global_label,
@@ -71,18 +80,20 @@ pub(super) fn schematic_text_offset_hier(
     spin: SpinStyle,
 ) -> (f64, f64) {
     let dist = ((parse_signex_markup(&normalize_standard_text(text))
-            .iter()
-            .map(|seg| match seg {
-                RichSegment::Normal(t)
-                | RichSegment::Bold(t)
-                | RichSegment::Italic(t)
-                | RichSegment::Strike(t)
-                | RichSegment::Subscript(t)
-                | RichSegment::Superscript(t)
-                | RichSegment::Overbar(t) => t.chars().count(),
-                RichSegment::Link { label, .. } => label.chars().count(),
-            })
-            .sum::<usize>() as f64) * font_size_mm).mul_add(0.6, font_size_mm * 0.4);
+        .iter()
+        .map(|seg| match seg {
+            RichSegment::Normal(t)
+            | RichSegment::Bold(t)
+            | RichSegment::Italic(t)
+            | RichSegment::Strike(t)
+            | RichSegment::Subscript(t)
+            | RichSegment::Superscript(t)
+            | RichSegment::Overbar(t) => t.chars().count(),
+            RichSegment::Link { label, .. } => label.chars().count(),
+        })
+        .sum::<usize>() as f64)
+        * font_size_mm)
+        .mul_add(0.6, font_size_mm * 0.4);
     match spin {
         SpinStyle::Left => (-dist, 0.0),
         SpinStyle::Up => (0.0, -dist),

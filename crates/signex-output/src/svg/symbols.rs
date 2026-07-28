@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Symbol emitters — library body graphics and pins.
 //!
 //! Emits each placed symbol's `LibSymbol` body graphics and its pins
@@ -8,7 +14,10 @@
 //! motion, zero behaviour change.
 
 use super::geometry::{arc_path_commands, circle_path, rect_path};
-use super::{SvgElement, SvgPathCommand, pt, SvgStyle, fill_to_rgb, SvgTextAlign, SvgTextVAlign, normalize_standard_text, normalize_standard_text_with_ctx};
+use super::{
+    SvgElement, SvgPathCommand, SvgStyle, SvgTextAlign, SvgTextVAlign, fill_to_rgb,
+    normalize_standard_text, normalize_standard_text_with_ctx, pt,
+};
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;

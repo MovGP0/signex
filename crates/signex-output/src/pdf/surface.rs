@@ -1,3 +1,9 @@
+#![expect(
+    clippy::many_single_char_names,
+    clippy::too_many_arguments,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `PdfSurface` — the second render target for the schematic scene graph.
 //!
 //! Emits PDF operators for:

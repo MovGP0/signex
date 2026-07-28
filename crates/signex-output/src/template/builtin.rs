@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Built-in sheet templates — ISO A0-A5 + ANSI A-E, portrait + landscape
 //! where standard practice allows. Constructed from a single
 //! `standard_title_block()` helper so all 17 templates share identical

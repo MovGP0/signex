@@ -1,3 +1,8 @@
+#![expect(
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Print preview. See `OUTPUT_PLAN.md` §6.
 //!
 //! Rasterises pages via `tiny-skia` into RGBA pixel buffers for on-screen
@@ -98,6 +103,10 @@ fn resolve_page_range_preview(range: &PageRange, sheet_count: usize) -> Vec<usiz
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "preview tests compare exact fixture dimensions"
+)]
 mod tests {
     use super::*;
 

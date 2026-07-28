@@ -1,6 +1,14 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Self-contained HTML emitter for BOM export.
 //!
 //! Produces a standalone HTML file with inline CSS suitable for printing.
+
+use std::fmt::Write as _;
 
 use super::{BomColumn, BomError, BomTable};
 
@@ -66,27 +74,27 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
     // Header with project metadata
     html.push_str("  <div class=\"bom-header\">\n");
-    html.push_str(&format!(
-        "    <h1>{}</h1>\n",
-        escape_html(&table.metadata.title)
-    ));
+    let _ = writeln!(html, "    <h1>{}</h1>", escape_html(&table.metadata.title));
     html.push_str("    <div class=\"bom-meta\">\n");
     if !table.metadata.revision.is_empty() {
-        html.push_str(&format!(
-            "      <p>Revision: {}</p>\n",
+        let _ = writeln!(
+            html,
+            "      <p>Revision: {}</p>",
             escape_html(&table.metadata.revision)
-        ));
+        );
     }
     if !table.metadata.date.is_empty() {
-        html.push_str(&format!(
-            "      <p>Date: {}</p>\n",
+        let _ = writeln!(
+            html,
+            "      <p>Date: {}</p>",
             escape_html(&table.metadata.date)
-        ));
+        );
     }
-    html.push_str(&format!(
-        "      <p>Total parts: {}</p>\n",
+    let _ = writeln!(
+        html,
+        "      <p>Total parts: {}</p>",
         table.rows.iter().map(|r| r.qty).sum::<u32>()
-    ));
+    );
     html.push_str("    </div>\n");
     html.push_str("  </div>\n");
 
@@ -96,7 +104,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     html.push_str("      <tr>\n");
 
     for col in columns {
-        html.push_str(&format!("        <th>{}</th>\n", col.header()));
+        let _ = writeln!(html, "        <th>{}</th>", col.header());
     }
 
     html.push_str("      </tr>\n");
@@ -118,7 +126,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
                 BomColumn::Custom(name) => row.custom.get(name).cloned().unwrap_or_default(),
             };
 
-            html.push_str(&format!("        <td>{}</td>\n", escape_html(&value)));
+            let _ = writeln!(html, "        <td>{}</td>", escape_html(&value));
         }
 
         html.push_str("      </tr>\n");
