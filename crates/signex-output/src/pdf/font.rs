@@ -6,7 +6,7 @@
 //!
 //! The Roboto + Iosevka TTF bytes below are bundled at compile time but NOT
 //! yet wired into the PDF pipeline — they're parked for v0.9 when the Type0
-//! composite-font dict + FontFile2 stream emission lands. The `#[allow(dead_code)]`
+//! composite-font dict + `FontFile2` stream emission lands. The `#[allow(dead_code)]`
 //! annotations that follow are deliberate.
 
 #![allow(dead_code)]
@@ -35,67 +35,67 @@ pub enum PdfFont {
 impl PdfFont {
     /// Every variant of the enum — handy for allocating refs / emitting
     /// the /Font resources dict without duplicating the match list.
-    pub const ALL: [PdfFont; 4] = [
-        PdfFont::RobotoRegular,
-        PdfFont::RobotoBold,
-        PdfFont::IosevkaRegular,
-        PdfFont::IosevkaBold,
+    pub const ALL: [Self; 4] = [
+        Self::RobotoRegular,
+        Self::RobotoBold,
+        Self::IosevkaRegular,
+        Self::IosevkaBold,
     ];
 
-    /// Map template FontStyle to the appropriate font.
+    /// Map template `FontStyle` to the appropriate font.
     /// Normal → Roboto, Bold → Roboto Bold, Italic/BoldItalic → Iosevka.
-    pub fn for_style(style: FontStyle) -> Self {
+    pub const fn for_style(style: FontStyle) -> Self {
         match style {
-            FontStyle::Normal => PdfFont::RobotoRegular,
-            FontStyle::Bold => PdfFont::RobotoBold,
-            FontStyle::Italic => PdfFont::IosevkaRegular, // Iosevka for italic text
-            FontStyle::BoldItalic => PdfFont::IosevkaBold,
+            FontStyle::Normal => Self::RobotoRegular,
+            FontStyle::Bold => Self::RobotoBold,
+            FontStyle::Italic => Self::IosevkaRegular, // Iosevka for italic text
+            FontStyle::BoldItalic => Self::IosevkaBold,
         }
     }
 
     /// Short alias used inside content streams (`/F1 9 Tf ...`). Matches the
     /// keys emitted in the page's /Font resources dict.
-    pub fn alias(&self) -> &'static str {
+    pub const fn alias(&self) -> &'static str {
         match self {
-            PdfFont::RobotoRegular => "F1",
-            PdfFont::RobotoBold => "F2",
-            PdfFont::IosevkaRegular => "F3",
-            PdfFont::IosevkaBold => "F4",
+            Self::RobotoRegular => "F1",
+            Self::RobotoBold => "F2",
+            Self::IosevkaRegular => "F3",
+            Self::IosevkaBold => "F4",
         }
     }
 
     /// PDF standard-14 Type1 font name we fall back to while full Type0
     /// composite-font emission is deferred to v0.9. Roboto → Helvetica,
     /// Iosevka → Courier (monospace). Every PDF reader ships these by
-    /// spec, so text always renders even without a /FontFile2 stream.
-    pub fn standard_ps_name(&self) -> &'static str {
+    /// spec, so text always renders even without a /`FontFile2` stream.
+    pub const fn standard_ps_name(&self) -> &'static str {
         match self {
-            PdfFont::RobotoRegular => "Helvetica",
-            PdfFont::RobotoBold => "Helvetica-Bold",
-            PdfFont::IosevkaRegular => "Courier",
-            PdfFont::IosevkaBold => "Courier-Bold",
+            Self::RobotoRegular => "Helvetica",
+            Self::RobotoBold => "Helvetica-Bold",
+            Self::IosevkaRegular => "Courier",
+            Self::IosevkaBold => "Courier-Bold",
         }
     }
 
-    /// PostScript base name for this font (used in /BaseFont). Matches the
+    /// PostScript base name for this font (used in /`BaseFont`). Matches the
     /// embedded TTF — used once full Type0 emission lands in v0.9.
     #[allow(dead_code)]
-    pub fn base_name(&self) -> &'static str {
+    pub const fn base_name(&self) -> &'static str {
         match self {
-            PdfFont::RobotoRegular => "Roboto",
-            PdfFont::RobotoBold => "Roboto-Bold",
-            PdfFont::IosevkaRegular => "Iosevka",
-            PdfFont::IosevkaBold => "Iosevka-Bold",
+            Self::RobotoRegular => "Roboto",
+            Self::RobotoBold => "Roboto-Bold",
+            Self::IosevkaRegular => "Iosevka",
+            Self::IosevkaBold => "Iosevka-Bold",
         }
     }
 
     /// Retrieve the embedded TTF bytes for this font.
-    pub fn font_bytes(&self) -> &'static [u8] {
+    pub const fn font_bytes(&self) -> &'static [u8] {
         match self {
-            PdfFont::RobotoRegular => ROBOTO_REGULAR,
-            PdfFont::RobotoBold => ROBOTO_BOLD,
-            PdfFont::IosevkaRegular => IOSEVKA_REGULAR,
-            PdfFont::IosevkaBold => IOSEVKA_BOLD,
+            Self::RobotoRegular => ROBOTO_REGULAR,
+            Self::RobotoBold => ROBOTO_BOLD,
+            Self::IosevkaRegular => IOSEVKA_REGULAR,
+            Self::IosevkaBold => IOSEVKA_BOLD,
         }
     }
 
@@ -105,7 +105,7 @@ impl PdfFont {
     }
 }
 
-/// Resolve alias (`F1`..`F4`) to PdfFont.
+/// Resolve alias (`F1`..`F4`) to `PdfFont`.
 pub fn font_for_alias(alias: &str) -> PdfFont {
     match alias {
         "F1" => PdfFont::RobotoRegular,
@@ -177,7 +177,7 @@ pub fn text_advance_pt(alias: &str, text: &str, size_pt: f32) -> f32 {
         return size_pt.max(1.0) * text.chars().count() as f32 * 0.5;
     };
 
-    let upm = face.units_per_em() as f32;
+    let upm = f32::from(face.units_per_em());
     if upm <= 0.0 {
         return size_pt.max(1.0) * text.chars().count() as f32 * 0.5;
     }
@@ -188,10 +188,9 @@ pub fn text_advance_pt(alias: &str, text: &str, size_pt: f32) -> f32 {
         if let Some(gid) = face.glyph_index(ch) {
             advance += face
                 .glyph_hor_advance(gid)
-                .map(|v| v as f32 * scale)
-                .unwrap_or(upm * scale * 0.5);
+                .map_or(upm * scale * 0.5, |v| f32::from(v) * scale);
         } else {
-            advance += upm * scale * 0.5;
+            advance = (upm * scale).mul_add(0.5, advance);
         }
     }
     advance
@@ -370,8 +369,8 @@ mod tests {
 
         let font_data = cat.font_data();
         assert_eq!(font_data.len(), 2);
-        assert!(font_data[0].1.len() > 0);
-        assert!(font_data[1].1.len() > 0);
+        assert!(!font_data[0].1.is_empty());
+        assert!(!font_data[1].1.is_empty());
     }
 
     #[test]
@@ -383,12 +382,11 @@ mod tests {
             PdfFont::IosevkaRegular,
             PdfFont::IosevkaBold,
         ] {
-            let face = font.face().expect(&format!("Font {:?} should parse", font));
-            assert!(face.units_per_em() > 0, "Font {:?} should have UPM", font);
+            let face = font.face().unwrap_or_else(|| panic!("Font {font:?} should parse"));
+            assert!(face.units_per_em() > 0, "Font {font:?} should have UPM");
             assert!(
                 face.ascender() > face.descender(),
-                "Font {:?} ascender should be > descender",
-                font
+                "Font {font:?} ascender should be > descender"
             );
         }
     }

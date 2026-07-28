@@ -8,7 +8,7 @@ use crate::{ExportContext, SheetSnapshot};
 
 /// Rasterise a single sheet to an RGBA bitmap.
 ///
-/// Uses the same `PageTransform` (FitToPage scale + margin offset) as the PDF
+/// Uses the same `PageTransform` (`FitToPage` scale + margin offset) as the PDF
 /// exporter so the preview thumbnail matches the exported document exactly.
 pub fn rasterize_page(
     sheet: &SheetSnapshot,

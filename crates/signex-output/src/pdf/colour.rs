@@ -14,7 +14,7 @@ pub struct ColourMap {
 }
 
 impl ColourMap {
-    pub fn new(mode: ColourMode) -> Self {
+    pub const fn new(mode: ColourMode) -> Self {
         Self { mode }
     }
 
@@ -23,7 +23,7 @@ impl ColourMap {
         match self.mode {
             ColourMode::Colour => (r, g, b),
             ColourMode::Grayscale => {
-                let luminance = 0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64;
+                let luminance = 0.114f64.mul_add(f64::from(b), 0.587f64.mul_add(f64::from(g), 0.299 * f64::from(r)));
                 let lum_f32 = luminance.clamp(0.0, 1.0) as f32;
                 (lum_f32, lum_f32, lum_f32)
             }

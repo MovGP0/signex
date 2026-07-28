@@ -86,7 +86,7 @@ pub struct SvgEvaluatorInputs<'a> {
     pub cell: &'a str,
 }
 
-fn fill_to_rgb(
+const fn fill_to_rgb(
     fill: FillType,
     stroke: (f32, f32, f32),
     body_fill: (f32, f32, f32),
@@ -123,11 +123,11 @@ fn map_colour_mode(rgb: (f32, f32, f32), mode: ColourMode) -> (f32, f32, f32) {
     match mode {
         ColourMode::Colour => (r, g, b),
         ColourMode::Grayscale => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
+            let y = 0.114f32.mul_add(b, 0.587f32.mul_add(g, 0.299 * r));
             (y, y, y)
         }
         ColourMode::BlackAndWhite => {
-            let y = 0.299 * r + 0.587 * g + 0.114 * b;
+            let y = 0.114f32.mul_add(b, 0.587f32.mul_add(g, 0.299 * r));
             if y >= 0.5 {
                 (1.0, 1.0, 1.0)
             } else {
@@ -137,7 +137,7 @@ fn map_colour_mode(rgb: (f32, f32, f32), mode: ColourMode) -> (f32, f32, f32) {
     }
 }
 
-fn pt(x: f32, y: f32) -> SvgPoint {
+const fn pt(x: f32, y: f32) -> SvgPoint {
     SvgPoint { x, y }
 }
 

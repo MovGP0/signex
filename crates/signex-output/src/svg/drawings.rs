@@ -7,7 +7,7 @@
 //! motion, zero behaviour change.
 
 use super::geometry::{arc_path_commands, circle_path, rect_path};
-use super::*;
+use super::{SvgElement, SvgPathCommand, pt, SvgStyle, fill_to_rgb};
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::schematic::{FillType, SchDrawing};

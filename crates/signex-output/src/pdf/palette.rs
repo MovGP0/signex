@@ -55,6 +55,7 @@ impl SchematicPalette {
     /// symbol bodies. Preserved for tests and as the
     /// default-for-tests `PdfOptions::default()` palette so the
     /// existing /Page bytes don't shift under tests.
+    #[must_use]
     pub const fn classic() -> Self {
         Self {
             paper: (1.0, 1.0, 1.0),
@@ -131,7 +132,7 @@ impl From<CanvasColors> for SchematicPalette {
 /// `signex_types::theme::Color` is u8 RGBA — strip alpha and divide
 /// by 255 so the renderer can feed PDF / tiny-skia f32 colour ops.
 fn rgb(c: signex_types::theme::Color) -> (f32, f32, f32) {
-    (c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0)
+    (f32::from(c.r) / 255.0, f32::from(c.g) / 255.0, f32::from(c.b) / 255.0)
 }
 
 #[cfg(test)]

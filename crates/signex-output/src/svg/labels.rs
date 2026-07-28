@@ -7,7 +7,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::*;
+use super::{normalize_standard_text, SvgTextAlign, SvgTextVAlign};
 use crate::pdf::PdfScale;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::{RichSegment, parse_signex_markup};
@@ -23,7 +23,7 @@ pub(super) fn label_size_pt(font_size_mm: f64, mm_to_unit: f64, scale: &PdfScale
     }
 }
 
-pub(super) fn label_colour(label_type: LabelType, palette: &SchematicPalette) -> (f32, f32, f32) {
+pub(super) const fn label_colour(label_type: LabelType, palette: &SchematicPalette) -> (f32, f32, f32) {
     match label_type {
         LabelType::Net => palette.net_label,
         LabelType::Global => palette.global_label,
@@ -40,7 +40,7 @@ pub(super) enum SpinStyle {
     Bottom,
 }
 
-pub(super) fn label_spin_style(justify: HAlign, rotation: f64) -> SpinStyle {
+pub(super) const fn label_spin_style(justify: HAlign, rotation: f64) -> SpinStyle {
     let rot = normalize_rotation(rotation);
     let vertical = rot == 90 || rot == 270;
 
@@ -70,8 +70,7 @@ pub(super) fn schematic_text_offset_hier(
     font_size_mm: f64,
     spin: SpinStyle,
 ) -> (f64, f64) {
-    let dist = font_size_mm * 0.4
-        + (parse_signex_markup(&normalize_standard_text(text))
+    let dist = ((parse_signex_markup(&normalize_standard_text(text))
             .iter()
             .map(|seg| match seg {
                 RichSegment::Normal(t)
@@ -83,9 +82,7 @@ pub(super) fn schematic_text_offset_hier(
                 | RichSegment::Overbar(t) => t.chars().count(),
                 RichSegment::Link { label, .. } => label.chars().count(),
             })
-            .sum::<usize>() as f64)
-            * font_size_mm
-            * 0.6;
+            .sum::<usize>() as f64) * font_size_mm).mul_add(0.6, font_size_mm * 0.4);
     match spin {
         SpinStyle::Left => (-dist, 0.0),
         SpinStyle::Up => (0.0, -dist),
@@ -99,7 +96,7 @@ pub(super) fn schematic_text_offset_global(shape: &str, spin: SpinStyle) -> (f64
     let vert = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.0715;
 
     if matches!(shape, "input" | "bidirectional" | "tri_state") {
-        horiz += signex_types::schematic::SCHEMATIC_TEXT_MM * 0.75;
+        horiz = signex_types::schematic::SCHEMATIC_TEXT_MM.mul_add(0.75, horiz);
     }
 
     match spin {
@@ -110,7 +107,7 @@ pub(super) fn schematic_text_offset_global(shape: &str, spin: SpinStyle) -> (f64
     }
 }
 
-pub(super) fn spin_text_style(spin: SpinStyle) -> (SvgTextAlign, SvgTextVAlign, f32) {
+pub(super) const fn spin_text_style(spin: SpinStyle) -> (SvgTextAlign, SvgTextVAlign, f32) {
     let align = match spin {
         SpinStyle::Left | SpinStyle::Bottom => SvgTextAlign::Right,
         SpinStyle::Right | SpinStyle::Up => SvgTextAlign::Left,
@@ -123,12 +120,12 @@ pub(super) fn spin_text_style(spin: SpinStyle) -> (SvgTextAlign, SvgTextVAlign, 
     (align, SvgTextVAlign::Bottom, rotation)
 }
 
-fn normalize_rotation(deg: f64) -> i32 {
+const fn normalize_rotation(deg: f64) -> i32 {
     let r = (deg.round() as i32) % 360;
     if r < 0 { r + 360 } else { r }
 }
 
-pub(super) fn halign_to_svg(h: HAlign) -> SvgTextAlign {
+pub(super) const fn halign_to_svg(h: HAlign) -> SvgTextAlign {
     match h {
         HAlign::Left => SvgTextAlign::Left,
         HAlign::Center => SvgTextAlign::Center,
@@ -136,7 +133,7 @@ pub(super) fn halign_to_svg(h: HAlign) -> SvgTextAlign {
     }
 }
 
-pub(super) fn valign_to_svg(v: VAlign) -> SvgTextVAlign {
+pub(super) const fn valign_to_svg(v: VAlign) -> SvgTextVAlign {
     match v {
         VAlign::Top => SvgTextVAlign::Top,
         VAlign::Center => SvgTextVAlign::Center,

@@ -13,32 +13,33 @@ impl PageSize {
     ///
     /// Standard uses strings like `"A4"`, `"A3"`, `"A"`, `"B"`, `"USLetter"`,
     /// `"USLegal"`. Unknown strings fall back to `IsoA4`.
+    #[must_use]
     pub fn from_standard_str(s: &str) -> Self {
         match Self::paper_base_token(s) {
-            "A0" => PageSize::IsoA0,
-            "A1" => PageSize::IsoA1,
-            "A2" => PageSize::IsoA2,
-            "A3" => PageSize::IsoA3,
-            "A4" => PageSize::IsoA4,
-            "A5" => PageSize::IsoA5,
-            "B5" => PageSize::Custom {
+            "A0" => Self::IsoA0,
+            "A1" => Self::IsoA1,
+            "A2" => Self::IsoA2,
+            "A3" => Self::IsoA3,
+            "A4" => Self::IsoA4,
+            "A5" => Self::IsoA5,
+            "B5" => Self::Custom {
                 width_mm: 257.0,
                 height_mm: 182.0,
             },
-            "A" => PageSize::AnsiA,
-            "B" => PageSize::AnsiB,
-            "C" => PageSize::AnsiC,
-            "D" => PageSize::AnsiD,
-            "E" => PageSize::AnsiE,
-            "USLetter" => PageSize::UsLetter,
-            "USLegal" => PageSize::UsLegal,
-            "Letter" => PageSize::UsLetter,
-            "Legal" => PageSize::UsLegal,
-            "Tabloid" => PageSize::Custom {
+            "A" => Self::AnsiA,
+            "B" => Self::AnsiB,
+            "C" => Self::AnsiC,
+            "D" => Self::AnsiD,
+            "E" => Self::AnsiE,
+            "USLetter" => Self::UsLetter,
+            "USLegal" => Self::UsLegal,
+            "Letter" => Self::UsLetter,
+            "Legal" => Self::UsLegal,
+            "Tabloid" => Self::Custom {
                 width_mm: 431.8,
                 height_mm: 279.4,
             },
-            _ => PageSize::IsoA4,
+            _ => Self::IsoA4,
         }
     }
 
@@ -47,6 +48,7 @@ impl PageSize {
     /// Standard schematics default to landscape for A-series except A4 which is
     /// portrait, and landscape for all ANSI sizes. The `portrait` flag in the
     /// Standard `(paper ...)` node overrides this; pass it when present.
+    #[must_use]
     pub fn default_orientation_for_standard(s: &str) -> Orientation {
         let lower = s.to_ascii_lowercase();
         if lower.contains("portrait") {
@@ -60,22 +62,23 @@ impl PageSize {
     }
 
     /// Portrait `(width_mm, height_mm)`. For landscape, swap them.
-    pub fn portrait_dimensions_mm(self) -> (f64, f64) {
+    #[must_use]
+    pub const fn portrait_dimensions_mm(self) -> (f64, f64) {
         match self {
-            PageSize::IsoA0 => (841.0, 1189.0),
-            PageSize::IsoA1 => (594.0, 841.0),
-            PageSize::IsoA2 => (420.0, 594.0),
-            PageSize::IsoA3 => (297.0, 420.0),
-            PageSize::IsoA4 => (210.0, 297.0),
-            PageSize::IsoA5 => (148.0, 210.0),
-            PageSize::AnsiA => (215.9, 279.4),
-            PageSize::AnsiB => (279.4, 431.8),
-            PageSize::AnsiC => (431.8, 558.8),
-            PageSize::AnsiD => (558.8, 863.6),
-            PageSize::AnsiE => (863.6, 1117.6),
-            PageSize::UsLetter => (215.9, 279.4),
-            PageSize::UsLegal => (215.9, 355.6),
-            PageSize::Custom {
+            Self::IsoA0 => (841.0, 1189.0),
+            Self::IsoA1 => (594.0, 841.0),
+            Self::IsoA2 => (420.0, 594.0),
+            Self::IsoA3 => (297.0, 420.0),
+            Self::IsoA4 => (210.0, 297.0),
+            Self::IsoA5 => (148.0, 210.0),
+            Self::AnsiA => (215.9, 279.4),
+            Self::AnsiB => (279.4, 431.8),
+            Self::AnsiC => (431.8, 558.8),
+            Self::AnsiD => (558.8, 863.6),
+            Self::AnsiE => (863.6, 1117.6),
+            Self::UsLetter => (215.9, 279.4),
+            Self::UsLegal => (215.9, 355.6),
+            Self::Custom {
                 width_mm,
                 height_mm,
             } => (width_mm, height_mm),
@@ -84,10 +87,11 @@ impl PageSize {
 
     /// Effective `(width_mm, height_mm)` honouring orientation. Custom
     /// sizes are not rotated (user supplied them as-is).
-    pub fn dimensions_mm(self, orientation: Orientation) -> (f64, f64) {
+    #[must_use]
+    pub const fn dimensions_mm(self, orientation: Orientation) -> (f64, f64) {
         let (w, h) = self.portrait_dimensions_mm();
         match (self, orientation) {
-            (PageSize::Custom { .. }, _) => (w, h),
+            (Self::Custom { .. }, _) => (w, h),
             (_, Orientation::Portrait) => (w, h),
             (_, Orientation::Landscape) => (h, w),
         }

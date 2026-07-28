@@ -37,7 +37,7 @@ pub struct SubstitutionContext<'a> {
     pub physical_document_number: bool,
 }
 
-impl<'a> SubstitutionContext<'a> {
+impl SubstitutionContext<'_> {
     /// Look up a single token. Returns `None` for unknown tokens — the
     /// resolver renders that as an empty string.
     fn lookup(&self, token: &str) -> Option<String> {
@@ -80,19 +80,19 @@ impl<'a> SubstitutionContext<'a> {
 
 /// Replace every `${IDENT}` in `input` with its resolved value. Unknown
 /// tokens render as empty string; non-token `${...}` strings pass through.
+#[must_use]
 pub fn resolve(input: &str, ctx: &SubstitutionContext<'_>) -> String {
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(input.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-            if let Some((token, end)) = scan_token(bytes, i + 2) {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{'
+            && let Some((token, end)) = scan_token(bytes, i + 2) {
                 let value = ctx.lookup(token).unwrap_or_default();
                 out.push_str(&value);
                 i = end + 1;
                 continue;
             }
-        }
         out.push(input[i..].chars().next().unwrap());
         i += input[i..].chars().next().unwrap().len_utf8();
     }
@@ -123,11 +123,11 @@ fn scan_token(bytes: &[u8], start: usize) -> Option<(&str, usize)> {
     Some((token, end))
 }
 
-fn is_ident_start(c: u8) -> bool {
+const fn is_ident_start(c: u8) -> bool {
     c.is_ascii_alphabetic() || c == b'_'
 }
 
-fn is_ident_continue(c: u8) -> bool {
+const fn is_ident_continue(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
@@ -156,7 +156,7 @@ mod tests {
         m
     }
 
-    fn ctx<'a>(m: &'a ProjectMetadata) -> SubstitutionContext<'a> {
+    fn ctx(m: &ProjectMetadata) -> SubstitutionContext<'_> {
         SubstitutionContext {
             metadata: m,
             filename: "PowerSupply.standard_sch".into(),

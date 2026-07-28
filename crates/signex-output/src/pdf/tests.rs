@@ -271,7 +271,7 @@ fn fit_to_page_scales_large_content_down() {
     let out = PdfExporter.export(&ctx, &opts).expect("export");
     // PDF should be valid and contain content (scaled down wires).
     assert!(out.bytes.starts_with(b"%PDF-"));
-    assert!(out.page_count == 1);
+    assert_eq!(out.page_count, 1);
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn fit_to_page_does_not_upscale_small_content() {
     let out = PdfExporter.export(&ctx, &opts).expect("export");
     // PDF should be valid. FitToPage should NOT upscale (use 1:1).
     assert!(out.bytes.starts_with(b"%PDF-"));
-    assert!(out.page_count == 1);
+    assert_eq!(out.page_count, 1);
 }
 
 #[test]

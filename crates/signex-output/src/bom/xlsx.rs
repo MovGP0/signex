@@ -1,4 +1,4 @@
-//! XLSX emitter for BOM export via rust_xlsxwriter.
+//! XLSX emitter for BOM export via `rust_xlsxwriter`.
 //!
 //! Produces an Excel workbook with frozen header row, auto-fit column widths,
 //! and styled header row (bold, grey background).
@@ -70,7 +70,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             // Try to parse as number for Qty column; otherwise write as string
             if matches!(column, BomColumn::Qty) {
                 if let Ok(qty_num) = value.parse::<u32>() {
-                    worksheet.write_number(row, col, qty_num as f64)?;
+                    worksheet.write_number(row, col, f64::from(qty_num))?;
                 } else {
                     worksheet.write_string(row, col, &value)?;
                 }
@@ -83,7 +83,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     // Save to in-memory buffer
     let bytes = workbook
         .save_to_buffer()
-        .map_err(|e| BomError::Xlsx(format!("Failed to save workbook: {}", e)))?;
+        .map_err(|e| BomError::Xlsx(format!("Failed to save workbook: {e}")))?;
 
     Ok(bytes)
 }

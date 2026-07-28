@@ -15,7 +15,7 @@
 //! even though the glyphs come from Helvetica/Courier rather than the
 //! bundled TTFs.
 //!
-//! TODO(v0.9): Emit Type0 CIDFontType2 dicts with `/FontFile2` streams
+//! TODO(v0.9): Emit Type0 `CIDFontType2` dicts with `/FontFile2` streams
 //! pointing at the embedded TTF bytes so the exported PDFs render in the
 //! intended Roboto/Iosevka typeface.
 

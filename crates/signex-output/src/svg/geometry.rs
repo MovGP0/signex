@@ -7,7 +7,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::*;
+use super::{SvgPathCommand, SvgStyle, SvgElement, pt, SvgPoint};
 use tiny_skia::PathBuilder;
 
 pub(super) fn path_to_tiny_skia(commands: &[SvgPathCommand]) -> Option<tiny_skia::Path> {
@@ -57,9 +57,9 @@ pub(super) fn arc_path_commands(
     end: SvgPoint,
 ) -> Vec<SvgPathCommand> {
     if let Some((cx, cy, r)) = circle_from_three_points(start, mid, end) {
-        let start_a = (start.y - cy).atan2(start.x - cx) as f64;
-        let mid_a = (mid.y - cy).atan2(mid.x - cx) as f64;
-        let end_a = (end.y - cy).atan2(end.x - cx) as f64;
+        let start_a = f64::from((start.y - cy).atan2(start.x - cx));
+        let mid_a = f64::from((mid.y - cy).atan2(mid.x - cx));
+        let end_a = f64::from((end.y - cy).atan2(end.x - cx));
         let (from, to) = arc_sweep(start_a, mid_a, end_a);
         let sweep = to - from;
         let seg_count = ((sweep.abs() / (std::f64::consts::FRAC_PI_2)).ceil() as usize).max(1);
@@ -74,20 +74,20 @@ pub(super) fn arc_path_commands(
             let k = (4.0 / 3.0) * ((a1 - a0) / 4.0).tan();
 
             let p0 = (
-                cx as f64 + r as f64 * a0.cos(),
-                cy as f64 + r as f64 * a0.sin(),
+                f64::from(r).mul_add(a0.cos(), f64::from(cx)),
+                f64::from(r).mul_add(a0.sin(), f64::from(cy)),
             );
             let p3 = (
-                cx as f64 + r as f64 * a1.cos(),
-                cy as f64 + r as f64 * a1.sin(),
+                f64::from(r).mul_add(a1.cos(), f64::from(cx)),
+                f64::from(r).mul_add(a1.sin(), f64::from(cy)),
             );
             let c1 = (
-                p0.0 - k * r as f64 * a0.sin(),
-                p0.1 + k * r as f64 * a0.cos(),
+                (k * f64::from(r)).mul_add(-a0.sin(), p0.0),
+                (k * f64::from(r)).mul_add(a0.cos(), p0.1),
             );
             let c2 = (
-                p3.0 + k * r as f64 * -a1.sin(),
-                p3.1 + k * r as f64 * a1.cos(),
+                (k * f64::from(r)).mul_add(-a1.sin(), p3.0),
+                (k * f64::from(r)).mul_add(a1.cos(), p3.1),
             );
 
             cmds.push(SvgPathCommand::CubicTo(
@@ -112,9 +112,9 @@ pub(super) fn arc_path_commands(
 fn circle_from_three_points(a: SvgPoint, b: SvgPoint, c: SvgPoint) -> Option<(f32, f32, f32)> {
     use signex_types::schematic::{Point, circumcircle};
     let (cx, cy, r) = circumcircle(
-        Point::new(a.x as f64, a.y as f64),
-        Point::new(b.x as f64, b.y as f64),
-        Point::new(c.x as f64, c.y as f64),
+        Point::new(f64::from(a.x), f64::from(a.y)),
+        Point::new(f64::from(b.x), f64::from(b.y)),
+        Point::new(f64::from(c.x), f64::from(c.y)),
     )?;
     Some((cx as f32, cy as f32, r as f32))
 }

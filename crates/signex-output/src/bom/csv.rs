@@ -12,7 +12,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     output.extend_from_slice(b"\xef\xbb\xbf");
 
     // Write header row
-    let headers: Vec<&str> = columns.iter().map(|col| col.header()).collect();
+    let headers: Vec<&str> = columns.iter().map(super::BomColumn::header).collect();
     write_csv_row(&mut output, &headers)?;
     output.extend_from_slice(b"\r\n");
 

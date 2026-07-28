@@ -11,6 +11,7 @@ use super::{FontStyle, Frame, Template, TemplateId, TitleBlock, TitleBlockField}
 use crate::pdf::{Orientation, PageSize};
 
 /// Every built-in template's IDs, in display order.
+#[must_use]
 pub fn all_builtin_ids() -> Vec<TemplateId> {
     BUILTIN_TEMPLATES
         .iter()
@@ -19,6 +20,7 @@ pub fn all_builtin_ids() -> Vec<TemplateId> {
 }
 
 /// Load a built-in template by ID. Returns `None` for unknown IDs.
+#[must_use]
 pub fn load_builtin(id: &TemplateId) -> Option<Template> {
     BUILTIN_TEMPLATES
         .iter()
@@ -155,7 +157,7 @@ const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, Orientation)] = &[
 
 /// Shared title-block layout used by every built-in. 180 x 40 mm rectangle
 /// anchored at the page's bottom-right, with six fields stacked over two
-/// columns. Matches the sketch in OUTPUT_PLAN.md §4.
+/// columns. Matches the sketch in `OUTPUT_PLAN.md` §4.
 fn standard_title_block() -> TitleBlock {
     TitleBlock {
         width_mm: 180.0,

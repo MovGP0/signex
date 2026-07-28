@@ -7,7 +7,7 @@
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::*;
+use super::{SvgTextAlign, SvgTextVAlign, rgb_to_color, normalize_standard_text};
 use signex_types::markup::{RichSegment, parse_signex_markup};
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
@@ -27,7 +27,7 @@ pub(super) fn draw_text_outline(
     let Some(face) = face_for_alias(font_alias) else {
         return;
     };
-    let units_per_em = face.units_per_em() as f32;
+    let units_per_em = f32::from(face.units_per_em());
     if units_per_em <= 0.0 {
         return;
     }
@@ -42,11 +42,11 @@ pub(super) fn draw_text_outline(
     };
 
     let base_scale = base_size / units_per_em;
-    let asc = face.ascender() as f32 * base_scale;
-    let desc = face.descender() as f32 * base_scale;
+    let asc = f32::from(face.ascender()) * base_scale;
+    let desc = f32::from(face.descender()) * base_scale;
     let baseline_y = match v_align {
         SvgTextVAlign::Top => y + asc,
-        SvgTextVAlign::Center => y + (asc + desc) * 0.5,
+        SvgTextVAlign::Center => (asc + desc).mul_add(0.5, y),
         SvgTextVAlign::Bottom => y + desc,
     };
 
@@ -113,7 +113,7 @@ fn measure_text_advance_runs(
             if let Some(gid) = face.glyph_index(ch) {
                 advance += glyph_advance(face, gid, run_scale);
             } else {
-                advance += 0.5 * run_scale * face.units_per_em() as f32;
+                advance = (0.5 * run_scale).mul_add(f32::from(face.units_per_em()), advance);
             }
         }
     }
@@ -193,13 +193,12 @@ fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, 
     let sin = rad.sin();
     let dx = px - ox;
     let dy = py - oy;
-    (ox + dx * cos - dy * sin, oy + dx * sin + dy * cos)
+    (dy.mul_add(-sin, dx.mul_add(cos, ox)), dy.mul_add(cos, dx.mul_add(sin, oy)))
 }
 
 fn glyph_advance(face: &Face<'_>, gid: GlyphId, scale: f32) -> f32 {
     face.glyph_hor_advance(gid)
-        .map(|v| v as f32 * scale)
-        .unwrap_or(0.5 * face.units_per_em() as f32 * scale)
+        .map_or(0.5 * f32::from(face.units_per_em()) * scale, |v| f32::from(v) * scale)
 }
 
 fn face_for_alias(alias: &str) -> Option<Face<'static>> {
@@ -266,12 +265,12 @@ impl TinyPathOutlineBuilder {
     }
 
     fn map_point(&self, x: f32, y: f32) -> (f32, f32) {
-        let px = self.pen_x + x * self.scale;
-        let py = self.baseline_y - y * self.scale;
+        let px = x.mul_add(self.scale, self.pen_x);
+        let py = y.mul_add(-self.scale, self.baseline_y);
         let dx = px - self.anchor_x;
         let dy = py - self.anchor_y;
-        let rx = self.anchor_x + dx * self.rot_cos - dy * self.rot_sin;
-        let ry = self.anchor_y + dx * self.rot_sin + dy * self.rot_cos;
+        let rx = dy.mul_add(-self.rot_sin, dx.mul_add(self.rot_cos, self.anchor_x));
+        let ry = dy.mul_add(self.rot_cos, dx.mul_add(self.rot_sin, self.anchor_y));
         (rx, ry)
     }
 }

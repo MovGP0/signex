@@ -35,7 +35,7 @@ use signex_types::schematic::LabelType;
 
 /// A bookmark target before any PDF refs have been allocated.
 #[derive(Debug, Clone)]
-pub(crate) struct PendingBookmark {
+pub struct PendingBookmark {
     pub title: String,
     pub parent_idx: Option<usize>,
     pub children: Vec<usize>,
@@ -69,7 +69,7 @@ impl PendingBookmark {
 /// for via `PdfOptions`. Returns an empty vec when no bookmark
 /// toggles are on — the caller should skip emitting `/Outlines`
 /// entirely in that case.
-pub(crate) fn build_bookmarks(
+pub fn build_bookmarks(
     ctx: &ExportContext,
     opts: &PdfOptions,
     page_sheet_indices: &[usize],
@@ -250,7 +250,7 @@ pub(crate) fn build_bookmarks(
                     // anchor as the destination. Coarse but matches
                     // Altium's "find this pin" behaviour well enough.
                     for sym in &sheet.schematic.symbols {
-                        for (pin_number, _uuid) in &sym.pin_uuids {
+                        for pin_number in sym.pin_uuids.keys() {
                             let item_idx = items.len();
                             items.push(PendingBookmark {
                                 title: format!("pin {}.{}", sym.reference, pin_number),
@@ -276,7 +276,7 @@ pub(crate) fn build_bookmarks(
 /// `catalog.outlines(root_id)` before calling this. `bookmark_id_base`
 /// is the Ref number assigned to `bookmarks[0]`; subsequent items
 /// land at `bookmark_id_base + i`.
-pub(crate) fn emit_bookmarks(
+pub fn emit_bookmarks(
     pdf: &mut Pdf,
     bookmarks: &[PendingBookmark],
     root_id: Ref,
@@ -367,12 +367,12 @@ pub(crate) fn emit_bookmarks(
 
 /// Returns true when at least one toggle that produces a bookmark
 /// is enabled.
-fn any_bookmark_toggle_on(opts: &PdfOptions) -> bool {
+const fn any_bookmark_toggle_on(opts: &PdfOptions) -> bool {
     opts.include_component_parameters || opts.generate_nets_info
 }
 
 /// Returns true when the Nets group has any reason to exist.
-fn nets_group_active(opts: &PdfOptions) -> bool {
+const fn nets_group_active(opts: &PdfOptions) -> bool {
     opts.generate_nets_info
         && (opts.bookmark_net_labels || opts.bookmark_pins || opts.bookmark_ports)
 }
@@ -383,13 +383,11 @@ fn build_sheet_title(sheet: &crate::SheetSnapshot, opts: &PdfOptions) -> String 
     } else {
         sheet.sheet_name.clone()
     };
-    if opts.use_physical_structure {
-        if let Some(variant) = opts.variant.as_deref() {
-            if !variant.is_empty() {
+    if opts.use_physical_structure
+        && let Some(variant) = opts.variant.as_deref()
+            && !variant.is_empty() {
                 title.push_str(&format!(" [{variant}]"));
             }
-        }
-    }
     title
 }
 

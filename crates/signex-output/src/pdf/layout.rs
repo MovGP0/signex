@@ -108,8 +108,8 @@ impl PageTransform {
         let mm_to_unit = units_per_mm * content_scale;
 
         // Place the top-left of the content bbox at the top-left margin corner.
-        let translate_x = margins.left_mm * units_per_mm - bbox_x1 * mm_to_unit;
-        let translate_y = margins.top_mm * units_per_mm - bbox_y1 * mm_to_unit;
+        let translate_x = bbox_x1.mul_add(-mm_to_unit, margins.left_mm * units_per_mm);
+        let translate_y = bbox_y1.mul_add(-mm_to_unit, margins.top_mm * units_per_mm);
 
         Self {
             mm_to_unit,
@@ -120,8 +120,8 @@ impl PageTransform {
 
     /// Map a schematic X coordinate to output units.
     #[inline]
-    pub fn x(&self, sch_x: f64) -> f32 {
-        (sch_x * self.mm_to_unit + self.translate_x) as f32
+    pub const fn x(&self, sch_x: f64) -> f32 {
+        sch_x.mul_add(self.mm_to_unit, self.translate_x) as f32
     }
 
     /// Map a schematic Y coordinate to a **PDF Y** coordinate.
@@ -130,7 +130,7 @@ impl PageTransform {
     #[allow(dead_code)]
     #[inline]
     pub fn pdf_y(&self, sch_y: f64, page_h_units: f32) -> f32 {
-        page_h_units - (sch_y * self.mm_to_unit + self.translate_y) as f32
+        page_h_units - sch_y.mul_add(self.mm_to_unit, self.translate_y) as f32
     }
 
     /// Map a schematic Y coordinate to a **pixel Y** coordinate.
@@ -138,7 +138,7 @@ impl PageTransform {
     /// Pixels origin is top-left, Y increases downward — same as schematic,
     /// no flip needed.
     #[inline]
-    pub fn px_y(&self, sch_y: f64) -> f32 {
-        (sch_y * self.mm_to_unit + self.translate_y) as f32
+    pub const fn px_y(&self, sch_y: f64) -> f32 {
+        sch_y.mul_add(self.mm_to_unit, self.translate_y) as f32
     }
 }

@@ -1,6 +1,6 @@
 //! BOM (Bill of Materials) export — CSV, HTML, XLSX formats.
 //!
-//! See `OUTPUT_PLAN.md` §8. Walks every sheet in an ExportContext, aggregates
+//! See `OUTPUT_PLAN.md` §8. Walks every sheet in an `ExportContext`, aggregates
 //! components, skips power ports and DNP symbols, and emits in one of three formats.
 
 use std::collections::BTreeMap;
@@ -84,6 +84,7 @@ pub enum BomColumn {
 }
 
 impl BomColumn {
+    #[must_use]
     pub fn header(&self) -> &str {
         match self {
             Self::Name => "Name",
@@ -118,7 +119,7 @@ impl BomFormat {
             .as_deref()
         {
             Some("xlsx") => Self::Xlsx,
-            Some("html") | Some("htm") => Self::Html,
+            Some("html" | "htm") => Self::Html,
             _ => Self::Csv,
         }
     }
@@ -141,7 +142,7 @@ pub enum BomError {
 
 impl From<rust_xlsxwriter::XlsxError> for BomError {
     fn from(err: rust_xlsxwriter::XlsxError) -> Self {
-        BomError::Xlsx(err.to_string())
+        Self::Xlsx(err.to_string())
     }
 }
 
@@ -149,8 +150,9 @@ impl From<rust_xlsxwriter::XlsxError> for BomError {
 // Rollup logic
 // ============================================================================
 
-/// Walks every sheet in the ExportContext, aggregates components according
-/// to the BomOptions, and returns a BomTable ready to emit.
+/// Walks every sheet in the `ExportContext`, aggregates components according
+/// to the `BomOptions`, and returns a `BomTable` ready to emit.
+#[must_use]
 pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
     let bom_ctx = build_bom_context(ctx, opts);
     let engine_opts = engine_options_from_opts(opts);
@@ -158,7 +160,7 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
     build_table(&bom_ctx, &engine_opts)
 }
 
-fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
+const fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
     BomEngineOptions {
         grouping: opts.grouping,
         include_dnp: opts.include_dnp,
@@ -311,7 +313,7 @@ fn parse_variant_field_key(key: &str) -> Option<(String, VariantFieldKind)> {
     Some((variant.to_string(), kind))
 }
 
-fn property_variant_kind(key: &str) -> Option<VariantFieldKind> {
+const fn property_variant_kind(key: &str) -> Option<VariantFieldKind> {
     if key.eq_ignore_ascii_case("variantfitted") || key.eq_ignore_ascii_case("fitted") {
         return Some(VariantFieldKind::Fitted);
     }
@@ -328,7 +330,7 @@ fn property_variant_kind(key: &str) -> Option<VariantFieldKind> {
 /// regardless of which path resolved it — encoding the precedence twice is
 /// exactly how the base `custom_properties` path and the variant `fields`
 /// path drifted apart.
-fn rank_fitted_over_dnp(kind: VariantFieldKind, parsed: bool) -> (u8, bool) {
+const fn rank_fitted_over_dnp(kind: VariantFieldKind, parsed: bool) -> (u8, bool) {
     match kind {
         VariantFieldKind::Fitted => (0, parsed),
         VariantFieldKind::Dnp => (1, !parsed),

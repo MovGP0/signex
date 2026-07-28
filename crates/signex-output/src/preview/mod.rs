@@ -6,7 +6,7 @@
 //!
 //! **Note on text rendering:** tiny-skia has no built-in text rasterisation.
 //! We render text as hollow rectangles with estimated dimensions
-//! (char_count × 0.6 × font_size_px) so users recognise text placement in
+//! (`char_count` × 0.6 × `font_size_px`) so users recognise text placement in
 //! the preview even without glyph rendering. This is acceptable for preview
 //! fidelity; the actual PDF renders glyphs correctly via font subsetting.
 
@@ -43,7 +43,7 @@ pub struct PreviewPage {
     pub width_px: u32,
     /// Height in pixels at the preview DPI.
     pub height_px: u32,
-    /// RGBA bytes (width_px × height_px × 4 bytes per pixel).
+    /// RGBA bytes (`width_px` × `height_px` × 4 bytes per pixel).
     pub rgba: Vec<u8>,
 }
 
@@ -52,6 +52,7 @@ impl PreviewRasterizer {
     ///
     /// Returns a vec of preview pages, one per sheet in sheet order.
     /// If a page fails to rasterise (e.g., dimensions too small), it is skipped.
+    #[must_use]
     pub fn rasterize(&self, ctx: &ExportContext, opts: &PreviewOptions) -> Vec<PreviewPage> {
         let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());

@@ -23,7 +23,7 @@ pub struct PdfSurface {
 }
 
 impl PdfSurface {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             bytes: Vec::new(),
             current_stroke_r: 0.0,
@@ -47,7 +47,7 @@ impl PdfSurface {
             || (self.current_stroke_g - g).abs() > 1e-5
             || (self.current_stroke_b - b).abs() > 1e-5
         {
-            self.write_operator(&format!("{} {} {} RG\n", r, g, b));
+            self.write_operator(&format!("{r} {g} {b} RG\n"));
             self.current_stroke_r = r;
             self.current_stroke_g = g;
             self.current_stroke_b = b;
@@ -60,7 +60,7 @@ impl PdfSurface {
             || (self.current_fill_g - g).abs() > 1e-5
             || (self.current_fill_b - b).abs() > 1e-5
         {
-            self.write_operator(&format!("{} {} {} rg\n", r, g, b));
+            self.write_operator(&format!("{r} {g} {b} rg\n"));
             self.current_fill_r = r;
             self.current_fill_g = g;
             self.current_fill_b = b;
@@ -70,7 +70,7 @@ impl PdfSurface {
     /// Set stroke width (in points). Emits `w` operator only if changed.
     pub fn set_stroke_width(&mut self, width: f32) {
         if (self.current_stroke_width - width).abs() > 1e-5 {
-            self.write_operator(&format!("{} w\n", width));
+            self.write_operator(&format!("{width} w\n"));
             self.current_stroke_width = width;
         }
     }
@@ -84,23 +84,23 @@ impl PdfSurface {
     #[allow(dead_code)]
     pub fn stroke_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, width_pt: f32) {
         self.set_stroke_width(width_pt);
-        self.write_operator(&format!("{} {} m\n", x1, y1));
-        self.write_operator(&format!("{} {} l\n", x2, y2));
+        self.write_operator(&format!("{x1} {y1} m\n"));
+        self.write_operator(&format!("{x2} {y2} l\n"));
         self.write_operator("S\n");
     }
 
     /// Stroke a rectangle outline (top-left at (x, y), width w, height h).
     pub fn stroke_rect(&mut self, x: f32, y: f32, w: f32, h: f32, width_pt: f32) {
         self.set_stroke_width(width_pt);
-        self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));
+        self.write_operator(&format!("{x} {y} {w} {h} re\n"));
         self.write_operator("S\n");
     }
 
     /// Fill a rectangle (top-left at (x, y), width w, height h) with RGB color.
     #[allow(dead_code)] // Reserved for v0.9 template backgrounds / fills.
     pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32) {
-        self.write_operator(&format!("{} {} {} rg\n", r, g, b));
-        self.write_operator(&format!("{} {} {} {} re\n", x, y, w, h));
+        self.write_operator(&format!("{r} {g} {b} rg\n"));
+        self.write_operator(&format!("{x} {y} {w} {h} re\n"));
         self.write_operator("f\n");
     }
 
@@ -109,9 +109,9 @@ impl PdfSurface {
     pub fn text_at(&mut self, x: f32, y: f32, font_name: &str, size_pt: f32, text: &str) {
         let escaped = escape_pdf_string(text);
         self.write_operator("BT\n");
-        self.write_operator(&format!("/{} {} Tf\n", font_name, size_pt));
-        self.write_operator(&format!("{} {} Td\n", x, y));
-        self.write_operator(&format!("({}) Tj\n", escaped));
+        self.write_operator(&format!("/{font_name} {size_pt} Tf\n"));
+        self.write_operator(&format!("{x} {y} Td\n"));
+        self.write_operator(&format!("({escaped}) Tj\n"));
         self.write_operator("ET\n");
     }
 
@@ -131,12 +131,12 @@ impl PdfSurface {
         let sin = rad.sin();
 
         self.write_operator("BT\n");
-        self.write_operator(&format!("/{} {} Tf\n", font_name, size_pt));
+        self.write_operator(&format!("/{font_name} {size_pt} Tf\n"));
         self.write_operator(&format!(
             "{} {} {} {} {} {} Tm\n",
             cos, sin, -sin, cos, x, y
         ));
-        self.write_operator(&format!("({}) Tj\n", escaped));
+        self.write_operator(&format!("({escaped}) Tj\n"));
         self.write_operator("ET\n");
     }
 
@@ -154,7 +154,7 @@ impl Default for PdfSurface {
 
 /// Escape a string for use in PDF string literals (minimal escaping).
 ///
-/// MD-28: PDF string literals are PDFDocEncoding / Latin-1; multi-byte
+/// MD-28: PDF string literals are `PDFDocEncoding` / Latin-1; multi-byte
 /// UTF-8 sequences emitted raw would be misinterpreted by readers as
 /// pairs of Latin-1 characters. Callers must run `sanitize_pdf_text`
 /// first so the input is ASCII-only by the time it reaches us; this
@@ -162,8 +162,7 @@ impl Default for PdfSurface {
 fn escape_pdf_string(s: &str) -> String {
     debug_assert!(
         s.is_ascii(),
-        "escape_pdf_string received non-ASCII input ({:?}); call sanitize_pdf_text first",
-        s
+        "escape_pdf_string received non-ASCII input ({s:?}); call sanitize_pdf_text first"
     );
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {

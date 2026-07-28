@@ -18,7 +18,7 @@ use super::symbols::{
     field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
 };
 use super::text::draw_text_outline;
-use super::*;
+use super::{SvgRenderContext, SvgEvaluatorInputs, SvgStyle, SvgElement, SvgPathCommand, pt, normalize_standard_text, SvgTextAlign, SvgTextVAlign, normalize_standard_text_with_ctx, map_colour_mode, rgb_to_color};
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};
@@ -29,6 +29,7 @@ use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
 
 impl SvgRenderContext {
+    #[must_use]
     pub fn from_sheet(
         sheet: &SheetSnapshot,
         opts: &PdfOptions,
@@ -385,10 +386,12 @@ impl SvgRenderContext {
         }
     }
 
+    #[must_use]
     pub fn rasterize_rgba(&self, width: u32, height: u32) -> Option<Vec<u8>> {
         self.rasterize_rgba_with_colour_mode(width, height, ColourMode::Colour)
     }
 
+    #[must_use]
     pub fn rasterize_rgba_with_colour_mode(
         &self,
         width: u32,
@@ -471,13 +474,9 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
             SvgElement::Path { commands, style } => {
                 let d = to_svg_path_d(commands);
                 let stroke = style
-                    .stroke_rgb
-                    .map(rgb_css)
-                    .unwrap_or_else(|| "none".to_string());
+                    .stroke_rgb.map_or_else(|| "none".to_string(), rgb_css);
                 let fill = style
-                    .fill_rgb
-                    .map(rgb_css)
-                    .unwrap_or_else(|| "none".to_string());
+                    .fill_rgb.map_or_else(|| "none".to_string(), rgb_css);
                 let _ = writeln!(
                     out,
                     "  <path d=\"{}\" stroke=\"{}\" fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",
@@ -506,7 +505,7 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     SvgTextVAlign::Bottom => "alphabetic",
                 };
                 let transform = if rotation_deg.abs() > 0.001 {
-                    format!(" transform=\"rotate({} {} {})\"", rotation_deg, x, y)
+                    format!(" transform=\"rotate({rotation_deg} {x} {y})\"")
                 } else {
                     String::new()
                 };

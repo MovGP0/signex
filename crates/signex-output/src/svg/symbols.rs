@@ -8,7 +8,7 @@
 //! motion, zero behaviour change.
 
 use super::geometry::{arc_path_commands, circle_path, rect_path};
-use super::*;
+use super::{SvgElement, SvgPathCommand, pt, SvgStyle, fill_to_rgb, SvgTextAlign, SvgTextVAlign, normalize_standard_text, normalize_standard_text_with_ctx};
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
@@ -268,8 +268,8 @@ pub(super) fn push_symbol_pins(
         };
 
         let body_end = Point::new(
-            pin.position.x + dir_x * length,
-            pin.position.y + dir_y * length,
+            dir_x.mul_add(length, pin.position.x),
+            dir_y.mul_add(length, pin.position.y),
         );
 
         let (wx1, wy1) = symbol_world_point(sym, &pin.position);
@@ -296,7 +296,7 @@ pub(super) fn push_symbol_pins(
             );
             let dx = p1x - p0x;
             let dy = p1y - p0y;
-            let len = (dx * dx + dy * dy).sqrt();
+            let len = dx.hypot(dy);
             if len > 0.0 {
                 (dx / len, dy / len)
             } else {
@@ -328,8 +328,8 @@ pub(super) fn push_symbol_pins(
                 }
             } else {
                 let name_pos = (
-                    wx2 + wdx * lib.pin_name_offset,
-                    wy2 + wdy * lib.pin_name_offset,
+                    wdx.mul_add(lib.pin_name_offset, wx2),
+                    wdy.mul_add(lib.pin_name_offset, wy2),
                 );
                 if wdx.abs() > wdy.abs() {
                     (
@@ -375,8 +375,8 @@ pub(super) fn push_symbol_pins(
             pin_eval_ctx.net_name_by_pin = pin_net_names;
 
             let mid = Point::new(
-                pin.position.x + dir_x * length * 0.5,
-                pin.position.y + dir_y * length * 0.5,
+                (dir_x * length).mul_add(0.5, pin.position.x),
+                (dir_y * length).mul_add(0.5, pin.position.y),
             );
             let (mwx, mwy) = symbol_world_point(sym, &mid);
             let (perp_x, perp_y, align) = if wdx.abs() >= wdy.abs() {
@@ -420,8 +420,8 @@ fn symbol_world_point(sym: &Symbol, local: &Point) -> (f64, f64) {
     let rad = -sym.rotation.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
-    let rx = x * cos - y * sin;
-    let ry = x * sin + y * cos;
+    let rx = y.mul_add(-sin, x * cos);
+    let ry = y.mul_add(cos, x * sin);
     let rx = if sym.mirror_y { -rx } else { rx };
     let ry = if sym.mirror_x { -ry } else { ry };
     (rx + sym.position.x, ry + sym.position.y)

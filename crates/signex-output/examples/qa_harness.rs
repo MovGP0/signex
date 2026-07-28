@@ -4,7 +4,7 @@
 //! Usage: `cargo run --example qa_harness -p signex-output -- <project.snxprj> [out_dir]`
 //!
 //! Reads the project, walks every sheet via the same logic the app uses,
-//! drives PdfExporter / NetlistExporter / BomExporter (CSV / HTML / XLSX),
+//! drives `PdfExporter` / `NetlistExporter` / `BomExporter` (CSV / HTML / XLSX),
 //! and prints a one-line summary per artefact plus any BOM validation
 //! issues. Exits non-zero if any export panics or returns Err.
 
@@ -20,12 +20,9 @@ use signex_types::project::parse_project;
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let project_path = match args.next() {
-        Some(p) => PathBuf::from(p),
-        None => {
-            eprintln!("usage: qa_harness <project.snxprj> [out_dir]");
-            std::process::exit(2);
-        }
+    let project_path = if let Some(p) = args.next() { PathBuf::from(p) } else {
+        eprintln!("usage: qa_harness <project.snxprj> [out_dir]");
+        std::process::exit(2);
     };
     let out_dir = PathBuf::from(args.next().unwrap_or_else(|| {
         std::env::temp_dir()
@@ -247,8 +244,8 @@ fn qa_bom(ctx: &ExportContext, out_dir: &Path, grouping: BomGrouping, label: &st
                     }
                 }
             }
-            Ok(Err(e)) => eprintln!("  BOM[{:?}]: ERROR {e}", format),
-            Err(_) => eprintln!("  BOM[{:?}]: PANIC", format),
+            Ok(Err(e)) => eprintln!("  BOM[{format:?}]: ERROR {e}"),
+            Err(_) => eprintln!("  BOM[{format:?}]: PANIC"),
         }
     }
 

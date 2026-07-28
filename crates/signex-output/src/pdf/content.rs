@@ -1,6 +1,6 @@
 //! Per-page PDF content-stream builder + markup/text helpers.
 
-use super::*;
+use super::{PdfOptions, ExportContext, ExpressionTables, PdfError, PdfSurface, ColourMap, sheet_cell_value, SvgEvaluatorInputs, SvgRenderContext, MM_TO_PT, SvgElement, SvgPathCommand, sanitize_pdf_text, best_alias_for_text, text_advance_pt, SvgTextAlign, SvgTextVAlign, SubstitutionContext, PdfFont, Finish, PageRange, parse_signex_markup, RichSegment, ExpressionEvalContext, evaluate_expressions};
 
 /// Build a content stream for a single page.
 pub(super) fn build_page_content(
@@ -112,12 +112,12 @@ pub(super) fn build_page_content(
                 let desc = -size_pt * 0.2;
                 let draw_x = match align {
                     SvgTextAlign::Left => *x,
-                    SvgTextAlign::Center => *x - text_w * 0.5,
+                    SvgTextAlign::Center => text_w.mul_add(-0.5, *x),
                     SvgTextAlign::Right => *x - text_w,
                 };
                 let draw_y = match v_align {
                     SvgTextVAlign::Top => *y + asc,
-                    SvgTextVAlign::Center => *y + (asc + desc) * 0.5,
+                    SvgTextVAlign::Center => (asc + desc).mul_add(0.5, *y),
                     SvgTextVAlign::Bottom => *y + desc,
                 };
 
@@ -128,7 +128,7 @@ pub(super) fn build_page_content(
                     }
                     let run_size = *size_pt * run.scale;
                     let run_text = sanitize_pdf_text(&run.text);
-                    let run_y = draw_y + *size_pt * run.baseline_offset;
+                    let run_y = (*size_pt).mul_add(run.baseline_offset, draw_y);
                     let run_advance = text_advance_pt(chosen_alias, &run_text, run_size);
 
                     if rotation_deg.abs() > 0.001 {
@@ -153,7 +153,7 @@ pub(super) fn build_page_content(
                     if run.overbar && run_advance > 0.1 {
                         surface.set_stroke_color(sr, sg, sb);
                         surface.set_stroke_width((run_size * 0.08).max(0.25));
-                        let y_bar = run_y - run_size * 0.78;
+                        let y_bar = run_size.mul_add(-0.78, run_y);
                         let (x1, y1, x2, y2) = if rotation_deg.abs() > 0.001 {
                             let (rx1, ry1) =
                                 rotate_about(cursor_x, y_bar, cursor_x, run_y, -*rotation_deg);
@@ -184,15 +184,15 @@ pub(super) fn build_page_content(
     }
 
     // Template frame and title block (if enabled).
-    if opts.include_title_block {
-        if let Some(template_id) = &opts.sheet_template {
-            if let Some(template) = crate::template::load_builtin(template_id) {
+    if opts.include_title_block
+        && let Some(template_id) = &opts.sheet_template
+            && let Some(template) = crate::template::load_builtin(template_id) {
                 let frame_margin_pt = (template.frame.border_margin_mm * MM_TO_PT) as f32;
                 surface.stroke_rect(
                     frame_margin_pt,
                     frame_margin_pt,
-                    page_w_pt - 2.0 * frame_margin_pt,
-                    page_h_pt - 2.0 * frame_margin_pt,
+                    2.0f32.mul_add(-frame_margin_pt, page_w_pt),
+                    2.0f32.mul_add(-frame_margin_pt, page_h_pt),
                     (0.15 * MM_TO_PT) as f32,
                 );
 
@@ -235,8 +235,6 @@ pub(super) fn build_page_content(
                     surface.text_at(fx, fy, font.alias(), size, &resolved);
                 }
             }
-        }
-    }
 
     Ok(surface.finish())
 }
@@ -354,5 +352,5 @@ fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, 
     let sin = rad.sin();
     let dx = px - ox;
     let dy = py - oy;
-    (ox + dx * cos - dy * sin, oy + dx * sin + dy * cos)
+    (dy.mul_add(-sin, dx.mul_add(cos, ox)), dy.mul_add(cos, dx.mul_add(sin, oy)))
 }
