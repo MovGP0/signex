@@ -10,8 +10,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
 ) -> Option<crate::panels::FootprintEditorPanelContext> {
     use crate::library::editor::footprint::state::EditorMode;
     use crate::panels::{
-        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary,
-        FootprintSketchEntitySummary, FootprintSolveSummary, OverConstraintSummary,
+        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary, FootprintSolveSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;

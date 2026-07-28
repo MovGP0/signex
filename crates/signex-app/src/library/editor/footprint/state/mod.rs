@@ -49,7 +49,6 @@ pub use tool::{PadsTool, SketchTool, ToolPending};
 use signex_library::{Footprint, LayerId};
 
 use super::layers::LayerVisibility;
-use pad::NEW_PAD_SIZE_MM;
 
 /// Slack on each side of the pad bounding box when auto-fitting the
 /// courtyard polygon.

@@ -16,8 +16,6 @@
 //! identical pattern across schematic / footprint / SchLib /
 //! upcoming PCB editors.
 
-use std::path::PathBuf;
-
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
@@ -214,6 +212,8 @@ fn dropdown_trigger_items(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
     use signex_library::{Symbol, SymbolFile};
 

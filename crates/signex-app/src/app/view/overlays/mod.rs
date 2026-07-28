@@ -23,7 +23,7 @@ impl Signex {
     /// the dwell timer was running).
     pub(super) fn view_hover_tooltip(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container, text};
-        use iced::{Background, Border, Color};
+        use iced::{Background, Border};
 
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;

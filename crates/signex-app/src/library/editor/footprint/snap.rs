@@ -319,7 +319,7 @@ pub fn snap_cursor(
             let tol = state.snap_options.snap_distance_mm.max(1e-6);
             let tol_sq = tol * tol;
             let mut best: Option<(f64, (f64, f64))> = None;
-            let mut consider = |pt: Point2, best: &mut Option<(f64, (f64, f64))>| {
+            let consider = |pt: Point2, best: &mut Option<(f64, (f64, f64))>| {
                 let dx = pt.x - raw.0;
                 let dy = pt.y - raw.1;
                 let d_sq = dx * dx + dy * dy;
@@ -407,7 +407,7 @@ pub fn snap_cursor(
     }
 
     // Priority 2 + 3 — anchor-relative angle snap (H/V/15°).
-    if (opts.horizontal_vertical || opts.angle) {
+    if opts.horizontal_vertical || opts.angle {
         if let Some(anchor) = anchor_for_tool(state, sketch) {
             let dx = raw.0 - anchor.0;
             let dy = raw.1 - anchor.1;

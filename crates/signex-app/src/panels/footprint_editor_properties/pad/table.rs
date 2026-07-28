@@ -4,10 +4,8 @@
 //! rows, individual data cells) — used by `pad_form::render_pad_form_pad_stack`
 //! to compose the COPPER / HOLE / PASTE / SOLDER rows.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{container, pick_list, text, text_input};
+use iced::{Color, Length, Theme};
 
 use super::super::super::PanelMsg;
 use super::form::{

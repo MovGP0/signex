@@ -145,7 +145,6 @@ impl Signex {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
                     SelectionMode::Single => SelectionMode::Inside,
-                    _ => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",

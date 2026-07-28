@@ -6,7 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
-use crate::library::editor::footprint::state::{EditorPad, FootprintEditorState};
+use crate::library::editor::footprint::state::FootprintEditorState;
 
 use super::constraints::draw_constraint_icons;
 use super::fills::draw_filled_closed_loops;

@@ -152,7 +152,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     use std::collections::HashSet;
                     let mut seen: HashSet<signex_sketch::id::SketchEntityId> = HashSet::new();
                     let mut victims: Vec<signex_sketch::id::SketchEntityId> = Vec::new();
-                    let mut push_unique =
+                    let push_unique =
                         |id: signex_sketch::id::SketchEntityId,
                          vs: &mut Vec<signex_sketch::id::SketchEntityId>,
                          seen: &mut HashSet<_>| {
