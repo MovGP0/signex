@@ -1,3 +1,8 @@
+#![expect(
+    clippy::items_after_statements,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 use signex_sketch::SketchData;
 use signex_sketch::array::{
     Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme, bga_row_letter,

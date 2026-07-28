@@ -1,3 +1,9 @@
+#![expect(
+    clippy::items_after_statements,
+    clippy::similar_names,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! End-to-end solver acceptance for `split_line` (issue #360 blocker 3):
 //! a split followed by a re-solve must converge, and the duplicated
 //! `Horizontal` / `Vertical` carry-over must pull a perturbed mid

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! DOF analysis — rank-based per-entity colour classification.
 //!
 //! After solve, examine the Jacobian to classify each entity:
@@ -110,10 +116,7 @@ pub fn entity_colours(
     let rank = if jacobian.is_empty() || n == 0 {
         0
     } else {
-        match QrDecomposition::new(jacobian) {
-            Ok(qr) => qr.rank(RANK_TOL),
-            Err(_) => 0,
-        }
+        QrDecomposition::new(jacobian).map_or(0, |qr| qr.rank(RANK_TOL))
     };
     let fully_pinned = n > 0 && rank == n;
 
@@ -194,26 +197,23 @@ fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntit
     };
     let mut out = Vec::new();
     match kind {
-        Coincident { p1, p2 } => {
-            out.push(*p1);
-            out.push(*p2);
-        }
-        DistancePtPt { p1, p2, .. } => {
+        Coincident { p1, p2 } | DistancePtPt { p1, p2, .. } => {
             out.push(*p1);
             out.push(*p2);
         }
         Horizontal { line } | Vertical { line } => {
             extend_with_entity_points(*line, sketch, &mut out);
         }
-        Parallel { l1, l2 } | Perpendicular { l1, l2 } => {
+        Parallel { l1, l2 }
+        | Perpendicular { l1, l2 }
+        | Angle { l1, l2, .. }
+        | EqualLength { l1, l2 } => {
             extend_with_entity_points(*l1, sketch, &mut out);
             extend_with_entity_points(*l2, sketch, &mut out);
         }
-        Angle { l1, l2, .. } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
-        }
-        PointOnLine { point, line } => {
+        PointOnLine { point, line }
+        | DistancePtLine { point, line, .. }
+        | Midpoint { point, line } => {
             out.push(*point);
             extend_with_entity_points(*line, sketch, &mut out);
         }
@@ -221,17 +221,9 @@ fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntit
             out.push(*point);
             extend_with_entity_points(*arc, sketch, &mut out);
         }
-        DistancePtLine { point, line, .. } => {
-            out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
-        }
         DistancePtCircle { point, circle, .. } => {
             out.push(*point);
             extend_with_entity_points(*circle, sketch, &mut out);
-        }
-        EqualLength { l1, l2 } => {
-            extend_with_entity_points(*l1, sketch, &mut out);
-            extend_with_entity_points(*l2, sketch, &mut out);
         }
         EqualRadius { e1, e2 } => {
             extend_with_entity_points(*e1, sketch, &mut out);
@@ -254,10 +246,6 @@ fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntit
             out.push(*p1);
             out.push(*p2);
             out.push(*center);
-        }
-        Midpoint { point, line } => {
-            out.push(*point);
-            extend_with_entity_points(*line, sketch, &mut out);
         }
         Fixed { point } => {
             out.push(*point);

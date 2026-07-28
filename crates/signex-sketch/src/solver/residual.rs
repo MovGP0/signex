@@ -1,3 +1,9 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Constraint residual functions.
 //!
 //! Each [`ConstraintKind`] variant maps to a residual `f(state) -> R^k`
@@ -61,7 +67,7 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
             // Fast path: single bare identifier.
             if !body.is_empty()
                 && body.chars().all(|c| c.is_alphanumeric() || c == '_')
-                && !body.chars().next().unwrap().is_ascii_digit()
+                && body.chars().next().is_some_and(|c| !c.is_ascii_digit())
                 && let Some(v) = params.get(body)
             {
                 return Ok(*v);

@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::comparison_chain,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Fixed-point arithmetic for deterministic geometry.
 //!
 //! `f64` results aren't bit-stable across machines because the

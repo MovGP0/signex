@@ -1,3 +1,11 @@
+#![expect(
+    clippy::many_single_char_names,
+    clippy::missing_panics_doc,
+    clippy::needless_range_loop,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Self-contained 2D vector + dense linear-algebra primitives used
 //! across the solver. Everything is stdlib-only `f64`; no external
 //! numerics crate is taken on.
@@ -225,6 +233,11 @@ pub fn add_diag(a: &mut [Vec<f64>], lambda: f64) {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::float_cmp,
+        reason = "linear algebra tests assert exact sentinel and identity values"
+    )]
+
     use super::*;
 
     const EPS: f64 = 1e-12;
@@ -276,8 +289,11 @@ mod tests {
         let a = PI - 0.01;
         let b = -PI + 0.01;
         assert!(
-            approx_eq(wrap_to_pi(b - a), 2.0f64.mul_add(PI, -PI + 0.02) - 0.0, 1e-3)
-                || (wrap_to_pi(b - a)).abs() < 0.02 + EPS
+            approx_eq(
+                wrap_to_pi(b - a),
+                2.0f64.mul_add(PI, -PI + 0.02) - 0.0,
+                1e-3
+            ) || (wrap_to_pi(b - a)).abs() < 0.02 + EPS
         );
     }
 

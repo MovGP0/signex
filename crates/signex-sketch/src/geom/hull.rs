@@ -78,6 +78,7 @@ pub fn convex_hull(points: &[Point2]) -> Vec<Point2> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::predicates::signed_area;
     use super::*;
 
     fn p(x: f64, y: f64) -> Point2 {
@@ -108,7 +109,6 @@ mod tests {
         // Hull is the square itself, CCW-ordered starting at (0, 0).
         assert_eq!(hull.len(), 4);
         // Verify CCW.
-        use super::super::predicates::signed_area;
         assert!(signed_area(&hull) > 0.0);
     }
 

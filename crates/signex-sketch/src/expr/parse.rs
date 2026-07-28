@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Recursive-descent parser for the sketch expression language.
 //! Cleanroom — see crate-level doc comment in `expr/mod.rs`.
 //!

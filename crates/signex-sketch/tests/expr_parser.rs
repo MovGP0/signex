@@ -1,3 +1,8 @@
+#![expect(
+    clippy::float_cmp,
+    reason = "parser tests assert exact literal and operator results"
+)]
+
 //! Integration tests for the recursive-descent expression parser
 //! (`crates/signex-sketch/src/expr/parse.rs`).
 //!

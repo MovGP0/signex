@@ -1,3 +1,11 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Levenberg–Marquardt iteration for the constraint solver.
 //!
 //! Solves the least-squares problem
@@ -98,7 +106,7 @@ pub fn solve_lm(
             index: packed.index,
             iterations: 0,
             final_residual_norm: 0.0,
-            elapsed_ms: started.elapsed().as_millis() as u64,
+            elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         });
     }
 
@@ -127,7 +135,7 @@ pub fn solve_lm(
             });
         }
 
-        let elapsed_ms = started.elapsed().as_millis() as u64;
+        let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         if elapsed_ms > timeout_ms {
             return Err(SolveError::Timeout {
                 elapsed_ms,
@@ -236,6 +244,6 @@ pub fn solve_lm(
         index: packed.index,
         iterations,
         final_residual_norm: norm_vec(&r),
-        elapsed_ms: started.elapsed().as_millis() as u64,
+        elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
     })
 }

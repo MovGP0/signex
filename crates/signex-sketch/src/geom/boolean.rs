@@ -1,3 +1,9 @@
+#![expect(
+    clippy::similar_names,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Polygon boolean operations.
 //!
 //! Phase 2 stage 1: polygon-against-convex-clip via the

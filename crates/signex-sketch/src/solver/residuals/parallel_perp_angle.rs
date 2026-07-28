@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Task 2.4 — Parallel / Perpendicular / Angle residuals.
 //!
 //! Each helper returns a single scalar residual (`Vec<f64>` of length 1)

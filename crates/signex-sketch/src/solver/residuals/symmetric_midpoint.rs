@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Task 2.7 — `SymmetricAboutLine` / `SymmetricAboutPoint` / Midpoint
 //! residuals.
 //!

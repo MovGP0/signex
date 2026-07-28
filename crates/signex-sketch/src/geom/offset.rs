@@ -1,3 +1,8 @@
+#![expect(
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Polygon offset (Minkowski-style outward / inward expansion).
 //!
 //! Given a closed polygon and a signed offset distance `d`:

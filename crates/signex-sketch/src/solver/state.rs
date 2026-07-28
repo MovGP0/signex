@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::collections::{HashMap, HashSet};
 
 use crate::constraint::ConstraintKind;
@@ -132,8 +137,7 @@ pub fn arc_refs(
 pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntityId> {
     let entity = sketch.entities.iter().find(|e| e.id == id)?;
     match entity.kind {
-        EntityKind::Arc { center, .. } => Some(center),
-        EntityKind::Circle { center, .. } => Some(center),
+        EntityKind::Arc { center, .. } | EntityKind::Circle { center, .. } => Some(center),
         _ => None,
     }
 }

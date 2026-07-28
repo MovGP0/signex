@@ -1,3 +1,11 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::similar_names,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! `split_line` — divide a sketch `Line` at a parameter into two Lines
 //! sharing a new mid `Point`.
 //!

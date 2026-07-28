@@ -1,3 +1,12 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::many_single_char_names,
+    clippy::match_same_arms,
+    clippy::too_long_first_doc_paragraph,
+    clippy::unnested_or_patterns,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! General polygon boolean operations — union, intersection,
 //! difference, xor — via the Greiner-Hormann clipping pattern.
 //!
@@ -197,7 +206,7 @@ fn first_corner(verts: &[Vertex], start: usize) -> Option<usize> {
 /// `inside` before the flip, so an intersection is an "entry"
 /// when the walker is OUTSIDE the other polygon and is about to
 /// step inside.
-fn classify_entries(verts: &mut Vec<Vertex>, start: usize, mut inside: bool) {
+fn classify_entries(verts: &mut [Vertex], start: usize, mut inside: bool) {
     let mut cur = start;
     let total = verts.len();
     for _ in 0..total {
@@ -220,7 +229,6 @@ fn is_walk_start(verts: &[Vertex], idx: usize, op: BoolOp) -> bool {
         // the result is the intersection (∩) — we cross from outside
         // the clip to inside, follow subject inside, switch to clip
         // when we exit, follow clip until we re-enter subject, etc.
-        BoolOp::Intersection => verts[idx].entry,
         // Union: walk subject forward at exits — we leave the clip
         // and stay along subject's outside-of-clip portion, then
         // switch to clip at the next intersection.
@@ -228,7 +236,7 @@ fn is_walk_start(verts: &[Vertex], idx: usize, op: BoolOp) -> bool {
         // Difference (subject - clip): same as intersection on
         // subject side but swap walking direction on clip — handled
         // in the walker.
-        BoolOp::Difference => verts[idx].entry,
+        BoolOp::Intersection | BoolOp::Difference => verts[idx].entry,
     }
 }
 
@@ -237,8 +245,8 @@ fn is_walk_start(verts: &[Vertex], idx: usize, op: BoolOp) -> bool {
 /// output order. Marks every intersection visited along the way
 /// (in BOTH rings).
 fn walk_one_ring(
-    subject: &mut Vec<Vertex>,
-    clip: &mut Vec<Vertex>,
+    subject: &mut [Vertex],
+    clip: &mut [Vertex],
     start: usize,
     op: BoolOp,
 ) -> Vec<Point2> {
@@ -417,22 +425,21 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
         let clip_inside = !cl.is_empty() && point_in_ring(&subj, 0, cl[0].pos);
         return match (op, subj_inside, clip_inside) {
             (BoolOp::Intersection, true, _) => vec![subject.to_vec()],
-            (BoolOp::Intersection, _, true) => vec![clip.to_vec()],
-            (BoolOp::Intersection, _, _) => Vec::new(),
-            (BoolOp::Union, true, _) => vec![clip.to_vec()],
+            (BoolOp::Intersection, _, true) | (BoolOp::Union, true, _) => vec![clip.to_vec()],
+            (BoolOp::Intersection, _, _) | (BoolOp::Difference, true, _) => Vec::new(),
             (BoolOp::Union, _, true) => vec![subject.to_vec()],
             (BoolOp::Union, _, _) => vec![subject.to_vec(), clip.to_vec()],
-            (BoolOp::Difference, true, _) => Vec::new(),
-            (BoolOp::Difference, _, true) => vec![subject.to_vec()],
-            (BoolOp::Difference, _, _) => vec![subject.to_vec()],
+            (BoolOp::Difference, _, true) | (BoolOp::Difference, _, _) => vec![subject.to_vec()],
         };
     }
 
     // Phase 2 — classify entries and exits.
-    let subj_seed =
-        first_corner(&subj, 0).expect("non-degenerate polygon must have a non-intersection corner");
-    let clip_seed =
-        first_corner(&cl, 0).expect("non-degenerate polygon must have a non-intersection corner");
+    let Some(subj_seed) = first_corner(&subj, 0) else {
+        return Vec::new();
+    };
+    let Some(clip_seed) = first_corner(&cl, 0) else {
+        return Vec::new();
+    };
     let subj_starts_inside_clip = point_in_ring(&cl, 0, subj[subj_seed].pos);
     let clip_starts_inside_subj = point_in_ring(&subj, 0, cl[clip_seed].pos);
     classify_entries(&mut subj, subj_seed, subj_starts_inside_clip);

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Numerical Jacobian via central differences.
 //!
 //! The Jacobian J is an (m × n) matrix where m = total residual count

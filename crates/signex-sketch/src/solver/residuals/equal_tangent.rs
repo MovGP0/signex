@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::many_single_char_names,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Task 2.6 — `EqualLength` / `EqualRadius` / `TangentLineArc` / `TangentArcArc`
 //! residuals.
 //!
@@ -12,8 +19,8 @@
 //!    arc centre to the line equals the arc radius (in absolute
 //!    value, since the line can sit on either side of the centre).
 //!  - Arc/arc tangency:
-//!      external — `|C2 − C1| = r1 + r2`
-//!      internal — `|C2 − C1| = |r1 − r2|`
+//!    external — `|C2 − C1| = r1 + r2`
+//!    internal — `|C2 − C1| = |r1 − r2|`
 
 use crate::entity::EntityKind;
 use crate::error::SketchError;
@@ -73,8 +80,7 @@ fn entity_center_xy(
 ) -> Result<Vec2, SketchError> {
     let entity = find_entity(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
     let center_id = match entity.kind {
-        EntityKind::Circle { center, .. } => center,
-        EntityKind::Arc { center, .. } => center,
+        EntityKind::Circle { center, .. } | EntityKind::Arc { center, .. } => center,
         _ => return Err(SketchError::EntityNotFound(id)),
     };
     point_xy(center_id, state, index, sketch).ok_or(SketchError::EntityNotFound(center_id))

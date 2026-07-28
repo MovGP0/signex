@@ -1,3 +1,8 @@
+#![expect(
+    clippy::many_single_char_names,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Task 2.4 — residual tests for Parallel, Perpendicular, Angle.
 
 mod common;

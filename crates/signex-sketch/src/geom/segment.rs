@@ -1,3 +1,9 @@
+#![expect(
+    clippy::many_single_char_names,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Segment, circle, and arc intersection helpers.
 //!
 //! All inputs are in plane-local mm. Returned intersections include

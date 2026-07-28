@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Arc-aware polygon offset. Accepts a closed polyline whose
 //! segments are either straight Lines or circular Arcs, and
 //! returns the offset polyline whose arc segments stay arcs (no
@@ -29,9 +34,9 @@ pub enum PolyElement {
     Line { a: Point2, b: Point2 },
     /// Circular arc — `centre` + `radius` + `start_rad`/`end_rad`
     /// + `sweep_ccw`. The arc's start point is at
-    /// `(centre.x + radius·cos(start_rad), centre.y + radius·sin(start_rad))`
-    /// and similar for the end. Adjacent elements must connect at
-    /// these endpoints.
+    ///   `(centre.x + radius·cos(start_rad), centre.y + radius·sin(start_rad))`
+    ///   and similar for the end. Adjacent elements must connect at
+    ///   these endpoints.
     Arc {
         centre: Point2,
         radius: f64,

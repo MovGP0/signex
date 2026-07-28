@@ -1,3 +1,10 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::needless_range_loop,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dense LU linear solver with partial pivoting for small systems
 //! (n < 200). Designed for the LM step's `(J^T J + λI) Δx = b`.
 //!
@@ -73,10 +80,10 @@ pub fn solve(a: &[Vec<f64>], b: &[f64]) -> Result<Vec<f64>, LinAlgError> {
 ///      [`LinAlgError::Singular`]. Swap rows `k` and `r` and
 ///      record `perm[k] = r`.
 ///    - **Eliminate:** for every row `i > k`,
-///        `a[i][k] /= a[k][k]`            // store L's i-th
-///                                        // multiplier in place
-///        `a[i][j] -= a[i][k] * a[k][j]`  // for each j > k:
-///                                        // update U's submatrix
+///      `a[i][k] /= a[k][k]`            // store L's i-th
+///      // multiplier in place
+///      `a[i][j] -= a[i][k] * a[k][j]`  // for each j > k:
+///      // update U's submatrix
 pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
     let n = a.len();
     for row in a.iter() {

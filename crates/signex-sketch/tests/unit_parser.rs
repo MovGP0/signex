@@ -1,3 +1,8 @@
+#![expect(
+    clippy::float_cmp,
+    reason = "unit parser tests assert exact canonical conversion results"
+)]
+
 //! Integration tests for the strict-unit parser
 //! (`crates/signex-sketch/src/unit.rs`).
 //!

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::similar_names,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Task 3.4 — Canonical sketch corpus.
 //!
 //! Four hand-known sketches that exercise the Phase 3.3 LM solver

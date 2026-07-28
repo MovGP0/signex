@@ -46,10 +46,14 @@ pub(super) fn retarget_pad_profiles(sketch: &mut SketchData, ctx: &SplitCtx) {
             continue;
         };
         if let PadShape::Custom(CustomPadShape::SketchProfile { source }) = &mut pad.shape {
-            source.iter_mut().for_each(|id| retarget(id, ctx));
+            for id in source.iter_mut() {
+                retarget(id, ctx);
+            }
         }
         if let PasteAperturePattern::Custom { source } = &mut pad.paste_apertures {
-            source.iter_mut().for_each(|id| retarget(id, ctx));
+            for id in source.iter_mut() {
+                retarget(id, ctx);
+            }
         }
     }
 }

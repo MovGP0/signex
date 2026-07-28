@@ -1,3 +1,9 @@
+#![expect(
+    clippy::many_single_char_names,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Geometric predicates with epsilon-aware sign returns.
 //!
 //! These wrap the textbook formulae for orientation and signed area
@@ -87,6 +93,11 @@ pub fn signed_area(points: &[Point2]) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::float_cmp,
+        reason = "predicate tests assert exact sign classifications"
+    )]
+
     use super::*;
 
     fn p(x: f64, y: f64) -> Point2 {

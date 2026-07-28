@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::many_single_char_names,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pole of inaccessibility — finds the point inside a polygon
 //! that is furthest from any polygon edge. Useful for placing pad
 //! designators / labels at the visual centre of irregular shapes.

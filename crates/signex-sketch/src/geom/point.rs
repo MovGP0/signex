@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Point / segment / polygon predicates shared across the editor surfaces.
 //!
 //! These were reimplemented (with drifting signatures) in the footprint,

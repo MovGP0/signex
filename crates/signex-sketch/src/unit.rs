@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Strict-unit parser and `Quantity` type for sketch expressions.
 //!
 //! Cleanroom implementation. No third-party constraint-solver source

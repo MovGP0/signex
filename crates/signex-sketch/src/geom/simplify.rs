@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Polygon simplification — removes duplicate vertices, merges
 //! colinear edges, and snaps near-equal coordinates to a grid.
 //! Used as a pre-processing pass before the boolean operations
@@ -56,8 +61,10 @@ pub fn dedup(polygon: &[Point2], eps: f64) -> Vec<Point2> {
     }
     if out.len() >= 2 {
         let first = out[0];
-        let last = *out.last().unwrap();
-        if (first.x - last.x).abs() <= eps && (first.y - last.y).abs() <= eps {
+        if let Some(&last) = out.last()
+            && (first.x - last.x).abs() <= eps
+            && (first.y - last.y).abs() <= eps
+        {
             out.pop();
         }
     }

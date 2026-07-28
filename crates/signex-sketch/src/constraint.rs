@@ -129,24 +129,24 @@ impl ConstraintKind {
             Vertical,
         };
         match self {
-            Coincident { .. } => 2,
-            PointOnLine { .. } => 1,
-            PointOnArc { .. } => 1,
-            Horizontal { .. } => 1,
-            Vertical { .. } => 1,
-            Parallel { .. } => 1,
-            Perpendicular { .. } => 1,
-            DistancePtPt { .. } => 1,
-            DistancePtLine { .. } => 1,
-            DistancePtCircle { .. } => 1,
-            Angle { .. } => 1,
-            EqualLength { .. } => 1,
-            EqualRadius { .. } => 1,
-            TangentLineArc { .. } => 1,
-            TangentArcArc { .. } => 1,
-            SymmetricAboutLine { .. } => 2,
-            SymmetricAboutPoint { .. } => 2,
-            Midpoint { .. } => 2,
+            PointOnLine { .. }
+            | PointOnArc { .. }
+            | Horizontal { .. }
+            | Vertical { .. }
+            | Parallel { .. }
+            | Perpendicular { .. }
+            | DistancePtPt { .. }
+            | DistancePtLine { .. }
+            | DistancePtCircle { .. }
+            | Angle { .. }
+            | EqualLength { .. }
+            | EqualRadius { .. }
+            | TangentLineArc { .. }
+            | TangentArcArc { .. } => 1,
+            Coincident { .. }
+            | SymmetricAboutLine { .. }
+            | SymmetricAboutPoint { .. }
+            | Midpoint { .. } => 2,
             Fixed { .. } => 0,
         }
     }

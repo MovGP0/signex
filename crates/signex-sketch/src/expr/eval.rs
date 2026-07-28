@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::missing_errors_doc,
+    clippy::unnested_or_patterns,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Expression evaluator for the parametric sketch parameter table.
 //!
 //! Walks the [`ExprNode`] tree and produces a [`Quantity`] with
@@ -164,22 +171,18 @@ fn eval_mul(lhs: Quantity, rhs: Quantity) -> Result<Quantity, ExprError> {
     let lf = lhs.unit.family();
     let rf = rhs.unit.family();
     match (lf, rf) {
-        (UnitFamily::Length, UnitFamily::Count) => Ok(Quantity {
-            value: lhs.value * rhs.value,
-            unit: lhs.unit,
-        }),
-        (UnitFamily::Count, UnitFamily::Length) => Ok(Quantity {
-            value: lhs.value * rhs.value,
-            unit: rhs.unit,
-        }),
-        (UnitFamily::Angle, UnitFamily::Count) => Ok(Quantity {
-            value: lhs.value * rhs.value,
-            unit: lhs.unit,
-        }),
-        (UnitFamily::Count, UnitFamily::Angle) => Ok(Quantity {
-            value: lhs.value * rhs.value,
-            unit: rhs.unit,
-        }),
+        (UnitFamily::Count, UnitFamily::Length) | (UnitFamily::Count, UnitFamily::Angle) => {
+            Ok(Quantity {
+                value: lhs.value * rhs.value,
+                unit: rhs.unit,
+            })
+        }
+        (UnitFamily::Length, UnitFamily::Count) | (UnitFamily::Angle, UnitFamily::Count) => {
+            Ok(Quantity {
+                value: lhs.value * rhs.value,
+                unit: lhs.unit,
+            })
+        }
         (UnitFamily::Count, UnitFamily::Count) => Ok(Quantity::count(lhs.value * rhs.value)),
         // Length × Length would produce an Area; we don't model that.
         // Length × Angle, Angle × Angle, Angle × Length are also not
@@ -212,7 +215,7 @@ fn eval_div_mod(
             check_nonzero(r_mm)?;
             Ok(Quantity::count(f(l_mm, r_mm)))
         }
-        (UnitFamily::Length, UnitFamily::Count) => {
+        (UnitFamily::Length, UnitFamily::Count) | (UnitFamily::Angle, UnitFamily::Count) => {
             check_nonzero(rhs.value)?;
             Ok(Quantity {
                 value: f(lhs.value, rhs.value),
@@ -224,13 +227,6 @@ fn eval_div_mod(
             let r_rad = rhs.as_rad()?;
             check_nonzero(r_rad)?;
             Ok(Quantity::count(f(l_rad, r_rad)))
-        }
-        (UnitFamily::Angle, UnitFamily::Count) => {
-            check_nonzero(rhs.value)?;
-            Ok(Quantity {
-                value: f(lhs.value, rhs.value),
-                unit: lhs.unit,
-            })
         }
         (UnitFamily::Count, UnitFamily::Count) => {
             check_nonzero(rhs.value)?;

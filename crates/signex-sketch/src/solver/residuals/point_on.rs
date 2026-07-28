@@ -1,3 +1,10 @@
+#![expect(
+    clippy::many_single_char_names,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Task 2.5 — `PointOnLine` / `PointOnArc` / `DistancePtLine` residuals.
 //!
 //! Each helper returns a single scalar residual (`Vec<f64>` of length 1)

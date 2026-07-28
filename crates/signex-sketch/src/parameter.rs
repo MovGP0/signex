@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Parameter table with topological resolution.
 //!
 //! A sketch's `parameters` field is a `name → source-string` table.
@@ -96,7 +101,9 @@ pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError
     let mut ctx = EvalContext::default();
     let mut resolved_quantities: HashMap<String, Quantity> = HashMap::new();
     for name in &order {
-        let ast = asts.get(name).expect("topo order names a param we have");
+        let Some(ast) = asts.get(name) else {
+            return Err(ExprError::Unknown(name.clone()));
+        };
         let q = eval(ast, &ctx)?;
         ctx.params.insert(name.clone(), ExprNode::Literal(q));
         resolved_quantities.insert(name.clone(), q);
@@ -145,7 +152,10 @@ fn topo_sort(asts: &BTreeMap<String, ExprNode>) -> Result<Vec<String>, ExprError
             if top.1 >= top.2.len() {
                 // All children processed → mark Black, emit, pop.
                 let name = top.0.clone();
-                color.insert(name_borrow(&name, asts), Color::Black);
+                let Some(name_key) = name_borrow(&name, asts) else {
+                    return Err(ExprError::Unknown(name));
+                };
+                color.insert(name_key, Color::Black);
                 order.push(name);
                 stack.pop();
                 continue;
@@ -163,17 +173,17 @@ fn topo_sort(asts: &BTreeMap<String, ExprNode>) -> Result<Vec<String>, ExprError
             match color.get(dep_name.as_str()).copied() {
                 Some(Color::White) => {
                     let dep_deps = collect_deps(asts, &dep_name);
-                    color.insert(name_borrow(&dep_name, asts), Color::Gray);
+                    let Some(dep_key) = name_borrow(&dep_name, asts) else {
+                        return Err(ExprError::Unknown(dep_name));
+                    };
+                    color.insert(dep_key, Color::Gray);
                     stack.push((dep_name, 0, dep_deps));
                 }
                 Some(Color::Gray) => {
                     return Err(ExprError::Cycle(dep_name));
                 }
-                Some(Color::Black) => {
+                Some(Color::Black) | None => {
                     // Already finished; nothing to do.
-                }
-                None => {
-                    // Should not happen — every param key is in the map.
                 }
             }
         }
@@ -184,10 +194,8 @@ fn topo_sort(asts: &BTreeMap<String, ExprNode>) -> Result<Vec<String>, ExprError
 
 /// Borrow a `&str` view of `name` whose lifetime matches `asts`'s
 /// keys, so we can use it as a `HashMap<&str, _>` key.
-fn name_borrow<'a>(name: &str, asts: &'a BTreeMap<String, ExprNode>) -> &'a str {
-    asts.get_key_value(name)
-        .map(|(k, _)| k.as_str())
-        .expect("name must be a param in the table")
+fn name_borrow<'a>(name: &str, asts: &'a BTreeMap<String, ExprNode>) -> Option<&'a str> {
+    asts.get_key_value(name).map(|(k, _)| k.as_str())
 }
 
 /// Collect every [`ExprNode::Ref`] name reachable from `name`'s AST.

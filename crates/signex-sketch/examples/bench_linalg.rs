@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::needless_range_loop,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Self-contained benchmark for the in-house dense LU solver in
 //! `signex_sketch::solver::linalg`. No external benchmarking crate
 //! is used — timings are taken with `std::time::Instant` so the
@@ -43,8 +49,20 @@
 //! adequate for the v0.13 use case, not to compete with hand-tuned
 //! BLAS implementations.
 
-use signex_sketch::solver::linalg::{lu_decompose, lu_solve, solve};
+use std::fmt::Debug;
 use std::time::Instant;
+
+use signex_sketch::solver::linalg::{lu_decompose, lu_solve, solve};
+
+fn require<T, E: Debug>(result: Result<T, E>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("benchmark setup failed: {error:?}");
+            std::process::exit(1);
+        }
+    }
+}
 
 /// Build a well-conditioned `n × n` matrix that exercises pivoting:
 /// strongly diagonally dominant with off-diagonals decaying away
@@ -92,7 +110,7 @@ fn main() {
         let (a, b) = make_matrix(n);
 
         // Warm allocator.
-        let _ = solve(&a, &b).unwrap();
+        let _ = require(solve(&a, &b));
 
         // lu_decompose alone.
         let mut scratch = a.clone();
@@ -100,19 +118,19 @@ fn main() {
             for i in 0..n {
                 scratch[i].copy_from_slice(&a[i]);
             }
-            let _ = lu_decompose(&mut scratch).unwrap();
+            let _ = require(lu_decompose(&mut scratch));
         });
 
         // lu_solve alone (one decomposition reused).
         let mut lu = a.clone();
-        let perm = lu_decompose(&mut lu).unwrap();
+        let perm = require(lu_decompose(&mut lu));
         let lu_solve_ns = bench(iters, || {
-            let _ = lu_solve(&lu, &perm, &b).unwrap();
+            let _ = require(lu_solve(&lu, &perm, &b));
         });
 
         // Full solve (decompose + back-sub each iter).
         let solve_ns = bench(iters, || {
-            let _ = solve(&a, &b).unwrap();
+            let _ = require(solve(&a, &b));
         });
 
         // Approximate FLOPS for solve = (2/3)·n³ (decompose) + 2·n² (subs).

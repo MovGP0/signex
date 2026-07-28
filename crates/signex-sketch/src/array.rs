@@ -147,8 +147,10 @@ pub fn bga_row_letter(row_index: u32, skip_letters: bool, start_row: char) -> St
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect()
     };
     let start_idx = alphabet.iter().position(|&c| c == start_row).unwrap_or(0);
-    let n = alphabet.len() as u32;
-    let mut idx = start_idx as u32 + row_index;
+    let n = u32::try_from(alphabet.len()).unwrap_or(u32::MAX);
+    let mut idx = u32::try_from(start_idx)
+        .unwrap_or(u32::MAX)
+        .saturating_add(row_index);
 
     let mut digits = Vec::new();
     loop {
