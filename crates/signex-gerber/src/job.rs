@@ -1,4 +1,4 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -63,14 +63,14 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch {
     let mut batch = GerberLoadBatch::default();
 
     for attributes in document.files_attributes {
-        let relative = Path::new(&attributes.path);
-        if !is_safe_relative_path(relative) {
+        if !is_safe_relative_path(&attributes.path) {
             batch.failures.push(GerberLoadFailure {
                 path: PathBuf::from(&attributes.path),
                 message: "unsafe Gerber job member path was rejected".to_owned(),
             });
             continue;
         }
+        let relative = Path::new(&attributes.path);
         let target = base.join(relative);
         let canonical_target = match target.canonicalize() {
             Ok(target) => target,
@@ -105,11 +105,16 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch {
     batch
 }
 
-fn is_safe_relative_path(path: &Path) -> bool {
-    !path.as_os_str().is_empty()
-        && path
-            .components()
-            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+fn is_safe_relative_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    let has_windows_drive_prefix =
+        bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+
+    !path.is_empty()
+        && !path.starts_with('/')
+        && !path.starts_with('\\')
+        && !has_windows_drive_prefix
+        && path.split(['/', '\\']).all(|component| component != "..")
 }
 
 fn single_failure(path: &Path, message: String) -> GerberLoadBatch {
@@ -186,9 +191,15 @@ mod tests {
 
     #[test]
     fn job_rejects_parent_and_absolute_member_paths() {
-        assert!(!is_safe_relative_path(Path::new("../outside.gbr")));
-        assert!(!is_safe_relative_path(Path::new("C:\\outside.gbr")));
-        assert!(!is_safe_relative_path(Path::new("/outside.gbr")));
-        assert!(is_safe_relative_path(Path::new("plots/board.gtl")));
+        assert!(!is_safe_relative_path("../outside.gbr"));
+        assert!(!is_safe_relative_path("..\\outside.gbr"));
+        assert!(!is_safe_relative_path("C:\\outside.gbr"));
+        assert!(!is_safe_relative_path("C:/outside.gbr"));
+        assert!(!is_safe_relative_path("C:outside.gbr"));
+        assert!(!is_safe_relative_path("\\\\server\\outside.gbr"));
+        assert!(!is_safe_relative_path("\\outside.gbr"));
+        assert!(!is_safe_relative_path("/outside.gbr"));
+        assert!(is_safe_relative_path("plots/board.gtl"));
+        assert!(is_safe_relative_path("plots\\board.gtl"));
     }
 }
