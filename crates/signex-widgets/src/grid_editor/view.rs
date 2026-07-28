@@ -1,13 +1,27 @@
 use super::{GerberGridEditorMessage, GerberGridEditorState};
 use crate::gerber_viewer::{GridUnit, styles};
 use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, text,
-    text_input,
+    Space, button, column, container, pick_list, row, scrollable, svg,
+    text, text_input, tooltip,
 };
 use iced::{
     Background, Border, Color, Element, Length, Theme,
 };
 use signex_types::theme::ThemeTokens;
+
+const ICON_SIZE: f32 = 18.0;
+const BUTTON_SIZE: f32 = 28.0;
+
+const ADD_ICON: &[u8] =
+    include_bytes!("../../assets/grid-editor/add.svg");
+const MOVE_UP_ICON: &[u8] =
+    include_bytes!("../../assets/grid-editor/move_up.svg");
+const MOVE_DOWN_ICON: &[u8] =
+    include_bytes!("../../assets/grid-editor/move_down.svg");
+const DELETE_ICON: &[u8] =
+    include_bytes!("../../assets/grid-editor/delete.svg");
+const RESET_DEFAULTS_ICON: &[u8] =
+    include_bytes!("../../assets/grid-editor/reset_defaults.svg");
 
 pub fn view<'a>(
     state: &'a GerberGridEditorState,
@@ -43,25 +57,37 @@ pub fn view<'a>(
 
     let selected = state.selected_index();
     let list_controls = row![
-        compact_button("+", Some(GerberGridEditorMessage::AddGrid)),
-        compact_button(
-            "↑",
-            (selected > 0).then_some(GerberGridEditorMessage::MoveGridUp),
+        grid_icon_button(
+            ADD_ICON,
+            "Add Grid",
+            Some(GerberGridEditorMessage::AddGrid),
+            tokens,
         ),
-        compact_button(
-            "↓",
+        grid_icon_button(
+            MOVE_UP_ICON,
+            "Move Grid Up",
+            (selected > 0).then_some(GerberGridEditorMessage::MoveGridUp),
+            tokens,
+        ),
+        grid_icon_button(
+            MOVE_DOWN_ICON,
+            "Move Grid Down",
             (selected + 1 < choices.len())
                 .then_some(GerberGridEditorMessage::MoveGridDown),
+            tokens,
         ),
         Space::new().width(20),
-        compact_button(
-            "⌫",
+        grid_icon_button(
+            DELETE_ICON,
+            "Delete Grid",
             (choices.len() > 1).then_some(
                 GerberGridEditorMessage::DeleteGrid,
             ),
+            tokens,
         ),
     ]
-    .spacing(8);
+    .spacing(4)
+    .align_y(iced::Alignment::Center);
 
     let grids_panel = column![
         text("Grids").size(13).color(text_primary),
@@ -156,8 +182,12 @@ pub fn view<'a>(
         });
 
     let footer = row![
-        button(text("Reset Grids to Defaults"))
-            .on_press(GerberGridEditorMessage::ResetDefaults),
+        grid_icon_button(
+            RESET_DEFAULTS_ICON,
+            "Reset Grids to Defaults",
+            Some(GerberGridEditorMessage::ResetDefaults),
+            tokens,
+        ),
         Space::new().width(Length::Fill),
         button(text("OK"))
             .on_press(GerberGridEditorMessage::Apply),
@@ -190,12 +220,78 @@ pub fn view<'a>(
         .into()
 }
 
-fn compact_button(
-    label: &'static str,
+fn grid_icon_button<'a>(
+    icon: &'static [u8],
+    hint: &'static str,
     message: Option<GerberGridEditorMessage>,
-) -> iced::widget::Button<'static, GerberGridEditorMessage>
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberGridEditorMessage>
 {
-    button(text(label).size(14))
-        .padding([5, 9])
-        .on_press_maybe(message)
+    let enabled = message.is_some();
+    let icon_color = if enabled
+    {
+        styles::ti(tokens.text_secondary)
+    }
+    else
+    {
+        let muted = styles::ti(tokens.text_secondary);
+        Color {
+            a: muted.a * 0.45,
+            ..muted
+        }
+    };
+    let hover = styles::ti(tokens.hover);
+    let icon = svg(svg::Handle::from_memory(icon))
+        .width(ICON_SIZE)
+        .height(ICON_SIZE)
+        .style(move |_: &Theme, _| iced::widget::svg::Style {
+            color: Some(icon_color),
+        });
+    let button = button(
+        container(icon)
+            .width(BUTTON_SIZE)
+            .height(BUTTON_SIZE)
+            .center_x(BUTTON_SIZE)
+            .center_y(BUTTON_SIZE),
+    )
+    .padding(0)
+    .on_press_maybe(message)
+    .style(move |_: &Theme, status: button::Status| button::Style {
+        background: (enabled && status == button::Status::Hovered)
+            .then_some(Background::Color(hover)),
+        border: Border {
+            width: 0.0,
+            radius: 2.0.into(),
+            color: Color::TRANSPARENT,
+        },
+        ..button::Style::default()
+    });
+    let panel = styles::ti(tokens.panel_bg);
+    let border = styles::ti(tokens.border);
+    tooltip(
+        button,
+        container(text(hint).size(11).color(styles::ti(tokens.text)))
+            .padding([4, 7])
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(panel)),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..container::Style::default()
+            }),
+        tooltip::Position::Top,
+    )
+    .gap(5)
+    .into()
 }
+
+#[cfg(test)]
+pub(super) const GRID_EDITOR_ICON_ASSETS: [&[u8]; 5] = [
+    ADD_ICON,
+    MOVE_UP_ICON,
+    MOVE_DOWN_ICON,
+    DELETE_ICON,
+    RESET_DEFAULTS_ICON,
+];

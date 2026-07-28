@@ -20,3 +20,7 @@ mod grid_editor_draft_tests;
 #[cfg(test)]
 #[path = "../../tests/grid_editor/units.rs"]
 mod grid_editor_unit_tests;
+
+#[cfg(test)]
+#[path = "../../tests/grid_editor/view.rs"]
+mod grid_editor_view_tests;
