@@ -1,8 +1,18 @@
+#![expect(
+    clippy::manual_let_else,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Integration tests covering DB schema migrations + the `/tables`
 //! and `/rows` HTTP routes for the `DBLib` row model.
 //!
 //! Default backend: in-memory `SQLite`. Postgres path is gated behind
 //! `SIGNEX_TEST_PG_URL` env var so CI without Postgres still passes.
+
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests fail fast when request or response fixtures fail"
+)]
 
 use std::time::Duration;
 

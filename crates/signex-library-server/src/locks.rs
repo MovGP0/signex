@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! In-memory advisory lock service.
 //!
 //! Locks are keyed on `(Uuid, FieldSet)`. Each lock records the holder
@@ -92,7 +97,10 @@ impl LockManager {
         // HI-20: best-effort recovery. If the mutex is poisoned the inner
         // state may be partially consistent, but for a TTL update that's
         // acceptable; the alternative (panic) brings down the server.
-        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.idle_ttl = ttl;
     }
 
@@ -123,6 +131,7 @@ impl LockManager {
                 last_renewed_wallclock: now_wall,
             },
         );
+        drop(inner);
         Ok(())
     }
 
@@ -143,6 +152,7 @@ impl LockManager {
         }
         entry.last_renewed = Instant::now();
         entry.last_renewed_wallclock = Utc::now();
+        drop(inner);
         Ok(())
     }
 
@@ -162,30 +172,39 @@ impl LockManager {
             });
         }
         inner.locks.remove(&key);
+        drop(inner);
         Ok(())
     }
 
     pub fn snapshot(&self, uuid: Uuid, field_set: FieldSet) -> Option<LockSnapshot> {
         // Read-only inspection; on poison we recover rather than crash.
-        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let key = (uuid, field_set);
         let entry = inner.locks.get(&key)?;
         // Treat expired entries as absent.
         if Instant::now().duration_since(entry.last_renewed) >= inner.idle_ttl {
             return None;
         }
-        Some(LockSnapshot {
+        let snapshot = LockSnapshot {
             holder: entry.holder.clone(),
             acquired: entry.acquired,
             last_renewed: entry.last_renewed_wallclock,
-        })
+        };
+        drop(inner);
+        Some(snapshot)
     }
 
     /// Drop expired entries. Background tasks may call this periodically.
     pub fn sweep_expired(&self) {
         // The sweeper is best-effort; on poison we still want the next
         // tick to clean up rather than the task panicking out.
-        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
         let ttl = inner.idle_ttl;
         inner

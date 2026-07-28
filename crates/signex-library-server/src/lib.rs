@@ -1,3 +1,10 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Signex library DB-flavour server.
 //!
 //! Exposes a JSON HTTP API over a shared `AppState` (DB pool + lock manager).
@@ -179,7 +186,9 @@ pub fn with_rate_limit(router: Router) -> Router {
             .per_second(RATE_LIMIT_PER_SECOND)
             .burst_size(RATE_LIMIT_BURST_SIZE)
             .finish()
-            .expect("governor config: per_second/burst_size both nonzero"),
+            .unwrap_or_else(|| {
+                panic!("governor config must accept nonzero per-second and burst limits")
+            }),
     );
     let governor_for_cleanup = Arc::clone(&governor_conf);
     tokio::spawn(async move {

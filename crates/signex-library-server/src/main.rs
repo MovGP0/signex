@@ -34,8 +34,7 @@ async fn main() -> anyhow::Result<()> {
     // Loopback dev mode without a token is fine; binding 0.0.0.0 / a
     // routable interface without a token would expose every CRUD route
     // to the network with only a `tracing::warn!`, so we exit instead.
-    let token_set = std::env::var(API_TOKEN_ENV)
-        .is_ok_and(|t| !t.is_empty());
+    let token_set = std::env::var(API_TOKEN_ENV).is_ok_and(|t| !t.is_empty());
     if !is_loopback_bind(&bind) && !token_set {
         anyhow::bail!(
             "refusing to bind to non-loopback address `{bind}` without `{API_TOKEN_ENV}` set; \

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Database layer — pool management, migrations, and component-row /
 //! primitive persistence helpers used by the route handlers.
 //!
@@ -50,7 +55,7 @@ impl DbPool {
     pub const fn sqlite(&self) -> Option<&sqlx::SqlitePool> {
         match self {
             Self::Sqlite(p) => Some(p),
-            _ => None,
+            Self::Postgres(_) => None,
         }
     }
 
@@ -58,7 +63,7 @@ impl DbPool {
     pub const fn postgres(&self) -> Option<&sqlx::PgPool> {
         match self {
             Self::Postgres(p) => Some(p),
-            _ => None,
+            Self::Sqlite(_) => None,
         }
     }
 }

@@ -6,6 +6,11 @@
 //! `LibraryAdapter` will use in production. Auth is the same fixture bearer
 //! token used by `tests/integration_db.rs`.
 
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests fail fast when request or response fixtures fail"
+)]
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use signex_library::primitive::{Footprint, SimKind, SimModel, Symbol};
