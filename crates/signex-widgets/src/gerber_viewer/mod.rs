@@ -35,7 +35,7 @@ mod toolbar;
 mod view;
 mod workspace;
 
-#[path = "canvas.rs"]
+#[path = "canvas/mod.rs"]
 mod viewport;
 
 pub use display::{GerberCrosshairMode, GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
