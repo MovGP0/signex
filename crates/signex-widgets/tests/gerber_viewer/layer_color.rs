@@ -77,6 +77,10 @@ macro_rules! gerber_layer_color_tests
                 assert!(choices.len() < state.palette.len());
                 for (index, choice) in choices.iter().enumerate()
                 {
+                    assert_eq!(
+                        choice.color,
+                        state.palette[choice.palette_index],
+                    );
                     assert!(!choices[..index].iter().any(|previous|
                     {
                         state.palette[previous.palette_index]
@@ -98,6 +102,22 @@ macro_rules! gerber_layer_color_tests
 
                 assert_eq!(state.layers[0].color, original);
                 assert_eq!(state.redraw_generation, generation);
+            }
+
+            #[test]
+            fn color_picker_tracks_one_target_and_closes_after_selection()
+            {
+                let mut state = two_layer_state();
+
+                state.toggle_color_picker(GerberColorTarget::Layer(0));
+                assert!(state.color_picker_open(GerberColorTarget::Layer(0)));
+
+                state.toggle_color_picker(GerberColorTarget::Grid);
+                assert!(!state.color_picker_open(GerberColorTarget::Layer(0)));
+                assert!(state.color_picker_open(GerberColorTarget::Grid));
+
+                state.set_grid_color(1);
+                assert!(!state.color_picker_open(GerberColorTarget::Grid));
             }
         }
     };

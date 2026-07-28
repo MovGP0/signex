@@ -67,6 +67,7 @@ pub struct GerberViewerState
     pub(super) edit_grid_unit: GridUnit,
     pub(super) grid_editor_error: Option<String>,
     pub(super) palette: Vec<Color>,
+    pub(super) open_color_picker: Option<GerberColorTarget>,
 }
 
 impl Default for GerberViewerState
@@ -151,6 +152,7 @@ impl Default for GerberViewerState
             edit_grid_unit,
             grid_editor_error: None,
             palette,
+            open_color_picker: None,
         }
     }
 }

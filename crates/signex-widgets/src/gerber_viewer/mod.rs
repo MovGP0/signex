@@ -16,6 +16,7 @@ use signex_gerber::{
 use signex_types::theme::ThemeTokens;
 
 mod display;
+mod color_dropdown;
 mod dock;
 mod gerber_viewer_state;
 mod grid;
@@ -44,6 +45,7 @@ pub use display::{
 pub use dock::GerberDockPanel;
 pub use grid::GridUnit;
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
+pub use layer_color::GerberColorTarget;
 pub use measurement::GerberMeasurement;
 pub use message::GerberViewerMessage;
 pub use pcb_export::{
@@ -81,6 +83,8 @@ use highlight::{
     attribute_highlight_color, component_highlight_color, d_code_highlight_color,
     net_highlight_color,
 };
+use color_dropdown::color_dropdown;
+use layer_color::GerberLayerColorChoice;
 use measurement::draw_measurement;
 use selection::{
     hit_test_visible_item, hit_test_visible_items_in_bounds,

@@ -568,6 +568,16 @@ impl Signex
                     .set_layer_visible(index, visible);
                 Task::none()
             }
+            GerberViewerMessage::ToggleColorPicker(target) =>
+            {
+                gerber_viewer.toggle_color_picker(target);
+                Task::none()
+            }
+            GerberViewerMessage::CloseColorPicker =>
+            {
+                gerber_viewer.close_color_picker();
+                Task::none()
+            }
             GerberViewerMessage::SetLayerColor(index, palette_index) =>
             {
                 gerber_viewer

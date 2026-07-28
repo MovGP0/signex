@@ -426,18 +426,21 @@ fn view_layers<'a>(
             .on_press(GerberViewerMessage::SelectLayer(index))
             .style(styles::rail_tab(tokens, active));
             let selected_color = state.selected_layer_color_choice(index);
-            let color_picker = pick_list(
+            let target = GerberColorTarget::Layer(index);
+            let color_picker = color_dropdown(
                 color_choices.clone(),
                 selected_color,
+                target,
+                state.color_picker_open(target),
+                Length::Fixed(128.0),
                 move |choice| {
                     GerberViewerMessage::SetLayerColor(
                         index,
-                        choice.palette_index,
+                        choice,
                     )
                 },
-            )
-            .placeholder("Layer color")
-            .width(128);
+                tokens,
+            );
             layer_list = layer_list.push(
                 row![visible, label, color_picker]
                     .spacing(5)
@@ -457,14 +460,15 @@ fn view_layers<'a>(
         .push(
             row![
                 text("Grid").size(11).width(70),
-                pick_list(
+                color_dropdown(
                     item_color_choices.clone(),
                     grid_color,
-                    |choice| GerberViewerMessage::SetGridColor(
-                        choice.palette_index,
-                    ),
+                    GerberColorTarget::Grid,
+                    state.color_picker_open(GerberColorTarget::Grid),
+                    Length::Fill,
+                    GerberViewerMessage::SetGridColor,
+                    tokens,
                 )
-                .width(Length::Fill),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
@@ -472,14 +476,15 @@ fn view_layers<'a>(
         .push(
             row![
                 text("D-codes").size(11).width(70),
-                pick_list(
+                color_dropdown(
                     item_color_choices.clone(),
                     d_code_color,
-                    |choice| GerberViewerMessage::SetDCodeColor(
-                        choice.palette_index,
-                    ),
+                    GerberColorTarget::DCode,
+                    state.color_picker_open(GerberColorTarget::DCode),
+                    Length::Fill,
+                    GerberViewerMessage::SetDCodeColor,
+                    tokens,
                 )
-                .width(Length::Fill),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
@@ -487,14 +492,15 @@ fn view_layers<'a>(
         .push(
             row![
                 text("Negative").size(11).width(70),
-                pick_list(
+                color_dropdown(
                     item_color_choices,
                     negative_color,
-                    |choice| GerberViewerMessage::SetNegativeObjectColor(
-                        choice.palette_index,
-                    ),
+                    GerberColorTarget::NegativeObject,
+                    state.color_picker_open(GerberColorTarget::NegativeObject),
+                    Length::Fill,
+                    GerberViewerMessage::SetNegativeObjectColor,
+                    tokens,
                 )
-                .width(Length::Fill),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),

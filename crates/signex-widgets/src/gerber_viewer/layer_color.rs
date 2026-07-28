@@ -1,20 +1,19 @@
-use std::fmt;
-
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GerberColorTarget
+{
+    Layer(usize),
+    Grid,
+    DCode,
+    NegativeObject,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct GerberLayerColorChoice
 {
     pub(super) palette_index: usize,
-    label: String,
-}
-
-impl fmt::Display for GerberLayerColorChoice
-{
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-    {
-        formatter.write_str(&self.label)
-    }
+    pub(super) color: Color,
 }
 
 impl GerberViewerState
@@ -32,11 +31,7 @@ impl GerberViewerState
             {
                 GerberLayerColorChoice {
                     palette_index,
-                    label: format!(
-                        "Material {:02} · {}",
-                        palette_index + 1,
-                        color_hex(*color),
-                    ),
+                    color: *color,
                 }
             })
             .collect()
@@ -71,8 +66,31 @@ impl GerberViewerState
             .find(|choice| choice.palette_index == palette_index)
     }
 
+    pub fn toggle_color_picker(&mut self, target: GerberColorTarget)
+    {
+        self.open_color_picker = if self.open_color_picker == Some(target)
+        {
+            None
+        }
+        else
+        {
+            Some(target)
+        };
+    }
+
+    pub fn close_color_picker(&mut self)
+    {
+        self.open_color_picker = None;
+    }
+
+    pub(super) fn color_picker_open(&self, target: GerberColorTarget) -> bool
+    {
+        self.open_color_picker == Some(target)
+    }
+
     pub fn set_layer_color(&mut self, layer_index: usize, palette_index: usize)
     {
+        self.close_color_picker();
         let Some(color) = self.palette.get(palette_index).copied() else
         {
             return;

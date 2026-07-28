@@ -30,6 +30,8 @@ pub enum GerberViewerMessage
     MoveLayerUp,
     MoveLayerDown,
     SetLayerVisible(usize, bool),
+    ToggleColorPicker(GerberColorTarget),
+    CloseColorPicker,
     SetLayerColor(usize, usize),
     SetGridColor(usize),
     SetDCodeColor(usize),
