@@ -3,7 +3,7 @@ use signex_widgets::passive_calculator::{
     Tolerance, solve,
 };
 
-fn options(kind: ComponentKind, target: f64, max_parts: usize) -> SolveOptions {
+const fn options(kind: ComponentKind, target: f64, max_parts: usize) -> SolveOptions {
     SolveOptions {
         kind,
         target,

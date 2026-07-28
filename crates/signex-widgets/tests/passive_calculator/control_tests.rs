@@ -95,7 +95,7 @@ fn changing_a_result_tolerance_leaves_other_leaves_unchanged() {
     control.update(CalculatorMessage::Calculate);
     let before = control.active_state().result.as_ref().unwrap().components();
     assert_eq!(before.len(), 2, "the fixture must produce two components");
-    let mut expected = before.clone();
+    let mut expected = before;
     expected[0].1 = Tolerance::Percent1;
 
     control.update(CalculatorMessage::ToleranceChanged(0, Tolerance::Percent1));
