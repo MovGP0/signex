@@ -429,16 +429,16 @@ impl GeometryState {
     }
 
     fn finish_region(&mut self, geometry: &mut GerberGeometry) {
-        if let Some(points) = self.region_points.take() {
-            if points.len() >= 3 {
-                geometry.push_primitive(
-                    GerberPrimitive::Region {
-                        points,
-                        polarity: self.polarity,
-                    },
-                    self.region_attributes.clone(),
-                );
-            }
+        if let Some(points) = self.region_points.take()
+            && points.len() >= 3
+        {
+            geometry.push_primitive(
+                GerberPrimitive::Region {
+                    points,
+                    polarity: self.polarity,
+                },
+                self.region_attributes.clone(),
+            );
         }
     }
 }
