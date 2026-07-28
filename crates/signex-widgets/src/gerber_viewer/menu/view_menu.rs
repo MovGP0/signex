@@ -69,12 +69,6 @@ pub(super) fn view(
                 GerberViewerMessage::ToggleGridVisibility(!state.grid_visible),
                 colors,
             ),
-            checked_leaf(
-                "Polar Coordinates",
-                state.polar_coordinates,
-                GerberViewerMessage::TogglePolarCoordinates(!state.polar_coordinates),
-                colors,
-            ),
             units_menu,
             separator(colors),
             checked_leaf(
@@ -136,6 +130,18 @@ pub(super) fn view(
                 "Show Layers Manager",
                 state.layer_manager_visible,
                 GerberViewerMessage::ToggleLayerManager,
+                colors,
+            ),
+            checked_leaf(
+                "Show Highlight Panel",
+                state.is_tool_panel_visible(GerberDockPanel::Highlight),
+                GerberViewerMessage::ToggleHighlightPanel,
+                colors,
+            ),
+            checked_leaf(
+                "Show Grid Panel",
+                state.is_tool_panel_visible(GerberDockPanel::Grid),
+                GerberViewerMessage::ToggleGridPanel,
                 colors,
             ),
         ]),

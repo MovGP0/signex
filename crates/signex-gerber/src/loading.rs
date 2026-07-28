@@ -182,6 +182,142 @@ where
     batch
 }
 
+/// Loads supported fabrication sources through one entry point.
+///
+/// ZIP archives are detected from their binary signature and Gerber jobs from
+/// their JSON structure. Gerber and Excellon text files continue to use their
+/// content signatures. Standard extensions are used only to reject a
+/// mismatched container before parsing it as another format.
+pub fn load_fabrication_files<I, P>(paths: I) -> GerberLoadBatch
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<Path>,
+{
+    let mut batch = GerberLoadBatch::default();
+    for path in paths
+    {
+        let path = path.as_ref();
+        let mut loaded = match detect_fabrication_container(path)
+        {
+            Ok(Some(FabricationContainerFormat::Zip)) =>
+            {
+                crate::load_zip_archive(path)
+            }
+            Ok(Some(FabricationContainerFormat::GerberJob)) =>
+            {
+                crate::load_gerber_job_file(path)
+            }
+            Ok(None) => match load_autodetected_file(path)
+            {
+                Ok(layer) => single_layer(layer),
+                Err(failure) => single_load_failure(failure),
+            },
+            Err(failure) => single_load_failure(failure),
+        };
+        batch.layers.append(&mut loaded.layers);
+        batch.failures.append(&mut loaded.failures);
+    }
+    batch
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FabricationContainerFormat
+{
+    Zip,
+    GerberJob,
+}
+
+fn detect_fabrication_container(
+    path: &Path,
+) -> Result<Option<FabricationContainerFormat>, GerberLoadFailure>
+{
+    let mut file = File::open(path).map_err(|error| GerberLoadFailure {
+        path: path.to_path_buf(),
+        message: format!("could not open file: {error}"),
+    })?;
+    let mut prefix = [0_u8; 4096];
+    let prefix_length =
+        file.read(&mut prefix).map_err(|error| GerberLoadFailure {
+            path: path.to_path_buf(),
+            message: format!("could not inspect file type: {error}"),
+        })?;
+    let prefix = &prefix[..prefix_length];
+    let is_zip = prefix.get(..4).is_some_and(|signature|
+    {
+        matches!(
+            signature,
+            [b'P', b'K', 3, 4]
+                | [b'P', b'K', 5, 6]
+                | [b'P', b'K', 7, 8]
+        )
+    });
+    if is_zip
+    {
+        return Ok(Some(FabricationContainerFormat::Zip));
+    }
+
+    let text_prefix = prefix
+        .strip_prefix(&[0xEF, 0xBB, 0xBF])
+        .unwrap_or(prefix);
+    let looks_like_json = text_prefix
+        .iter()
+        .copied()
+        .find(|byte| !byte.is_ascii_whitespace())
+        == Some(b'{');
+    if looks_like_json
+    {
+        let file = File::open(path).map_err(|error| GerberLoadFailure {
+            path: path.to_path_buf(),
+            message: format!("could not inspect Gerber job: {error}"),
+        })?;
+        if serde_json::from_reader::<_, serde_json::Value>(file)
+            .ok()
+            .is_some_and(|value| {
+                value
+                    .get("FilesAttributes")
+                    .is_some_and(serde_json::Value::is_array)
+            })
+        {
+            return Ok(Some(FabricationContainerFormat::GerberJob));
+        }
+    }
+
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    match extension.to_ascii_lowercase().as_str()
+    {
+        "zip" => Err(GerberLoadFailure {
+            path: path.to_path_buf(),
+            message: "file extension indicates a ZIP archive, but the ZIP signature is missing"
+                .to_owned(),
+        }),
+        "gbrjob" => Err(GerberLoadFailure {
+            path: path.to_path_buf(),
+            message: "file extension indicates a Gerber job, but the FilesAttributes JSON structure is missing"
+                .to_owned(),
+        }),
+        _ => Ok(None),
+    }
+}
+
+fn single_layer(layer: LoadedLayer) -> GerberLoadBatch
+{
+    GerberLoadBatch {
+        layers: vec![layer],
+        failures: Vec::new(),
+    }
+}
+
+fn single_load_failure(failure: GerberLoadFailure) -> GerberLoadBatch
+{
+    GerberLoadBatch {
+        layers: Vec::new(),
+        failures: vec![failure],
+    }
+}
+
 pub fn load_autodetected_reader<R>(
     name: impl Into<String>,
     mut reader: R,

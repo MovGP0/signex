@@ -66,6 +66,23 @@ macro_rules! gerber_clear_highlight_tests
                 assert_eq!(state.status, status);
                 assert_eq!(state.redraw_generation, generation);
             }
+
+            #[test]
+            fn clear_highlight_icon_is_a_black_path_on_a_transparent_background()
+            {
+                let source = std::str::from_utf8(
+                    highlight_controls::CLEAR_HIGHLIGHT_ICON_ASSET,
+                )
+                .expect("clear-highlight SVG must be UTF-8");
+
+                assert!(source.starts_with("<svg "));
+                assert!(source.contains("<path "));
+                assert!(source.contains("fill=\"#000000\""));
+                assert!(!source.contains("<rect"));
+                assert!(!source.contains("<circle"));
+                assert!(!source.contains("<image"));
+                assert!(!source.contains("background"));
+            }
         }
     };
 }

@@ -12,6 +12,8 @@ pub enum GerberDockPanel
 {
     Document(GerberDocumentId),
     Layers,
+    Highlight,
+    Grid,
     LayerInformation,
     DCodes,
     Source,
@@ -19,8 +21,10 @@ pub enum GerberDockPanel
 
 impl GerberDockPanel
 {
-    pub const TOOL_PANELS: [Self; 4] = [
+    pub const TOOL_PANELS: [Self; 6] = [
         Self::Layers,
+        Self::Highlight,
+        Self::Grid,
         Self::LayerInformation,
         Self::DCodes,
         Self::Source,
@@ -32,6 +36,8 @@ impl GerberDockPanel
         {
             Self::Document(id) => format!("document-{}", id.value()),
             Self::Layers => "layers".to_owned(),
+            Self::Highlight => "highlight".to_owned(),
+            Self::Grid => "grid".to_owned(),
             Self::LayerInformation => "layer-information".to_owned(),
             Self::DCodes => "d-codes".to_owned(),
             Self::Source => "source".to_owned(),
@@ -44,6 +50,8 @@ impl GerberDockPanel
         {
             Self::Document(_) => "Gerber",
             Self::Layers => "Layers",
+            Self::Highlight => "Highlight",
+            Self::Grid => "Grid",
             Self::LayerInformation => "Layer Information",
             Self::DCodes => "D-Codes",
             Self::Source => "Original Source",

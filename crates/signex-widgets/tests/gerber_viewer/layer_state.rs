@@ -120,6 +120,8 @@ macro_rules! gerber_layer_state_tests
         for expected in [
             GerberDockPanel::Document(document_id),
             GerberDockPanel::Layers,
+            GerberDockPanel::Highlight,
+            GerberDockPanel::Grid,
             GerberDockPanel::LayerInformation,
             GerberDockPanel::DCodes,
             GerberDockPanel::Source,
@@ -158,6 +160,33 @@ macro_rules! gerber_layer_state_tests
                 .panel_ids()
                 .contains(&GerberDockPanel::DCodes.id()),
         );
+    }
+
+    #[test]
+    fn highlight_and_grid_tabs_can_be_closed_and_reopened()
+    {
+        let mut workspace = GerberWorkspaceState::default();
+
+        for panel in [GerberDockPanel::Highlight, GerberDockPanel::Grid]
+        {
+            workspace.dock.close_tool(panel);
+            workspace.handle_dock_event(&iced_dock::DockEvent::TabClosed {
+                panel,
+            });
+
+            assert!(!workspace
+                .active_viewer()
+                .expect("active Gerber document")
+                .is_tool_panel_visible(panel));
+
+            workspace.set_tool_visible(panel, true);
+
+            assert!(workspace
+                .active_viewer()
+                .expect("active Gerber document")
+                .is_tool_panel_visible(panel));
+            assert!(workspace.dock.panel_ids().contains(&panel.id()));
+        }
     }
 
     #[test]

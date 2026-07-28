@@ -312,136 +312,12 @@ impl Signex
             {
                 Task::none()
             }
-            GerberViewerMessage::OpenAutodetectedFiles => {
+            GerberViewerMessage::OpenFiles => {
                 gerber_viewer.begin_loading();
                 Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
-                            .set_title("Open Fabrication Files")
-                            .pick_files()
-                            .await
-                            .map(|files| {
-                                files
-                                    .into_iter()
-                                    .map(|file| file.path().to_path_buf())
-                                    .collect::<Vec<_>>()
-                            })
-                    },
-                    move |paths| {
-                        route(
-                            GerberViewerMessage::AutodetectedFilesChosen(paths),
-                        )
-                    },
-                )
-            }
-            GerberViewerMessage::AutodetectedFilesChosen(Some(paths)) => Task::perform(
-                async move { signex_gerber::load_autodetected_files(paths) },
-                move |batch| {
-                    route(
-                        GerberViewerMessage::AutodetectedFilesLoaded(batch),
-                    )
-                },
-            ),
-            GerberViewerMessage::AutodetectedFilesChosen(None) => {
-                gerber_viewer.loading = false;
-                gerber_viewer.status =
-                    "Open fabrication files cancelled.".into();
-                Task::none()
-            }
-            GerberViewerMessage::AutodetectedFilesLoaded(batch) => {
-                self.apply_gerber_load_batch(
-                    document_id,
-                    &mut gerber_viewer,
-                    batch,
-                );
-                Task::none()
-            }
-            GerberViewerMessage::OpenZipArchive => {
-                gerber_viewer.begin_loading();
-                Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Open Gerber and Drill ZIP Archive")
-                            .add_filter("ZIP archive", &["zip"])
-                            .pick_file()
-                            .await
-                            .map(|file| file.path().to_path_buf())
-                    },
-                    move |path| {
-                        route(
-                            GerberViewerMessage::ZipArchiveChosen(path),
-                        )
-                    },
-                )
-            }
-            GerberViewerMessage::ZipArchiveChosen(Some(path)) => Task::perform(
-                async move { signex_gerber::load_zip_archive(path) },
-                move |batch| {
-                    route(
-                        GerberViewerMessage::ZipArchiveLoaded(batch),
-                    )
-                },
-            ),
-            GerberViewerMessage::ZipArchiveChosen(None) => {
-                gerber_viewer.loading = false;
-                gerber_viewer.status =
-                    "Open ZIP archive cancelled.".into();
-                Task::none()
-            }
-            GerberViewerMessage::ZipArchiveLoaded(batch) => {
-                self.apply_gerber_load_batch(
-                    document_id,
-                    &mut gerber_viewer,
-                    batch,
-                );
-                Task::none()
-            }
-            GerberViewerMessage::OpenGerberJob => {
-                gerber_viewer.begin_loading();
-                Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Open Gerber Job File")
-                            .add_filter("Gerber job", &["gbrjob"])
-                            .pick_file()
-                            .await
-                            .map(|file| file.path().to_path_buf())
-                    },
-                    move |path| {
-                        route(
-                            GerberViewerMessage::GerberJobChosen(path),
-                        )
-                    },
-                )
-            }
-            GerberViewerMessage::GerberJobChosen(Some(path)) => Task::perform(
-                async move { signex_gerber::load_gerber_job_file(path) },
-                move |batch| {
-                    route(
-                        GerberViewerMessage::GerberJobLoaded(batch),
-                    )
-                },
-            ),
-            GerberViewerMessage::GerberJobChosen(None) => {
-                gerber_viewer.loading = false;
-                gerber_viewer.status =
-                    "Open Gerber job cancelled.".into();
-                Task::none()
-            }
-            GerberViewerMessage::GerberJobLoaded(batch) => {
-                self.apply_gerber_load_batch(
-                    document_id,
-                    &mut gerber_viewer,
-                    batch,
-                );
-                Task::none()
-            }
-            GerberViewerMessage::OpenGerberFiles => {
-                gerber_viewer.begin_loading();
-                Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Open Gerber Files")
+                            .set_title("Open Fabrication File(s)")
                             .add_filter(
                                 "Gerber RS-274X",
                                 &[
@@ -450,46 +326,9 @@ impl Signex
                                     "gsp",
                                 ],
                             )
-                            .pick_files()
-                            .await
-                            .map(|files| {
-                                files
-                                    .into_iter()
-                                    .map(|file| file.path().to_path_buf())
-                                    .collect::<Vec<_>>()
-                            })
-                    },
-                    move |paths| {
-                        route(GerberViewerMessage::GerberFilesChosen(paths))
-                    },
-                )
-            }
-            GerberViewerMessage::GerberFilesChosen(Some(paths)) => Task::perform(
-                async move { signex_gerber::load_gerber_files(paths) },
-                move |batch| {
-                    route(GerberViewerMessage::GerberFilesLoaded(batch))
-                },
-            ),
-            GerberViewerMessage::GerberFilesChosen(None) => {
-                gerber_viewer.loading = false;
-                gerber_viewer.status = "Open Gerber files cancelled.".into();
-                Task::none()
-            }
-            GerberViewerMessage::GerberFilesLoaded(batch) => {
-                self.apply_gerber_load_batch(
-                    document_id,
-                    &mut gerber_viewer,
-                    batch,
-                );
-                Task::none()
-            }
-            GerberViewerMessage::OpenExcellonFiles => {
-                gerber_viewer.begin_loading();
-                Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Open Excellon Drill Files")
                             .add_filter("Excellon Drill", &["drl", "drd"])
+                            .add_filter("Gerber job", &["gbrjob"])
+                            .add_filter("ZIP archive", &["zip"])
                             .pick_files()
                             .await
                             .map(|files| {
@@ -500,22 +339,23 @@ impl Signex
                             })
                     },
                     move |paths| {
-                        route(GerberViewerMessage::ExcellonFilesChosen(paths))
+                        route(GerberViewerMessage::FilesChosen(paths))
                     },
                 )
             }
-            GerberViewerMessage::ExcellonFilesChosen(Some(paths)) => Task::perform(
-                async move { signex_gerber::load_excellon_files(paths) },
+            GerberViewerMessage::FilesChosen(Some(paths)) => Task::perform(
+                async move { signex_gerber::load_fabrication_files(paths) },
                 move |batch| {
-                    route(GerberViewerMessage::ExcellonFilesLoaded(batch))
+                    route(GerberViewerMessage::FilesLoaded(batch))
                 },
             ),
-            GerberViewerMessage::ExcellonFilesChosen(None) => {
+            GerberViewerMessage::FilesChosen(None) => {
                 gerber_viewer.loading = false;
-                gerber_viewer.status = "Open Excellon files cancelled.".into();
+                gerber_viewer.status =
+                    "Open fabrication files cancelled.".into();
                 Task::none()
             }
-            GerberViewerMessage::ExcellonFilesLoaded(batch) => {
+            GerberViewerMessage::FilesLoaded(batch) => {
                 self.apply_gerber_load_batch(
                     document_id,
                     &mut gerber_viewer,
@@ -683,6 +523,24 @@ impl Signex
                 );
                 Task::none()
             }
+            GerberViewerMessage::ToggleHighlightPanel => {
+                gerber_viewer.toggle_highlight_panel();
+                self.ui_state.gerber_workspace.set_tool_visible(
+                    GerberDockPanel::Highlight,
+                    gerber_viewer
+                        .is_tool_panel_visible(GerberDockPanel::Highlight),
+                );
+                Task::none()
+            }
+            GerberViewerMessage::ToggleGridPanel => {
+                gerber_viewer.toggle_grid_panel();
+                self.ui_state.gerber_workspace.set_tool_visible(
+                    GerberDockPanel::Grid,
+                    gerber_viewer
+                        .is_tool_panel_visible(GerberDockPanel::Grid),
+                );
+                Task::none()
+            }
             GerberViewerMessage::ToggleLayerInformation => {
                 gerber_viewer.toggle_layer_information();
                 self.ui_state.gerber_workspace.set_tool_visible(
@@ -832,11 +690,6 @@ impl Signex
             GerberViewerMessage::ResetMeasurement =>
             {
                 gerber_viewer.reset_measurement();
-                Task::none()
-            }
-            GerberViewerMessage::TogglePolarCoordinates(polar) => {
-                gerber_viewer
-                    .set_polar_coordinates(polar);
                 Task::none()
             }
             GerberViewerMessage::ToggleFullWindowCrosshair(full_window) => {
@@ -1170,7 +1023,7 @@ mod tests
 
         let _ = app.dispatch_gerber_viewer_message(
             document_ids[0],
-            GerberViewerMessage::GerberFilesLoaded(
+            GerberViewerMessage::FilesLoaded(
                 signex_gerber::GerberLoadBatch {
                     layers: vec![layer],
                     failures: Vec::new(),

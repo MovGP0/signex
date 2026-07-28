@@ -5,10 +5,7 @@ pub(super) fn view(
     colors: MenuColors,
 ) -> Item<'static, GerberViewerMessage, Theme, Renderer>
 {
-    let recent_gerber = recent_files_menu("Open Recent Gerber File", colors);
-    let recent_drill = recent_files_menu("Open Recent Drill File", colors);
-    let recent_job = recent_files_menu("Open Recent Job File", colors);
-    let recent_zip = recent_files_menu("Open Recent Zip File", colors);
+    let recent_files = recent_files_menu("Open Recent File", colors);
 
     Item::with_menu(
         root_button("File", colors),
@@ -21,44 +18,13 @@ pub(super) fn view(
             ),
             separator(colors),
             leaf_if(
-                "Open Autodetected File(s) ...",
+                "Open File(s) ...",
                 None,
-                GerberViewerMessage::OpenAutodetectedFiles,
+                GerberViewerMessage::OpenFiles,
                 !state.loading,
                 colors,
             ),
-            leaf_if(
-                "Open Gerber Plot File(s) ...",
-                None,
-                GerberViewerMessage::OpenGerberFiles,
-                !state.loading,
-                colors,
-            ),
-            recent_gerber,
-            leaf_if(
-                "Open Excellon Drill File(s) ...",
-                None,
-                GerberViewerMessage::OpenExcellonFiles,
-                !state.loading,
-                colors,
-            ),
-            recent_drill,
-            leaf_if(
-                "Open Gerber Job File ...",
-                None,
-                GerberViewerMessage::OpenGerberJob,
-                !state.loading,
-                colors,
-            ),
-            recent_job,
-            leaf_if(
-                "Open Zip Archive File ...",
-                None,
-                GerberViewerMessage::OpenZipArchive,
-                !state.loading,
-                colors,
-            ),
-            recent_zip,
+            recent_files,
             separator(colors),
             leaf_if(
                 "Clear All Layers",

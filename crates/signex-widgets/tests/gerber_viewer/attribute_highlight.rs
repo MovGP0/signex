@@ -33,12 +33,20 @@ macro_rules! gerber_attribute_highlight_tests
             #[test]
             fn attribute_choices_are_sorted_unique_and_include_values()
             {
-                let layer = attribute_layer();
+                let first = attribute_layer();
+                let mut second = first.clone();
+                second.name = "second.gbr".into();
+                for attributes in &mut second.geometry.primitive_attributes
+                {
+                    attributes.attributes =
+                        vec![attribute(".Second", &["Layer"])];
+                }
                 let mut state = GerberViewerState::default();
                 state.apply_load_batch(GerberLoadBatch {
-                    layers: vec![layer.clone(), layer],
+                    layers: vec![first, second],
                     failures: Vec::new(),
                 });
+                state.select_layer(0);
 
                 assert_eq!(
                     state.attribute_choices(),
@@ -52,6 +60,17 @@ macro_rules! gerber_attribute_highlight_tests
                     state.attribute_choices()[2].to_string(),
                     ".MyAttribute: Alpha"
                 );
+
+                state.set_highlighted_attribute(
+                    attribute(".CVal", &["10k"]),
+                );
+                state.select_layer(1);
+
+                assert_eq!(
+                    state.attribute_choices(),
+                    [attribute(".Second", &["Layer"])]
+                );
+                assert_eq!(state.highlighted_attribute(), None);
             }
 
             #[test]

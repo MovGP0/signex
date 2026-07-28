@@ -23,16 +23,29 @@ macro_rules! gerber_highlight_tests
             }
 
             #[test]
-            fn component_choices_are_sorted_unique_across_loaded_layers()
+            fn component_choices_follow_the_active_layer_and_clear_stale_selection()
             {
-                let layer = component_layer();
+                let first = component_layer();
+                let mut second = first.clone();
+                second.name = "second.gbr".into();
+                for attributes in &mut second.geometry.primitive_attributes
+                {
+                    attributes.component = Some("U1".into());
+                }
                 let mut state = GerberViewerState::default();
                 state.apply_load_batch(GerberLoadBatch {
-                    layers: vec![layer.clone(), layer],
+                    layers: vec![first, second],
                     failures: Vec::new(),
                 });
+                state.select_layer(0);
 
                 assert_eq!(state.component_choices(), ["C2", "R1"]);
+                state.set_highlighted_component("R1".into());
+
+                state.select_layer(1);
+
+                assert_eq!(state.component_choices(), ["U1"]);
+                assert_eq!(state.highlighted_component(), None);
             }
 
             #[test]

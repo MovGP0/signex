@@ -21,6 +21,8 @@ pub struct GerberViewerState
     pub zoom: f32,
     pub pan: iced::Vector,
     pub layer_manager_visible: bool,
+    pub(super) highlight_panel_visible: bool,
+    pub(super) grid_panel_visible: bool,
     pub(super) layer_information_visible: bool,
     pub(super) d_code_list_visible: bool,
     pub(super) source_view_visible: bool,
@@ -47,7 +49,6 @@ pub struct GerberViewerState
     pub(super) dim_inactive_layers: bool,
     pub(super) inactive_layer_opacity: f32,
     pub(super) mirrored: bool,
-    pub(super) polar_coordinates: bool,
     pub(super) crosshair_mode: GerberCrosshairMode,
     pub(super) page_size: GerberPageSize,
     pub(super) zoom_selection_active: bool,
@@ -101,6 +102,8 @@ impl Default for GerberViewerState
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
+            highlight_panel_visible: true,
+            grid_panel_visible: true,
             layer_information_visible: true,
             d_code_list_visible: true,
             source_view_visible: true,
@@ -127,7 +130,6 @@ impl Default for GerberViewerState
             dim_inactive_layers: false,
             inactive_layer_opacity: default_inactive_layer_opacity(),
             mirrored: false,
-            polar_coordinates: false,
             crosshair_mode: GerberCrosshairMode::default(),
             page_size: load_page_size(),
             zoom_selection_active: false,
@@ -415,6 +417,16 @@ impl GerberViewerState
         self.layer_manager_visible = !self.layer_manager_visible;
     }
 
+    pub fn toggle_highlight_panel(&mut self)
+    {
+        self.highlight_panel_visible = !self.highlight_panel_visible;
+    }
+
+    pub fn toggle_grid_panel(&mut self)
+    {
+        self.grid_panel_visible = !self.grid_panel_visible;
+    }
+
     pub fn toggle_layer_information(&mut self)
     {
         self.layer_information_visible = !self.layer_information_visible;
@@ -443,6 +455,14 @@ impl GerberViewerState
             {
                 self.layer_manager_visible = visible;
             }
+            super::dock::GerberDockPanel::Highlight =>
+            {
+                self.highlight_panel_visible = visible;
+            }
+            super::dock::GerberDockPanel::Grid =>
+            {
+                self.grid_panel_visible = visible;
+            }
             super::dock::GerberDockPanel::LayerInformation =>
             {
                 self.layer_information_visible = visible;
@@ -469,6 +489,14 @@ impl GerberViewerState
             super::dock::GerberDockPanel::Layers =>
             {
                 self.layer_manager_visible
+            }
+            super::dock::GerberDockPanel::Highlight =>
+            {
+                self.highlight_panel_visible
+            }
+            super::dock::GerberDockPanel::Grid =>
+            {
+                self.grid_panel_visible
             }
             super::dock::GerberDockPanel::LayerInformation =>
             {
@@ -521,7 +549,7 @@ impl GerberViewerState
         {
             if self.active_layer != Some(index)
             {
-                self.highlighted_d_code = None;
+                self.clear_highlights_for_layer_change();
             }
             self.active_layer = Some(index);
         }
@@ -551,10 +579,22 @@ impl GerberViewerState
     {
         if self.active_layer != Some(index)
         {
-            self.highlighted_d_code = None;
+            self.clear_highlights_for_layer_change();
         }
         self.active_layer = Some(index);
         self.status = format!("Active layer: {}", self.layers[index].layer.name);
+    }
+
+    fn clear_highlights_for_layer_change(&mut self)
+    {
+        if self.has_active_highlight()
+        {
+            self.highlighted_component = None;
+            self.highlighted_net = None;
+            self.highlighted_attribute = None;
+            self.highlighted_d_code = None;
+            self.redraw_generation = self.redraw_generation.wrapping_add(1);
+        }
     }
 
     pub fn select_grid_size(&mut self, index: usize)
@@ -600,11 +640,6 @@ impl GerberViewerState
     )
     {
         self.cursor_world_position = position;
-    }
-
-    pub fn set_polar_coordinates(&mut self, polar: bool)
-    {
-        self.polar_coordinates = polar;
     }
 
     pub fn set_full_window_crosshair(&mut self, full_window: bool)

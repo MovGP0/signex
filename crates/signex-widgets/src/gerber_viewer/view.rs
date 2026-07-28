@@ -19,153 +19,6 @@ pub fn view<'a>(
     let text_muted = styles::ti(tokens.text_secondary);
     let menu_bar = menu::view(state, tokens)
         .map(move |message| (active_document, message));
-    let component_choices = state.component_choices();
-    let component_picker = pick_list(
-        component_choices,
-        state.highlighted_component().map(str::to_owned),
-        GerberViewerMessage::SetHighlightedComponent,
-    )
-    .placeholder("Highlight component")
-    .width(180);
-    let net_choices = state.net_choices();
-    let net_picker = pick_list(
-        net_choices,
-        state.highlighted_net().map(str::to_owned),
-        GerberViewerMessage::SetHighlightedNet,
-    )
-    .placeholder("Highlight net")
-    .width(180);
-    let attribute_choices = state.attribute_choices();
-    let attribute_picker = pick_list(
-        attribute_choices,
-        state.highlighted_attribute().cloned(),
-        GerberViewerMessage::SetHighlightedAttribute,
-    )
-    .placeholder("Highlight attribute")
-    .width(220);
-    let d_code_choices = state.d_code_choices();
-    let selected_d_code = state.highlighted_d_code().and_then(|selected|
-    {
-        d_code_choices
-            .iter()
-            .find(|choice| choice.code == selected)
-            .cloned()
-    });
-    let d_code_picker = pick_list(
-        d_code_choices,
-        selected_d_code,
-        |choice| GerberViewerMessage::SetHighlightedDCode(choice.code),
-    )
-    .placeholder("Highlight D-code")
-    .width(220);
-
-    let toolbar: Element<'_, GerberViewerMessage> = container(
-        row![
-            text("Highlight").size(11).color(text_muted),
-            component_picker,
-            net_picker,
-            attribute_picker,
-            d_code_picker,
-            button(text("Clear Highlight")).on_press_maybe(
-                state
-                    .has_active_highlight()
-                    .then_some(GerberViewerMessage::ClearHighlight),
-            ),
-            Space::new().width(Length::Fill),
-            text(format!("{} / {MAX_VIEWER_LAYERS} layers", state.layers.len()))
-                .size(11)
-                .color(text_muted),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([6, 10])
-    .width(Length::Fill)
-    .style(styles::toolbar_strip(tokens))
-    .into();
-    let toolbar = toolbar
-        .map(move |message| (active_document, message));
-
-    let grid_choices = grid_size_choices(
-        &state.grid_catalog,
-        &state.decimal_separator,
-    );
-    let selected_grid = grid_choices.get(state.active_grid_index).cloned();
-    let grid_picker = pick_list(grid_choices, selected_grid, |choice| {
-        GerberViewerMessage::SelectGridSize(choice.index)
-    })
-    .width(320);
-    let display_unit_picker = pick_list(
-        GerberDisplayUnit::ALL,
-        Some(state.display_unit),
-        GerberViewerMessage::SetDisplayUnit,
-    )
-    .width(125);
-    let page_size_picker = pick_list(
-        GerberPageSize::ALL,
-        Some(state.page_size),
-        GerberViewerMessage::SetPageSize,
-    )
-    .width(105);
-    let cursor_label = state
-        .cursor_world_position
-        .map(|position| {
-            format_coordinate_in_unit(
-                position,
-                state.display_unit,
-                &state.decimal_separator,
-                state.polar_coordinates,
-            )
-        })
-        .unwrap_or_else(|| "X: —  Y: —".to_owned());
-    let bounds_label = visible_bounds(&state.layers)
-        .map(|bounds| {
-            format_bounds_in_unit(
-                bounds,
-                state.display_unit,
-                &state.decimal_separator,
-            )
-        })
-        .unwrap_or_else(|| "Bounds: —".to_owned());
-    let measurement_label = state
-        .measurement_summary()
-        .unwrap_or_else(|| "Measurement: —".to_owned());
-    let grid_toolbar: Element<'_, GerberViewerMessage> = container(
-        row![
-            text("Grid").size(11).color(text_muted),
-            checkbox(state.grid_visible)
-                .label("Visible")
-                .on_toggle(GerberViewerMessage::ToggleGridVisibility),
-            grid_picker,
-            display_unit_picker,
-            text("Page").size(11).color(text_muted),
-            page_size_picker,
-            checkbox(state.polar_coordinates)
-                .label("Polar")
-                .on_toggle(GerberViewerMessage::TogglePolarCoordinates),
-            checkbox(state.crosshair_mode == GerberCrosshairMode::Full)
-                .label("Full crosshair")
-                .on_toggle(GerberViewerMessage::ToggleFullWindowCrosshair),
-            text(cursor_label)
-                .size(10)
-                .color(text_muted),
-            text(bounds_label)
-            .size(10)
-            .color(text_muted),
-            text(measurement_label)
-                .size(10)
-                .color(text_muted),
-            Space::new().width(Length::Fill),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([4, 10])
-    .width(Length::Fill)
-    .style(styles::toolbar_strip(tokens))
-    .into();
-    let grid_toolbar = grid_toolbar
-        .map(move |message| (active_document, message));
     let dock_tokens = *tokens;
     let content = iced_dock::dock()
         .state(workspace.dock.session().state())
@@ -191,17 +44,24 @@ pub fn view<'a>(
         .splitter_size(5.0)
         .build();
 
+    let (cartesian_label, polar_label) = cursor_coordinate_labels(state);
+    let status_color = if state.status.contains("could not")
+    {
+        Color::from_rgb8(239, 83, 80)
+    }
+    else
+    {
+        text_muted
+    };
     let status = container(
-        text(&state.status)
-            .size(10)
-            .color(if state.status.contains("could not")
-            {
-                Color::from_rgb8(239, 83, 80)
-            }
-            else
-            {
-                text_muted
-            }),
+        row![
+            text(cartesian_label).size(10).color(text_muted),
+            text(polar_label).size(10).color(text_muted),
+            text("|").size(10).color(text_muted),
+            text(&state.status).size(10).color(status_color),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
     )
     .padding([4, 10])
     .width(Length::Fill)
@@ -209,8 +69,6 @@ pub fn view<'a>(
 
     column![
         menu_bar,
-        toolbar,
-        grid_toolbar,
         row![
             toolbar::view(state, tokens)
                 .map(move |message| (active_document, message)),
@@ -248,6 +106,24 @@ fn view_dock_panel<'a>(
             .active_viewer()
             .map(|state| {
                 view_layers(state, tokens)
+                    .map(move |message| {
+                        (workspace.active_document_id(), message)
+                    })
+            })
+            .unwrap_or_else(|| Space::new().into()),
+        GerberDockPanel::Highlight => workspace
+            .active_viewer()
+            .map(|state| {
+                view_highlight(state, tokens)
+                    .map(move |message| {
+                        (workspace.active_document_id(), message)
+                    })
+            })
+            .unwrap_or_else(|| Space::new().into()),
+        GerberDockPanel::Grid => workspace
+            .active_viewer()
+            .map(|state| {
+                view_grid(state, tokens)
                     .map(move |message| {
                         (workspace.active_document_id(), message)
                     })
@@ -345,6 +221,188 @@ fn view_canvas<'a>(
             ..container::Style::default()
         })
         .into()
+}
+
+fn view_highlight<'a>(
+    state: &'a GerberViewerState,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let component_picker = pick_list(
+        state.component_choices(),
+        state.highlighted_component().map(str::to_owned),
+        GerberViewerMessage::SetHighlightedComponent,
+    )
+    .placeholder("Component")
+    .width(Length::Fill);
+    let net_picker = pick_list(
+        state.net_choices(),
+        state.highlighted_net().map(str::to_owned),
+        GerberViewerMessage::SetHighlightedNet,
+    )
+    .placeholder("Net")
+    .width(Length::Fill);
+    let attribute_picker = pick_list(
+        state.attribute_choices(),
+        state.highlighted_attribute().cloned(),
+        GerberViewerMessage::SetHighlightedAttribute,
+    )
+    .placeholder("Attribute")
+    .width(Length::Fill);
+    let d_code_choices = state.d_code_choices();
+    let selected_d_code = state.highlighted_d_code().and_then(|selected|
+    {
+        d_code_choices
+            .iter()
+            .find(|choice| choice.code == selected)
+            .cloned()
+    });
+    let d_code_picker = pick_list(
+        d_code_choices,
+        selected_d_code,
+        |choice| GerberViewerMessage::SetHighlightedDCode(choice.code),
+    )
+    .placeholder("D-code")
+    .width(Length::Fill);
+    let active_layer = state
+        .active_layer
+        .and_then(|index| state.layers.get(index))
+        .map(|layer| layer.layer.name.as_str())
+        .unwrap_or("No active layer");
+    let content = column![
+        row![
+            column![
+                text("Active-layer highlight")
+                    .size(13)
+                    .color(text_primary),
+                text(active_layer).size(10).color(text_muted),
+            ]
+            .spacing(2)
+            .width(Length::Fill),
+            highlight_controls::clear_button(
+                state.has_active_highlight(),
+                tokens,
+            ),
+        ]
+        .align_y(iced::Alignment::Center),
+        text("Component").size(11).color(text_muted),
+        component_picker,
+        text("Net").size(11).color(text_muted),
+        net_picker,
+        text("Attribute").size(11).color(text_muted),
+        attribute_picker,
+        text("D-code").size(11).color(text_muted),
+        d_code_picker,
+        text(format!("{} / {MAX_VIEWER_LAYERS} layers", state.layers.len()))
+            .size(10)
+            .color(text_muted),
+    ]
+    .spacing(6)
+    .padding(8);
+
+    panel_container(scrollable(content), tokens)
+}
+
+fn view_grid<'a>(
+    state: &'a GerberViewerState,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let grid_choices = grid_size_choices(
+        &state.grid_catalog,
+        &state.decimal_separator,
+    );
+    let selected_grid = grid_choices.get(state.active_grid_index).cloned();
+    let grid_picker = pick_list(grid_choices, selected_grid, |choice| {
+        GerberViewerMessage::SelectGridSize(choice.index)
+    })
+    .width(Length::Fill);
+    let display_unit_picker = pick_list(
+        GerberDisplayUnit::ALL,
+        Some(state.display_unit),
+        GerberViewerMessage::SetDisplayUnit,
+    )
+    .width(Length::Fill);
+    let page_size_picker = pick_list(
+        GerberPageSize::ALL,
+        Some(state.page_size),
+        GerberViewerMessage::SetPageSize,
+    )
+    .width(Length::Fill);
+    let bounds_label = visible_bounds(&state.layers)
+        .map(|bounds| {
+            format_bounds_in_unit(
+                bounds,
+                state.display_unit,
+                &state.decimal_separator,
+            )
+        })
+        .unwrap_or_else(|| "Bounds: —".to_owned());
+    let measurement_label = state
+        .measurement_summary()
+        .unwrap_or_else(|| "Measurement: —".to_owned());
+    let content = column![
+        text("Grid settings").size(13).color(text_primary),
+        text("Spacing").size(11).color(text_muted),
+        grid_picker,
+        button(text("Edit grids ..."))
+            .width(Length::Fill)
+            .on_press(GerberViewerMessage::OpenGridEditor),
+        row![
+            column![
+                text("Display unit").size(11).color(text_muted),
+                display_unit_picker,
+            ]
+            .spacing(4)
+            .width(Length::Fill),
+            column![
+                text("Page").size(11).color(text_muted),
+                page_size_picker,
+            ]
+            .spacing(4)
+            .width(Length::Fill),
+        ]
+        .spacing(6),
+        horizontal_rule(tokens),
+        text(bounds_label).size(10).color(text_muted),
+        text(measurement_label).size(10).color(text_muted),
+    ]
+    .spacing(6)
+    .padding(8);
+
+    panel_container(scrollable(content), tokens)
+}
+
+fn cursor_coordinate_labels(
+    state: &GerberViewerState,
+) -> (String, String)
+{
+    state
+        .cursor_world_position
+        .map(|position| {
+            (
+                format_cartesian_coordinate_in_unit(
+                    position,
+                    state.display_unit,
+                    &state.decimal_separator,
+                ),
+                format_polar_coordinate_in_unit(
+                    position,
+                    state.display_unit,
+                    &state.decimal_separator,
+                ),
+            )
+        })
+        .unwrap_or_else(|| {
+            (
+                "X: —  Y: —".to_owned(),
+                "R: —  θ: —° / — rad".to_owned(),
+            )
+        })
 }
 
 fn view_layers<'a>(

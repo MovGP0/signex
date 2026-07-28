@@ -21,6 +21,7 @@ mod dock;
 mod gerber_viewer_state;
 mod grid;
 mod highlight;
+mod highlight_controls;
 mod item_colors;
 mod layer_color;
 mod layer_controls;

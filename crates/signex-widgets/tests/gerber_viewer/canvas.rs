@@ -48,29 +48,26 @@ macro_rules! gerber_canvas_tests
         };
 
         assert_eq!(
-            format_coordinate_in_unit(
+            format_cartesian_coordinate_in_unit(
                 point,
                 GerberDisplayUnit::Millimetres,
                 ".",
-                false,
             ),
             "X: 25.4000  Y: 12.7000 mm"
         );
         assert_eq!(
-            format_coordinate_in_unit(
+            format_cartesian_coordinate_in_unit(
                 point,
                 GerberDisplayUnit::Inches,
                 ".",
-                false,
             ),
             "X: 1.0000  Y: 0.5000 in"
         );
         assert_eq!(
-            format_coordinate_in_unit(
+            format_cartesian_coordinate_in_unit(
                 point,
                 GerberDisplayUnit::Mils,
                 ".",
-                false,
             ),
             "X: 1000.00  Y: 500.00 mils"
         );
@@ -81,52 +78,34 @@ macro_rules! gerber_canvas_tests
     }
 
     #[test]
-    fn polar_coordinates_use_selected_unit_and_cartesian_origin()
+    fn polar_coordinates_include_degrees_and_radians_in_selected_unit()
     {
         let point = signex_gerber::Point { x: 25.4, y: 25.4 };
 
         assert_eq!(
-            format_coordinate_in_unit(
+            format_polar_coordinate_in_unit(
                 point,
                 GerberDisplayUnit::Inches,
                 ".",
-                true,
             ),
-            "R: 1.4142 in  θ: 45.00°"
+            "R: 1.4142 in  θ: 45.00° / 0.7854 rad"
         );
         assert_eq!(
-            format_coordinate_in_unit(
+            format_polar_coordinate_in_unit(
                 signex_gerber::Point::default(),
                 GerberDisplayUnit::Millimetres,
                 ".",
-                true,
             ),
-            "R: 0.0000 mm  θ: 0.00°"
+            "R: 0.0000 mm  θ: 0.00° / 0.0000 rad"
         );
         assert_eq!(
-            format_coordinate_in_unit(
+            format_polar_coordinate_in_unit(
                 signex_gerber::Point { x: 0.0, y: -25.4 },
                 GerberDisplayUnit::Mils,
                 ".",
-                true,
             ),
-            "R: 1000.00 mils  θ: -90.00°"
+            "R: 1000.00 mils  θ: -90.00° / -1.5708 rad"
         );
-    }
-
-    #[test]
-    fn toggling_polar_coordinates_preserves_pointer_and_geometry_state()
-    {
-        let mut state = GerberViewerState::default();
-        let position = signex_gerber::Point { x: 3.0, y: 4.0 };
-        state.set_cursor_world_position(Some(position));
-        let grid_catalog = state.grid_catalog.clone();
-
-        state.set_polar_coordinates(true);
-
-        assert!(state.polar_coordinates);
-        assert_eq!(state.cursor_world_position, Some(position));
-        assert_eq!(state.grid_catalog, grid_catalog);
     }
 
     #[test]

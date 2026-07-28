@@ -25,11 +25,19 @@ macro_rules! gerber_net_highlight_tests
             #[test]
             fn net_choices_are_sorted_unique_and_selection_is_exclusive()
             {
+                let first = net_layer();
+                let mut second = first.clone();
+                second.name = "second.gbr".into();
+                for attributes in &mut second.geometry.primitive_attributes
+                {
+                    attributes.nets = vec!["SIGNAL".into()];
+                }
                 let mut state = GerberViewerState::default();
                 state.apply_load_batch(GerberLoadBatch {
-                    layers: vec![net_layer(), net_layer()],
+                    layers: vec![first, second],
                     failures: Vec::new(),
                 });
+                state.select_layer(0);
                 state.highlighted_component = Some("R1".into());
 
                 assert_eq!(state.net_choices(), ["GND", "VCC"]);
@@ -38,6 +46,11 @@ macro_rules! gerber_net_highlight_tests
 
                 assert_eq!(state.highlighted_net(), Some("VCC"));
                 assert_eq!(state.highlighted_component(), None);
+
+                state.select_layer(1);
+
+                assert_eq!(state.net_choices(), ["SIGNAL"]);
+                assert_eq!(state.highlighted_net(), None);
             }
 
             #[test]

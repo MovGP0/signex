@@ -1,14 +1,15 @@
 use std::fs::File;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
 
-use zip::ZipArchive;
+use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 use lib_gerber_edit::layer::LayerData;
 
 use super::{
     GerberPrimitive, LayerType, load_excellon_reader, load_gerber_file,
-    load_autodetected_reader, load_gerber_reader, reload_layers,
+    load_autodetected_reader, load_fabrication_files, load_gerber_reader,
+    reload_layers,
 };
 
 fn generated_fixture_member(member: &str) -> Vec<u8>
@@ -178,6 +179,60 @@ fn autodetection_reports_ambiguous_and_unsupported_content()
 
     assert!(ambiguous.message.contains("ambiguous fabrication file"));
     assert!(unsupported.message.contains("unsupported fabrication file"));
+}
+
+#[test]
+fn unified_loader_routes_job_archive_gerber_and_excellon_files()
+{
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let gerber_path = directory.path().join("layer.gbr");
+    std::fs::write(
+        &gerber_path,
+        b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
+    )
+    .expect("write Gerber layer");
+    let job_path = directory.path().join("job-without-extension");
+    std::fs::write(
+        &job_path,
+        br#"{"FilesAttributes":[{"Path":"layer.gbr"}]}"#,
+    )
+    .expect("write Gerber job");
+
+    let archive_path = directory.path().join("archive-without-extension");
+    let archive_file = File::create(&archive_path).expect("create ZIP archive");
+    let mut archive = ZipWriter::new(archive_file);
+    archive
+        .start_file("holes.drl", SimpleFileOptions::default())
+        .expect("start Excellon member");
+    archive
+        .write_all(b"M48\nMETRIC\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nM30\n")
+        .expect("write Excellon member");
+    archive.finish().expect("finish ZIP archive");
+
+    let batch = load_fabrication_files([job_path, archive_path]);
+
+    assert!(batch.failures.is_empty());
+    assert_eq!(batch.layers.len(), 2);
+    assert!(matches!(batch.layers[0].data, LayerData::Gerber(_)));
+    assert!(matches!(batch.layers[1].data, LayerData::Excellon(_)));
+}
+
+#[test]
+fn unified_loader_rejects_mismatched_container_extensions()
+{
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let zip_path = directory.path().join("not-an-archive.zip");
+    std::fs::write(&zip_path, b"plain text").expect("write false ZIP");
+    let job_path = directory.path().join("not-a-job.gbrjob");
+    std::fs::write(&job_path, br#"{"Unrelated":[]}"#)
+        .expect("write false Gerber job");
+
+    let batch = load_fabrication_files([zip_path, job_path]);
+
+    assert!(batch.layers.is_empty());
+    assert_eq!(batch.failures.len(), 2);
+    assert!(batch.failures[0].message.contains("ZIP signature is missing"));
+    assert!(batch.failures[1].message.contains("FilesAttributes"));
 }
 
 #[test]

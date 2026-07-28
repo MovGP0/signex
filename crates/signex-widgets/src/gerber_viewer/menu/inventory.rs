@@ -1,14 +1,7 @@
 pub(crate) const FILE_MENU_LABELS: &[&str] = &[
     "New Gerber Document",
-    "Open Autodetected File(s) ...",
-    "Open Gerber Plot File(s) ...",
-    "Open Recent Gerber File",
-    "Open Excellon Drill File(s) ...",
-    "Open Recent Drill File",
-    "Open Gerber Job File ...",
-    "Open Recent Job File",
-    "Open Zip Archive File ...",
-    "Open Recent Zip File",
+    "Open File(s) ...",
+    "Open Recent File",
     "Clear All Layers",
     "Reload All Layers",
     "Export to PCB Editor ...",
@@ -23,7 +16,6 @@ pub(crate) const VIEW_MENU_LABELS: &[&str] = &[
     "Zoom to Selection Area",
     "Refresh",
     "Show Grid",
-    "Polar Coordinates",
     "Units",
     "Sketch Flashed Items",
     "Sketch Lines",
@@ -35,6 +27,8 @@ pub(crate) const VIEW_MENU_LABELS: &[&str] = &[
     "Inactive Layer View Mode",
     "Flip Gerber View",
     "Show Layers Manager",
+    "Show Highlight Panel",
+    "Show Grid Panel",
 ];
 
 pub(crate) const TOOLS_MENU_LABELS: &[&str] = &[

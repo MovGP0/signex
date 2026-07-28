@@ -6,16 +6,18 @@ impl GerberViewerState
 {
     pub fn attribute_choices(&self) -> Vec<GerberAttributeValue>
     {
-        self.layers
+        let Some(viewer_layer) =
+            self.active_layer.and_then(|index| self.layers.get(index))
+        else
+        {
+            return Vec::new();
+        };
+
+        viewer_layer
+            .layer
+            .geometry
+            .primitive_attributes
             .iter()
-            .flat_map(|viewer_layer|
-            {
-                viewer_layer
-                    .layer
-                    .geometry
-                    .primitive_attributes
-                    .iter()
-            })
             .flat_map(|attributes| attributes.attributes.iter().cloned())
             .collect::<BTreeSet<_>>()
             .into_iter()
