@@ -21,6 +21,24 @@ macro_rules! gerber_canvas_tests
     }
 
     #[test]
+    fn default_grid_markers_have_visible_contrast_on_the_dark_canvas()
+    {
+        let background = Color::from_rgb8(45, 45, 48);
+        let marker = grid_render_color(material_grid_color());
+        let blend = |foreground: f32, background: f32| {
+            foreground * marker.a + background * (1.0 - marker.a)
+        };
+        let marker_luminance = 0.2126 * blend(marker.r, background.r)
+            + 0.7152 * blend(marker.g, background.g)
+            + 0.0722 * blend(marker.b, background.b);
+        let background_luminance = 0.2126 * background.r
+            + 0.7152 * background.g
+            + 0.0722 * background.b;
+
+        assert!((marker_luminance - background_luminance).abs() >= 0.12);
+    }
+
+    #[test]
     fn display_units_convert_coordinates_and_bounds_from_millimetres()
     {
         let point = signex_gerber::Point { x: 25.4, y: 12.7 };

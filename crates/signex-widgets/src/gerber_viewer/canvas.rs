@@ -604,7 +604,7 @@ pub(super) fn draw_grid(
     origin: Point,
 )
 {
-    let dot_color = Color { a: 0.16, ..color };
+    let dot_color = grid_render_color(color);
     let x_spacing = visible_grid_spacing(
         grid_size.x_millimetres() as f32 * pixels_per_millimetre,
     );
@@ -681,7 +681,10 @@ pub(super) fn draw_grid(
                             else
                             {
                                 frame.fill(
-                                    &canvas::Path::circle(Point::new(x, y), 0.75),
+                                    &canvas::Path::circle(
+                                        Point::new(x, y),
+                                        GRID_DOT_RADIUS_PIXELS,
+                                    ),
                                     dot_color,
                                 );
                             }
@@ -725,6 +728,17 @@ pub(super) fn draw_grid(
             }
         }
         (None, None) => {}
+    }
+}
+
+const GRID_OPACITY: f32 = 0.72;
+const GRID_DOT_RADIUS_PIXELS: f32 = 1.0;
+
+pub(super) fn grid_render_color(color: Color) -> Color
+{
+    Color {
+        a: color.a * GRID_OPACITY,
+        ..color
     }
 }
 
