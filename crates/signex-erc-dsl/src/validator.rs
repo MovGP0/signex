@@ -1,6 +1,6 @@
 //! AST validator: checks predicate whitelist and target compatibility.
 
-use crate::ast::*;
+use crate::ast::{TargetKind, RuleAst, ExprAst, FieldExprAst};
 use crate::error::DslError;
 
 // ---------------------------------------------------------------------------
@@ -71,6 +71,7 @@ const METHOD_ACCESS: &[(&str, &str, &[TargetKind])] = &[
 // Public entry point
 // ---------------------------------------------------------------------------
 
+#[must_use]
 pub fn validate(rules: &[RuleAst]) -> Vec<DslError> {
     let mut errors = Vec::new();
     for rule in rules {

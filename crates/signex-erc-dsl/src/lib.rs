@@ -24,6 +24,7 @@ pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<DslError>> {
 }
 
 /// Validate parsed rules against helper and field compatibility constraints.
+#[must_use]
 pub fn validate(rules: &[RuleAst]) -> Vec<DslError> {
     validator::validate(rules)
 }

@@ -10,7 +10,7 @@ use signex_erc::{
 };
 use signex_types::schematic::{PinDirection, Point, SelectedItem, SelectedKind};
 
-use crate::ast::*;
+use crate::ast::{LiteralAst, FieldExprAst, CmpOp, RuleAst, ExprAst, TargetKind, ScopeKind, ApplicabilityAst, SeverityKind};
 use crate::error::DslError;
 
 /// A compiled helper call. For regex-capable helpers, regexes are compiled once.
@@ -24,9 +24,9 @@ pub struct CompiledHelper {
 /// Expression after compilation/preprocessing.
 #[derive(Debug, Clone)]
 pub enum CompiledExpr {
-    And(Box<CompiledExpr>, Box<CompiledExpr>),
-    Or(Box<CompiledExpr>, Box<CompiledExpr>),
-    Not(Box<CompiledExpr>),
+    And(Box<Self>, Box<Self>),
+    Or(Box<Self>, Box<Self>),
+    Not(Box<Self>),
     HelperCall(CompiledHelper),
     FieldCmp {
         field: FieldExprAst,
@@ -51,6 +51,7 @@ pub struct CompiledRule {
 
 impl CompiledRule {
     /// Clones the evaluator closure for use with `engine::run_all_with_dsl`.
+    #[must_use]
     pub fn eval_fn(&self) -> EvalFn {
         self.eval.clone()
     }
@@ -272,7 +273,7 @@ fn eval_expr(expr: &CompiledExpr, subject: Subject<'_>) -> bool {
     }
 }
 
-fn subject_ref<'a>(subject: &'a Subject<'a>) -> Subject<'a> {
+const fn subject_ref<'a>(subject: &'a Subject<'a>) -> Subject<'a> {
     match subject {
         Subject::Net(n) => Subject::Net(n),
         Subject::Pin(p) => Subject::Pin(p),
@@ -289,8 +290,7 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
             .args
             .first()
             .and_then(|a| parse_pin_type(a.as_str_value()))
-            .map(|t| net.pin_types.contains(&t))
-            .unwrap_or(false),
+            .is_some_and(|t| net.pin_types.contains(&t)),
         ("name_matches", Subject::Net(net)) => {
             if let Some(regex) = &helper.regex_arg {
                 regex.is_match(&net.name)
@@ -301,8 +301,7 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
         ("class_is", Subject::Net(net)) => helper
             .args
             .first()
-            .map(|a| normalize(a.as_str_value()) == normalize(&net.class))
-            .unwrap_or(false),
+            .is_some_and(|a| normalize(a.as_str_value()) == normalize(&net.class)),
         ("is_driven", Subject::Pin(pin)) => is_driving_pin(pin.electrical_type),
         _ => false,
     }
@@ -404,7 +403,7 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
     }
 }
 
-fn map_target(target: TargetKind) -> RuleTarget {
+const fn map_target(target: TargetKind) -> RuleTarget {
     match target {
         TargetKind::Net => RuleTarget::Net,
         TargetKind::Pin => RuleTarget::Pin,
@@ -413,7 +412,7 @@ fn map_target(target: TargetKind) -> RuleTarget {
     }
 }
 
-fn map_scope(scope: ScopeKind) -> AnalysisScope {
+const fn map_scope(scope: ScopeKind) -> AnalysisScope {
     match scope {
         ScopeKind::Local => AnalysisScope::Local,
         ScopeKind::Sheet => AnalysisScope::Sheet,
@@ -430,7 +429,7 @@ fn map_applicability(app: &ApplicabilityAst) -> Applicability {
     }
 }
 
-fn map_severity(severity: SeverityKind) -> Severity {
+const fn map_severity(severity: SeverityKind) -> Severity {
     match severity {
         SeverityKind::Error => Severity::Error,
         SeverityKind::Warning => Severity::Warning,
@@ -438,7 +437,7 @@ fn map_severity(severity: SeverityKind) -> Severity {
     }
 }
 
-fn fallback_kind(target: TargetKind) -> RuleKind {
+const fn fallback_kind(target: TargetKind) -> RuleKind {
     match target {
         TargetKind::Net => RuleKind::NetLabelConflict,
         TargetKind::Pin => RuleKind::UnusedPin,
@@ -447,7 +446,7 @@ fn fallback_kind(target: TargetKind) -> RuleKind {
     }
 }
 
-fn is_driving_pin(t: PinDirection) -> bool {
+const fn is_driving_pin(t: PinDirection) -> bool {
     matches!(
         t,
         PinDirection::Output
@@ -478,7 +477,7 @@ fn parse_pin_type(s: &str) -> Option<PinDirection> {
     }
 }
 
-fn pin_type_name(t: PinDirection) -> &'static str {
+const fn pin_type_name(t: PinDirection) -> &'static str {
     match t {
         PinDirection::Input => "Input",
         PinDirection::Output => "Output",

@@ -40,12 +40,13 @@ pub enum TargetKind {
 }
 
 impl TargetKind {
-    pub fn as_str(self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
-            TargetKind::Net => "net",
-            TargetKind::Pin => "pin",
-            TargetKind::Component => "component",
-            TargetKind::Sheet => "sheet",
+            Self::Net => "net",
+            Self::Pin => "pin",
+            Self::Component => "component",
+            Self::Sheet => "sheet",
         }
     }
 }
@@ -71,9 +72,9 @@ pub enum SeverityKind {
 
 #[derive(Debug, Clone)]
 pub enum ExprAst {
-    And(Box<ExprAst>, Box<ExprAst>),
-    Or(Box<ExprAst>, Box<ExprAst>),
-    Not(Box<ExprAst>),
+    And(Box<Self>, Box<Self>),
+    Or(Box<Self>, Box<Self>),
+    Not(Box<Self>),
     /// `name(arg, …)` — built-in predicate helper.
     /// Examples: `has_driver()`, `has_pin_kind(OpenDrain)`.
     HelperCall {
@@ -137,10 +138,11 @@ pub enum LiteralAst {
 
 impl LiteralAst {
     /// Returns the string representation of the literal for comparisons.
-    pub fn as_str_value(&self) -> &str {
+    #[must_use]
+    pub const fn as_str_value(&self) -> &str {
         match self {
-            LiteralAst::Str(s) | LiteralAst::Ident(s) => s.as_str(),
-            LiteralAst::Bool(b) => {
+            Self::Str(s) | Self::Ident(s) => s.as_str(),
+            Self::Bool(b) => {
                 if *b {
                     "true"
                 } else {
