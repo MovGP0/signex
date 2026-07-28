@@ -80,19 +80,21 @@ impl CalculatorModeState {
 }
 
 impl CalculatorControl {
-    pub fn state(&self, kind: ComponentKind) -> &CalculatorModeState {
+    #[must_use]
+    pub const fn state(&self, kind: ComponentKind) -> &CalculatorModeState {
         &self.modes[kind.index()]
     }
 
-    pub fn state_mut(&mut self, kind: ComponentKind) -> &mut CalculatorModeState {
+    pub const fn state_mut(&mut self, kind: ComponentKind) -> &mut CalculatorModeState {
         &mut self.modes[kind.index()]
     }
 
-    pub fn active_state(&self) -> &CalculatorModeState {
+    #[must_use]
+    pub const fn active_state(&self) -> &CalculatorModeState {
         self.state(self.kind)
     }
 
-    pub fn active_state_mut(&mut self) -> &mut CalculatorModeState {
+    pub const fn active_state_mut(&mut self) -> &mut CalculatorModeState {
         self.state_mut(self.kind)
     }
 
@@ -402,7 +404,7 @@ fn tab_button<'a>(
         .into()
 }
 
-fn default_tolerance(series: ESeries) -> Tolerance {
+const fn default_tolerance(series: ESeries) -> Tolerance {
     match series {
         ESeries::E3 => Tolerance::Percent20,
         ESeries::E6 => Tolerance::Percent20,
@@ -435,6 +437,7 @@ fn metric<'a>(
     .into()
 }
 
+#[must_use]
 pub fn format_difference(value: f64, target: f64) -> String {
     if value == target {
         return "0 (0%)".to_string();

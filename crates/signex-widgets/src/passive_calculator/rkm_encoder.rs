@@ -113,6 +113,7 @@ impl RkmEncoder {
         }
     }
 
+    #[must_use]
     pub fn code(&self) -> RkmCode {
         let component = self.component();
         let mut code = RkmCode::for_component(self.kind, component, self.tolerance);
@@ -125,6 +126,7 @@ impl RkmEncoder {
         code
     }
 
+    #[must_use]
     pub fn production_date_code(&self) -> Option<ProductionDateCode> {
         Some(ProductionDateCode::new(
             self.production_date_cycle?,
@@ -133,10 +135,12 @@ impl RkmEncoder {
         ))
     }
 
+    #[must_use]
     pub fn production_year_options(&self) -> &[u16] {
         &self.production_year_options
     }
 
+    #[must_use]
     pub fn value_options(&self) -> &[PreferredNumber] {
         &self.value_options
     }
@@ -311,7 +315,7 @@ impl RkmEncoder {
         content.into()
     }
 
-    fn component(&self) -> PreferredComponent {
+    const fn component(&self) -> PreferredComponent {
         PreferredComponent {
             number: self.value,
             decade: self.prefix.exponent(),

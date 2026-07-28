@@ -22,7 +22,8 @@ pub struct ComponentCard<'a> {
 }
 
 impl<'a> ComponentCard<'a> {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         index: usize,
         kind: ComponentKind,
         component: PreferredComponent,
@@ -38,6 +39,7 @@ impl<'a> ComponentCard<'a> {
         }
     }
 
+    #[must_use]
     pub fn view(self) -> Element<'a, ComponentCardMessage> {
         let Self {
             index,

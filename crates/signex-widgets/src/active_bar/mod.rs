@@ -73,17 +73,18 @@ pub enum ActiveBarItem<M: 'static + Clone> {
 
 impl<M: 'static + Clone> ActiveBarItem<M> {
     /// Convenience — build a Button item.
-    pub fn button(button: ActiveBarButton<M>) -> Self {
+    pub const fn button(button: ActiveBarButton<M>) -> Self {
         Self::Button(button)
     }
 
     /// Convenience — build a Custom item of a declared width.
-    pub fn custom(content: Element<'static, M>, width: f32) -> Self {
+    #[must_use]
+    pub const fn custom(content: Element<'static, M>, width: f32) -> Self {
         Self::Custom { content, width }
     }
 
     /// Width this slot renders at, excluding the row spacing around it.
-    pub fn width(&self) -> f32 {
+    pub const fn width(&self) -> f32 {
         match self {
             Self::Button(_) => BTN_SIZE,
             Self::Separator => SEP_W,
@@ -281,7 +282,8 @@ where
 /// layer. The bar is `Length::Shrink` width-wise so the caller
 /// controls horizontal positioning (centred via a parent
 /// `container.align_x(Center)`, etc.).
-pub fn view<'a, M>(items: Vec<ActiveBarItem<M>>, tokens: &'a ThemeTokens) -> Element<'a, M>
+#[must_use]
+pub fn view<M>(items: Vec<ActiveBarItem<M>>, tokens: &ThemeTokens) -> Element<'_, M>
 where
     M: 'static + Clone,
 {
@@ -312,7 +314,7 @@ where
         .into()
 }
 
-fn view_item<'a, M>(item: ActiveBarItem<M>, tokens: &'a ThemeTokens) -> Element<'a, M>
+fn view_item<M>(item: ActiveBarItem<M>, tokens: &ThemeTokens) -> Element<'_, M>
 where
     M: 'static + Clone,
 {

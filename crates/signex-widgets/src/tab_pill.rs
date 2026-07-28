@@ -108,11 +108,7 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        let child = self.content.as_widget().size();
-        Size {
-            width: child.width,
-            height: child.height,
-        }
+        self.content.as_widget().size()
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {

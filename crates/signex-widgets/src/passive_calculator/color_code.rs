@@ -21,6 +21,7 @@ pub enum BandColor {
 }
 
 impl BandColor {
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Pink => "Pink",
@@ -41,6 +42,7 @@ impl BandColor {
 
     /// Non-normative RAL associations from the Wikipedia electronic
     /// color-code table. Gold and silver have no RAL entry there.
+    #[must_use]
     pub const fn ral(self) -> Option<u16> {
         match self {
             Self::Pink => Some(3015),
@@ -59,6 +61,7 @@ impl BandColor {
     }
 
     /// Screen approximation of the associated RAL color.
+    #[must_use]
     pub const fn color(self) -> Color {
         match self {
             Self::Pink => Color::from_rgb8(0xD8, 0xA0, 0xA6),
@@ -77,6 +80,7 @@ impl BandColor {
         }
     }
 
+    #[must_use]
     pub const fn for_digit(digit: u8) -> Option<Self> {
         match digit {
             0 => Some(Self::Black),
@@ -93,6 +97,7 @@ impl BandColor {
         }
     }
 
+    #[must_use]
     pub const fn for_multiplier(exponent: i8) -> Option<Self> {
         match exponent {
             -3 => Some(Self::Pink),
@@ -112,6 +117,7 @@ impl BandColor {
         }
     }
 
+    #[must_use]
     pub const fn for_tolerance(tolerance: Tolerance) -> Option<Self> {
         match tolerance {
             Tolerance::Percent20 => None,
@@ -143,10 +149,12 @@ pub struct ResistorColorCode {
 pub type ComponentColorCode = ResistorColorCode;
 
 impl ResistorColorCode {
+    #[must_use]
     pub fn for_component(component: PreferredComponent, tolerance: Tolerance) -> Option<Self> {
         Self::for_kind(ComponentKind::Resistor, component, tolerance)
     }
 
+    #[must_use]
     pub fn for_kind(
         kind: ComponentKind,
         component: PreferredComponent,
@@ -157,6 +165,7 @@ impl ResistorColorCode {
             .next()
     }
 
+    #[must_use]
     pub fn representations_for_kind(
         kind: ComponentKind,
         component: PreferredComponent,
@@ -245,6 +254,7 @@ impl ResistorColorCode {
         representations
     }
 
+    #[must_use]
     pub fn accessible_label(&self) -> String {
         let mut labels = self
             .bands

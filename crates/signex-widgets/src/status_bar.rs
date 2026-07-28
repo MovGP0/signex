@@ -53,6 +53,7 @@ pub enum StatusBarMsg {
 /// * `left`   — sections aligned to the left.
 /// * `right`  — sections aligned to the right.
 /// * `tokens` — theme tokens for all colors.
+#[must_use]
 pub fn status_bar<'a>(
     left: &[StatusSection],
     right: &[StatusSection],

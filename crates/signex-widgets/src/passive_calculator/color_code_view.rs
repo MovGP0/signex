@@ -69,7 +69,7 @@ fn color_code_line<'a, Message: 'a>(
         .into()
 }
 
-fn color_code_unavailable_label(kind: ComponentKind) -> &'static str {
+const fn color_code_unavailable_label(kind: ComponentKind) -> &'static str {
     match kind {
         ComponentKind::Resistor => "Not representable with IEC 60062 bands",
         ComponentKind::Capacitor => "Not representable with capacitor color bands",

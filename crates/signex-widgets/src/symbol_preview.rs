@@ -1,13 +1,13 @@
 //! Miniature schematic symbol preview canvas.
 //!
-//! Renders a LibSymbol's graphics + pins in a small preview box,
+//! Renders a `LibSymbol`'s graphics + pins in a small preview box,
 //! auto-fitted to the available size.
 
 use iced::widget::canvas::{self, Cache, Geometry, Path, Stroke, Text};
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
 use signex_types::schematic::{Graphic, LibSymbol};
 
-/// Canvas program that draws a LibSymbol preview.
+/// Canvas program that draws a `LibSymbol` preview.
 pub struct SymbolPreview {
     symbol: LibSymbol,
     cache: Cache,
@@ -23,7 +23,7 @@ pub struct SymbolPreview {
 /// points "up" (`+y`) in Y-up library space. [`library_to_screen`] then
 /// applies the single y-flip that turns that "up" into a smaller
 /// screen-space y, matching every other consumer of library coordinates.
-fn pin_stub_direction(rotation: f64) -> (f64, f64) {
+const fn pin_stub_direction(rotation: f64) -> (f64, f64) {
     match rotation as i32 {
         0 => (1.0, 0.0),
         90 => (0.0, 1.0),
@@ -48,6 +48,7 @@ fn library_to_screen(x: f64, y: f64, mid_x: f64, mid_y: f64, scale: f64, center:
 }
 
 impl SymbolPreview {
+    #[must_use]
     pub fn new(symbol: LibSymbol) -> Self {
         Self {
             symbol,
@@ -120,8 +121,8 @@ impl SymbolPreview {
             // `library_to_screen`.
             let (dx, dy) = pin_stub_direction(pin.rotation);
             expand(
-                pin.position.x + dx * pin.length,
-                pin.position.y + dy * pin.length,
+                dx.mul_add(pin.length, pin.position.x),
+                dy.mul_add(pin.length, pin.position.y),
             );
         }
 
@@ -130,7 +131,7 @@ impl SymbolPreview {
             (0.0, 0.0, 10.0, 10.0)
         } else {
             // Add padding
-            let pad = ((max_x - min_x).max(max_y - min_y)) * 0.1 + 2.0;
+            let pad = ((max_x - min_x).max(max_y - min_y)).mul_add(0.1, 2.0);
             (min_x - pad, min_y - pad, max_x + pad, max_y + pad)
         }
     }
@@ -156,14 +157,14 @@ impl canvas::Program<(), Theme> for SymbolPreview {
             }
 
             // Scale to fit the frame
-            let scale_x = bounds.width as f64 / bw;
-            let scale_y = bounds.height as f64 / bh;
+            let scale_x = f64::from(bounds.width) / bw;
+            let scale_y = f64::from(bounds.height) / bh;
             let scale = scale_x.min(scale_y) * 0.9; // 90% fill
 
             let cx = bounds.width / 2.0;
             let cy = bounds.height / 2.0;
-            let mid_x = (bx0 + bx1) / 2.0;
-            let mid_y = (by0 + by1) / 2.0;
+            let mid_x = f64::midpoint(bx0, bx1);
+            let mid_y = f64::midpoint(by0, by1);
 
             // Transform: library coords (Y-up) → frame coords (Y-down).
             // Library space is Y-up (a pin at `(0, +len)` points up);
@@ -260,8 +261,8 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                 // sign here.
                 let (dx, dy) = pin_stub_direction(pin.rotation);
                 let tip = tx(
-                    pin.position.x + dx * pin.length,
-                    pin.position.y + dy * pin.length,
+                    dx.mul_add(pin.length, pin.position.x),
+                    dy.mul_add(pin.length, pin.position.y),
                 );
 
                 // Pin line
@@ -276,8 +277,8 @@ impl canvas::Program<(), Theme> for SymbolPreview {
                     frame.fill_text(Text {
                         content: pin.number.clone(),
                         position: Point::new(
-                            (origin.x + tip.x) / 2.0,
-                            (origin.y + tip.y) / 2.0 - font_sz,
+                            f32::midpoint(origin.x, tip.x),
+                            f32::midpoint(origin.y, tip.y) - font_sz,
                         ),
                         size: font_sz.into(),
                         color: text_color,
@@ -309,6 +310,7 @@ impl canvas::Program<(), Theme> for SymbolPreview {
 }
 
 /// Create a symbol preview element.
+#[must_use]
 pub fn symbol_preview(symbol: LibSymbol, height: f32) -> Element<'static, ()> {
     iced::widget::canvas(SymbolPreview::new(symbol))
         .width(Length::Fill)
@@ -404,8 +406,8 @@ mod tests {
     fn up_pin_screen_tip_is_above_anchor_down_pin_is_below() {
         let up_preview = SymbolPreview::new(symbol_with_pin(90.0));
         let (bx0, by0, bx1, by1) = up_preview.bounds();
-        let mid_x = (bx0 + bx1) / 2.0;
-        let mid_y = (by0 + by1) / 2.0;
+        let mid_x = f64::midpoint(bx0, bx1);
+        let mid_y = f64::midpoint(by0, by1);
         let scale = 10.0;
         let center = Point::new(100.0, 100.0);
 
@@ -413,8 +415,8 @@ mod tests {
         let origin = library_to_screen(pin.position.x, pin.position.y, mid_x, mid_y, scale, center);
         let (dx, dy) = pin_stub_direction(pin.rotation);
         let tip = library_to_screen(
-            pin.position.x + dx * pin.length,
-            pin.position.y + dy * pin.length,
+            dx.mul_add(pin.length, pin.position.x),
+            dy.mul_add(pin.length, pin.position.y),
             mid_x,
             mid_y,
             scale,
@@ -427,15 +429,15 @@ mod tests {
 
         let down_preview = SymbolPreview::new(symbol_with_pin(270.0));
         let (bx0, by0, bx1, by1) = down_preview.bounds();
-        let mid_x = (bx0 + bx1) / 2.0;
-        let mid_y = (by0 + by1) / 2.0;
+        let mid_x = f64::midpoint(bx0, bx1);
+        let mid_y = f64::midpoint(by0, by1);
 
         let pin = &down_preview.symbol.pins[0].pin;
         let origin = library_to_screen(pin.position.x, pin.position.y, mid_x, mid_y, scale, center);
         let (dx, dy) = pin_stub_direction(pin.rotation);
         let tip = library_to_screen(
-            pin.position.x + dx * pin.length,
-            pin.position.y + dy * pin.length,
+            dx.mul_add(pin.length, pin.position.x),
+            dy.mul_add(pin.length, pin.position.y),
             mid_x,
             mid_y,
             scale,
@@ -455,7 +457,7 @@ mod tests {
     fn bounds_grows_toward_positive_y_for_an_up_pin() {
         let preview = SymbolPreview::new(symbol_with_pin(90.0));
         let (_, min_y, _, max_y) = preview.bounds();
-        let mid_y = (min_y + max_y) / 2.0;
+        let mid_y = f64::midpoint(min_y, max_y);
         assert!(
             mid_y > 0.0,
             "Up pin's tip must pull the bbox toward +y in library space, got mid_y={mid_y}"

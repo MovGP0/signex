@@ -153,6 +153,7 @@ pub struct RkmCode {
 }
 
 impl RkmCode {
+    #[must_use]
     pub fn for_component(
         kind: ComponentKind,
         component: PreferredComponent,
@@ -166,11 +167,13 @@ impl RkmCode {
         }
     }
 
+    #[must_use]
     pub fn value_code(&self) -> &str {
         &self.value_code
     }
 
-    pub fn with_temperature_coefficient(
+    #[must_use]
+    pub const fn with_temperature_coefficient(
         mut self,
         temperature_coefficient: TemperatureCoefficient,
     ) -> Self {
@@ -178,7 +181,8 @@ impl RkmCode {
         self
     }
 
-    pub fn with_rated_power(mut self, rated_power: RatedPower) -> Self {
+    #[must_use]
+    pub const fn with_rated_power(mut self, rated_power: RatedPower) -> Self {
         self.rated_power = Some(rated_power);
         self
     }
@@ -243,7 +247,7 @@ fn format_scaled_value(
     result
 }
 
-fn resistance_scale(decade: i16) -> (i16, char) {
+const fn resistance_scale(decade: i16) -> (i16, char) {
     match decade {
         12.. => (12, 'T'),
         9..=11 => (9, 'G'),
@@ -254,7 +258,7 @@ fn resistance_scale(decade: i16) -> (i16, char) {
     }
 }
 
-fn capacitance_scale(decade: i16) -> (i16, char) {
+const fn capacitance_scale(decade: i16) -> (i16, char) {
     match decade {
         0.. => (0, 'F'),
         -3..=-1 => (-3, 'm'),

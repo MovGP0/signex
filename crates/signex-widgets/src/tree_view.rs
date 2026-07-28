@@ -176,6 +176,7 @@ impl TreeIcon {
     /// glyph family so the project tree reads as one cohesive visual
     /// family regardless of whether the underlying file is native or
     /// Standard. Unknown extensions fall back to `File`.
+    #[must_use]
     pub fn for_path(filename: &str) -> Self {
         let lower = filename.to_ascii_lowercase();
         if let Some(ext) = lower.rsplit('.').next() {
@@ -214,7 +215,7 @@ pub struct TreeNode {
     pub label: String,
     pub icon: TreeIcon,
     pub expanded: bool,
-    pub children: Vec<TreeNode>,
+    pub children: Vec<Self>,
     pub badge: Option<String>,
     /// Node represents a folder that can hold children (show expand even if empty).
     pub is_folder: bool,
@@ -252,7 +253,7 @@ impl TreeNode {
         }
     }
 
-    pub fn branch(label: impl Into<String>, icon: TreeIcon, children: Vec<TreeNode>) -> Self {
+    pub fn branch(label: impl Into<String>, icon: TreeIcon, children: Vec<Self>) -> Self {
         Self {
             label: label.into(),
             icon,
@@ -273,25 +274,29 @@ impl TreeNode {
     }
 
     /// Builder variant: mark the node as accented (bold at depth 0).
-    pub fn with_accent(mut self, accent: bool) -> Self {
+    #[must_use]
+    pub const fn with_accent(mut self, accent: bool) -> Self {
         self.accent = accent;
         self
     }
 
     /// Builder: mark this leaf as currently open in a tab.
-    pub fn with_open(mut self, open: bool) -> Self {
+    #[must_use]
+    pub const fn with_open(mut self, open: bool) -> Self {
         self.is_open = open;
         self
     }
 
     /// Builder: mark this leaf as having unsaved changes.
-    pub fn with_dirty(mut self, dirty: bool) -> Self {
+    #[must_use]
+    pub const fn with_dirty(mut self, dirty: bool) -> Self {
         self.is_dirty = dirty;
         self
     }
 
     /// Builder: mark this leaf as the currently-active document.
-    pub fn with_active(mut self, active: bool) -> Self {
+    #[must_use]
+    pub const fn with_active(mut self, active: bool) -> Self {
         self.is_active = active;
         self
     }
@@ -350,7 +355,8 @@ pub struct TreeView<'a> {
 }
 
 impl<'a> TreeView<'a> {
-    pub fn new(roots: &'a [TreeNode], tokens: &'a ThemeTokens) -> Self {
+    #[must_use]
+    pub const fn new(roots: &'a [TreeNode], tokens: &'a ThemeTokens) -> Self {
         Self {
             roots,
             selected: None,
@@ -358,12 +364,14 @@ impl<'a> TreeView<'a> {
         }
     }
 
-    pub fn selected(mut self, path: &'a [usize]) -> Self {
+    #[must_use]
+    pub const fn selected(mut self, path: &'a [usize]) -> Self {
         self.selected = Some(path);
         self
     }
 
     /// Build the tree into a scrollable Element.
+    #[must_use]
     pub fn view(self) -> Element<'static, TreeMsg> {
         let mut col: Column<'static, TreeMsg> = Column::new().spacing(0.0).width(Length::Fill);
         for (i, node) in self.roots.iter().enumerate() {
@@ -416,7 +424,7 @@ fn render_node(
     let hov_bg = theme_ext::hover_color(tokens);
 
     // --- Assemble row ---
-    let pad_left = (depth as f32) * INDENT_PER_DEPTH + BASE_PAD_LEFT;
+    let pad_left = (depth as f32).mul_add(INDENT_PER_DEPTH, BASE_PAD_LEFT);
 
     let mut r: Row<'static, TreeMsg> = Row::new()
         .spacing(ELEM_GAP)
@@ -545,7 +553,7 @@ fn render_node(
 
     // Click action
     let msg = if is_expandable {
-        TreeMsg::Toggle(path_vec.clone())
+        TreeMsg::Toggle(path_vec)
     } else {
         TreeMsg::Select(path_vec)
     };
@@ -600,7 +608,7 @@ fn render_node(
         } else {
             // "(empty)" indicator — matches React's italic muted placeholder
             let empty_pad =
-                ((depth + 1) as f32) * INDENT_PER_DEPTH + BASE_PAD_LEFT + CHEVRON_W + ELEM_GAP;
+                ((depth + 1) as f32).mul_add(INDENT_PER_DEPTH, BASE_PAD_LEFT) + CHEVRON_W + ELEM_GAP;
             let muted = theme_ext::text_secondary(tokens);
             let empty_c = Color::from_rgba(muted.r, muted.g, muted.b, 0.3);
             col = col.push(
@@ -626,6 +634,7 @@ fn render_node(
 // ─── State Helpers ────────────────────────────────────────────
 
 /// Get a node by path (immutable).
+#[must_use]
 pub fn get_node<'a>(roots: &'a [TreeNode], path: &[usize]) -> Option<&'a TreeNode> {
     if path.is_empty() {
         return None;

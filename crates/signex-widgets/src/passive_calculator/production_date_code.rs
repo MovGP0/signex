@@ -86,6 +86,7 @@ pub enum ProductionDateCode {
 }
 
 impl ProductionDateCode {
+    #[must_use]
     pub const fn new(cycle: ProductionDateCycle, year: u16, month: ProductionMonth) -> Self {
         match cycle {
             ProductionDateCycle::TwentyYear => Self::TwentyYear { year, month },
@@ -94,6 +95,7 @@ impl ProductionDateCode {
         }
     }
 
+    #[must_use]
     pub const fn cycle(self) -> ProductionDateCycle {
         match self {
             Self::TwentyYear { .. } => ProductionDateCycle::TwentyYear,
@@ -102,6 +104,7 @@ impl ProductionDateCode {
         }
     }
 
+    #[must_use]
     pub const fn year(self) -> u16 {
         match self {
             Self::TwentyYear { year, .. }
@@ -110,6 +113,7 @@ impl ProductionDateCode {
         }
     }
 
+    #[must_use]
     pub const fn month(self) -> ProductionMonth {
         match self {
             Self::TwentyYear { month, .. }

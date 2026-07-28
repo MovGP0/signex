@@ -10,6 +10,7 @@ pub enum ComponentKind {
 impl ComponentKind {
     pub const ALL: [Self; 3] = [Self::Resistor, Self::Capacitor, Self::Inductor];
 
+    #[must_use]
     pub const fn symbol(self) -> &'static str {
         match self {
             Self::Resistor => "R",
@@ -18,6 +19,7 @@ impl ComponentKind {
         }
     }
 
+    #[must_use]
     pub const fn index(self) -> usize {
         match self {
             Self::Resistor => 0,
@@ -26,6 +28,7 @@ impl ComponentKind {
         }
     }
 
+    #[must_use]
     pub const fn quantity_name(self) -> &'static str {
         match self {
             Self::Resistor => "Resistance",
@@ -34,6 +37,7 @@ impl ComponentKind {
         }
     }
 
+    #[must_use]
     pub const fn component_name(self) -> &'static str {
         match self {
             Self::Resistor => "Resistor",
@@ -42,6 +46,7 @@ impl ComponentKind {
         }
     }
 
+    #[must_use]
     pub const fn unit_symbol(self) -> &'static str {
         match self {
             Self::Resistor => "Ω",
@@ -79,6 +84,7 @@ impl ESeries {
         Self::E192,
     ];
 
+    #[must_use]
     pub const fn values(self) -> &'static [u16] {
         match self {
             Self::E3 => &E3_VALUES,
@@ -91,6 +97,7 @@ impl ESeries {
         }
     }
 
+    #[must_use]
     pub const fn decimal_places(self) -> u8 {
         match self {
             Self::E3 | Self::E6 | Self::E12 | Self::E24 => 1,
@@ -131,6 +138,7 @@ pub struct PreferredNumber {
 }
 
 impl PreferredNumber {
+    #[must_use]
     pub fn normalized(self) -> f64 {
         f64::from(self.significand) / 10_f64.powi(i32::from(self.decimal_places))
     }
@@ -163,11 +171,13 @@ pub struct PreferredComponent {
 }
 
 impl PreferredComponent {
+    #[must_use]
     pub fn value(self) -> f64 {
         self.number.normalized() * 10_f64.powi(i32::from(self.decade))
     }
 
-    pub fn multiplier_exponent(self) -> i8 {
+    #[must_use]
+    pub const fn multiplier_exponent(self) -> i8 {
         self.decade - self.number.decimal_places as i8
     }
 }
@@ -197,6 +207,7 @@ impl SiPrefix {
         Self::Giga,
     ];
 
+    #[must_use]
     pub const fn for_kind(kind: ComponentKind) -> &'static [Self] {
         match kind {
             ComponentKind::Resistor => &Self::RESISTOR,
@@ -204,6 +215,7 @@ impl SiPrefix {
         }
     }
 
+    #[must_use]
     pub const fn exponent(self) -> i8 {
         match self {
             Self::Pico => -12,
@@ -217,6 +229,7 @@ impl SiPrefix {
         }
     }
 
+    #[must_use]
     pub const fn symbol(self) -> &'static str {
         match self {
             Self::Pico => "p",
@@ -230,10 +243,12 @@ impl SiPrefix {
         }
     }
 
+    #[must_use]
     pub fn multiplier(self) -> f64 {
         10_f64.powi(i32::from(self.exponent()))
     }
 
+    #[must_use]
     pub fn unit(self, kind: ComponentKind) -> String {
         format!("{}{}", self.symbol(), kind.unit_symbol())
     }
@@ -284,6 +299,7 @@ impl Tolerance {
         Self::Percent0_01,
     ];
 
+    #[must_use]
     pub const fn fraction(self) -> f64 {
         match self {
             Self::Percent20 => 0.20,
@@ -300,6 +316,7 @@ impl Tolerance {
         }
     }
 
+    #[must_use]
     pub const fn percent_label(self) -> &'static str {
         match self {
             Self::Percent20 => "±20%",

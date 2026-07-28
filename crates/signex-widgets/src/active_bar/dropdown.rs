@@ -90,7 +90,7 @@ where
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
-    /// Convenience: simple label + on_press, no icon / shortcut.
+    /// Convenience: simple label + `on_press`, no icon / shortcut.
     pub fn new(label: impl Into<String>, on_press: M) -> Self {
         Self {
             label: label.into(),
@@ -103,7 +103,7 @@ impl<M: 'static + Clone> DropdownItem<M> {
     }
 
     /// Builder: mark this item as currently active (paints a "✓").
-    pub fn checked(mut self, on: bool) -> Self {
+    pub const fn checked(mut self, on: bool) -> Self {
         self.checked = on;
         self
     }
@@ -120,7 +120,7 @@ impl<M: 'static + Clone> DropdownItem<M> {
         self
     }
 
-    /// Builder: disable the row (greys + drops on_press).
+    /// Builder: disable the row (greys + drops `on_press`).
     pub fn disabled(mut self, off: bool) -> Self {
         self.disabled = off;
         if off {
@@ -136,6 +136,7 @@ impl<M: 'static + Clone> DropdownItem<M> {
 /// chip-grid that drives its own width). Caller wraps the result in a
 /// Translate / Stack overlay layer at the chevron's anchor and pairs
 /// it with a transparent backstop for click-outside-to-dismiss.
+#[must_use]
 pub fn view<'a, M>(
     entries: Vec<DropdownEntry<M>>,
     tokens: &'a ThemeTokens,

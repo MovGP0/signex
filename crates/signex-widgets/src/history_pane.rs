@@ -69,6 +69,7 @@ pub struct HistoryEntry {
 /// fresh libraries don't show an empty void. `now` is parameterised
 /// to keep the relative-time math testable; production callers pass
 /// `Utc::now()`.
+#[must_use]
 pub fn history_pane<'a, M>(
     entries: &[HistoryEntry],
     now: DateTime<Utc>,

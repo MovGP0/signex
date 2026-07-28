@@ -12,8 +12,9 @@ use signex_types::theme::{Color as SxColor, ThemeTokens};
 // ---------------------------------------------------------------------------
 
 /// Convert a signex `Color` (u8 components) to an Iced `Color` (f32 0..1).
+#[must_use]
 pub fn to_color(c: &SxColor) -> Color {
-    Color::from_rgba8(c.r, c.g, c.b, c.a as f32 / 255.0)
+    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -21,52 +22,62 @@ pub fn to_color(c: &SxColor) -> Color {
 // ---------------------------------------------------------------------------
 
 /// Primary text color from theme tokens.
+#[must_use]
 pub fn text_primary(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.text)
 }
 
 /// Secondary / muted text color.
+#[must_use]
 pub fn text_secondary(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.text_secondary)
 }
 
 /// Accent color (for highlights, active elements).
+#[must_use]
 pub fn accent(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.accent)
 }
 
 /// Error color.
+#[must_use]
 pub fn error_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.error)
 }
 
 /// Warning color.
+#[must_use]
 pub fn warning_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.warning)
 }
 
 /// Success / "on" indicator color.
+#[must_use]
 pub fn success_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.success)
 }
 
 /// Border color.
+#[must_use]
 pub fn border_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.border)
 }
 
 /// Selection highlight background.
+#[must_use]
 pub fn selection_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.selection)
 }
 
 /// Hover highlight color.
+#[must_use]
 pub fn hover_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.hover)
 }
 
 /// Theme accent color — used for active-project markers and the
 /// "open" indicator dot on the tree.
+#[must_use]
 pub fn accent_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.accent)
 }
@@ -76,6 +87,7 @@ pub fn accent_color(tokens: &ThemeTokens) -> Color {
 // ---------------------------------------------------------------------------
 
 /// Panel background container style (side panels, docks).
+#[must_use]
 pub fn panel_bg(tokens: &ThemeTokens) -> container::Style {
     container::Style {
         background: Some(to_color(&tokens.panel_bg).into()),
@@ -90,6 +102,7 @@ pub fn panel_bg(tokens: &ThemeTokens) -> container::Style {
 }
 
 /// Toolbar background container style.
+#[must_use]
 pub fn toolbar_bg(tokens: &ThemeTokens) -> container::Style {
     container::Style {
         background: Some(to_color(&tokens.toolbar_bg).into()),
@@ -104,6 +117,7 @@ pub fn toolbar_bg(tokens: &ThemeTokens) -> container::Style {
 }
 
 /// Status bar background container style (1px top border).
+#[must_use]
 pub fn status_bar_bg(tokens: &ThemeTokens) -> container::Style {
     container::Style {
         background: Some(to_color(&tokens.statusbar_bg).into()),
@@ -118,6 +132,7 @@ pub fn status_bar_bg(tokens: &ThemeTokens) -> container::Style {
 }
 
 /// General application background.
+#[must_use]
 pub fn app_bg(tokens: &ThemeTokens) -> container::Style {
     container::Style {
         background: Some(to_color(&tokens.bg).into()),
@@ -128,6 +143,7 @@ pub fn app_bg(tokens: &ThemeTokens) -> container::Style {
 }
 
 /// Paper / content area background.
+#[must_use]
 pub fn paper_bg(tokens: &ThemeTokens) -> container::Style {
     container::Style {
         background: Some(to_color(&tokens.paper).into()),
@@ -138,6 +154,7 @@ pub fn paper_bg(tokens: &ThemeTokens) -> container::Style {
 }
 
 /// Accent-colored container (for selected / active items).
+#[must_use]
 pub fn accent_bg(tokens: &ThemeTokens) -> container::Style {
     container::Style {
         background: Some(to_color(&tokens.accent).into()),

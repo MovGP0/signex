@@ -23,23 +23,26 @@ pub enum Network {
     },
     Connected {
         connection: Connection,
-        left: Box<Network>,
-        right: Box<Network>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
 }
 
 impl Network {
-    pub fn boundary(condition: BoundaryCondition) -> Self {
+    #[must_use]
+    pub const fn boundary(condition: BoundaryCondition) -> Self {
         Self::Boundary { condition }
     }
 
-    pub fn component(component: PreferredComponent, tolerance: Tolerance) -> Self {
+    #[must_use]
+    pub const fn component(component: PreferredComponent, tolerance: Tolerance) -> Self {
         Self::Component {
             component,
             tolerance,
         }
     }
 
+    #[must_use]
     pub fn connected(connection: Connection, left: Self, right: Self) -> Self {
         Self::Connected {
             connection,
@@ -48,6 +51,7 @@ impl Network {
         }
     }
 
+    #[must_use]
     pub fn part_count(&self) -> usize {
         match self {
             Self::Boundary { .. } => 0,
@@ -56,18 +60,22 @@ impl Network {
         }
     }
 
+    #[must_use]
     pub fn nominal(&self, kind: ComponentKind) -> f64 {
         self.evaluate(kind, Bound::Nominal)
     }
 
+    #[must_use]
     pub fn minimum(&self, kind: ComponentKind) -> f64 {
         self.evaluate(kind, Bound::Minimum)
     }
 
+    #[must_use]
     pub fn maximum(&self, kind: ComponentKind) -> f64 {
         self.evaluate(kind, Bound::Maximum)
     }
 
+    #[must_use]
     pub fn tolerance_interval(&self, kind: ComponentKind) -> (f64, f64) {
         (self.minimum(kind), self.maximum(kind))
     }
@@ -77,17 +85,20 @@ impl Network {
         self.set_tolerance_at(leaf_index, tolerance, &mut current)
     }
 
+    #[must_use]
     pub fn components(&self) -> Vec<(PreferredComponent, Tolerance)> {
         let mut components = Vec::with_capacity(self.part_count());
         self.collect_components(&mut components);
         components
     }
 
+    #[must_use]
     pub fn expression(&self, kind: ComponentKind) -> String {
         let mut index = 1;
         self.format_expression(kind.symbol(), &mut index, true)
     }
 
+    #[must_use]
     pub fn plain_expression(&self, kind: ComponentKind) -> String {
         let mut index = 1;
         self.format_expression(kind.symbol(), &mut index, false)
@@ -194,6 +205,7 @@ impl Network {
 }
 
 impl BoundaryCondition {
+    #[must_use]
     pub fn exact_for_target(kind: ComponentKind, target: f64) -> Option<Self> {
         match (kind, target) {
             (ComponentKind::Resistor | ComponentKind::Inductor, 0.0)
@@ -204,7 +216,7 @@ impl BoundaryCondition {
         }
     }
 
-    fn value(self, kind: ComponentKind) -> f64 {
+    const fn value(self, kind: ComponentKind) -> f64 {
         match (self, kind) {
             (Self::WireBridge, ComponentKind::Resistor | ComponentKind::Inductor)
             | (Self::OpenCircuit, ComponentKind::Capacitor) => 0.0,
@@ -213,7 +225,7 @@ impl BoundaryCondition {
         }
     }
 
-    fn label(self) -> &'static str {
+    const fn label(self) -> &'static str {
         match self {
             Self::WireBridge => "Wire bridge",
             Self::OpenCircuit => "Open circuit",
@@ -221,6 +233,7 @@ impl BoundaryCondition {
     }
 }
 
+#[must_use]
 pub fn is_additive(kind: ComponentKind, connection: Connection) -> bool {
     match kind {
         ComponentKind::Resistor | ComponentKind::Inductor => connection == Connection::Series,
@@ -228,6 +241,7 @@ pub fn is_additive(kind: ComponentKind, connection: Connection) -> bool {
     }
 }
 
+#[must_use]
 pub fn parallel_value(left: f64, right: f64) -> f64 {
     let (smaller, larger) = if left <= right {
         (left, right)
@@ -240,6 +254,7 @@ pub fn parallel_value(left: f64, right: f64) -> f64 {
     smaller / (1.0 + smaller / larger)
 }
 
+#[must_use]
 pub fn format_value(value: f64, kind: ComponentKind) -> String {
     if value == f64::INFINITY {
         return format!("∞ {}", SiPrefix::None.unit(kind));
@@ -252,6 +267,7 @@ pub fn format_value(value: f64, kind: ComponentKind) -> String {
     )
 }
 
+#[must_use]
 pub fn format_number(value: f64) -> String {
     if value == 0.0 {
         return "0".to_string();

@@ -69,6 +69,7 @@ pub fn icon_button<'a, M: Clone + 'a>(
 // ---------------------------------------------------------------------------
 
 /// A thin vertical separator for toolbar button groups.
+#[must_use]
 pub fn toolbar_separator<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
     let border = theme_ext::border_color(tokens);
     container(
@@ -89,6 +90,7 @@ pub fn toolbar_separator<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
 // ---------------------------------------------------------------------------
 
 /// Group multiple button elements into a horizontal row with no spacing.
+#[must_use]
 pub fn button_group<'a, M: 'a>(buttons: Vec<Element<'a, M>>) -> Element<'a, M> {
     let mut r: Row<'a, M> = Row::new().spacing(0).align_y(iced::Alignment::Center);
     for btn in buttons {

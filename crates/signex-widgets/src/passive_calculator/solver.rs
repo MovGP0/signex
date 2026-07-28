@@ -68,7 +68,7 @@ struct ValueBrackets<T> {
 }
 
 impl<T: Copy> ValueBrackets<T> {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             below: None,
             above: None,
@@ -93,6 +93,7 @@ impl<T: Copy> ValueBrackets<T> {
     }
 }
 
+#[must_use]
 pub fn solve(options: SolveOptions) -> Vec<Network> {
     if options.target.is_nan()
         || options.target < 0.0
