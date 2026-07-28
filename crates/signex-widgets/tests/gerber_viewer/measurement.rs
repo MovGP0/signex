@@ -159,6 +159,31 @@ r 5.0000 mm  θ 53.13° (0.92729 rad)"
             }
 
             #[test]
+            fn switching_to_selection_clears_partial_and_completed_measurements()
+            {
+                let mut state = GerberViewerState::default();
+                state.activate_measurement_tool();
+                state.begin_measurement(signex_gerber::Point { x: 1.0, y: 2.0 });
+
+                state.activate_selection_tool();
+
+                assert!(state.selection_tool_active());
+                assert_eq!(state.measurement(), None);
+                assert_eq!(state.measurement_annotation(), None);
+
+                state.activate_measurement_tool();
+                state.begin_measurement(signex_gerber::Point { x: 1.0, y: 2.0 });
+                state.complete_measurement(signex_gerber::Point { x: 4.0, y: 6.0 });
+                assert!(state.measurement_annotation().is_some());
+
+                state.activate_selection_tool();
+
+                assert!(state.selection_tool_active());
+                assert_eq!(state.measurement(), None);
+                assert_eq!(state.measurement_annotation(), None);
+            }
+
+            #[test]
             fn measurement_and_zoom_area_modes_are_mutually_exclusive()
             {
                 let mut state = GerberViewerState::default();

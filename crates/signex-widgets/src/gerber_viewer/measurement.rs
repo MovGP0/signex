@@ -49,11 +49,7 @@ impl GerberViewerState
     {
         if self.measurement_active
         {
-            self.measurement_active = false;
-            if self.measurement.is_some_and(|measurement| measurement.end.is_none())
-            {
-                self.measurement = None;
-            }
+            self.clear_measurement_state();
             self.status = "Measurement cancelled.".into();
         }
         else
@@ -142,10 +138,15 @@ impl GerberViewerState
 
     pub fn reset_measurement(&mut self)
     {
-        self.measurement_active = false;
-        self.measurement = None;
+        self.clear_measurement_state();
         self.status = "Measurement reset.".into();
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
+    }
+
+    pub(super) fn clear_measurement_state(&mut self)
+    {
+        self.measurement_active = false;
+        self.measurement = None;
     }
 
     pub fn measurement_summary(&self) -> Option<String>

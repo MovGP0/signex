@@ -319,11 +319,7 @@ impl GerberViewerState
         self.zoom_selection_active = !self.zoom_selection_active;
         if self.zoom_selection_active
         {
-            self.measurement_active = false;
-            if self.measurement.is_some_and(|measurement| measurement.end.is_none())
-            {
-                self.measurement = None;
-            }
+            self.clear_measurement_state();
         }
         self.status = if self.zoom_selection_active
         {

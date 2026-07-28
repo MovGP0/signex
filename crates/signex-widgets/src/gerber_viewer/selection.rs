@@ -22,12 +22,8 @@ impl GerberViewerState
 
     pub fn activate_selection_tool(&mut self)
     {
-        self.measurement_active = false;
+        self.clear_measurement_state();
         self.zoom_selection_active = false;
-        if self.measurement.is_some_and(|measurement| measurement.end.is_none())
-        {
-            self.measurement = None;
-        }
         self.status = "Selection tool active. Click an item or drag a rectangular region.".into();
         self.redraw_generation = self.redraw_generation.wrapping_add(1);
     }
