@@ -1,7 +1,7 @@
 //! Database layer — pool management, migrations, and component-row /
 //! primitive persistence helpers used by the route handlers.
 //!
-//! Components live as rows inside category tables (Altium DBLib
+//! Components live as rows inside category tables (Altium `DBLib`
 //! model). This module exposes:
 //!
 //! * primitive CRUD (`insert_symbol` / `fetch_symbol` / …) —
@@ -10,7 +10,7 @@
 //!   table-name listing (`list_table_names` / `list_rows_in_table`) —
 //!   backing the `/tables` and `/rows` HTTP routes.
 //!
-//! The pool is a thin enum over SQLite (default for tests + offline) and
+//! The pool is a thin enum over `SQLite` (default for tests + offline) and
 //! Postgres (production). Schema is portable across both — see
 //! `migrations/0001_initial.sql` (legacy, retained for forward-compat) +
 //! `migrations/0005_tabular_components.sql` (the row table).
@@ -29,7 +29,7 @@ use uuid::Uuid;
 
 use crate::locks::LockManager;
 
-/// Summary record for a primitive (Symbol / Footprint / SimModel) — what the
+/// Summary record for a primitive (Symbol / Footprint / `SimModel`) — what the
 /// `GET /symbols` etc. routes return when listing a library.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PrimitiveSummary {
@@ -46,16 +46,18 @@ pub enum DbPool {
 }
 
 impl DbPool {
-    pub fn sqlite(&self) -> Option<&sqlx::SqlitePool> {
+    #[must_use]
+    pub const fn sqlite(&self) -> Option<&sqlx::SqlitePool> {
         match self {
-            DbPool::Sqlite(p) => Some(p),
+            Self::Sqlite(p) => Some(p),
             _ => None,
         }
     }
 
-    pub fn postgres(&self) -> Option<&sqlx::PgPool> {
+    #[must_use]
+    pub const fn postgres(&self) -> Option<&sqlx::PgPool> {
         match self {
-            DbPool::Postgres(p) => Some(p),
+            Self::Postgres(p) => Some(p),
             _ => None,
         }
     }
@@ -69,7 +71,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Open an in-memory SQLite database. The pool is held to a single
+    /// Open an in-memory `SQLite` database. The pool is held to a single
     /// connection so tables persist for the lifetime of `AppState`.
     pub async fn new_sqlite_memory() -> sqlx::Result<Self> {
         let opts = SqliteConnectOptions::from_str("sqlite::memory:")?
@@ -83,7 +85,7 @@ impl AppState {
             .await?;
         Ok(Self {
             pool: DbPool::Sqlite(pool),
-            locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
+            locks: Arc::new(LockManager::new(Duration::from_mins(10))),
         })
     }
 
@@ -97,7 +99,7 @@ impl AppState {
                 .await?;
             Ok(Self {
                 pool: DbPool::Postgres(pool),
-                locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
+                locks: Arc::new(LockManager::new(Duration::from_mins(10))),
             })
         } else {
             let opts = SqliteConnectOptions::from_str(url)?.create_if_missing(true);
@@ -107,15 +109,17 @@ impl AppState {
                 .await?;
             Ok(Self {
                 pool: DbPool::Sqlite(pool),
-                locks: Arc::new(LockManager::new(Duration::from_secs(10 * 60))),
+                locks: Arc::new(LockManager::new(Duration::from_mins(10))),
             })
         }
     }
 
-    pub fn pool(&self) -> &DbPool {
+    #[must_use]
+    pub const fn pool(&self) -> &DbPool {
         &self.pool
     }
 
+    #[must_use]
     pub fn locks(&self) -> &LockManager {
         &self.locks
     }
@@ -123,6 +127,7 @@ impl AppState {
     /// Hand out a clone of the `Arc<LockManager>` for background tasks
     /// (the periodic `sweep_expired` sweeper spawned in `router_with_state`
     /// holds one of these).
+    #[must_use]
     pub fn locks_arc(&self) -> Arc<LockManager> {
         Arc::clone(&self.locks)
     }
@@ -199,7 +204,7 @@ impl AppState {
             }
         };
         match result {
-            Ok(_) => Ok(true),
+            Ok(()) => Ok(true),
             Err(e) if is_unique_violation(&e) => Ok(false),
             Err(e) => Err(e),
         }
@@ -640,7 +645,7 @@ fn decode_err(e: serde_json::Error) -> sqlx::Error {
 
 /// True when a sqlx error is a primary-key / unique-constraint
 /// violation — the signal that a plain `INSERT` hit an existing row.
-/// Backend-agnostic via `DatabaseError::kind()` (SQLite + Postgres).
+/// Backend-agnostic via `DatabaseError::kind()` (`SQLite` + Postgres).
 fn is_unique_violation(err: &sqlx::Error) -> bool {
     matches!(
         err,

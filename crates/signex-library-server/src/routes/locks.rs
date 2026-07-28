@@ -49,13 +49,13 @@ enum FieldSetWire {
 impl From<FieldSetWire> for FieldSet {
     fn from(value: FieldSetWire) -> Self {
         match value {
-            FieldSetWire::Symbol => FieldSet::Symbol,
-            FieldSetWire::Footprint => FieldSet::Footprint,
-            FieldSetWire::Model3d => FieldSet::Model3d,
-            FieldSetWire::SharedParams => FieldSet::SharedParams,
-            FieldSetWire::SharedSupplyChain => FieldSet::SharedSupplyChain,
-            FieldSetWire::SharedSimulation => FieldSet::SharedSimulation,
-            FieldSetWire::Lifecycle => FieldSet::Lifecycle,
+            FieldSetWire::Symbol => Self::Symbol,
+            FieldSetWire::Footprint => Self::Footprint,
+            FieldSetWire::Model3d => Self::Model3d,
+            FieldSetWire::SharedParams => Self::SharedParams,
+            FieldSetWire::SharedSupplyChain => Self::SharedSupplyChain,
+            FieldSetWire::SharedSimulation => Self::SharedSimulation,
+            FieldSetWire::Lifecycle => Self::Lifecycle,
         }
     }
 }
@@ -80,7 +80,7 @@ fn holder_from(headers: &HeaderMap) -> Result<String, ApiError> {
     }
     // Reject control characters — they would corrupt the echoed error
     // body and tracing output.
-    if raw.chars().any(|c| c.is_control()) {
+    if raw.chars().any(char::is_control) {
         return Err(ApiError::bad_request(
             "x-signex-holder contains control characters",
         ));

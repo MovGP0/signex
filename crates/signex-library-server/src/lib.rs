@@ -8,7 +8,7 @@
 //! `/rows/:row_id/locks` endpoint — is gated behind a bearer-token
 //! check sourced from the `SIGNEX_API_TOKEN` env var.
 //!
-//! ## DBLib row model
+//! ## `DBLib` row model
 //!
 //! Components live as rows inside a shared `component_rows` table:
 //!
@@ -49,12 +49,13 @@ pub use db::AppState;
 pub const API_TOKEN_ENV: &str = "SIGNEX_API_TOKEN";
 
 /// Env var holding the persistent database URL (`postgres://…` or
-/// `sqlite://<file>`). Unset → an ephemeral in-memory SQLite that
+/// `sqlite://<file>`). Unset → an ephemeral in-memory `SQLite` that
 /// loses every row on restart; the binary only allows that on a
 /// loopback bind and logs a prominent warning.
 pub const DATABASE_URL_ENV: &str = "SIGNEX_DATABASE_URL";
 
 /// Maximum request body in bytes accepted on protected mutation routes.
+///
 /// 1 MiB is generous for component / primitive payloads (typical row JSON
 /// is ~5 KiB, primitives ~50 KiB) and bounded enough to stop unbounded
 /// allocation if a client (auth'd or not) tries to OOM the server.
@@ -70,7 +71,7 @@ const RATE_LIMIT_PER_SECOND: u64 = 1; // i.e. 60 req/min/IP, replenished 1/sec
 const RATE_LIMIT_BURST_SIZE: u32 = 30; // accommodate a normal UI burst
 
 /// How often to drop expired entries from the in-memory `LockManager`.
-const LOCK_SWEEP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const LOCK_SWEEP_INTERVAL: Duration = Duration::from_mins(5);
 
 /// Router with no shared state — used by the legacy `/health` + `/version`
 /// integration tests in `tests/health.rs`.
@@ -80,7 +81,7 @@ pub fn router() -> Router {
         .route("/version", get(version))
 }
 
-/// Router wired up with a fresh in-memory SQLite. Production callers should
+/// Router wired up with a fresh in-memory `SQLite`. Production callers should
 /// build their own `AppState` and use [`router_with_state`] directly.
 pub async fn router_with_in_memory_state() -> anyhow::Result<Router> {
     let state = AppState::new_sqlite_memory().await?;
@@ -182,7 +183,7 @@ pub fn with_rate_limit(router: Router) -> Router {
     );
     let governor_for_cleanup = Arc::clone(&governor_conf);
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        let mut interval = tokio::time::interval(Duration::from_mins(1));
         interval.tick().await;
         loop {
             interval.tick().await;

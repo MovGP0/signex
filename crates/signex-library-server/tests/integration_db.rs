@@ -1,7 +1,7 @@
 //! Integration tests covering DB schema migrations + the `/tables`
-//! and `/rows` HTTP routes for the DBLib row model.
+//! and `/rows` HTTP routes for the `DBLib` row model.
 //!
-//! Default backend: in-memory SQLite. Postgres path is gated behind
+//! Default backend: in-memory `SQLite`. Postgres path is gated behind
 //! `SIGNEX_TEST_PG_URL` env var so CI without Postgres still passes.
 
 use std::time::Duration;
@@ -479,7 +479,7 @@ async fn lock_contention_ttl_expiry_allows_takeover() {
 #[tokio::test]
 async fn locks_endpoint_returns_409_when_held() {
     let state = fresh_state().await;
-    state.locks().set_idle_ttl(Duration::from_secs(60));
+    state.locks().set_idle_ttl(Duration::from_mins(1));
     let app = router_with_state(state);
 
     let row_id = RowId::new();

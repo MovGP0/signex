@@ -28,7 +28,7 @@ pub enum LockErrorKind {
         holder: String,
     },
     UnknownHolder,
-    /// HI-20: a previous LockManager call panicked while holding the
+    /// HI-20: a previous `LockManager` call panicked while holding the
     /// `Mutex`, poisoning it. We surface the failure as an explicit
     /// 500-class error rather than letting the second `.unwrap()` panic
     /// the axum task and cascade into every subsequent request.
@@ -77,6 +77,7 @@ struct Inner {
 }
 
 impl LockManager {
+    #[must_use]
     pub fn new(idle_ttl: Duration) -> Self {
         Self {
             inner: Mutex::new(Inner {
@@ -91,7 +92,7 @@ impl LockManager {
         // HI-20: best-effort recovery. If the mutex is poisoned the inner
         // state may be partially consistent, but for a TTL update that's
         // acceptable; the alternative (panic) brings down the server.
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.idle_ttl = ttl;
     }
 
@@ -166,7 +167,7 @@ impl LockManager {
 
     pub fn snapshot(&self, uuid: Uuid, field_set: FieldSet) -> Option<LockSnapshot> {
         // Read-only inspection; on poison we recover rather than crash.
-        let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let key = (uuid, field_set);
         let entry = inner.locks.get(&key)?;
         // Treat expired entries as absent.
@@ -184,7 +185,7 @@ impl LockManager {
     pub fn sweep_expired(&self) {
         // The sweeper is best-effort; on poison we still want the next
         // tick to clean up rather than the task panicking out.
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
         let ttl = inner.idle_ttl;
         inner
@@ -200,7 +201,7 @@ mod tests {
 
     #[test]
     fn try_lock_blocks_when_held() {
-        let mgr = LockManager::new(Duration::from_secs(60));
+        let mgr = LockManager::new(Duration::from_mins(1));
         let uuid = Uuid::now_v7();
         mgr.try_lock(uuid, FieldSet::Symbol, "alice").unwrap();
         let err = mgr.try_lock(uuid, FieldSet::Symbol, "bob").unwrap_err();
@@ -209,7 +210,7 @@ mod tests {
 
     #[test]
     fn release_then_relock_works() {
-        let mgr = LockManager::new(Duration::from_secs(60));
+        let mgr = LockManager::new(Duration::from_mins(1));
         let uuid = Uuid::now_v7();
         mgr.try_lock(uuid, FieldSet::Symbol, "alice").unwrap();
         mgr.release(uuid, FieldSet::Symbol, "alice").unwrap();
@@ -227,7 +228,7 @@ mod tests {
 
     #[test]
     fn different_field_sets_are_independent() {
-        let mgr = LockManager::new(Duration::from_secs(60));
+        let mgr = LockManager::new(Duration::from_mins(1));
         let uuid = Uuid::now_v7();
         mgr.try_lock(uuid, FieldSet::Symbol, "alice").unwrap();
         mgr.try_lock(uuid, FieldSet::Footprint, "bob").unwrap();
@@ -235,7 +236,7 @@ mod tests {
 
     #[test]
     fn release_by_other_fails() {
-        let mgr = LockManager::new(Duration::from_secs(60));
+        let mgr = LockManager::new(Duration::from_mins(1));
         let uuid = Uuid::now_v7();
         mgr.try_lock(uuid, FieldSet::Symbol, "alice").unwrap();
         assert!(mgr.release(uuid, FieldSet::Symbol, "bob").is_err());

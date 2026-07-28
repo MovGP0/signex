@@ -11,7 +11,7 @@
 //! DELETE /tables/:name/rows/:row_id     delete, 204 on success
 //! ```
 //!
-//! `:row_id` is parsed as a [`RowId`] — a UUIDv7 newtype.
+//! `:row_id` is parsed as a [`RowId`] — a `UUIDv7` newtype.
 
 use axum::{
     Json, Router,

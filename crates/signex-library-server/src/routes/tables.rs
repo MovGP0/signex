@@ -1,4 +1,4 @@
-//! `/tables` routes — DBLib row model.
+//! `/tables` routes — `DBLib` row model.
 //!
 //! Two endpoints under this prefix:
 //!

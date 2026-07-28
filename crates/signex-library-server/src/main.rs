@@ -13,14 +13,13 @@ const DEFAULT_BIND: &str = "127.0.0.1:3535";
 const BIND_ENV: &str = "SIGNEX_LIBRARY_BIND";
 
 /// Parse a `host:port` bind string and return whether the host is a
-/// loopback (127.0.0.0/8 or [::1]). IPv6 zone-id addresses (`fe80::1%lo0`)
+/// loopback (127.0.0.0/8 or [`::1`]). IPv6 zone-id addresses (`fe80::1%lo0`)
 /// are treated as non-loopback even when they happen to resolve to a
 /// loopback interface; we want the strictest possible guard.
 fn is_loopback_bind(bind: &str) -> bool {
     use std::net::SocketAddr;
     bind.parse::<SocketAddr>()
-        .map(|sa| sa.ip().is_loopback())
-        .unwrap_or(false)
+        .is_ok_and(|sa| sa.ip().is_loopback())
 }
 
 #[tokio::main]
@@ -36,8 +35,7 @@ async fn main() -> anyhow::Result<()> {
     // routable interface without a token would expose every CRUD route
     // to the network with only a `tracing::warn!`, so we exit instead.
     let token_set = std::env::var(API_TOKEN_ENV)
-        .map(|t| !t.is_empty())
-        .unwrap_or(false);
+        .is_ok_and(|t| !t.is_empty());
     if !is_loopback_bind(&bind) && !token_set {
         anyhow::bail!(
             "refusing to bind to non-loopback address `{bind}` without `{API_TOKEN_ENV}` set; \
@@ -65,20 +63,17 @@ async fn main() -> anyhow::Result<()> {
         listener.local_addr()?
     );
 
-    let router = match &db_url {
-        Some(url) => {
-            let state = AppState::connect(url).await?;
-            state.migrate().await?;
-            tracing::info!("persistent database backend connected");
-            router_with_state(state)
-        }
-        None => {
-            tracing::warn!(
-                "no {DATABASE_URL_ENV} set — using EPHEMERAL in-memory SQLite (loopback dev mode); \
-                 ALL DATA IS LOST ON RESTART"
-            );
-            router_with_in_memory_state().await?
-        }
+    let router = if let Some(url) = &db_url {
+        let state = AppState::connect(url).await?;
+        state.migrate().await?;
+        tracing::info!("persistent database backend connected");
+        router_with_state(state)
+    } else {
+        tracing::warn!(
+            "no {DATABASE_URL_ENV} set — using EPHEMERAL in-memory SQLite (loopback dev mode); \
+             ALL DATA IS LOST ON RESTART"
+        );
+        router_with_in_memory_state().await?
     };
 
     // HI-2: per-IP rate limit applied here (not in `router_with_state`)
