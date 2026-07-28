@@ -29,6 +29,7 @@ pub struct BomComponent {
 }
 
 impl BomComponent {
+    #[must_use]
     pub fn is_fitted(&self) -> bool {
         self.variant_fitted
             .unwrap_or(!self.dnp && self.in_bom && self.on_board)
@@ -106,7 +107,8 @@ impl Default for BomRuleOptions {
 }
 
 impl BomRuleOptions {
-    pub fn is_enabled(&self, rule: BomRule) -> bool {
+    #[must_use]
+    pub const fn is_enabled(&self, rule: BomRule) -> bool {
         match rule {
             BomRule::MissingFootprint => self.missing_footprint,
             BomRule::MissingMpn => self.missing_mpn,
@@ -139,6 +141,7 @@ pub struct BomValidationReport {
 }
 
 impl BomValidationReport {
+    #[must_use]
     pub fn error_count(&self) -> usize {
         self.issues
             .iter()
@@ -146,6 +149,7 @@ impl BomValidationReport {
             .count()
     }
 
+    #[must_use]
     pub fn warning_count(&self) -> usize {
         self.issues
             .iter()
@@ -153,6 +157,7 @@ impl BomValidationReport {
             .count()
     }
 
+    #[must_use]
     pub fn has_errors(&self) -> bool {
         self.error_count() > 0
     }
@@ -181,10 +186,11 @@ pub struct BomTable {
 }
 
 fn first_reference(row: &BomRow) -> &str {
-    row.references.first().map(String::as_str).unwrap_or("")
+    row.references.first().map_or("", String::as_str)
 }
 
 /// Build a BOM table from a normalized BOM context.
+#[must_use]
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
         .components
@@ -264,8 +270,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                     references: vec![component.reference.clone()],
                     name: component.name.clone(),
                     qty: 1,
-                    fitted_qty: if component.is_fitted() { 1 } else { 0 },
-                    not_fitted_qty: if component.is_fitted() { 0 } else { 1 },
+                    fitted_qty: u32::from(component.is_fitted()),
+                    not_fitted_qty: u32::from(!component.is_fitted()),
                     value: component.value.clone(),
                     footprint: component.footprint.clone(),
                     lib_ref: component.lib_ref.clone(),
@@ -298,6 +304,7 @@ fn has_populated_field(component: &BomComponent, candidates: &[&str]) -> bool {
 }
 
 /// Run quality rules against BOM input/output and return a validation report.
+#[must_use]
 pub fn validate_table(
     ctx: &BomContext,
     table: &BomTable,
