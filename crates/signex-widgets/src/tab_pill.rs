@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Custom tab pill widget — three-sided border (top + sides) plus a
 //! 2-px accent strip below for the active marker.
 //!

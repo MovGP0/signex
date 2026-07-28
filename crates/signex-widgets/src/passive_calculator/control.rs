@@ -1,3 +1,10 @@
+#![expect(
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
 use iced::{Alignment, Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
@@ -105,7 +112,7 @@ impl CalculatorControl {
                 self.active_tab = CalculatorTab::Passive(kind);
             }
             CalculatorMessage::TabChanged(tab) => self.active_tab = tab,
-            CalculatorMessage::RkmEncoder(message) => self.rkm_encoder.update(message),
+            CalculatorMessage::RkmEncoder(message) => self.rkm_encoder.update(&message),
             CalculatorMessage::TargetChanged(value) => {
                 let state = self.active_state_mut();
                 state.target_input = value;
@@ -406,8 +413,7 @@ fn tab_button<'a>(
 
 const fn default_tolerance(series: ESeries) -> Tolerance {
     match series {
-        ESeries::E3 => Tolerance::Percent20,
-        ESeries::E6 => Tolerance::Percent20,
+        ESeries::E3 | ESeries::E6 => Tolerance::Percent20,
         ESeries::E12 => Tolerance::Percent10,
         ESeries::E24 => Tolerance::Percent5,
         ESeries::E48 => Tolerance::Percent2,

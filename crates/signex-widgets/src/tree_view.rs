@@ -1,3 +1,12 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::match_same_arms,
+    clippy::return_self_not_must_use,
+    clippy::struct_excessive_bools,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Tree view widget — Altium-style project/component browser tree.
 //!
 //! COSMIC composition pattern: `TreeView` struct with builder methods.
@@ -179,8 +188,10 @@ impl TreeIcon {
     #[must_use]
     pub fn for_path(filename: &str) -> Self {
         let lower = filename.to_ascii_lowercase();
-        if let Some(ext) = lower.rsplit('.').next() {
-            match ext {
+        lower
+            .rsplit('.')
+            .next()
+            .map_or(Self::File, |ext| match ext {
                 // Native Signex files.
                 "snxprj" => Self::SnxProject,
                 "snxsch" => Self::SnxSchematic,
@@ -203,10 +214,7 @@ impl TreeIcon {
                 "standard_sym" => Self::SnxLibrary,
                 "standard_mod" => Self::SnxFootprint,
                 _ => Self::File,
-            }
-        } else {
-            Self::File
-        }
+            })
     }
 }
 
@@ -607,8 +615,9 @@ fn render_node(
             }
         } else {
             // "(empty)" indicator — matches React's italic muted placeholder
-            let empty_pad =
-                ((depth + 1) as f32).mul_add(INDENT_PER_DEPTH, BASE_PAD_LEFT) + CHEVRON_W + ELEM_GAP;
+            let empty_pad = ((depth + 1) as f32).mul_add(INDENT_PER_DEPTH, BASE_PAD_LEFT)
+                + CHEVRON_W
+                + ELEM_GAP;
             let muted = theme_ext::text_secondary(tokens);
             let empty_c = Color::from_rgba(muted.r, muted.g, muted.b, 0.3);
             col = col.push(

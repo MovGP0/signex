@@ -297,13 +297,13 @@ fn adjusted_significand(
 
 const fn capacitor_tolerance_color(tolerance: Tolerance) -> Option<BandColor> {
     match tolerance {
-        Tolerance::Percent20 => None,
         Tolerance::Percent10 => Some(BandColor::Silver),
         Tolerance::Percent5 => Some(BandColor::Gold),
         Tolerance::Percent2 => Some(BandColor::Red),
         Tolerance::Percent1 => Some(BandColor::Brown),
         Tolerance::Percent0_5 => Some(BandColor::Green),
-        Tolerance::Percent0_25
+        Tolerance::Percent20
+        | Tolerance::Percent0_25
         | Tolerance::Percent0_1
         | Tolerance::Percent0_05
         | Tolerance::Percent0_02
@@ -316,7 +316,7 @@ const fn temperature_coefficient_color(
 ) -> Option<BandColor> {
     match temperature_coefficient {
         TemperatureCoefficient::Ppm1 => Some(BandColor::Grey),
-        TemperatureCoefficient::Ppm2 => None,
+        TemperatureCoefficient::Ppm2 | TemperatureCoefficient::Other => None,
         TemperatureCoefficient::Ppm5 => Some(BandColor::Violet),
         TemperatureCoefficient::Ppm10 => Some(BandColor::Blue),
         TemperatureCoefficient::Ppm15 => Some(BandColor::Orange),
@@ -324,6 +324,5 @@ const fn temperature_coefficient_color(
         TemperatureCoefficient::Ppm50 => Some(BandColor::Red),
         TemperatureCoefficient::Ppm100 => Some(BandColor::Brown),
         TemperatureCoefficient::Ppm250 => Some(BandColor::Black),
-        TemperatureCoefficient::Other => None,
     }
 }

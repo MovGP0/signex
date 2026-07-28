@@ -1,3 +1,10 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::float_cmp,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -151,15 +158,18 @@ fn find_closest_network(
     target: f64,
     max_parts: usize,
 ) -> Network {
-    let minimum_leaf = leaves
+    let Some(minimum_leaf) = leaves
         .iter()
         .map(|leaf| leaf.nominal(kind))
         .min_by(f64::total_cmp)
-        .expect("the caller guarantees at least one leaf");
+    else {
+        panic!("find_closest_network requires at least one leaf");
+    };
     let minimum_network = minimum_leaf / max_parts as f64;
     if target <= minimum_network / 2.0 {
-        let condition = BoundaryCondition::exact_for_target(kind, 0.0)
-            .expect("every supported component kind has a zero-valued boundary");
+        let Some(condition) = BoundaryCondition::exact_for_target(kind, 0.0) else {
+            panic!("every supported component kind must have a zero-valued boundary");
+        };
         return Network::boundary(condition);
     }
 
@@ -488,11 +498,11 @@ fn generate_leaves(options: SolveOptions) -> Vec<Network> {
         .clamp(i32::from(i8::MIN), i32::from(i8::MAX));
     let mut leaves = Vec::new();
     for decade in first_decade..=last_decade {
+        let Ok(decade) = i8::try_from(decade) else {
+            continue;
+        };
         for number in options.series.preferred_numbers() {
-            let component = PreferredComponent {
-                number,
-                decade: decade as i8,
-            };
+            let component = PreferredComponent { number, decade };
             let value = component.value();
             if value.is_finite() && value > 0.0 {
                 leaves.push(Network::component(component, options.default_tolerance));

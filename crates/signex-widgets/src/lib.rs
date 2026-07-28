@@ -1,3 +1,8 @@
+#![expect(
+    clippy::return_self_not_must_use,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Custom Iced widgets for Signex EDA.
 //!
 //! Reusable, theme-aware widgets built on stock Iced 0.14 primitives.

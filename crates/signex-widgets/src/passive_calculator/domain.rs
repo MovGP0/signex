@@ -178,7 +178,7 @@ impl PreferredComponent {
 
     #[must_use]
     pub const fn multiplier_exponent(self) -> i8 {
-        self.decade - self.number.decimal_places as i8
+        self.decade - self.number.decimal_places.cast_signed()
     }
 }
 

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::float_cmp,
+    clippy::unwrap_used,
+    reason = "calculator tests use exact known values and fail-fast fixture extraction"
+)]
+
 #[path = "passive_calculator/color_code_tests.rs"]
 mod color_code_tests;
 #[path = "passive_calculator/control_tests.rs"]

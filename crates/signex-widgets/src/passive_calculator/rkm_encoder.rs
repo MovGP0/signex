@@ -1,3 +1,10 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
+use std::fmt::Write as _;
+
 use chrono::{Datelike, Local};
 use iced::widget::{button, column, container, pick_list, row, text};
 use iced::{Alignment, Background, Border, Element, Length};
@@ -44,14 +51,15 @@ pub struct RkmEncoder {
 
 impl Default for RkmEncoder {
     fn default() -> Self {
-        let current_year =
-            u16::try_from(Local::now().year()).expect("the current calendar year fits into a u16");
+        let current_year = u16::try_from(Local::now().year()).unwrap_or(u16::MAX);
         let value_options = ESeries::E192.preferred_numbers().collect::<Vec<_>>();
-        let value = value_options
+        let Some(value) = value_options
             .iter()
             .copied()
             .find(|number| number.significand == 470)
-            .expect("E192 contains 4.70");
+        else {
+            panic!("E192 must contain 4.70");
+        };
         Self {
             kind: ComponentKind::Resistor,
             value,
@@ -69,37 +77,36 @@ impl Default for RkmEncoder {
 }
 
 impl RkmEncoder {
-    pub fn update(&mut self, message: RkmEncoderMessage) {
+    pub fn update(&mut self, message: &RkmEncoderMessage) {
         match message {
             RkmEncoderMessage::KindChanged(kind) => {
-                self.kind = kind;
-                self.prefix = match kind {
+                self.kind = *kind;
+                self.prefix = match *kind {
                     ComponentKind::Resistor => SiPrefix::Kilo,
-                    ComponentKind::Capacitor => SiPrefix::Micro,
-                    ComponentKind::Inductor => SiPrefix::Micro,
+                    ComponentKind::Capacitor | ComponentKind::Inductor => SiPrefix::Micro,
                 };
-                if kind != ComponentKind::Resistor {
+                if *kind != ComponentKind::Resistor {
                     self.temperature_coefficient = None;
                     self.rated_power = None;
                 }
             }
-            RkmEncoderMessage::ValueChanged(value) => self.value = value,
-            RkmEncoderMessage::PrefixChanged(prefix) => self.prefix = prefix,
-            RkmEncoderMessage::ToleranceChanged(tolerance) => self.tolerance = tolerance,
+            RkmEncoderMessage::ValueChanged(value) => self.value = *value,
+            RkmEncoderMessage::PrefixChanged(prefix) => self.prefix = *prefix,
+            RkmEncoderMessage::ToleranceChanged(tolerance) => self.tolerance = *tolerance,
             RkmEncoderMessage::TemperatureCoefficientChanged(temperature_coefficient) => {
-                self.temperature_coefficient = Some(temperature_coefficient);
+                self.temperature_coefficient = Some(*temperature_coefficient);
             }
             RkmEncoderMessage::RatedPowerChanged(rated_power) => {
-                self.rated_power = Some(rated_power);
+                self.rated_power = Some(*rated_power);
             }
             RkmEncoderMessage::ProductionDateCycleChanged(cycle) => {
-                self.production_date_cycle = Some(cycle);
+                self.production_date_cycle = Some(*cycle);
             }
             RkmEncoderMessage::ProductionYearChanged(year) => {
-                self.production_year = Some(year);
+                self.production_year = Some(*year);
             }
             RkmEncoderMessage::ProductionMonthChanged(month) => {
-                self.production_month = Some(month);
+                self.production_month = Some(*month);
             }
             RkmEncoderMessage::ClearResistorOptionalFields => {
                 self.temperature_coefficient = None;
@@ -268,10 +275,10 @@ impl RkmEncoder {
             self.tolerance
         );
         if let Some(temperature_coefficient) = self.temperature_coefficient {
-            specification.push_str(&format!(" {temperature_coefficient}"));
+            let _ = write!(specification, " {temperature_coefficient}");
         }
         if let Some(rated_power) = self.rated_power {
-            specification.push_str(&format!(" {rated_power}"));
+            let _ = write!(specification, " {rated_power}");
         }
         let color_codes = color_code_representations(
             ComponentColorCode::representations_for_kind_with_temperature_coefficient(

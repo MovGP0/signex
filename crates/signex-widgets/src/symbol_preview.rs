@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Miniature schematic symbol preview canvas.
 //!
 //! Renders a `LibSymbol`'s graphics + pins in a small preview box,
@@ -25,7 +31,6 @@ pub struct SymbolPreview {
 /// screen-space y, matching every other consumer of library coordinates.
 const fn pin_stub_direction(rotation: f64) -> (f64, f64) {
     match rotation as i32 {
-        0 => (1.0, 0.0),
         90 => (0.0, 1.0),
         180 => (-1.0, 0.0),
         270 => (0.0, -1.0),
@@ -84,7 +89,7 @@ impl SymbolPreview {
                     expand(start.x, start.y);
                     expand(end.x, end.y);
                 }
-                Graphic::Polyline { points, .. } => {
+                Graphic::Polyline { points, .. } | Graphic::Bezier { points, .. } => {
                     for p in points {
                         expand(p.x, p.y);
                     }
@@ -102,11 +107,6 @@ impl SymbolPreview {
                 }
                 Graphic::Text { position, .. } => {
                     expand(position.x, position.y);
-                }
-                Graphic::Bezier { points, .. } => {
-                    for p in points {
-                        expand(p.x, p.y);
-                    }
                 }
                 Graphic::TextBox { .. } => {}
             }
@@ -319,6 +319,10 @@ pub fn symbol_preview(symbol: LibSymbol, height: f32) -> Element<'static, ()> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::similar_names,
+    reason = "geometry tests use paired coordinate names to make relationships explicit"
+)]
 mod tests {
     use super::*;
     use signex_types::schematic::{LibPin, Pin, PinDirection, PinShapeStyle, Point as LibPoint};

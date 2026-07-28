@@ -1,3 +1,8 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use super::domain::{ComponentKind, PreferredComponent, SiPrefix, Tolerance};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

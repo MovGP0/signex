@@ -18,6 +18,6 @@ fn selected_e192_value_drives_the_rkm_code() {
         .copied()
         .find(|number| number.significand == 499)
         .unwrap();
-    encoder.update(RkmEncoderMessage::ValueChanged(value));
+    encoder.update(&RkmEncoderMessage::ValueChanged(value));
     assert_eq!(encoder.code().value_code(), "4K99");
 }

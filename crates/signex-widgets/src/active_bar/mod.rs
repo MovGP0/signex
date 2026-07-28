@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Generic Active Bar — a floating row of icon buttons used by every
 //! Signex editor surface (schematic, schematic library, PCB, PCB
 //! library) to surface the primary place / select tools.

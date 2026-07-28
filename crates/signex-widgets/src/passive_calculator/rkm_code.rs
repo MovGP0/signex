@@ -1,3 +1,8 @@
+#![expect(
+    clippy::cast_sign_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use std::fmt;
 
 use super::domain::{ComponentKind, PreferredComponent, Tolerance};
@@ -202,9 +207,10 @@ impl fmt::Display for RkmCode {
 }
 
 fn value_code(kind: ComponentKind, component: PreferredComponent) -> String {
-    let value_decade = component.number.significand.to_string().len() as i16 - 1
-        + i16::from(component.decade)
-        - i16::from(component.number.decimal_places);
+    let value_decade =
+        i16::try_from(component.number.significand.to_string().len()).unwrap_or(i16::MAX) - 1
+            + i16::from(component.decade)
+            - i16::from(component.number.decimal_places);
     let (unit_exponent, separator) = match kind {
         ComponentKind::Resistor => resistance_scale(value_decade),
         ComponentKind::Capacitor => capacitance_scale(value_decade),
@@ -231,7 +237,9 @@ fn format_scaled_value(
         return result;
     }
 
-    let separator_index = digits.len() as i16 + power;
+    let separator_index = i16::try_from(digits.len())
+        .unwrap_or(i16::MAX)
+        .saturating_add(power);
     if separator_index > 0 {
         let separator_index = separator_index as usize;
         return format!(

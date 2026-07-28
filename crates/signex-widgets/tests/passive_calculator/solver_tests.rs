@@ -1,3 +1,8 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 use signex_widgets::passive_calculator::{
     BoundaryCondition, ComponentKind, ESeries, Network, PreferredComponent, SolveOptions,
     Tolerance, solve,

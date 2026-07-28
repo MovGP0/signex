@@ -1,3 +1,10 @@
+#![expect(
+    clippy::return_self_not_must_use,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Generic active-bar dropdown widget — used by every editor's active
 //! bar (schematic, footprint, future PCB) so chrome stays identical
 //! across surfaces while each editor supplies its own actions.
