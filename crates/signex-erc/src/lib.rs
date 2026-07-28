@@ -147,9 +147,14 @@ pub fn run_with_dsl(snapshot: &SchematicSheet, dsl_rules: &[engine::EvalFn]) -> 
         .collect()
 }
 
-/// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `children` keyed by the child's filename as it appears
+/// Run ERC for a schematic in the context of a whole project.
+///
+/// Cross-sheet rules consult `children` keyed by the child's filename as it appears
 /// on the parent's sheet symbol. Pass an empty map for top-only runs.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "project snapshots use the standard HashMap throughout the ERC API"
+)]
 pub fn run_with_project(
     snapshot: &SchematicSheet,
     children: &std::collections::HashMap<String, SchematicSheet>,
@@ -162,6 +167,10 @@ pub fn run_with_project(
 }
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "project snapshots use the standard HashMap throughout the ERC API"
+)]
 pub fn run_with_project_and_dsl(
     snapshot: &SchematicSheet,
     children: &std::collections::HashMap<String, SchematicSheet>,

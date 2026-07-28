@@ -210,6 +210,10 @@ impl ErcContext {
         Self::project(snapshot, child_ctxs)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "context construction keeps the ordered snapshot projection in one place"
+    )]
     fn project(snapshot: &SchematicSheet, children: HashMap<String, Self>) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
@@ -297,9 +301,8 @@ impl ErcContext {
                     .iter()
                     .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
                     .map(|lp| {
-                        let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
-                        let (wx, wy) = (_world.x, _world.y);
-                        let world_pos = Point::new(wx, wy);
+                        let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
+                        let world_pos = Point::new(world.x, world.y);
                         let connected = point_is_connected(
                             &world_pos,
                             &wires,
@@ -357,6 +360,10 @@ impl ErcContext {
 
 /// MD-6: see `rules::key` — the 1 µm bucket, the single "same point" metric so
 /// context + rule projections agree on net membership (D5.5).
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "schematic coordinates are deliberately quantized to integer micrometres"
+)]
 fn pt_key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
@@ -397,6 +404,10 @@ fn point_is_connected(
 /// ([`SheetConnectivity::merge_named_labels`]). Both halves are the ones
 /// `build_netlist` applies, so ERC and the netlist agree on membership by
 /// construction instead of ERC hand-rolling a second, thinner union-find.
+#[expect(
+    clippy::items_after_statements,
+    reason = "the driving-pin constant is local to the summary calculation"
+)]
 fn summarize_nets(
     wires: &[ErcWire],
     labels: &[ErcLabel],
@@ -468,8 +479,8 @@ fn summarize_nets(
     all_roots
         .into_iter()
         .map(|root| {
-            let lbls = net_labels.get(&root).map(Vec::as_slice).unwrap_or(&[]);
-            let pins = net_pins.get(&root).map(Vec::as_slice).unwrap_or(&[]);
+            let lbls = net_labels.get(&root).map_or(&[][..], Vec::as_slice);
+            let pins = net_pins.get(&root).map_or(&[][..], Vec::as_slice);
 
             // Highest-priority label name: Global > Power > Hierarchical > Net.
             let name = lbls
@@ -484,8 +495,10 @@ fn summarize_nets(
                 .map(|l| l.text.clone())
                 .unwrap_or_default();
 
-            let class = name
-                .find('_').map_or_else(|| name.to_ascii_lowercase(), |i| name[..i].to_ascii_lowercase());
+            let class = name.find('_').map_or_else(
+                || name.to_ascii_lowercase(),
+                |i| name[..i].to_ascii_lowercase(),
+            );
 
             let has_driver = pins.iter().any(|t| DRIVING.contains(t));
             let has_pullup = pins.contains(&PinDirection::Passive);

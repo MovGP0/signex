@@ -315,6 +315,10 @@ pub fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: BusBitWidthMismatch
 // ---------------------------------------------------------------------------
 
+#[expect(
+    clippy::items_after_statements,
+    reason = "bus-label parsing and grouping helpers are local to this rule"
+)]
 pub fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     // Bus bundles connect by segment only (no junction dots), so no junctions
     // are fed to the shared connectivity — same topology as before, now derived

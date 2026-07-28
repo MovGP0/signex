@@ -1,6 +1,7 @@
-//! [`Diagnostic`] is the internal output type for every rule. It carries a
-//! [`RuleId`] in addition to the legacy [`RuleKind`] so that DSL rules
-//! (Phase 2) can emit violations without needing a `RuleKind` variant.
+//! Internal [`Diagnostic`] output for every rule.
+//!
+//! It carries a [`RuleId`] in addition to the legacy [`RuleKind`] so that DSL
+//! rules (Phase 2) can emit violations without needing a `RuleKind` variant.
 //!
 //! [`Violation`] is kept as the public API type; [`From<Diagnostic>`] converts
 //! for backward compatibility with the rest of the app.
