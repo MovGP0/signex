@@ -1,6 +1,6 @@
 //! Composite (text+geometry / grid+overlay+text) smoke passes.
 
-use super::*;
+use super::{GpuPolygon, TextItem, CompositeSmokeReport, CameraUniform, CameraGpu, PolygonPipeline, GlyphonTextPipeline, CompositeStage, TextHAlign, TextVAlign, LineSegment, OverlayCompositeSmokeReport, GridPipeline, LinePipeline};
 
 async fn run_text_geometry_composite_smoke_pass_with(
     scale_px_per_mm: f32,

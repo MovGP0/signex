@@ -14,7 +14,8 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+    #[must_use]
+    pub const fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
         Self { device, queue }
     }
 }

@@ -27,6 +27,7 @@ pub struct LinePipeline {
 
 impl LinePipeline {
     /// Create a line pipeline bound to a target surface format.
+    #[must_use]
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
@@ -243,7 +244,8 @@ impl LinePipeline {
         render_pass.draw(0..6, 0..instance_count);
     }
 
-    pub fn instance_count(&self) -> u32 {
+    #[must_use]
+    pub const fn instance_count(&self) -> u32 {
         self.instance_count
     }
 }

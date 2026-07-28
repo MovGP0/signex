@@ -21,7 +21,7 @@
 /// unless clamped), so the caller can truncate its upload slice and set its
 /// draw count to the returned value. Logs once per process the first time a
 /// clamp happens.
-pub(crate) fn ensure_capacity(
+pub fn ensure_capacity(
     device: &wgpu::Device,
     buffer: &mut wgpu::Buffer,
     capacity: &mut usize,

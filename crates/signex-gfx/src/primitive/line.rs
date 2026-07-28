@@ -24,7 +24,8 @@ impl LineSegment {
     /// dash pattern; the rest is reserved. This is the shared predicate the CPU
     /// renderer honours and the GPU `line.wgsl` shader must match — the CPU↔GPU
     /// parity test locks both paths to it.
-    pub fn is_dashed(&self) -> bool {
+    #[must_use]
+    pub const fn is_dashed(&self) -> bool {
         (self.style & Self::STYLE_DASHED) == Self::STYLE_DASHED
     }
 }

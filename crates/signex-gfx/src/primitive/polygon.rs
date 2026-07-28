@@ -23,6 +23,7 @@ impl GpuPolygon {
     /// whenever `stroke_color` is `Some`, even at zero width (clamped to a
     /// minimum). That laxer rule is a known CPU↔GPU divergence the parity test
     /// documents; this predicate is the GPU-side truth.
+    #[must_use]
     pub fn is_stroked(&self) -> bool {
         self.stroke_color.is_some() && self.stroke_width > 0.0
     }

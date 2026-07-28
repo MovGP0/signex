@@ -16,6 +16,7 @@ pub struct ArcPipeline {
 }
 
 impl ArcPipeline {
+    #[must_use]
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
@@ -157,7 +158,8 @@ impl ArcPipeline {
         render_pass.draw(0..6, 0..self.instance_count);
     }
 
-    pub fn instance_count(&self) -> u32 {
+    #[must_use]
+    pub const fn instance_count(&self) -> u32 {
         self.instance_count
     }
 }

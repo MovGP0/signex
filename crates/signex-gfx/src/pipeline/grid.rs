@@ -21,9 +21,10 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     }
 
     let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    t * t * 2.0f32.mul_add(-t, 3.0)
 }
 
+#[must_use]
 pub fn lod_fade_factors(mm_per_px: f32) -> GridLodFactors {
     let safe_mm_per_px = mm_per_px.max(0.000001);
     let px_per_mm = 1.0 / safe_mm_per_px;
@@ -43,6 +44,7 @@ pub struct GridPipeline {
 }
 
 impl GridPipeline {
+    #[must_use]
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,

@@ -66,7 +66,7 @@ fn arc_smoke_pass_runs() {
 
 #[test]
 fn arc_smoke_pass_handles_wraparound_sweep() {
-    let wrap_start = 2.0 * std::f32::consts::PI - std::f32::consts::FRAC_PI_6;
+    let wrap_start = 2.0f32.mul_add(std::f32::consts::PI, -std::f32::consts::FRAC_PI_6);
     let wrap_end = std::f32::consts::FRAC_PI_6;
 
     let arcs = [Arc {

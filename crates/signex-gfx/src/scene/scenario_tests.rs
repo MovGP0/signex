@@ -245,7 +245,7 @@ fn shoelace_area(points: &[[f32; 2]]) -> f64 {
     for i in 0..points.len() {
         let [x0, y0] = points[i].map(f64::from);
         let [x1, y1] = points[(i + 1) % points.len()].map(f64::from);
-        sum += x0 * y1 - x1 * y0;
+        sum += x1.mul_add(-y0, x0 * y1);
     }
     (sum / 2.0).abs()
 }

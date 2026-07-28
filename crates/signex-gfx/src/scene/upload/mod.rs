@@ -22,7 +22,8 @@ pub struct TextUploadParams {
 }
 
 impl TextUploadParams {
-    pub fn new(scale_px_per_mm: f32, viewport_size_px: [u32; 2]) -> Self {
+    #[must_use]
+    pub const fn new(scale_px_per_mm: f32, viewport_size_px: [u32; 2]) -> Self {
         Self {
             scale_px_per_mm,
             viewport_size_px,
@@ -47,7 +48,8 @@ pub struct ViewportAabbMm {
 }
 
 impl ViewportAabbMm {
-    pub fn new(min: [f32; 2], max: [f32; 2]) -> Self {
+    #[must_use]
+    pub const fn new(min: [f32; 2], max: [f32; 2]) -> Self {
         Self {
             min: [min[0].min(max[0]), min[1].min(max[1])],
             max: [min[0].max(max[0]), min[1].max(max[1])],
@@ -66,11 +68,13 @@ pub struct UploadCulling {
 }
 
 impl UploadCulling {
-    pub fn disabled() -> Self {
+    #[must_use]
+    pub const fn disabled() -> Self {
         Self { viewport_mm: None }
     }
 
-    pub fn viewport(viewport_mm: ViewportAabbMm) -> Self {
+    #[must_use]
+    pub const fn viewport(viewport_mm: ViewportAabbMm) -> Self {
         Self {
             viewport_mm: Some(viewport_mm),
         }
@@ -112,7 +116,7 @@ fn line_envelope(line: &LineSegment) -> AABB<[f32; 2]> {
 }
 
 fn circle_envelope(circle: &Circle) -> AABB<[f32; 2]> {
-    let extent = (circle.radius + circle.stroke_width * 0.5).max(0.0);
+    let extent = circle.stroke_width.mul_add(0.5, circle.radius).max(0.0);
     AABB::from_corners(
         [circle.center[0] - extent, circle.center[1] - extent],
         [circle.center[0] + extent, circle.center[1] + extent],
@@ -120,7 +124,7 @@ fn circle_envelope(circle: &Circle) -> AABB<[f32; 2]> {
 }
 
 fn arc_envelope(arc: &Arc) -> AABB<[f32; 2]> {
-    let extent = (arc.radius + arc.width * 0.5).max(0.0);
+    let extent = arc.width.mul_add(0.5, arc.radius).max(0.0);
     AABB::from_corners(
         [arc.center[0] - extent, arc.center[1] - extent],
         [arc.center[0] + extent, arc.center[1] + extent],
@@ -153,7 +157,7 @@ fn text_envelope(text: &TextItem) -> AABB<[f32; 2]> {
     let char_count = text.content.chars().count().max(1) as f32;
     let width = (safe_size * char_count * 0.7).max(safe_size);
     let height = (safe_size * 1.5).max(safe_size);
-    let half_diag = ((width * width + height * height).sqrt() * 0.5).max(safe_size * 0.5);
+    let half_diag = (width.hypot(height) * 0.5).max(safe_size * 0.5);
 
     AABB::from_corners(
         [text.position[0] - half_diag, text.position[1] - half_diag],
@@ -221,7 +225,8 @@ pub struct UploadCounters {
 }
 
 impl UploadCounters {
-    pub fn total_updates(&self) -> u32 {
+    #[must_use]
+    pub const fn total_updates(&self) -> u32 {
         self.line_uploads
             + self.circle_uploads
             + self.arc_uploads
@@ -237,7 +242,8 @@ impl UploadCounters {
             + self.theme_refreshes
     }
 
-    pub fn geometry_uploads(&self) -> u32 {
+    #[must_use]
+    pub const fn geometry_uploads(&self) -> u32 {
         self.line_uploads
             + self.circle_uploads
             + self.arc_uploads
@@ -251,11 +257,13 @@ impl UploadCounters {
             + self.erc_marker_polygon_uploads
     }
 
-    pub fn is_theme_only_refresh(&self) -> bool {
+    #[must_use]
+    pub const fn is_theme_only_refresh(&self) -> bool {
         self.theme_refreshes == 1 && self.grid_refreshes == 0 && self.geometry_uploads() == 0
     }
 
-    pub fn is_idle(&self) -> bool {
+    #[must_use]
+    pub const fn is_idle(&self) -> bool {
         self.total_updates() == 0
     }
 }

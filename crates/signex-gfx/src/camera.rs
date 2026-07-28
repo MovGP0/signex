@@ -18,6 +18,7 @@ pub struct CameraUniform {
 
 impl CameraUniform {
     /// Build an orthographic camera for 2D views.
+    #[must_use]
     pub fn ortho(viewport_px: [f32; 2], offset_mm: [f32; 2], scale_px_per_mm: f32) -> Self {
         let width_mm = viewport_px[0] / scale_px_per_mm;
         let height_mm = viewport_px[1] / scale_px_per_mm;
@@ -38,6 +39,7 @@ impl CameraUniform {
     }
 
     /// Build a perspective camera for future 3D views.
+    #[must_use]
     pub fn perspective(
         viewport_px: [f32; 2],
         eye: glam::Vec3,
@@ -71,6 +73,7 @@ pub struct CameraGpu {
 }
 
 impl CameraGpu {
+    #[must_use]
     pub fn new(device: &wgpu::Device, initial: CameraUniform) -> Self {
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("signex_gfx_camera_uniform"),
@@ -112,11 +115,13 @@ impl CameraGpu {
         queue.write_buffer(&self.buffer, 0, bytemuck::bytes_of(&camera));
     }
 
-    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+    #[must_use]
+    pub const fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
     }
 
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
+    #[must_use]
+    pub const fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_group
     }
 }

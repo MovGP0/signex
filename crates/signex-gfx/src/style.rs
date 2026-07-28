@@ -35,7 +35,8 @@ pub struct StyleRef {
 }
 
 impl StyleRef {
-    pub fn new(slot: ColorSlot) -> Self {
+    #[must_use]
+    pub const fn new(slot: ColorSlot) -> Self {
         Self {
             slot: slot as u16,
             flags: 0,

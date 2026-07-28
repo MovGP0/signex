@@ -61,7 +61,7 @@ fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
     let points = &polygon.vertices;
     let points_2d: Vec<signex_sketch::geom::Point2> = points
         .iter()
-        .map(|p| signex_sketch::geom::Point2::new(p[0] as f64, p[1] as f64))
+        .map(|p| signex_sketch::geom::Point2::new(f64::from(p[0]), f64::from(p[1])))
         .collect();
     let triangles = signex_sketch::geom::ear_clip(&points_2d);
 
@@ -140,7 +140,7 @@ fn append_edge_quad(
 ) {
     let dx = b[0] - a[0];
     let dy = b[1] - a[1];
-    let len = (dx * dx + dy * dy).sqrt();
+    let len = dx.hypot(dy);
     if len <= f32::EPSILON {
         return;
     }
@@ -173,6 +173,7 @@ pub struct PolygonPipeline {
 }
 
 impl PolygonPipeline {
+    #[must_use]
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
@@ -373,7 +374,8 @@ impl PolygonPipeline {
         render_pass.draw(0..vertex_count, 0..1);
     }
 
-    pub fn vertex_count(&self) -> u32 {
+    #[must_use]
+    pub const fn vertex_count(&self) -> u32 {
         self.vertex_count
     }
 }
@@ -391,7 +393,7 @@ mod tests {
         for i in 0..points.len() {
             let [x0, y0] = points[i].map(f64::from);
             let [x1, y1] = points[(i + 1) % points.len()].map(f64::from);
-            sum += x0 * y1 - x1 * y0;
+            sum += x1.mul_add(-y0, x0 * y1);
         }
         (sum / 2.0).abs()
     }

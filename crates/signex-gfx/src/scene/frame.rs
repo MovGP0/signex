@@ -45,7 +45,8 @@ impl Scene {
         self.dirty = DirtyFlags::ALL;
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.lines.is_empty()
             && self.circles.is_empty()
             && self.arcs.is_empty()

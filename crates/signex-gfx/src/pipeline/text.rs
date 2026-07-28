@@ -10,15 +10,15 @@ fn text_size_px(item: &TextItem, scale_px_per_mm: f32) -> f32 {
     (item.size_mm.max(0.01) * scale_px_per_mm.max(0.01)).max(1.0)
 }
 
-fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) -> [f32; 2] {
+const fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) -> [f32; 2] {
     // Full screen mapping `screen_px = world_mm * scale + offset_px`. Unlike the
     // instanced primitives — which stay in world space and let the camera ortho
     // apply pan on the GPU — glyphon rasterises text CPU-side in screen space,
     // so the pan term must be added here or the labels stay pinned while the
     // geometry they annotate scrolls out from under them.
     [
-        item.position[0] * scale_px_per_mm + offset_px[0],
-        item.position[1] * scale_px_per_mm + offset_px[1],
+        item.position[0].mul_add(scale_px_per_mm, offset_px[0]),
+        item.position[1].mul_add(scale_px_per_mm, offset_px[1]),
     ]
 }
 
@@ -56,8 +56,8 @@ fn rotated_offset_px(offset_px: [f32; 2], rotation_rad: f32) -> [f32; 2] {
     let (sin_theta, cos_theta) = angle.sin_cos();
 
     [
-        offset_px[0] * cos_theta - offset_px[1] * sin_theta,
-        offset_px[0] * sin_theta + offset_px[1] * cos_theta,
+        offset_px[1].mul_add(-sin_theta, offset_px[0] * cos_theta),
+        offset_px[1].mul_add(cos_theta, offset_px[0] * sin_theta),
     ]
 }
 
@@ -130,7 +130,7 @@ fn overlap_ratio_by_smaller_area(a: RectPx, b: RectPx) -> f32 {
     rect_overlap_area_px(a, b) / min_area
 }
 
-fn viewport_bounds(viewport_size_px: [u32; 2]) -> cryoglyph::TextBounds {
+const fn viewport_bounds(viewport_size_px: [u32; 2]) -> cryoglyph::TextBounds {
     cryoglyph::TextBounds {
         left: 0,
         top: 0,
@@ -157,7 +157,7 @@ fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
     }
 }
 
-fn attrs_for_item(item: &TextItem) -> cryoglyph::Attrs<'static> {
+const fn attrs_for_item(item: &TextItem) -> cryoglyph::Attrs<'static> {
     let mut attrs = cryoglyph::Attrs::new().family(cryoglyph::Family::SansSerif);
 
     if item.bold {
@@ -205,6 +205,7 @@ pub struct GlyphonTextPipeline {
 }
 
 impl GlyphonTextPipeline {
+    #[must_use]
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -358,11 +359,11 @@ impl GlyphonTextPipeline {
         self.atlas.trim();
     }
 
-    pub fn text_count(&self) -> u32 {
+    pub const fn text_count(&self) -> u32 {
         self.text_count
     }
 
-    pub fn viewport_size_px(&self) -> [u32; 2] {
+    pub const fn viewport_size_px(&self) -> [u32; 2] {
         self.viewport_size_px
     }
 }

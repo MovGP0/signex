@@ -276,7 +276,7 @@ async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8
     // Bgra8Unorm is 4 bytes/pixel; WIDTH * 4 = 512 is already a multiple of
     // wgpu::COPY_BYTES_PER_ROW_ALIGNMENT (256), so no row padding is needed.
     let bytes_per_row = WIDTH * 4;
-    let buffer_size = (bytes_per_row * HEIGHT) as wgpu::BufferAddress;
+    let buffer_size = wgpu::BufferAddress::from(bytes_per_row * HEIGHT);
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("signex_gfx_dash_readback_buffer"),
         size: buffer_size,

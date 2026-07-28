@@ -40,6 +40,7 @@ pub struct Arc {
 /// used to hand iced's arc builder a raw unnormalized `end - start`
 /// and silently draw the wrong complement for any wrapped arc) must
 /// call this function rather than re-deriving the formula.
+#[must_use]
 pub fn ccw_wrapped_sweep_rad(start_angle: f32, end_angle: f32) -> f32 {
     const TAU: f32 = std::f32::consts::TAU;
     (end_angle - start_angle).rem_euclid(TAU)
@@ -58,6 +59,7 @@ pub fn ccw_wrapped_sweep_rad(start_angle: f32, end_angle: f32) -> f32 {
 /// arc a user typed into the Properties panel (`0° -> 360°`, which
 /// bypasses the load-time full-turn-to-`Circle` migration) never
 /// renders as a visible circle it cannot also click-select.
+#[must_use]
 pub fn arc_is_full_turn_rad(start_angle: f32, end_angle: f32) -> bool {
     const EPS: f32 = 1e-4;
     ccw_wrapped_sweep_rad(start_angle, end_angle).abs() < EPS
