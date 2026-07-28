@@ -1,6 +1,22 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! GLB runtime-model ingest + bridge + binary parsing.
 
-use super::*;
+use std::path::Path;
+
+use super::{
+    ColorSlot, GLB_CHUNK_HEADER_LEN, GLB_HEADER_LEN, GLB_JSON_CHUNK_TYPE, GLB_MAGIC, GLB_VERSION_2,
+    GlbSource, GpuPolygon, HashSet, ModelImportRequest, ModelImportWarning, OpaquePassLayout,
+    ResolvedTheme, RuntimeGlbIngestError, RuntimeGlbIngestRequest, RuntimeGlbMetadata,
+    RuntimeGlbModel, RuntimeMeshStaging, RuntimeModelBridgeError, RuntimeModelBridgeRequest,
+    RuntimeModelBridgeResult, RuntimeModelBridgeWarning, RuntimeModelSource,
+    RuntimeOpaquePrimitive, Scene, Value, fs, import_to_glb, read_u32_le, square_vertices,
+    with_alpha_mul,
+};
 
 pub fn ingest_runtime_model_with_bridge(
     request: RuntimeModelBridgeRequest,
@@ -186,11 +202,10 @@ fn load_glb_bytes(model_id: &str, source: &GlbSource) -> Result<Vec<u8>, Runtime
     }
 }
 
-fn is_glb_path(path: &PathBuf) -> bool {
+fn is_glb_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("glb"))
-        .unwrap_or(false)
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("glb"))
 }
 
 fn validate_and_stage_glb_payload(
@@ -422,7 +437,7 @@ fn stage_opaque_primitives(
             let node_index = parse_index(
                 scene_node,
                 nodes.len(),
-                format!("scene[{scene_index}].nodes index"),
+                &format!("scene[{scene_index}].nodes index"),
             )?;
 
             stage_node_tree(scene_index, node_index, nodes, mesh_layouts, &mut staged)?;
@@ -459,7 +474,7 @@ fn stage_node_tree(
             let mesh_index = parse_index(
                 mesh_value,
                 mesh_layouts.len(),
-                format!("nodes[{node_index}].mesh index"),
+                &format!("nodes[{node_index}].mesh index"),
             )?;
 
             for (primitive_index, material_index) in mesh_layouts[mesh_index]
@@ -483,7 +498,7 @@ fn stage_node_tree(
                 let child_index = parse_index(
                     child,
                     nodes.len(),
-                    format!("nodes[{node_index}].children index"),
+                    &format!("nodes[{node_index}].children index"),
                 )?;
                 stack.push(child_index);
             }
@@ -493,7 +508,7 @@ fn stage_node_tree(
     Ok(())
 }
 
-fn parse_index(value: &Value, upper_bound: usize, label: String) -> Result<usize, String> {
+fn parse_index(value: &Value, upper_bound: usize, label: &str) -> Result<usize, String> {
     let raw = value
         .as_u64()
         .ok_or_else(|| format!("{label} must be an unsigned integer"))?;

@@ -1,5 +1,10 @@
 //! Integration tests for Milestone C runtime GLB ingest hooks.
 
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests fail fast when fixture setup does not succeed"
+)]
+
 use signex_gfx::scene::Scene;
 use signex_renderer::pcb3d::{
     GlbSource, ModelTransform, OpaquePassLayout, ProjectionAlignmentError, ProjectionBounds,
@@ -29,11 +34,15 @@ fn make_glb_with_json(json: &str) -> Vec<u8> {
     let total_len = 12 + 8 + json_chunk.len();
     let mut bytes = Vec::with_capacity(total_len);
 
-    bytes.extend_from_slice(&0x46546C67_u32.to_le_bytes());
+    bytes.extend_from_slice(&0x4654_6C67_u32.to_le_bytes());
     bytes.extend_from_slice(&2_u32.to_le_bytes());
-    bytes.extend_from_slice(&(total_len as u32).to_le_bytes());
-    bytes.extend_from_slice(&(json_chunk.len() as u32).to_le_bytes());
-    bytes.extend_from_slice(&0x4E4F534A_u32.to_le_bytes());
+    bytes.extend_from_slice(&u32::try_from(total_len).unwrap_or(u32::MAX).to_le_bytes());
+    bytes.extend_from_slice(
+        &u32::try_from(json_chunk.len())
+            .unwrap_or(u32::MAX)
+            .to_le_bytes(),
+    );
+    bytes.extend_from_slice(&0x4E4F_534A_u32.to_le_bytes());
     bytes.extend_from_slice(&json_chunk);
 
     bytes

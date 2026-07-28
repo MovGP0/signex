@@ -1,6 +1,15 @@
+#![expect(
+    clippy::or_fun_call,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Per-primitive scene emitters for the schematic renderer.
 
-use super::*;
+use super::{
+    Arc, Circle, ColorSlot, ErcMarkerInput, GpuPolygon, HAlign, LineSegment, OverlayCircleInput,
+    OverlayLineInput, OverlayPolygonInput, ResolvedTheme, Scene, SchematicSnapshot, Severity,
+    StyleRef, TextHAlign, TextInput, TextItem, TextVAlign, VAlign, WireInput,
+};
 
 pub(super) fn resolve_wire_color(
     wire: &WireInput,
@@ -92,7 +101,7 @@ pub(super) fn emit_text_bucket(texts: &[TextInput], output: &mut Vec<TextItem>) 
     }
 }
 
-pub(super) fn to_text_h_align(h_align: HAlign) -> TextHAlign {
+pub(super) const fn to_text_h_align(h_align: HAlign) -> TextHAlign {
     match h_align {
         HAlign::Left => TextHAlign::Left,
         HAlign::Center => TextHAlign::Center,
@@ -100,7 +109,7 @@ pub(super) fn to_text_h_align(h_align: HAlign) -> TextHAlign {
     }
 }
 
-pub(super) fn to_text_v_align(v_align: VAlign) -> TextVAlign {
+pub(super) const fn to_text_v_align(v_align: VAlign) -> TextVAlign {
     match v_align {
         VAlign::Top => TextVAlign::Top,
         VAlign::Center => TextVAlign::Center,
@@ -185,7 +194,7 @@ pub(super) fn emit_overlays(snapshot: &SchematicSnapshot, scene: &mut Scene) {
     emit_overlay_circle_bucket(&snapshot.overlays.snap_circles, &mut scene.overlay_circles);
 }
 
-pub(super) fn erc_style_ref(severity: Severity) -> StyleRef {
+pub(super) const fn erc_style_ref(severity: Severity) -> StyleRef {
     let slot = match severity {
         Severity::Error => ColorSlot::ErcError,
         Severity::Warning => ColorSlot::ErcWarning,
@@ -219,7 +228,7 @@ pub(super) fn erc_marker_vertices(
 
     match severity {
         Severity::Error => {
-            let tri_half_width = radius * 0.8660254;
+            let tri_half_width = radius * 0.866_025_4;
             vec![
                 [cx, cy - radius],
                 [cx + tri_half_width, cy + radius * 0.5],

@@ -1,5 +1,10 @@
 //! Benchmark fixture guardrails for PCB zone stack compositing order.
 
+#![expect(
+    clippy::expect_used,
+    reason = "benchmark tests fail fast when fixture setup does not succeed"
+)]
+
 use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::PcbBoard;
 

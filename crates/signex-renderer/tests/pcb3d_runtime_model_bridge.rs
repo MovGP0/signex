@@ -1,5 +1,10 @@
 //! Integration tests for runtime bridge: source model -> importer -> GLB ingest.
 
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests fail fast when fixture setup does not succeed"
+)]
+
 use signex_renderer::pcb3d::{
     ModelTransform, RuntimeMaterialPolicy, RuntimeModelBridgeError, RuntimeModelBridgeRequest,
     RuntimeModelSource, ingest_runtime_model_with_bridge,
@@ -31,11 +36,15 @@ fn make_glb_with_json(json: &str) -> Vec<u8> {
     let total_len = 12 + 8 + json_chunk.len();
     let mut bytes = Vec::with_capacity(total_len);
 
-    bytes.extend_from_slice(&0x46546C67_u32.to_le_bytes());
+    bytes.extend_from_slice(&0x4654_6C67_u32.to_le_bytes());
     bytes.extend_from_slice(&2_u32.to_le_bytes());
-    bytes.extend_from_slice(&(total_len as u32).to_le_bytes());
-    bytes.extend_from_slice(&(json_chunk.len() as u32).to_le_bytes());
-    bytes.extend_from_slice(&0x4E4F534A_u32.to_le_bytes());
+    bytes.extend_from_slice(&u32::try_from(total_len).unwrap_or(u32::MAX).to_le_bytes());
+    bytes.extend_from_slice(
+        &u32::try_from(json_chunk.len())
+            .unwrap_or(u32::MAX)
+            .to_le_bytes(),
+    );
+    bytes.extend_from_slice(&0x4E4F_534A_u32.to_le_bytes());
     bytes.extend_from_slice(&json_chunk);
 
     bytes
@@ -194,6 +203,6 @@ fn pcb3d_runtime_bridge_reports_import_failure_for_missing_source() {
             assert_eq!(path, missing_path);
             assert!(reason.contains("source file not found"));
         }
-        other => panic!("unexpected error: {other:?}"),
+        other @ RuntimeModelBridgeError::IngestFailed(_) => panic!("unexpected error: {other:?}"),
     }
 }

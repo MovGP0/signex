@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_const_for_fn,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Resolved theme model for renderer-side scene emission.
 //!
 //! CLEAN ROOM DECLARATION
@@ -20,10 +25,12 @@ impl ResolvedTheme {
         BUILTIN.get_or_init(load_builtin_theme).clone()
     }
 
+    #[must_use]
     pub fn from_theme_id(theme_id: ThemeId) -> Self {
         Self::from_canvas_colors(canvas_colors(theme_id))
     }
 
+    #[must_use]
     pub fn from_canvas_colors(canvas: CanvasColors) -> Self {
         let mut resolved = Self::empty();
 
@@ -45,20 +52,22 @@ impl ResolvedTheme {
         resolved
     }
 
+    #[must_use]
     pub fn with_slot(mut self, slot: ColorSlot, color: [f32; 4]) -> Self {
         self.set_slot(slot, color);
         self
     }
 
-    pub fn color(&self, slot: ColorSlot) -> [f32; 4] {
+    #[must_use]
+    pub const fn color(&self, slot: ColorSlot) -> [f32; 4] {
         self.slots[slot as usize]
     }
 
-    pub fn set_slot(&mut self, slot: ColorSlot, color: [f32; 4]) {
+    pub const fn set_slot(&mut self, slot: ColorSlot, color: [f32; 4]) {
         self.slots[slot as usize] = color;
     }
 
-    fn empty() -> Self {
+    const fn empty() -> Self {
         Self {
             slots: [[0.0; 4]; 32],
         }
@@ -90,8 +99,10 @@ struct BuiltinSlots {
 
 fn load_builtin_theme() -> ResolvedTheme {
     let palette: BuiltinPaletteFile =
-        serde_json::from_str(include_str!("../data/builtin_schematic_palette.json"))
-            .expect("valid builtin_schematic_palette.json");
+        match serde_json::from_str(include_str!("../data/builtin_schematic_palette.json")) {
+            Ok(palette) => palette,
+            Err(error) => panic!("invalid builtin_schematic_palette.json: {error}"),
+        };
 
     let mut resolved = ResolvedTheme::empty();
     resolved.set_slot(ColorSlot::Wire, palette.slots.wire);
@@ -122,6 +133,10 @@ fn to_rgba(color: Color) -> [f32; 4] {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "theme tests compare exact configured RGBA values"
+)]
 mod tests {
     use super::ResolvedTheme;
     use signex_gfx::style::ColorSlot;

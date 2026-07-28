@@ -125,11 +125,13 @@ impl PcbSnapshot {
         }
     }
 
+    #[must_use]
     pub fn with_ratsnest_lines(mut self, ratsnest_lines: Vec<RatsnestInput>) -> Self {
         self.ratsnest_lines = ratsnest_lines;
         self
     }
 
+    #[must_use]
     pub fn with_drc_markers(mut self, drc_markers: Vec<DrcMarkerInput>) -> Self {
         self.drc_markers = drc_markers;
         self
@@ -137,7 +139,11 @@ impl PcbSnapshot {
 }
 
 mod emit;
-use emit::*;
+use emit::{
+    emit_overlays, emit_static_polygons, emit_traces, emit_vias, layer_rank_index,
+    pad_from_footprint, sort_zone_stack, trace_from_segment, via_from_board_via,
+    zone_from_board_zone,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcbSliceFamily {
@@ -179,7 +185,8 @@ const FAMILIES_DRC_RESULTS_UPDATED: &[PcbSliceFamily] = &[PcbSliceFamily::Drc];
 const FAMILIES_THEME_CHANGED: &[PcbSliceFamily] = &[PcbSliceFamily::Theme];
 const FAMILIES_CAMERA_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Camera];
 
-pub fn families_for_event(event: PcbAppEvent) -> &'static [PcbSliceFamily] {
+#[must_use]
+pub const fn families_for_event(event: PcbAppEvent) -> &'static [PcbSliceFamily] {
     match event {
         PcbAppEvent::TraceEdited => FAMILIES_TRACE_EDITED,
         PcbAppEvent::ViaEdited => FAMILIES_VIA_EDITED,
@@ -194,6 +201,7 @@ pub fn families_for_event(event: PcbAppEvent) -> &'static [PcbSliceFamily] {
     }
 }
 
+#[must_use]
 pub fn dirty_flags_for_families(families: &[PcbSliceFamily]) -> DirtyFlags {
     let mut dirty = DirtyFlags::empty();
 
@@ -213,10 +221,12 @@ pub fn dirty_flags_for_families(families: &[PcbSliceFamily]) -> DirtyFlags {
     dirty
 }
 
+#[must_use]
 pub fn dirty_flags_for_event(event: PcbAppEvent) -> DirtyFlags {
     dirty_flags_for_families(families_for_event(event))
 }
 
+#[must_use]
 pub fn dirty_flags_for_events(events: &[PcbAppEvent]) -> DirtyFlags {
     let mut dirty = DirtyFlags::empty();
 
@@ -259,6 +269,11 @@ impl ViewRenderer for PcbRenderer {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    clippy::too_many_lines,
+    reason = "tests compare exact fixture geometry and keep complete scene setup together"
+)]
 mod tests {
     use super::{
         DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily, PcbSnapshot, RatsnestInput,

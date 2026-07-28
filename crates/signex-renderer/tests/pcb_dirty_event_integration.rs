@@ -1,5 +1,10 @@
 //! Integration test for PCB app-event to dirty-flag routing.
 
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests fail fast when fixture setup does not succeed"
+)]
+
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::pcb::{
     DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSnapshot, RatsnestInput, dirty_flags_for_events,

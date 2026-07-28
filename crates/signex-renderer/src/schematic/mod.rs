@@ -131,7 +131,10 @@ pub struct SchematicSnapshot {
 }
 
 mod emit;
-use emit::*;
+use emit::{
+    emit_arcs, emit_erc_markers, emit_junctions, emit_overlays, emit_polygons, emit_texts,
+    emit_wires,
+};
 
 /// Phase-0 schematic renderer placeholder.
 pub struct SchematicRenderer;
@@ -175,6 +178,10 @@ impl ViewRenderer for SchematicRenderer {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "tests compare exact fixture geometry emitted by the renderer"
+)]
 mod tests {
     use super::{
         ArcInput, ErcMarkerInput, OverlayCircleInput, OverlayInputs, OverlayLineInput,
@@ -324,7 +331,7 @@ mod tests {
                 radius_mm: 0.3,
                 color: [0.9, 0.9, 0.2, 1.0],
             }],
-            arcs: vec![make_arc(1.2, 0.0, 1.5707964)],
+            arcs: vec![make_arc(1.2, 0.0, 1.570_796_4)],
             polygons: vec![make_polygon()],
             labels: vec![make_text("R1", 0.0)],
             pin_texts: Vec::new(),
@@ -419,7 +426,7 @@ mod tests {
 
     #[test]
     fn arc_emitter_preserves_wraparound_and_tiny_radius_inputs() {
-        let wrap_start = 2.0 * std::f32::consts::PI - std::f32::consts::FRAC_PI_6;
+        let wrap_start = 2.0f32.mul_add(std::f32::consts::PI, -std::f32::consts::FRAC_PI_6);
         let wrap_end = std::f32::consts::FRAC_PI_6;
 
         let snapshot = SchematicSnapshot {
@@ -427,7 +434,7 @@ mod tests {
             junctions: Vec::new(),
             arcs: vec![
                 make_arc(2.0, wrap_start, wrap_end),
-                make_arc(0.01, 0.0, 1.5707964),
+                make_arc(0.01, 0.0, 1.570_796_4),
             ],
             polygons: Vec::new(),
             labels: Vec::new(),

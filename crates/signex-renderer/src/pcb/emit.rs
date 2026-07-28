@@ -1,6 +1,19 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! PCB scene emitters + snapshot geometry helpers.
 
-use super::*;
+use super::{
+    Circle, ColorSlot, DrcMarkerInput, DrcViolationType, Footprint, GpuPolygon, HashMap,
+    LineSegment, MARKER_POLYGON_SEGMENTS, PAD_ELLIPSE_SEGMENTS, PCB_DEFAULT_PAD_SIZE_MM,
+    PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM,
+    PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM, Pad, PadInput, PadShape,
+    PadType, PcbBoard, PcbSnapshot, Point, RATSNEST_STYLE_DASHED, ResolvedTheme, Scene, Segment,
+    Severity, TraceInput, Via, ViaInput, Zone, ZonePolygonInput,
+};
 
 pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
     TraceInput {
@@ -98,7 +111,7 @@ pub(super) fn zone_layer_top_composite_key(zone: &ZonePolygonInput) -> (u32, u8,
 }
 
 pub(super) fn zone_connected_bucket(net: u32) -> u8 {
-    if net == 0 { 0 } else { 1 }
+    u8::from(net != 0)
 }
 
 pub(super) fn is_rule_area_zone(zone: &Zone) -> bool {
@@ -108,7 +121,7 @@ pub(super) fn is_rule_area_zone(zone: &Zone) -> bool {
     fill.contains("rule") || fill.contains("keepout") || layer.contains("rule")
 }
 
-pub(super) fn point_to_xy(point: Point) -> [f32; 2] {
+pub(super) const fn point_to_xy(point: Point) -> [f32; 2] {
     [point.x as f32, point.y as f32]
 }
 
@@ -123,8 +136,8 @@ pub(super) fn rotate_local(point: [f32; 2], rotation_deg: f32) -> [f32; 2] {
     let sin_a = angle.sin();
 
     [
-        point[0] * cos_a - point[1] * sin_a,
-        point[0] * sin_a + point[1] * cos_a,
+        point[1].mul_add(-sin_a, point[0] * cos_a),
+        point[1].mul_add(cos_a, point[0] * sin_a),
     ]
 }
 
@@ -151,8 +164,8 @@ pub(super) fn ellipse_vertices(
     for i in 0..count {
         let t = (i as f32 / count as f32) * std::f32::consts::TAU;
         vertices.push([
-            center[0] + radius_xy[0] * t.cos(),
-            center[1] + radius_xy[1] * t.sin(),
+            radius_xy[0].mul_add(t.cos(), center[0]),
+            radius_xy[1].mul_add(t.sin(), center[1]),
         ]);
     }
 
@@ -176,7 +189,7 @@ pub(super) fn pad_vertices(pad: &PadInput) -> Vec<[f32; 2]> {
     }
 }
 
-pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {
+pub(super) const fn pad_alpha_mul(pad_type: PadType) -> f32 {
     match pad_type {
         PadType::Connect => 0.8,
         PadType::NpThru => 0.7,
@@ -275,7 +288,7 @@ pub(super) fn emit_static_polygons(
     }
 }
 
-pub(super) fn drc_slot(severity: Severity) -> ColorSlot {
+pub(super) const fn drc_slot(severity: Severity) -> ColorSlot {
     match severity {
         Severity::Error => ColorSlot::ErcError,
         Severity::Warning => ColorSlot::ErcWarning,
@@ -292,7 +305,7 @@ pub(super) enum DrcMarkerKind {
     Dimensional,
 }
 
-pub(super) fn drc_marker_kind(marker: &DrcMarkerInput) -> DrcMarkerKind {
+pub(super) const fn drc_marker_kind(marker: &DrcMarkerInput) -> DrcMarkerKind {
     match marker.violation_type {
         Some(DrcViolationType::ShortCircuit) => DrcMarkerKind::ShortCircuit,
         Some(DrcViolationType::UnroutedNet) => DrcMarkerKind::Unrouted,
@@ -353,7 +366,7 @@ pub(super) fn drc_marker_vertices(marker: &DrcMarkerInput) -> Vec<[f32; 2]> {
         }
         DrcMarkerKind::Generic => match severity {
             Severity::Error => {
-                let tri_half_width = radius * 0.8660254;
+                let tri_half_width = radius * 0.866_025_4;
                 vec![
                     [cx, cy - radius],
                     [cx + tri_half_width, cy + radius * 0.5],
@@ -383,8 +396,9 @@ pub(super) fn drc_marker_lines(marker: &DrcMarkerInput) -> Vec<([f32; 2], [f32; 
             ([cx - half, cy + half], [cx + half, cy - half]),
         ],
         DrcMarkerKind::Clearance => vec![([cx, cy - half], [cx, cy + half])],
-        DrcMarkerKind::Unrouted => vec![([cx - half, cy], [cx + half, cy])],
-        DrcMarkerKind::Dimensional => vec![([cx - half, cy], [cx + half, cy])],
+        DrcMarkerKind::Unrouted | DrcMarkerKind::Dimensional => {
+            vec![([cx - half, cy], [cx + half, cy])]
+        }
         DrcMarkerKind::Generic => match marker.severity {
             Severity::Error => vec![([cx - half, cy - half], [cx + half, cy + half])],
             Severity::Warning => vec![([cx - half, cy + half * 0.2], [cx + half, cy + half * 0.2])],

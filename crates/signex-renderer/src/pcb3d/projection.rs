@@ -1,6 +1,15 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Projection texture pass (footprint/UV alignment + emission).
 
-use super::*;
+use super::{
+    ColorSlot, GpuPolygon, ResolvedTheme, RuntimeGlbModel, Scene, fmt, rect_vertices,
+    with_alpha_mul,
+};
 
 // ---------------------------------------------------------------------------
 // Projection texture pass
@@ -171,10 +180,10 @@ pub fn emit_projection_pass(
     let fb = &config.footprint_bounds;
     let uv = &config.uv_bounds;
 
-    let proj_min_x = fb.min_mm[0] + uv.min_mm[0] * fb.width();
-    let proj_min_y = fb.min_mm[1] + uv.min_mm[1] * fb.height();
-    let proj_max_x = fb.min_mm[0] + uv.max_mm[0] * fb.width();
-    let proj_max_y = fb.min_mm[1] + uv.max_mm[1] * fb.height();
+    let proj_min_x = uv.min_mm[0].mul_add(fb.width(), fb.min_mm[0]);
+    let proj_min_y = uv.min_mm[1].mul_add(fb.height(), fb.min_mm[1]);
+    let proj_max_x = uv.max_mm[0].mul_add(fb.width(), fb.min_mm[0]);
+    let proj_max_y = uv.max_mm[1].mul_add(fb.height(), fb.min_mm[1]);
 
     let proj_w = proj_max_x - proj_min_x;
     let proj_h = proj_max_y - proj_min_y;

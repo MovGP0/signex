@@ -1,5 +1,10 @@
 //! Deterministic fixture and golden checks for Milestone B vertical slice 01.
 
+#![expect(
+    clippy::expect_used,
+    reason = "golden tests fail fast when fixture setup does not succeed"
+)]
+
 use serde::Deserialize;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::pcb::{DrcMarkerInput, PcbRenderer, PcbSnapshot, RatsnestInput};

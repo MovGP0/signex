@@ -1,8 +1,13 @@
+#![expect(
+    clippy::unnecessary_debug_formatting,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! PCB 3D runtime GLB ingest contract and validation hooks.
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
-//! Sources: glTF 2.0 GLB container specification, serde_json public docs.
+//! Sources: glTF 2.0 GLB container specification, `serde_json` public docs.
 
 use crate::theme::ResolvedTheme;
 use serde_json::Value;
@@ -17,13 +22,13 @@ use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 
-const GLB_MAGIC: u32 = 0x46546C67;
+const GLB_MAGIC: u32 = 0x4654_6C67;
 const GLB_VERSION_2: u32 = 2;
 const GLB_HEADER_LEN: usize = 12;
 const GLB_CHUNK_HEADER_LEN: usize = 8;
-const GLB_JSON_CHUNK_TYPE: u32 = 0x4E4F534A;
+const GLB_JSON_CHUNK_TYPE: u32 = 0x4E4F_534A;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GlbSource {
     FilePath(PathBuf),
     Bytes(Vec<u8>),
@@ -147,11 +152,10 @@ impl fmt::Display for RuntimeGlbIngestError {
                 expected_extension,
             } => write!(
                 f,
-                "model {model_id} rejected source {:?}: expected .{expected_extension}",
-                path
+                "model {model_id} rejected source {path:?}: expected .{expected_extension}"
             ),
             Self::MissingGlbCacheEntry { model_id, path } => {
-                write!(f, "model {model_id} missing cached GLB at {:?}", path)
+                write!(f, "model {model_id} missing cached GLB at {path:?}")
             }
             Self::IoReadFailed {
                 model_id,
@@ -160,8 +164,7 @@ impl fmt::Display for RuntimeGlbIngestError {
             } => {
                 write!(
                     f,
-                    "model {model_id} failed to read GLB at {:?}: {message}",
-                    path
+                    "model {model_id} failed to read GLB at {path:?}: {message}"
                 )
             }
             Self::InvalidGlb { model_id, reason } => {
@@ -173,7 +176,7 @@ impl fmt::Display for RuntimeGlbIngestError {
 
 impl std::error::Error for RuntimeGlbIngestError {}
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeModelSource {
     FilePath(PathBuf),
     GlbBytes(Vec<u8>),
@@ -234,8 +237,7 @@ impl fmt::Display for RuntimeModelBridgeError {
                 reason,
             } => write!(
                 f,
-                "model {model_id} failed import bridge for {:?}: {reason}",
-                path
+                "model {model_id} failed import bridge for {path:?}: {reason}"
             ),
             Self::IngestFailed(err) => write!(f, "runtime GLB ingest failed: {err}"),
         }
