@@ -4,17 +4,17 @@
 //! binding-field comparison over [`ComponentRow`] pairs. Geometry-level
 //! diffs live with the primitive editors and are out of scope here.
 //!
-//! These tests build three synthetic rows of the same internal_pn and
+//! These tests build three synthetic rows of the same `internal_pn` and
 //! verify:
 //! - mpn-only swap is a Minor bump,
-//! - symbol_ref swap is a Major bump,
+//! - `symbol_ref` swap is a Major bump,
 //! - the diff is symmetric (added/removed swap on reversal),
 //! - lifecycle transitions surface in `lifecycle_detail`.
 
 use signex_library::*;
 use uuid::Uuid;
 
-fn fixed_uuid(seed: u8) -> Uuid {
+const fn fixed_uuid(seed: u8) -> Uuid {
     let mut bytes = [0u8; 16];
     bytes[0] = seed;
     Uuid::from_bytes(bytes)

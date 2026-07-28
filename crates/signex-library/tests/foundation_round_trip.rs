@@ -70,5 +70,5 @@ fn template_registry_validates_round_trip() {
         },
     );
     let v = r.validate_params(Uuid::nil(), "resistor", &params);
-    assert!(v.is_empty(), "valid resistor params: got {:?}", v);
+    assert!(v.is_empty(), "valid resistor params: got {v:?}");
 }

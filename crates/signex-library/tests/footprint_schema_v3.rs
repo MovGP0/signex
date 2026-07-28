@@ -2,7 +2,7 @@
 //!
 //! v0.14 adds optional Vec fields to `Footprint` for closed-profile
 //! bake targets that v0.13 only round-tripped: pours, keepouts,
-//! cutouts, v_scores, mask_openings, mask_excludes, paste_apertures.
+//! cutouts, `v_scores`, `mask_openings`, `mask_excludes`, `paste_apertures`.
 //! It also adds two `PadKind` variants (`Castellated`, `Fiducial`) and
 //! a `PadShape::Chamfered` variant.
 //!

@@ -1,6 +1,6 @@
 //! Acceptance tests for `TantivySearchIndex`.
 //!
-//! The full Tantivy rewrite for the DBLib model is deferred (see
+//! The full Tantivy rewrite for the `DBLib` model is deferred (see
 //! `docs/internal/docs/v0.9-library-plan.md`); the index needs only to
 //! compile and accept [`ComponentRow`] payloads for now. The
 //! corpus-level tests below build rows directly and verify
@@ -100,8 +100,7 @@ fn fixture_corpus() -> Vec<ComponentRow> {
             params.insert("package".into(), ParamValue::Text((*pkg).into()));
             let pn = format!("C_FILLER_{:03}", i * 4 + rep);
             let desc = format!(
-                "Generic ceramic capacitor {} package, {} dielectric, {} V",
-                pkg, dielec, v
+                "Generic ceramic capacitor {pkg} package, {dielec} dielectric, {v} V"
             );
             out.push(fresh_row(
                 &pn,
@@ -125,10 +124,10 @@ fn fixture_corpus() -> Vec<ComponentRow> {
             params.insert("package".into(), ParamValue::Text((*pkg).into()));
             params.insert("tolerance".into(), ParamValue::Text("1%".into()));
             let pn = format!("R{}_{}_{}", pkg, *r as u64, i);
-            let desc = format!("Thick film resistor {} Ω, 1%, {}", r, pkg);
+            let desc = format!("Thick film resistor {r} Ω, 1%, {pkg}");
             out.push(fresh_row(
                 &pn,
-                &format!("RES{}_{}", i, rep),
+                &format!("RES{i}_{rep}"),
                 "Yageo",
                 &desc,
                 "Resistor",
@@ -142,12 +141,12 @@ fn fixture_corpus() -> Vec<ComponentRow> {
         let mut params = ParamMap::new();
         params.insert("voltage".into(), ParamValue::Number(3.3));
         params.insert("package".into(), ParamValue::Text("SOT-23".into()));
-        let pn = format!("IC_FILLER_{:03}", i);
+        let pn = format!("IC_FILLER_{i:03}");
         out.push(fresh_row(
             &pn,
-            &format!("IC{}", i),
+            &format!("IC{i}"),
             "TI",
-            &format!("Generic regulator IC variant {}", i),
+            &format!("Generic regulator IC variant {i}"),
             "IC",
             params,
         ));
@@ -248,8 +247,7 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
 
     assert_eq!(
         got, expected,
-        "Lt 1e-6 should return exactly sub-1µF caps (got {:?}, expected {:?})",
-        got, expected
+        "Lt 1e-6 should return exactly sub-1µF caps (got {got:?}, expected {expected:?})"
     );
 }
 
@@ -367,6 +365,6 @@ fn category_only_query_filters_corpus() {
 // when the test file evolves; suppression rather than removal because adapter
 // tests often re-introduce these collections.
 #[allow(dead_code)]
-fn _force_use_btreemap() -> BTreeMap<String, String> {
+const fn _force_use_btreemap() -> BTreeMap<String, String> {
     BTreeMap::new()
 }

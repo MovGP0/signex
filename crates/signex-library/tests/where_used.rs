@@ -1,7 +1,7 @@
 //! Integration tests for the where-used reverse index.
 //!
 //! The index is keyed by [`RowId`] (component-table row) under the
-//! DBLib model — not by a `(uuid, Version)` pair. Verifies the
+//! `DBLib` model — not by a `(uuid, Version)` pair. Verifies the
 //! public contract:
 //!   - `ingest_sheet` registers row references for a (project, sheet) pair.
 //!   - `where_used(row_id)` returns every site.

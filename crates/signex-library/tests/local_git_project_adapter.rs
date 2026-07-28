@@ -154,7 +154,7 @@ fn file_history_respects_limit() {
 fn file_history_empty_on_unborn_head() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
-    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let adapter = LocalGitProjectAdapter::open_or_init(root).unwrap();
     // Just init'd — no commits yet.
     let entries = adapter.file_history(Path::new("x.snxsch"), 10).unwrap();
     assert!(entries.is_empty());
@@ -236,7 +236,7 @@ fn restore_at_from_sha_round_trips_via_string_oid() {
 fn restore_at_from_sha_rejects_invalid_sha() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
-    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let adapter = LocalGitProjectAdapter::open_or_init(root).unwrap();
 
     let err = adapter
         .restore_at_from_sha(Path::new("x.snxsch"), "not-a-sha")
@@ -290,7 +290,7 @@ fn commit_path_rejects_absolute_rel_path() {
     // outside the working tree and corrupt the index.
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
-    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let adapter = LocalGitProjectAdapter::open_or_init(root).unwrap();
 
     let abs_path = if cfg!(windows) {
         Path::new("C:\\Windows\\System32\\drivers\\etc\\hosts")
@@ -313,7 +313,7 @@ fn commit_path_rejects_parent_dir_traversal() {
     // project root. Reject them in the guard.
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
-    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    let adapter = LocalGitProjectAdapter::open_or_init(root).unwrap();
 
     let err = adapter
         .commit_path(Path::new("../escape.txt"), "should fail")

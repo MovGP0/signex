@@ -162,7 +162,7 @@ fn cache_hit_short_circuits_network() {
     };
     cache.put("lcsc", &pre).unwrap();
 
-    let cache_for_test = cache.clone();
+    let cache_for_test = cache;
     with_mock_server(
         |server| {
             Box::pin(async move {

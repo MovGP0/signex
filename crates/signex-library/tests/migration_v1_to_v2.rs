@@ -80,7 +80,6 @@ fn v2_serialises_skips_none_sketch() {
     let out = toml::to_string(&fp).unwrap();
     assert!(
         !out.contains("sketch"),
-        "sketch=None must skip serialisation entirely; got:\n{}",
-        out
+        "sketch=None must skip serialisation entirely; got:\n{out}"
     );
 }

@@ -1,9 +1,9 @@
-//! DigiKey adapter integration tests using wiremock.
+//! `DigiKey` adapter integration tests using wiremock.
 //!
 //! Two flavours:
 //! 1. Inline access token + mocked product-search endpoint — covers the
 //!    happy path of the adapter without the OAuth dance.
-//! 2. Mocked OAuth2 token endpoint — exercises the refresh-token-grant
+//! 2. Mocked `OAuth2` token endpoint — exercises the refresh-token-grant
 //!    path that production runs on every API call. Refresh token comes
 //!    from the OS keyring; we plant it before the test runs.
 
@@ -141,8 +141,8 @@ fn refresh_token_grant_calls_token_endpoint() {
             })
         },
         move |base| {
-            let auth_url = format!("{}/oauth/authorize", base);
-            let token_url = format!("{}/oauth/token", base);
+            let auth_url = format!("{base}/oauth/authorize");
+            let token_url = format!("{base}/oauth/token");
             let auth = DigiKeyAuth::with_endpoints(
                 "client-id",
                 "client-secret",

@@ -2,7 +2,7 @@
 //!
 //! Row CRUD speaks to the `/tables` and `/rows` routes; primitive
 //! (`/symbols` / `/footprints` / `/sims`) coverage stays unchanged
-//! under the DBLib model.
+//! under the `DBLib` model.
 //!
 //! Mirrors the `distributor_*` test layout — a private tokio runtime
 //! drives a `MockServer`; the adapter (which uses `reqwest::blocking`)
@@ -78,7 +78,7 @@ fn get_symbol_round_trips_through_get_symbols_uuid() {
     with_mock_server(
         move |server| {
             let path_for_mock = path_str.clone();
-            let body = body.clone();
+            let body = body;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
@@ -184,7 +184,7 @@ fn list_symbols_round_trips_through_get_symbols() {
 
     with_mock_server(
         move |server| {
-            let body = body.clone();
+            let body = body;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/symbols"))
@@ -215,7 +215,7 @@ fn get_symbol_404_maps_to_not_found() {
 
     with_mock_server(
         move |server| {
-            let path_for_mock = path_str.clone();
+            let path_for_mock = path_str;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))
@@ -271,7 +271,7 @@ fn mk_row(pn: &str, class: &str) -> ComponentRow {
 }
 
 /// Round-trip: insert → read → update → delete, each call hitting its own
-/// mock route. Mirrors the LocalGit test plan (`local_git_adapter.rs`)
+/// mock route. Mirrors the `LocalGit` test plan (`local_git_adapter.rs`)
 /// per `v0.9-refactor-2-plan.md` §8 step 3.5.
 #[test]
 fn database_round_trip_row() {
@@ -290,7 +290,7 @@ fn database_round_trip_row() {
             let read_path_for_mock = read_path.clone();
             let put_path_for_mock = put_path.clone();
             let del_path_for_mock = del_path.clone();
-            let get_body = body_for_get.clone();
+            let get_body = body_for_get;
             Box::pin(async move {
                 Mock::given(method("POST"))
                     .and(path("/tables/resistors/rows"))
@@ -367,7 +367,7 @@ fn database_iter_rows_across_tables() {
             let nil_for_mock = nil.clone();
             let tables = tables.clone();
             let resistors = resistors.clone();
-            let opamps = opamps.clone();
+            let opamps = opamps;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/tables"))
@@ -416,7 +416,7 @@ fn database_read_row_by_pn() {
         move |server| {
             let nil_for_mock = nil.clone();
             let tables = tables.clone();
-            let resistors = resistors.clone();
+            let resistors = resistors;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/tables"))
@@ -455,7 +455,7 @@ fn database_read_row_by_pn_404_maps_to_not_found() {
         move |server| {
             let nil_for_mock = nil.clone();
             let tables = tables.clone();
-            let resistors = resistors.clone();
+            let resistors = resistors;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/tables"))
@@ -503,7 +503,7 @@ fn database_update_row_modifies_payload() {
         move |server| {
             let nil_for_mock = nil.clone();
             let path_for_mock = url_path.clone();
-            let body_for_mock = expected_body.clone();
+            let body_for_mock = expected_body;
             Box::pin(async move {
                 Mock::given(method("PUT"))
                     .and(path(path_for_mock.as_str()))
@@ -535,7 +535,7 @@ fn database_list_tables_returns_names() {
     let nil = Uuid::nil().to_string();
     with_mock_server(
         move |server| {
-            let nil_for_mock = nil.clone();
+            let nil_for_mock = nil;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/tables"))
@@ -567,7 +567,7 @@ fn database_read_table_returns_rows() {
     with_mock_server(
         move |server| {
             let nil_for_mock = nil.clone();
-            let body = body.clone();
+            let body = body;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path("/tables/resistors"))
@@ -596,7 +596,7 @@ fn database_read_row_404_maps_to_not_found() {
     with_mock_server(
         move |server| {
             let nil_for_mock = nil.clone();
-            let path_for_mock = url_path.clone();
+            let path_for_mock = url_path;
             Box::pin(async move {
                 Mock::given(method("GET"))
                     .and(path(path_for_mock.as_str()))

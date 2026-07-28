@@ -222,7 +222,7 @@ fn library_id_returns_manifest_id() {
     assert_eq!(adapter.library_id(), expected);
 }
 
-/// Save a Symbol → reopen → get_symbol → bytes are identical.
+/// Save a Symbol → reopen → `get_symbol` → bytes are identical.
 /// Multi-symbol containers (v0.9 phase 2): the adapter writes the
 /// symbol into a `SymbolFile` TOML envelope named after the
 /// symbol's slugified name (`opamp-dual-8.snxsym`), not
@@ -411,7 +411,7 @@ fn list_primitives_returns_alphabetic_summaries() {
     assert_eq!(fps[0].name, "SOIC-8");
 }
 
-/// LibrarySet integration test — mount two LocalGit libraries and resolve a
+/// `LibrarySet` integration test — mount two `LocalGit` libraries and resolve a
 /// `PrimitiveRef` whose `library_id` points at one specific lib. Verifies the
 /// cross-library resolver picks the correct adapter and surfaces unresolved
 /// refs cleanly.
@@ -453,14 +453,14 @@ fn library_set_resolves_across_two_local_libs() {
     sym_a.uuid = shared_uuid;
     let mut sym_b = fixture_symbol("OPAMP-IN-B");
     sym_b.uuid = shared_uuid;
-    adapter_a.save_symbol(sym_a.clone(), "in A").unwrap();
-    adapter_b.save_symbol(sym_b.clone(), "in B").unwrap();
+    adapter_a.save_symbol(sym_a, "in A").unwrap();
+    adapter_b.save_symbol(sym_b, "in B").unwrap();
 
     // Footprint only lives in B — a ref into A would be unresolved.
     let fp_b = fixture_footprint("SOIC-8");
     let fp_b_uuid = fp_b.uuid;
     adapter_b
-        .save_footprint(fp_b.clone(), "soic-8 in B")
+        .save_footprint(fp_b, "soic-8 in B")
         .unwrap();
 
     let mut set = LibrarySet::new();
@@ -569,7 +569,7 @@ fn local_git_round_trip_row() {
     assert_eq!(got, row);
 
     // Mutate a non-key field; update_row must keep the same row_id.
-    let mut modified = row.clone();
+    let mut modified = row;
     modified.internal_pn = InternalPn::new("R10K_RENAMED");
     adapter
         .update_row("resistors", modified.clone(), "rename")
@@ -606,9 +606,9 @@ fn local_git_iter_rows_across_tables() {
     let r2 = fixture_row("R47K", "resistor", lib_id);
     let c1 = fixture_row("C100N", "capacitor", lib_id);
 
-    adapter.insert_row("resistors", r1.clone(), "r1").unwrap();
-    adapter.insert_row("resistors", r2.clone(), "r2").unwrap();
-    adapter.insert_row("capacitors", c1.clone(), "c1").unwrap();
+    adapter.insert_row("resistors", r1, "r1").unwrap();
+    adapter.insert_row("resistors", r2, "r2").unwrap();
+    adapter.insert_row("capacitors", c1, "c1").unwrap();
 
     let mut got = adapter.iter_rows().unwrap();
     assert_eq!(got.len(), 3);
@@ -755,7 +755,7 @@ fn cascade_personal_mode_auto_bumps_bound_row() {
         .unwrap();
 
     // Save symbol v0.0.2 — cascade should silently advance the row.
-    let mut sym2 = sym.clone();
+    let mut sym2 = sym;
     sym2.version = "0.0.2".into();
     adapter.save_symbol(sym2, "edit opamp").unwrap();
 
@@ -800,11 +800,11 @@ fn cascade_team_mode_leaves_released_row_stale() {
     row.released = true;
     let row_id = RowId::from_uuid(row.row_id);
     adapter
-        .insert_row("opamps", row.clone(), "bind released row")
+        .insert_row("opamps", row, "bind released row")
         .unwrap();
 
     // Save symbol v1.0.1 — Team mode + released row → stale.
-    let mut sym2 = sym.clone();
+    let mut sym2 = sym;
     sym2.version = "1.0.1".into();
     adapter.save_symbol(sym2, "edit opamp").unwrap();
 
@@ -861,10 +861,10 @@ fn cascade_team_mode_unreleased_row_auto_bumps() {
     row.released = false;
     let row_id = RowId::from_uuid(row.row_id);
     adapter
-        .insert_row("opamps", row.clone(), "bind draft row")
+        .insert_row("opamps", row, "bind draft row")
         .unwrap();
 
-    let mut sym2 = sym.clone();
+    let mut sym2 = sym;
     sym2.version = "1.0.1".into();
     adapter.save_symbol(sym2, "edit opamp").unwrap();
 
@@ -909,7 +909,7 @@ fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
         .insert_row("opamps", row.clone(), "bind row")
         .unwrap();
 
-    let mut fp2 = fp.clone();
+    let mut fp2 = fp;
     fp2.version = "0.0.2".into();
     adapter.save_footprint(fp2, "edit fp").unwrap();
 
