@@ -16,7 +16,7 @@ use signex_types::schematic::{HAlign, Label, LabelType, Point, SchematicSheet, V
 use std::collections::HashMap;
 use uuid::Uuid;
 
-fn pt(x: f64, y: f64) -> Point {
+const fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
 }
 

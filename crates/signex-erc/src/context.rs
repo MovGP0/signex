@@ -28,23 +28,24 @@ impl PaperSize {
     /// sheet as landscape; if the schema ever grows an explicit
     /// orientation flag (e.g. `A4_L` vs `A4`), the consumer should
     /// swap the tuple instead of expecting this method to do it.
-    pub fn dimensions_mm(self) -> (f64, f64) {
+    #[must_use]
+    pub const fn dimensions_mm(self) -> (f64, f64) {
         match self {
-            PaperSize::A4 => (297.0, 210.0),
-            PaperSize::A3 => (420.0, 297.0),
-            PaperSize::A2 => (594.0, 420.0),
-            PaperSize::A1 => (841.0, 594.0),
-            PaperSize::A0 => (1189.0, 841.0),
+            Self::A4 => (297.0, 210.0),
+            Self::A3 => (420.0, 297.0),
+            Self::A2 => (594.0, 420.0),
+            Self::A1 => (841.0, 594.0),
+            Self::A0 => (1189.0, 841.0),
         }
     }
 
     fn parse(s: &str) -> Self {
         match s {
-            "A3" => PaperSize::A3,
-            "A2" => PaperSize::A2,
-            "A1" => PaperSize::A1,
-            "A0" => PaperSize::A0,
-            _ => PaperSize::A4,
+            "A3" => Self::A3,
+            "A2" => Self::A2,
+            "A1" => Self::A1,
+            "A0" => Self::A0,
+            _ => Self::A4,
         }
     }
 }
@@ -158,8 +159,8 @@ pub struct ErcNet {
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
     pub pin_types: Vec<PinDirection>,
-    /// `true` if any pin is Output / PowerOutput / ThreeStatable /
-    /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
+    /// `true` if any pin is Output / `PowerOutput` / `ThreeStatable` /
+    /// `OpenDrainLow` / `OpenDrainHigh`. DSL: `has_driver()`.
     pub has_driver: bool,
     /// `true` if any pin is Passive (rough pull-up heuristic).
     /// DSL: `has_pullup()`.
@@ -188,14 +189,16 @@ pub struct ErcContext {
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
-    pub children: HashMap<String, ErcContext>,
+    pub children: HashMap<String, Self>,
 }
 
 impl ErcContext {
+    #[must_use]
     pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
         Self::project(snapshot, HashMap::new())
     }
 
+    #[must_use]
     pub fn from_snapshot_with_children(
         snapshot: &SchematicSheet,
         children: &HashMap<String, SchematicSheet>,
@@ -207,7 +210,7 @@ impl ErcContext {
         Self::project(snapshot, child_ctxs)
     }
 
-    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
+    fn project(snapshot: &SchematicSheet, children: HashMap<String, Self>) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -332,7 +335,7 @@ impl ErcContext {
         // --- Step 3: derive logical nets ----------------------------------
         let nets = summarize_nets(&wires, &labels, &junctions, &symbols);
 
-        ErcContext {
+        Self {
             paper_size: PaperSize::parse(&snapshot.paper_size),
             symbols,
             wires,
@@ -482,9 +485,7 @@ fn summarize_nets(
                 .unwrap_or_default();
 
             let class = name
-                .find('_')
-                .map(|i| name[..i].to_ascii_lowercase())
-                .unwrap_or_else(|| name.to_ascii_lowercase());
+                .find('_').map_or_else(|| name.to_ascii_lowercase(), |i| name[..i].to_ascii_lowercase());
 
             let has_driver = pins.iter().any(|t| DRIVING.contains(t));
             let has_pullup = pins.contains(&PinDirection::Passive);

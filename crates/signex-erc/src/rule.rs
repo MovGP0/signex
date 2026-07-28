@@ -1,4 +1,5 @@
 //! Rule metadata types. Describe *what* a rule checks and *where* it applies.
+//!
 //! The built-in rules are registered in [`crate::engine`]; DSL rules will
 //! produce [`RuleDefinition`] values at compile time (Phase 2).
 
@@ -14,15 +15,18 @@ use crate::{RuleKind, Severity};
 pub struct RuleId(pub String);
 
 impl RuleId {
+    #[must_use]
     pub fn builtin(kind: RuleKind) -> Self {
         let slug = kind.label().to_ascii_lowercase().replace(' ', "_");
-        RuleId(format!("builtin::{slug}"))
+        Self(format!("builtin::{slug}"))
     }
 
+    #[must_use]
     pub fn user(name: &str) -> Self {
-        RuleId(format!("user::{name}"))
+        Self(format!("user::{name}"))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -105,8 +109,9 @@ pub struct RuleDefinition {
 
 impl RuleDefinition {
     /// Convenience constructor for built-in rules.
+    #[must_use]
     pub fn builtin(kind: RuleKind) -> Self {
-        RuleDefinition {
+        Self {
             id: RuleId::builtin(kind),
             name: kind.label().to_string(),
             description: String::new(),

@@ -50,7 +50,7 @@ pub enum RuleKind {
     BusBitWidthMismatch,
     /// A sheet symbol's port pin doesn't match a label/port on the child sheet.
     BadHierSheetPin,
-    /// A net containing a power pin lacks a power flag (PWR_FLAG).
+    /// A net containing a power pin lacks a power flag (`PWR_FLAG`).
     MissingPowerFlag,
     /// Two power ports with incompatible nets are shorted together.
     PowerPortShort,
@@ -65,39 +65,41 @@ pub enum RuleKind {
 
 impl RuleKind {
     /// Human-readable rule name for the Messages panel and preferences UI.
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            RuleKind::UnusedPin => "Unused pin",
-            RuleKind::DuplicateRefDesignator => "Duplicate reference designator",
-            RuleKind::HierPortDisconnected => "Hierarchical port disconnected",
-            RuleKind::DanglingWire => "Dangling wire endpoint",
-            RuleKind::NetLabelConflict => "Net label conflict",
-            RuleKind::OrphanLabel => "Orphan label",
-            RuleKind::BusBitWidthMismatch => "Bus bit-width mismatch",
-            RuleKind::BadHierSheetPin => "Bad hierarchical sheet pin",
-            RuleKind::MissingPowerFlag => "Missing power flag",
-            RuleKind::PowerPortShort => "Power port short",
-            RuleKind::SymbolOutsideSheet => "Symbol outside sheet boundary",
-            RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
+            Self::UnusedPin => "Unused pin",
+            Self::DuplicateRefDesignator => "Duplicate reference designator",
+            Self::HierPortDisconnected => "Hierarchical port disconnected",
+            Self::DanglingWire => "Dangling wire endpoint",
+            Self::NetLabelConflict => "Net label conflict",
+            Self::OrphanLabel => "Orphan label",
+            Self::BusBitWidthMismatch => "Bus bit-width mismatch",
+            Self::BadHierSheetPin => "Bad hierarchical sheet pin",
+            Self::MissingPowerFlag => "Missing power flag",
+            Self::PowerPortShort => "Power port short",
+            Self::SymbolOutsideSheet => "Symbol outside sheet boundary",
+            Self::AmbiguousLabelAnchor => "Ambiguous label anchor",
         }
     }
 
     /// Default severity. Users can override per-rule in the Preferences
     /// panel via `ui_state.erc_severity_override`.
-    pub fn default_severity(self) -> Severity {
+    #[must_use]
+    pub const fn default_severity(self) -> Severity {
         match self {
-            RuleKind::DuplicateRefDesignator
-            | RuleKind::BusBitWidthMismatch
-            | RuleKind::BadHierSheetPin
-            | RuleKind::PowerPortShort => Severity::Error,
-            RuleKind::UnusedPin
-            | RuleKind::HierPortDisconnected
-            | RuleKind::DanglingWire
-            | RuleKind::NetLabelConflict
-            | RuleKind::OrphanLabel
-            | RuleKind::MissingPowerFlag
-            | RuleKind::AmbiguousLabelAnchor => Severity::Warning,
-            RuleKind::SymbolOutsideSheet => Severity::Info,
+            Self::DuplicateRefDesignator
+            | Self::BusBitWidthMismatch
+            | Self::BadHierSheetPin
+            | Self::PowerPortShort => Severity::Error,
+            Self::UnusedPin
+            | Self::HierPortDisconnected
+            | Self::DanglingWire
+            | Self::NetLabelConflict
+            | Self::OrphanLabel
+            | Self::MissingPowerFlag
+            | Self::AmbiguousLabelAnchor => Severity::Warning,
+            Self::SymbolOutsideSheet => Severity::Info,
         }
     }
 }
@@ -173,6 +175,6 @@ pub fn run_with_project_and_dsl(
 }
 
 /// Helper for rules to build a [`SelectedItem`] when they only have a uuid.
-pub(crate) fn sel(uuid: uuid::Uuid, kind: SelectedKind) -> SelectedItem {
+pub(crate) const fn sel(uuid: uuid::Uuid, kind: SelectedKind) -> SelectedItem {
     SelectedItem::new(uuid, kind)
 }

@@ -7,7 +7,7 @@
 //! in their own sibling file rather than growing it further.
 
 mod ambiguous_label_anchor;
-pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+pub use ambiguous_label_anchor::ambiguous_label_anchor;
 
 use std::collections::HashMap;
 
@@ -30,7 +30,7 @@ fn same(a: &Point, b: &Point) -> bool {
 
 /// Every wire on the sheet as a `(start, end)` pair, for anchoring queries
 /// against [`SheetConnectivity::root_of_anchored`] / [`on_any_wire`].
-pub(super) fn wire_pairs(ctx: &ErcContext) -> Vec<(Point, Point)> {
+pub fn wire_pairs(ctx: &ErcContext) -> Vec<(Point, Point)> {
     ctx.wires.iter().map(|w| (w.start, w.end)).collect()
 }
 
@@ -70,7 +70,7 @@ fn on_any_bus_endpoint(pos: &Point, ctx: &ErcContext) -> bool {
 // Rule: UnusedPin
 // ---------------------------------------------------------------------------
 
-pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for symbol in &ctx.symbols {
         if symbol.is_power {
             continue;
@@ -104,7 +104,7 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: DuplicateRefDesignator
 // ---------------------------------------------------------------------------
 
-pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let mut by_ref: HashMap<&str, Vec<&crate::context::ErcSymbol>> = HashMap::new();
     for symbol in &ctx.symbols {
         let r = symbol.reference.trim();
@@ -137,7 +137,7 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
 // Rule: HierPortDisconnected
 // ---------------------------------------------------------------------------
 
-pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let wires = wire_pairs(ctx);
     for label in &ctx.labels {
         if !matches!(
@@ -172,7 +172,7 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
 // Rule: DanglingWire
 // ---------------------------------------------------------------------------
 
-pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let touched_non_wire = |p: &Point| -> bool {
         ctx.symbols
             .iter()
@@ -211,7 +211,7 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: NetLabelConflict
 // ---------------------------------------------------------------------------
 
-pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
 
@@ -273,7 +273,7 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: OrphanLabel
 // ---------------------------------------------------------------------------
 
-pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let wires = wire_pairs(ctx);
     for label in &ctx.labels {
         // MD-13: Hierarchical and Global labels are handled by
@@ -315,7 +315,7 @@ pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: BusBitWidthMismatch
 // ---------------------------------------------------------------------------
 
-pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     // Bus bundles connect by segment only (no junction dots), so no junctions
     // are fed to the shared connectivity — same topology as before, now derived
     // through `signex-net` rather than a hand-rolled union-find.
@@ -417,7 +417,7 @@ pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>
 // Rule: BadHierSheetPin
 // ---------------------------------------------------------------------------
 
-pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     use std::collections::HashSet;
 
     for child in &ctx.child_sheets {
@@ -513,7 +513,7 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: MissingPowerFlag
 // ---------------------------------------------------------------------------
 
-pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     // MD-12: verify the power port shares a NET with a same-text label, not just
     // that the text exists somewhere on the sheet (a port `+3V3` floating on its
     // own net must not be suppressed by ANY other `+3V3` label). Connectivity is
@@ -569,8 +569,7 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         let port_root = conn.root_of(&symbol.position);
         let same_net_label = label_nets
             .get(name)
-            .map(|nets| nets.contains(&port_root))
-            .unwrap_or(false);
+            .is_some_and(|nets| nets.contains(&port_root));
         if same_net_label {
             continue;
         }
@@ -592,7 +591,7 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: PowerPortShort
 // ---------------------------------------------------------------------------
 
-pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let power: Vec<&crate::context::ErcSymbol> = ctx
         .symbols
         .iter()
@@ -626,7 +625,7 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: SymbolOutsideSheet
 // ---------------------------------------------------------------------------
 
-pub(crate) fn symbol_outside_sheet(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn symbol_outside_sheet(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let (w, h) = ctx.paper_size.dimensions_mm();
     for symbol in &ctx.symbols {
         if symbol.position.x < 0.0
@@ -642,7 +641,7 @@ pub(crate) fn symbol_outside_sheet(ctx: &ErcContext, out: &mut Vec<Diagnostic>) 
             out.push(
                 Diagnostic::new(
                     RuleKind::SymbolOutsideSheet,
-                    format!("Symbol '{reference}' sits outside the {}×{} mm sheet", w, h,),
+                    format!("Symbol '{reference}' sits outside the {w}×{h} mm sheet"),
                     symbol.position,
                 )
                 .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),

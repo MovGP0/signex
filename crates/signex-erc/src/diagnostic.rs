@@ -28,7 +28,7 @@ pub struct Diagnostic {
 impl Diagnostic {
     /// Shorthand for built-in rules: severity comes from the kind's default.
     pub fn new(kind: RuleKind, message: impl Into<String>, location: Point) -> Self {
-        Diagnostic {
+        Self {
             rule_id: RuleId::builtin(kind),
             rule_kind: kind,
             severity: kind.default_severity(),
@@ -40,18 +40,21 @@ impl Diagnostic {
     }
 
     /// Override the severity (used by rules that hard-code a specific level
-    /// different from the kind's default, e.g. MissingPowerFlag → Info).
-    pub fn with_severity(mut self, severity: Severity) -> Self {
+    /// different from the kind's default, e.g. `MissingPowerFlag` → Info).
+    #[must_use]
+    pub const fn with_severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
         self
     }
 
-    pub fn with_primary(mut self, primary: SelectedItem) -> Self {
+    #[must_use]
+    pub const fn with_primary(mut self, primary: SelectedItem) -> Self {
         self.primary = Some(primary);
         self
     }
 
-    pub fn with_peer(mut self, peer: SelectedItem) -> Self {
+    #[must_use]
+    pub const fn with_peer(mut self, peer: SelectedItem) -> Self {
         self.peer = Some(peer);
         self
     }
@@ -63,7 +66,7 @@ impl Diagnostic {
 
 impl From<Diagnostic> for Violation {
     fn from(d: Diagnostic) -> Self {
-        Violation {
+        Self {
             rule: d.rule_kind,
             severity: d.severity,
             message: d.message,

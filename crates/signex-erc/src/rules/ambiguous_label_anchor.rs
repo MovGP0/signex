@@ -1,4 +1,4 @@
-//! Rule: AmbiguousLabelAnchor.
+//! Rule: `AmbiguousLabelAnchor`.
 //!
 //! `build_netlist`'s `anchor_point` rule 2 resolves a label that sits on the
 //! interior of *several* wires by picking exactly one — the segment with the
@@ -26,7 +26,7 @@ use crate::{RuleKind, sel};
 
 use super::wire_pairs;
 
-pub(crate) fn ambiguous_label_anchor(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+pub fn ambiguous_label_anchor(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let wires = wire_pairs(ctx);
 
     for label in &ctx.labels {

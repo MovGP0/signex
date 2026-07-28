@@ -15,6 +15,7 @@ use crate::rules;
 pub type EvalFn = Arc<dyn Fn(&ErcContext) -> Vec<Diagnostic> + Send + Sync>;
 
 /// Run every built-in rule against `ctx` and return all diagnostics.
+#[must_use]
 pub fn run_all(ctx: &ErcContext) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     rules::unused_pin(ctx, &mut out);
