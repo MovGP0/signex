@@ -56,6 +56,10 @@ pub enum BomGrouping {
 }
 
 /// Engine options for BOM table generation.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent BOM inclusion switches are intentionally represented as booleans"
+)]
 #[derive(Debug, Clone)]
 pub struct BomEngineOptions {
     pub grouping: BomGrouping,
@@ -87,6 +91,10 @@ pub enum BomRule {
 }
 
 /// Rule-level on/off switches for BOM validation.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent BOM validation switches are intentionally represented as booleans"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BomRuleOptions {
     pub missing_footprint: bool,
@@ -229,11 +237,14 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         .map(|component| component.reference.clone())
                         .collect::<Vec<_>>();
 
-                    let fitted_qty = grouped_components
-                        .iter()
-                        .filter(|component| component.is_fitted())
-                        .count() as u32;
-                    let qty = grouped_components.len() as u32;
+                    let fitted_qty = u32::try_from(
+                        grouped_components
+                            .iter()
+                            .filter(|component| component.is_fitted())
+                            .count(),
+                    )
+                    .unwrap_or(u32::MAX);
+                    let qty = u32::try_from(grouped_components.len()).unwrap_or(u32::MAX);
 
                     let description = grouped_components
                         .first()
