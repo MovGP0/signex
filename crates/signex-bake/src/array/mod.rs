@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Sketch-array expansion — bakes all three `ArrayKind` variants.
 //!
 //! Phase 7 Task 7.2 of the v0.13 sketch-mode plan. Walks every
@@ -46,10 +51,10 @@ use polar::bake_polar;
 
 /// Walk every [`signex_sketch::array::Array`] and append baked pads
 /// to `out`. Bakes `ArrayKind::Linear`, `Grid`, and `Polar` natively.
-pub fn bake_arrays(
+pub fn bake_arrays<S: ::std::hash::BuildHasher>(
     sketch: &SketchData,
     solve: &FullSolveOutput,
-    params_canonical: &HashMap<String, f64>,
+    params_canonical: &HashMap<String, f64, S>,
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {

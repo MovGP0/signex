@@ -1,3 +1,12 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::manual_let_else,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Polar (rotational) array baking — `count` instances around a
 //! centre point, sweeping `sweep_angle_expr` total degrees, with
 //! optional per-instance depopulation.
@@ -42,13 +51,17 @@ pub(super) fn bake_polar(
 ) -> Result<(), SketchError> {
     use signex_sketch::solver::state::point_xy;
 
-    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) { e } else {
+    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) {
+        e
+    } else {
         warnings.push(format!(
             "polar array source {source}: entity not found — array skipped"
         ));
         return Ok(());
     };
-    let pad_attr = if let Some(p) = source_entity.pad.as_ref() { p } else {
+    let pad_attr = if let Some(p) = source_entity.pad.as_ref() {
+        p
+    } else {
         warnings.push(format!(
             "polar array source {source}: no PadAttr on source entity — array skipped"
         ));
@@ -56,18 +69,24 @@ pub(super) fn bake_polar(
     };
 
     // Resolve source + center positions in mm.
-    let (sx, sy) = if let Some(p) = point_xy(source, &solve.result.state, &solve.result.index, sketch) { p } else {
-        warnings.push(format!(
-            "polar array source {source}: position unknown — array skipped"
-        ));
-        return Ok(());
-    };
-    let (cx, cy) = if let Some(p) = point_xy(center, &solve.result.state, &solve.result.index, sketch) { p } else {
-        warnings.push(format!(
-            "polar array center {center}: position unknown — array skipped"
-        ));
-        return Ok(());
-    };
+    let (sx, sy) =
+        if let Some(p) = point_xy(source, &solve.result.state, &solve.result.index, sketch) {
+            p
+        } else {
+            warnings.push(format!(
+                "polar array source {source}: position unknown — array skipped"
+            ));
+            return Ok(());
+        };
+    let (cx, cy) =
+        if let Some(p) = point_xy(center, &solve.result.state, &solve.result.index, sketch) {
+            p
+        } else {
+            warnings.push(format!(
+                "polar array center {center}: position unknown — array skipped"
+            ));
+            return Ok(());
+        };
 
     let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
     let sweep_ast = parse(strip_eq_prefix(sweep_angle_expr)).map_err(SketchError::Expr)?;
@@ -85,13 +104,20 @@ pub(super) fn bake_polar(
         ));
         return Ok(());
     }
-    let count = count as usize;
+    let Ok(count) = usize::try_from(count) else {
+        warnings.push(format!(
+            "polar array source {source}: count={count} exceeds the supported platform size — array skipped"
+        ));
+        return Ok(());
+    };
 
     // Sweep angle is an Altium-style degrees-or-radians value via the
     // expression's unit family. We expect rad here (the parser
     // resolves `deg` → rad). On unit error, surface and skip.
     let sweep_q = eval(&sweep_ast, &setup_ctx).map_err(SketchError::Expr)?;
-    let sweep_rad = if sweep_q.unit.family() == signex_sketch::unit::UnitFamily::Angle { sweep_q.value } else {
+    let sweep_rad = if sweep_q.unit.family() == signex_sketch::unit::UnitFamily::Angle {
+        sweep_q.value
+    } else {
         warnings.push(format!(
             "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
         ));
@@ -117,7 +143,7 @@ pub(super) fn bake_polar(
         // Properties panel checkbox row can toggle individual
         // instances without rewriting the expression.
         if let Some(d) = depopulation {
-            let i_u32 = i as u32;
+            let i_u32 = u32::try_from(i).unwrap_or(u32::MAX);
             if d.suppressed_instances
                 .iter()
                 .any(|(si, sj)| *si == i_u32 && *sj == 0)

@@ -1,3 +1,12 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::needless_option_as_deref,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pad bake — turns `SketchData` + solved state into Vec<Pad>.
 //!
 //! Phase 7 Task 7.1 of the v0.13 sketch-mode plan. Walks every entity
@@ -61,10 +70,10 @@ use signex_types::layer::SignexLayer;
 
 /// Bake every entity tagged with [`PadAttr`] into a [`LibPad`]. Adds
 /// human-readable warnings to `warnings` for v0.14+ features.
-pub fn bake_pads(
+pub fn bake_pads<S: ::std::hash::BuildHasher>(
     sketch: &SketchData,
     solve: &FullSolveOutput,
-    params_canonical: &HashMap<String, f64>,
+    params_canonical: &HashMap<String, f64, S>,
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
@@ -143,19 +152,19 @@ pub(crate) fn bake_one_pad(
     .ok_or(SketchError::EntityNotFound(sketch_point_id))?;
 
     // Position = sketch point + array offset + per-pad authored offset.
-    let ox = opt_eval_mm(&pad_attr.offset_x_expr, &ctx)?.unwrap_or(0.0);
-    let oy = opt_eval_mm(&pad_attr.offset_y_expr, &ctx)?.unwrap_or(0.0);
+    let ox = opt_eval_mm(pad_attr.offset_x_expr.as_ref(), &ctx)?.unwrap_or(0.0);
+    let oy = opt_eval_mm(pad_attr.offset_y_expr.as_ref(), &ctx)?.unwrap_or(0.0);
     let position = [px + extra_dx + ox, py + extra_dy + oy];
 
     let size_x = eval_mm(&pad_attr.size_x_expr, &ctx)?;
     let size_y = eval_mm(&pad_attr.size_y_expr, &ctx)?;
 
-    let rotation = rotation_deg(&pad_attr.rotation_expr, &ctx)?;
+    let rotation = rotation_deg(pad_attr.rotation_expr.as_ref(), &ctx)?;
 
     let pad_number = extra_pad_number.unwrap_or_else(|| pad_attr.number.clone());
     let is_fiducial = pad_attr.kind == PadKind::Fiducial;
 
-    let mask_margin = match opt_eval_mm(&pad_attr.mask_margin_expr, &ctx)? {
+    let mask_margin = match opt_eval_mm(pad_attr.mask_margin_expr.as_ref(), &ctx)? {
         Some(v) => Some(v),
         None if is_fiducial => Some(1.0),
         None => None,
@@ -170,13 +179,13 @@ pub(crate) fn bake_one_pad(
         }
         None
     } else {
-        opt_eval_mm(&pad_attr.paste_margin_expr, &ctx)?
+        opt_eval_mm(pad_attr.paste_margin_expr.as_ref(), &ctx)?
     };
 
     let drill = match &pad_attr.drill {
         Some(d) => Some(LibDrill {
             diameter: eval_mm(&d.diameter_expr, &ctx)?,
-            slot_length: opt_eval_mm(&d.slot_length_expr, &ctx)?,
+            slot_length: opt_eval_mm(d.slot_length_expr.as_ref(), &ctx)?,
         }),
         None => None,
     };
@@ -188,9 +197,7 @@ pub(crate) fn bake_one_pad(
 
     let shape = if is_fiducial {
         if !matches!(pad_attr.shape, PadShape::Round) {
-            warnings.push(format!(
-                "pad {pad_number}: Fiducial shape forced to Round"
-            ));
+            warnings.push(format!("pad {pad_number}: Fiducial shape forced to Round"));
         }
         LibPadShape::Round
     } else {
@@ -222,10 +229,10 @@ pub(crate) fn bake_one_pad(
         derive_layers(pad_attr.kind, pad_attr.side)
     };
 
-    let mask_top = opt_eval_mm(&pad_attr.stack.mask_top_expr, &ctx)?;
-    let mask_bottom = opt_eval_mm(&pad_attr.stack.mask_bottom_expr, &ctx)?;
-    let paste_top = opt_eval_mm(&pad_attr.stack.paste_top_expr, &ctx)?;
-    let paste_bottom = opt_eval_mm(&pad_attr.stack.paste_bottom_expr, &ctx)?;
+    let mask_top = opt_eval_mm(pad_attr.stack.mask_top_expr.as_ref(), &ctx)?;
+    let mask_bottom = opt_eval_mm(pad_attr.stack.mask_bottom_expr.as_ref(), &ctx)?;
+    let paste_top = opt_eval_mm(pad_attr.stack.paste_top_expr.as_ref(), &ctx)?;
+    let paste_bottom = opt_eval_mm(pad_attr.stack.paste_bottom_expr.as_ref(), &ctx)?;
 
     Ok(LibPad {
         number: pad_number,
@@ -284,14 +291,14 @@ fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
     q.as_mm().map_err(SketchError::Unit)
 }
 
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, SketchError> {
+fn opt_eval_mm(expr: Option<&String>, ctx: &EvalContext) -> Result<Option<f64>, SketchError> {
     match expr.as_deref() {
         Some(e) => Ok(Some(eval_mm(e, ctx)?)),
         None => Ok(None),
     }
 }
 
-fn rotation_deg(expr: &Option<String>, ctx: &EvalContext) -> Result<f64, SketchError> {
+fn rotation_deg(expr: Option<&String>, ctx: &EvalContext) -> Result<f64, SketchError> {
     match expr.as_deref() {
         Some(e) => {
             let body = strip_eq_prefix(e);
@@ -332,7 +339,7 @@ fn signex_layer_id(l: SignexLayer) -> LayerId {
 }
 
 /// Translate sketch `ChamferedCorners` into the lib mirror enum.
-const fn map_corners(c: &SkChamferedCorners) -> LibChamferedCorners {
+const fn map_corners(c: SkChamferedCorners) -> LibChamferedCorners {
     LibChamferedCorners {
         top_left: c.top_left,
         top_right: c.top_right,
@@ -441,7 +448,7 @@ fn bake_shape(
             let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
             LibPadShape::Chamfered {
                 chamfer_ratio: q.as_count()?.clamp(0.0, 0.5),
-                corners: map_corners(corners),
+                corners: map_corners(*corners),
             }
         }
         PadShape::Custom(CustomPadShape::StaticPoints { points }) => {
@@ -456,7 +463,9 @@ fn bake_shape(
             // LibPadShape::Custom. On any trace failure, fall back to
             // bbox Rect with a warning so the bake doesn't poison the
             // whole pad.
-            let seed = if let Some(id) = source.first() { *id } else {
+            let seed = if let Some(id) = source.first() {
+                *id
+            } else {
                 warnings.push(format!(
                     "pad {pad_number}: Custom::SketchProfile.source is empty; falling back to Rect"
                 ));

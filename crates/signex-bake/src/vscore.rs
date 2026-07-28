@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::needless_option_as_deref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! V-score bake — turns VScoreHintAttr-tagged Line entities into
 //! `Footprint::v_scores: Vec<FpVScore>` records.
 //!
@@ -32,10 +39,10 @@ use std::collections::HashMap;
 /// 1.6 mm is the IPC-A-600 default board thickness for FR-4.
 const NOMINAL_BOARD_THICKNESS_MM: f64 = 1.6;
 
-pub fn bake_v_scores(
+pub fn bake_v_scores<S: ::std::hash::BuildHasher>(
     sketch: &SketchData,
     solve: &FullSolveOutput,
-    params_canonical: &HashMap<String, f64>,
+    params_canonical: &HashMap<String, f64, S>,
     out: &mut Vec<FpVScore>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
@@ -48,7 +55,9 @@ pub fn bake_v_scores(
             Some(a) => a,
             None => continue,
         };
-        let (start, end) = if let EntityKind::Line { start, end } = entity.kind { (start, end) } else {
+        let (start, end) = if let EntityKind::Line { start, end } = entity.kind {
+            (start, end)
+        } else {
             warnings.push(format!(
                 "entity {}: VScoreHintAttr requires a Line entity (Arcs / Circles ignored — V-scores are straight cuts); skipping",
                 entity.id
@@ -56,14 +65,19 @@ pub fn bake_v_scores(
             continue;
         };
 
-        let from = if let Some(p) = point_xy(start, &solve.result.state, &solve.result.index, sketch) { [p.0, p.1] } else {
-            warnings.push(format!(
-                "entity {}: VScoreHintAttr start endpoint missing; skipping",
-                entity.id
-            ));
-            continue;
-        };
-        let to = if let Some(p) = point_xy(end, &solve.result.state, &solve.result.index, sketch) { [p.0, p.1] } else {
+        let from =
+            if let Some(p) = point_xy(start, &solve.result.state, &solve.result.index, sketch) {
+                [p.0, p.1]
+            } else {
+                warnings.push(format!(
+                    "entity {}: VScoreHintAttr start endpoint missing; skipping",
+                    entity.id
+                ));
+                continue;
+            };
+        let to = if let Some(p) = point_xy(end, &solve.result.state, &solve.result.index, sketch) {
+            [p.0, p.1]
+        } else {
             warnings.push(format!(
                 "entity {}: VScoreHintAttr end endpoint missing; skipping",
                 entity.id
@@ -83,7 +97,7 @@ pub fn bake_v_scores(
         };
 
         // v0.15 — min_web_expr now propagates into FpVScore.min_web_mm.
-        let min_web_mm = match opt_eval_mm(&attr.min_web_expr, &ctx) {
+        let min_web_mm = match opt_eval_mm(attr.min_web_expr.as_ref(), &ctx) {
             Ok(Some(v)) => v.max(0.0),
             Ok(None) => 0.0,
             Err(e) => {
@@ -117,7 +131,7 @@ const fn map_side(
     }
 }
 
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
+fn opt_eval_mm(expr: Option<&String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
     let s = match expr.as_deref() {
         Some(s) => s.trim(),
         None => return Ok(None),
@@ -129,7 +143,9 @@ fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, 
     Ok(Some(mm))
 }
 
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
+fn build_ctx<S: ::std::hash::BuildHasher>(
+    params_canonical: &HashMap<String, f64, S>,
+) -> EvalContext {
     let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, value) in params_canonical {
         params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
@@ -149,6 +165,10 @@ fn eval_dimensionless(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "tests compare exact input geometry carried through V-score baking"
+)]
 mod tests {
     use super::*;
     use signex_sketch::attr::{VScoreHintAttr, VScoreSide};

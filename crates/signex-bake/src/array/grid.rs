@@ -1,3 +1,13 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::manual_let_else,
+    clippy::similar_names,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Grid (2D) array baking — `nx` × `ny` instances stepped by
 //! (`dx_expr`, `dy_expr`) per axis, with optional per-cell
 //! depopulation (a mask predicate and/or an explicit suppressed-cell
@@ -33,13 +43,17 @@ pub(super) fn bake_grid(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) { e } else {
+    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) {
+        e
+    } else {
         warnings.push(format!(
             "grid array source {source}: entity not found — array skipped"
         ));
         return Ok(());
     };
-    let pad_attr = if let Some(p) = source_entity.pad.as_ref() { p } else {
+    let pad_attr = if let Some(p) = source_entity.pad.as_ref() {
+        p
+    } else {
         warnings.push(format!(
             "grid array source {source}: no PadAttr on source entity — array skipped"
         ));
@@ -77,8 +91,18 @@ pub(super) fn bake_grid(
         ));
         return Ok(());
     }
-    let nx = nx as usize;
-    let ny = ny as usize;
+    let Ok(nx) = usize::try_from(nx) else {
+        warnings.push(format!(
+            "grid array source {source}: nx={nx} exceeds the supported platform size — array skipped"
+        ));
+        return Ok(());
+    };
+    let Ok(ny) = usize::try_from(ny) else {
+        warnings.push(format!(
+            "grid array source {source}: ny={ny} exceeds the supported platform size — array skipped"
+        ));
+        return Ok(());
+    };
 
     for j in 0..ny {
         for i in 0..nx {
@@ -92,8 +116,8 @@ pub(super) fn bake_grid(
             // panel checkbox grid can toggle individual cells without
             // mutating the expression.
             if let Some(d) = depopulation {
-                let i_u32 = i as u32;
-                let j_u32 = j as u32;
+                let i_u32 = u32::try_from(i).unwrap_or(u32::MAX);
+                let j_u32 = u32::try_from(j).unwrap_or(u32::MAX);
                 if d.suppressed_instances
                     .iter()
                     .any(|(si, sj)| *si == i_u32 && *sj == j_u32)

@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::tuple_array_conversions,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Silkscreen bake — turns SilkAttr-tagged sketch entities into
 //! `FpGraphic` Line / Arc / Circle entries on the matching layer
 //! (`F.SilkS` / `B.SilkS` typically).
@@ -164,6 +171,10 @@ fn pos(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "tests compare exact input geometry carried through silk baking"
+)]
 mod tests {
     use super::*;
     use signex_sketch::attr::SilkAttr;

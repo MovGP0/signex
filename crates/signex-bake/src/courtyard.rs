@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Courtyard bake — turns CourtyardAttr-tagged closed-profile sketches
 //! into the footprint's `courtyard: Polygon` field.
 //!

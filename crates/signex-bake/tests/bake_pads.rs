@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::expect_used,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Integration tests for the v0.13 sketch → footprint pad bake.
 //!
 //! Phase 7 Task 7.1 + 7.2 of the `SKETCH_MODE_v0.13_PLAN`. Each test

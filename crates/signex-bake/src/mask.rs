@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::unnecessary_wraps,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Mask + paste-aperture bake — turns `MaskOpeningAttr`,
 //! `MaskExcludeAttr`, and PasteApertureAttr-tagged closed profiles into
 //! `Footprint::mask_openings`, `mask_excludes`, and `paste_apertures`.

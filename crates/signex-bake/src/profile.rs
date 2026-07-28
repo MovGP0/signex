@@ -1,3 +1,15 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::manual_let_else,
+    clippy::many_single_char_names,
+    clippy::map_unwrap_or,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    clippy::tuple_array_conversions,
+    clippy::while_float,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Closed-profile walker — given a starting Line entity, trace a
 //! connected loop of edge entities through shared endpoint Points and
 //! emit the boundary as a Polygon (Vec of `[x_mm, y_mm]` vertices).
@@ -368,13 +380,16 @@ fn build_adjacency(
 /// `(start, end)` (the Arc's `center` Point is NOT a topology vertex).
 const fn edge_endpoints(entity: &Entity) -> Option<(SketchEntityId, SketchEntityId)> {
     match entity.kind {
-        EntityKind::Line { start, end } => Some((start, end)),
-        EntityKind::Arc { start, end, .. } => Some((start, end)),
+        EntityKind::Line { start, end } | EntityKind::Arc { start, end, .. } => Some((start, end)),
         _ => None,
     }
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "tests compare exact input geometry carried through profile tracing"
+)]
 mod tests {
     use super::*;
     use signex_sketch::entity::{Entity, EntityKind};

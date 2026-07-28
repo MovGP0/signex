@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::needless_option_as_deref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Pour bake — turns PourAttr-tagged closed sketch profiles into
 //! `Footprint::pours: Vec<FpPour>` records.
 //!
@@ -26,10 +33,10 @@ use std::collections::HashMap;
 use crate::profile::{TraceError, trace_closed_profile};
 
 /// Bake every PourAttr-tagged closed profile into `out`.
-pub fn bake_pours(
+pub fn bake_pours<S: ::std::hash::BuildHasher>(
     sketch: &SketchData,
     solve: &FullSolveOutput,
-    params_canonical: &HashMap<String, f64>,
+    params_canonical: &HashMap<String, f64, S>,
     out: &mut Vec<FpPour>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
@@ -78,7 +85,7 @@ pub fn bake_pours(
             }
         };
 
-        let clearance = match opt_eval_mm(&attr.clearance_expr, &ctx) {
+        let clearance = match opt_eval_mm(attr.clearance_expr.as_ref(), &ctx) {
             Ok(v) => v.unwrap_or(0.0),
             Err(e) => {
                 warnings.push(format!(
@@ -88,7 +95,7 @@ pub fn bake_pours(
                 0.0
             }
         };
-        let min_thickness = match opt_eval_mm(&attr.min_thickness_expr, &ctx) {
+        let min_thickness = match opt_eval_mm(attr.min_thickness_expr.as_ref(), &ctx) {
             Ok(v) => v.unwrap_or(0.0),
             Err(e) => {
                 warnings.push(format!(
@@ -107,13 +114,15 @@ pub fn bake_pours(
             thermal_relief: map_thermal(&attr.thermal_relief),
             clearance,
             min_thickness,
-            priority: attr.priority.min(u32::from(u8::MAX)) as u8,
+            priority: u8::try_from(attr.priority.min(u32::from(u8::MAX))).unwrap_or(u8::MAX),
         });
     }
     Ok(())
 }
 
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
+fn build_ctx<S: ::std::hash::BuildHasher>(
+    params_canonical: &HashMap<String, f64, S>,
+) -> EvalContext {
     let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, value) in params_canonical {
         params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
@@ -124,7 +133,7 @@ fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
     }
 }
 
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
+fn opt_eval_mm(expr: Option<&String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
     let s = match expr.as_deref() {
         Some(s) => s.trim(),
         None => return Ok(None),

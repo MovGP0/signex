@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::manual_let_else,
+    clippy::similar_names,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Linear array baking —  instances stepped by
 //!  from the source pad.
 
@@ -35,13 +43,17 @@ pub(super) fn bake_linear(
 ) -> Result<(), SketchError> {
     // Find the source entity's PadAttr. Without it there's nothing to
     // replicate; warn and skip the array.
-    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) { e } else {
+    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) {
+        e
+    } else {
         warnings.push(format!(
             "linear array source {source}: entity not found — array skipped"
         ));
         return Ok(());
     };
-    let pad_attr = if let Some(p) = source_entity.pad.as_ref() { p } else {
+    let pad_attr = if let Some(p) = source_entity.pad.as_ref() {
+        p
+    } else {
         warnings.push(format!(
             "linear array source {source}: no PadAttr on source entity — array skipped"
         ));
@@ -71,7 +83,12 @@ pub(super) fn bake_linear(
         ));
         return Ok(());
     }
-    let count = count as usize;
+    let Ok(count) = usize::try_from(count) else {
+        warnings.push(format!(
+            "linear array source {source}: count={count} exceeds the supported platform size — array skipped"
+        ));
+        return Ok(());
+    };
 
     for i in 0..count {
         // MD-2: re-evaluating dx/dy needs only the `array_index` change,

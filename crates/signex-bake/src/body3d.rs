@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! 3D-extrude bake — closed profile on a `PlaneKind::BodyTop` plane
 //! becomes the `body_3d.outline` polygon (driving the procedural 3D
 //! render with the actual body shape rather than the default fab
@@ -43,10 +51,10 @@ use signex_sketch::unit::Quantity;
 
 use crate::profile::{TraceError, trace_closed_profile};
 
-pub fn bake_body3d(
+pub fn bake_body3d<S: ::std::hash::BuildHasher>(
     sketch: &SketchData,
     solve: &FullSolveOutput,
-    params_canonical: &HashMap<String, f64>,
+    params_canonical: &HashMap<String, f64, S>,
     body_3d: &mut Body3D,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
@@ -68,7 +76,7 @@ pub fn bake_body3d(
     let plane_id = body_plane.id;
     let offset_z_expr = match &body_plane.kind {
         PlaneKind::BodyTop { offset_z_expr } => offset_z_expr.clone(),
-        _ => unreachable!("filtered to BodyTop above"),
+        PlaneKind::BoardTop => unreachable!("filtered to BodyTop above"),
     };
 
     let seed = match find_seed_on_plane(sketch, plane_id) {
@@ -132,7 +140,9 @@ fn find_seed_on_plane(sketch: &SketchData, plane_id: PlaneId) -> Option<SketchEn
         .map(|e| e.id)
 }
 
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
+fn build_ctx<S: ::std::hash::BuildHasher>(
+    params_canonical: &HashMap<String, f64, S>,
+) -> EvalContext {
     let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, value) in params_canonical {
         params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
@@ -152,6 +162,10 @@ fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "tests compare exact authored or sentinel geometry values"
+)]
 mod tests {
     use super::*;
     use signex_library::primitive::footprint::Body3D;
@@ -254,8 +268,10 @@ mod tests {
         // bakes, offset_z stays at the prior value.
         let data = sketch_with_body_top_rectangle("(((bad");
         let solved = solve(&data);
-        let mut body = Body3D::default();
-        body.offset_z_mm = 7.5; // sentinel
+        let mut body = Body3D {
+            offset_z_mm: 7.5,
+            ..Body3D::default()
+        };
         let mut warnings = Vec::new();
         bake_body3d(&data, &solved, &HashMap::new(), &mut body, &mut warnings).unwrap();
         assert!(body.outline.is_some(), "outline should still bake");

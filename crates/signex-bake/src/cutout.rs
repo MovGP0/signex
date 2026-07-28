@@ -1,3 +1,10 @@
+#![expect(
+    clippy::manual_let_else,
+    clippy::missing_errors_doc,
+    clippy::needless_option_as_deref,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Board cutout bake — turns BoardCutoutAttr-tagged closed profiles
 //! into `Footprint::cutouts: Vec<FpCutout>` records.
 //!
@@ -26,10 +33,10 @@ use signex_sketch::unit::Quantity;
 
 use crate::profile::{TraceError, trace_closed_profile};
 
-pub fn bake_cutouts(
+pub fn bake_cutouts<S: ::std::hash::BuildHasher>(
     sketch: &SketchData,
     solve: &FullSolveOutput,
-    params_canonical: &HashMap<String, f64>,
+    params_canonical: &HashMap<String, f64, S>,
     out: &mut Vec<FpCutout>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
@@ -59,7 +66,7 @@ pub fn bake_cutouts(
                 // mm. Empty expression → 0 (sharp corner); eval
                 // failure → 0 + warning so the bake doesn't silently
                 // drop the user's authoring intent.
-                let edge_radius_mm = match opt_eval_mm(&attr.edge_radius_expr, &ctx) {
+                let edge_radius_mm = match opt_eval_mm(attr.edge_radius_expr.as_ref(), &ctx) {
                     Ok(Some(v)) => v,
                     Ok(None) => 0.0,
                     Err(e) => {
@@ -93,7 +100,9 @@ pub fn bake_cutouts(
     Ok(())
 }
 
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
+fn build_ctx<S: ::std::hash::BuildHasher>(
+    params_canonical: &HashMap<String, f64, S>,
+) -> EvalContext {
     let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, value) in params_canonical {
         params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
@@ -104,7 +113,7 @@ fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
     }
 }
 
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
+fn opt_eval_mm(expr: Option<&String>, ctx: &EvalContext) -> Result<Option<f64>, String> {
     let s = match expr.as_deref() {
         Some(s) => s.trim(),
         None => return Ok(None),
@@ -117,6 +126,10 @@ fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, 
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::float_cmp,
+    reason = "tests compare exact authored or default geometry values"
+)]
 mod tests {
     use super::*;
     use signex_sketch::attr::BoardCutoutAttr;

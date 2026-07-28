@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Per-instance pad-numbering schemes for sketch arrays — both
 //! the 1D  (Linear) and the 2D
 //!  (Grid). Polar reuses the 1D form.
@@ -109,8 +115,14 @@ pub(super) fn derive_pad_number_2d(
             start_row,
             start_col,
         } => {
-            let row = bga_row_letter(j as u32, *skip_letters, *start_row);
-            let col = (i as u32) + *start_col;
+            let row = bga_row_letter(
+                u32::try_from(j).unwrap_or(u32::MAX),
+                *skip_letters,
+                *start_row,
+            );
+            let col = u32::try_from(i)
+                .unwrap_or(u32::MAX)
+                .saturating_add(*start_col);
             format!("{row}{col}")
         }
         NumberingScheme::Explicit { names } => {
