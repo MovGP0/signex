@@ -76,7 +76,7 @@ fn split_constraint(c: &Constraint, sketch: &SketchData, ctx: &SplitCtx) -> Vec<
 /// 2 new (`mid.x`, `mid.y`) variables with `mid.x` left free is
 /// correct and cannot over-constrain by itself.
 fn split_duplicated(c: &Constraint, ctx: &SplitCtx) -> Option<Vec<Constraint>> {
-    use ConstraintKind::*;
+    use ConstraintKind::{Horizontal, Vertical};
     Some(match &c.kind {
         Horizontal { line } if *line == ctx.line => duplicate(
             c.id,
@@ -153,7 +153,7 @@ fn point_param(sketch: &SketchData, point: SketchEntityId, ctx: &SplitCtx) -> f6
     let Some((px, py)) = entity_point_xy(sketch, point) else {
         return 0.0;
     };
-    ((px - ctx.start_xy.0) * ctx.dx + (py - ctx.start_xy.1) * ctx.dy) / ctx.len_sq
+    (py - ctx.start_xy.1).mul_add(ctx.dy, (px - ctx.start_xy.0) * ctx.dx) / ctx.len_sq
 }
 
 /// `Parallel` / `Perpendicular` / `Angle` / `EqualLength` /
@@ -175,7 +175,10 @@ fn point_param(sketch: &SketchData, point: SketchEntityId, ctx: &SplitCtx) -> f6
 /// the expected price of turning one rigid line into a two-segment
 /// hinge at the mid point.
 fn retarget_relational(c: &Constraint, ctx: &SplitCtx) -> Constraint {
-    use ConstraintKind::*;
+    use ConstraintKind::{
+        Angle, DistancePtLine, EqualLength, Parallel, Perpendicular, SymmetricAboutLine,
+        TangentLineArc,
+    };
     let sub = |id: SketchEntityId| if id == ctx.line { ctx.line_a } else { id };
     let kind = match &c.kind {
         Parallel { l1, l2 } => Parallel {

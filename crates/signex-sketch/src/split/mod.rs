@@ -160,7 +160,7 @@ pub fn split_line(
     } = validate_split(sketch, line, t)?;
     let dx = end_xy.0 - start_xy.0;
     let dy = end_xy.1 - start_xy.1;
-    let mid_xy = (start_xy.0 + t * dx, start_xy.1 + t * dy);
+    let mid_xy = (t.mul_add(dx, start_xy.0), t.mul_add(dy, start_xy.1));
     if !mid_xy.0.is_finite() || !mid_xy.1.is_finite() {
         return Err(SplitError::DegenerateLine);
     }
@@ -185,7 +185,7 @@ pub fn split_line(
         start_xy,
         dx,
         dy,
-        len_sq: dx * dx + dy * dy,
+        len_sq: dy.mul_add(dy, dx * dx),
         t,
     };
 
@@ -323,7 +323,7 @@ fn validate_split(
 
 /// Euclidean distance between two `(x, y)` pairs in mm.
 fn mm_distance(a: (f64, f64), b: (f64, f64)) -> f64 {
-    ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt()
+    (b.0 - a.0).hypot(b.1 - a.1)
 }
 
 /// Coordinates of a `Point` entity, or `None` if `id` doesn't resolve

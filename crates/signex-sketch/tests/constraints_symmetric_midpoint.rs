@@ -1,5 +1,5 @@
-//! Task 2.7 — residual tests for SymmetricAboutLine,
-//! SymmetricAboutPoint, and Midpoint.
+//! Task 2.7 — residual tests for `SymmetricAboutLine`,
+//! `SymmetricAboutPoint`, and Midpoint.
 
 mod common;
 use common::Sketch;

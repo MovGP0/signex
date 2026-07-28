@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct SketchEntityId(pub Uuid);
 
 impl SketchEntityId {
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -28,6 +29,7 @@ impl std::fmt::Display for SketchEntityId {
 pub struct ConstraintId(pub Uuid);
 
 impl ConstraintId {
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }

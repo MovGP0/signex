@@ -32,11 +32,13 @@ pub struct FixPoint2 {
 }
 
 impl FixPoint2 {
+    #[must_use]
     pub const fn new(x: i64, y: i64) -> Self {
         Self { x, y }
     }
 
     /// Convert from world-mm with rounding.
+    #[must_use]
     pub fn from_f64(p: Point2) -> Self {
         Self {
             x: (p.x * SCALE_F).round() as i64,
@@ -45,6 +47,7 @@ impl FixPoint2 {
     }
 
     /// Convert back to world-mm.
+    #[must_use]
     pub fn to_f64(self) -> Point2 {
         Point2::new((self.x as f64) / SCALE_F, (self.y as f64) / SCALE_F)
     }
@@ -52,6 +55,7 @@ impl FixPoint2 {
 
 /// Fixed-point variant of `signed_area`. Returns `2 * signed_area`
 /// in fixed-point units (the doubled form keeps it integer).
+#[must_use]
 pub fn signed_area_2x(points: &[FixPoint2]) -> i128 {
     if points.len() < 3 {
         return 0;
@@ -59,17 +63,23 @@ pub fn signed_area_2x(points: &[FixPoint2]) -> i128 {
     let mut acc: i128 = 0;
     for i in 0..points.len() {
         let j = (i + 1) % points.len();
-        acc += (points[i].x as i128) * (points[j].y as i128);
-        acc -= (points[j].x as i128) * (points[i].y as i128);
+        acc += i128::from(points[i].x) * i128::from(points[j].y);
+        acc -= i128::from(points[j].x) * i128::from(points[i].y);
     }
     acc
 }
 
 /// Fixed-point orient2d: sign of the determinant. Returns +1 / -1
 /// / 0 — exact arithmetic, no eps tolerance because integers.
+#[must_use]
 pub fn orient2d(a: FixPoint2, b: FixPoint2, c: FixPoint2) -> i32 {
-    let det: i128 = (b.x as i128 - a.x as i128) * (c.y as i128 - a.y as i128)
-        - (b.y as i128 - a.y as i128) * (c.x as i128 - a.x as i128);
+    let ax = i128::from(a.x);
+    let ay = i128::from(a.y);
+    let bx = i128::from(b.x);
+    let by = i128::from(b.y);
+    let cx = i128::from(c.x);
+    let cy = i128::from(c.y);
+    let det = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     if det > 0 {
         1
     } else if det < 0 {

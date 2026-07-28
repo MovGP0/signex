@@ -37,11 +37,12 @@ pub enum Unit {
 impl Unit {
     /// Family this unit belongs to. Conversions between different
     /// families return [`UnitError::WrongFamily`].
-    pub fn family(self) -> UnitFamily {
+    #[must_use]
+    pub const fn family(self) -> UnitFamily {
         match self {
-            Unit::Mm | Unit::Mil | Unit::In | Unit::Um => UnitFamily::Length,
-            Unit::Deg | Unit::Rad => UnitFamily::Angle,
-            Unit::Dimensionless => UnitFamily::Count,
+            Self::Mm | Self::Mil | Self::In | Self::Um => UnitFamily::Length,
+            Self::Deg | Self::Rad => UnitFamily::Angle,
+            Self::Dimensionless => UnitFamily::Count,
         }
     }
 }
@@ -66,7 +67,8 @@ pub struct Quantity {
 
 impl Quantity {
     /// Construct a length quantity in millimetres.
-    pub fn length(mm: f64) -> Self {
+    #[must_use]
+    pub const fn length(mm: f64) -> Self {
         Self {
             value: mm,
             unit: Unit::Mm,
@@ -74,7 +76,8 @@ impl Quantity {
     }
 
     /// Construct an angle quantity in radians.
-    pub fn angle(rad: f64) -> Self {
+    #[must_use]
+    pub const fn angle(rad: f64) -> Self {
         Self {
             value: rad,
             unit: Unit::Rad,
@@ -82,7 +85,8 @@ impl Quantity {
     }
 
     /// Construct a dimensionless count.
-    pub fn count(n: f64) -> Self {
+    #[must_use]
+    pub const fn count(n: f64) -> Self {
         Self {
             value: n,
             unit: Unit::Dimensionless,
@@ -106,10 +110,10 @@ impl Quantity {
 
     /// Convert to radians. Errors with [`UnitError::WrongFamily`]
     /// for non-angle units.
-    pub fn as_rad(self) -> Result<f64, UnitError> {
+    pub const fn as_rad(self) -> Result<f64, UnitError> {
         match self.unit {
             Unit::Rad => Ok(self.value),
-            Unit::Deg => Ok(self.value * std::f64::consts::PI / 180.0),
+            Unit::Deg => Ok(self.value.to_radians()),
             other => Err(UnitError::WrongFamily {
                 expected: UnitFamily::Angle,
                 got: other.family(),
@@ -119,7 +123,7 @@ impl Quantity {
 
     /// Return the raw scalar if this quantity is dimensionless.
     /// Errors with [`UnitError::WrongFamily`] otherwise.
-    pub fn as_count(self) -> Result<f64, UnitError> {
+    pub const fn as_count(self) -> Result<f64, UnitError> {
         match self.unit {
             Unit::Dimensionless => Ok(self.value),
             other => Err(UnitError::WrongFamily {

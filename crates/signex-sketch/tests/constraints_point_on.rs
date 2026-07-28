@@ -1,4 +1,4 @@
-//! Task 2.5 — residual tests for PointOnLine, PointOnArc, DistancePtLine.
+//! Task 2.5 — residual tests for `PointOnLine`, `PointOnArc`, `DistancePtLine`.
 
 mod common;
 use common::Sketch;

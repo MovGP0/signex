@@ -8,6 +8,7 @@ use crate::id::SketchEntityId;
 pub struct ArrayId(pub Uuid);
 
 impl ArrayId {
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -20,7 +21,8 @@ impl Default for ArrayId {
 }
 
 /// A sketch array — expands to multiple baked primitives at bake time.
-/// Each replica inherits attributes (PadAttr etc.) from `source`, with
+///
+/// Each replica inherits attributes (`PadAttr` etc.) from `source`, with
 /// per-instance overrides applied by the bake pipeline (number from
 /// `numbering`, position from the array geometry).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -32,7 +34,7 @@ pub struct Array {
     pub numbering: NumberingScheme,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
 pub enum ArrayKind {
     /// One-dimensional array. v0.13 bakes this kind.
@@ -83,7 +85,7 @@ pub enum ArrayKind {
 /// panel's per-instance checkbox grid (Phase B5 UI) toggle individual
 /// pads without needing to round-trip through an expression parser.
 /// Polar arrays use `j = 0` for every entry.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GridDepopulation {
     pub mask_expr: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -91,7 +93,7 @@ pub struct GridDepopulation {
 }
 
 /// Pad-numbering scheme for an array's expanded primitives.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
 pub enum NumberingScheme {
     /// Sequential integers. Default.
@@ -124,19 +126,20 @@ impl Default for NumberingScheme {
     }
 }
 
-fn default_skip_letters() -> bool {
+const fn default_skip_letters() -> bool {
     true
 }
-fn default_start_row() -> char {
+const fn default_start_row() -> char {
     'A'
 }
-fn default_start_col() -> u32 {
+const fn default_start_col() -> u32 {
     1
 }
 
 /// IPC-7351 BGA letter sequence. With `skip_letters` true, the alphabet
 /// is `ABCDEFGHJKLMNPRTUVWY` (I/O/Q/S/X/Z skipped). Excel-style
 /// extension produces `AA, AB, …` after the single-letter range.
+#[must_use]
 pub fn bga_row_letter(row_index: u32, skip_letters: bool, start_row: char) -> String {
     let alphabet: Vec<char> = if skip_letters {
         "ABCDEFGHJKLMNPRTUVWY".chars().collect()

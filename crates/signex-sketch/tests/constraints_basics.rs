@@ -1,4 +1,4 @@
-//! Task 2.3 — residual tests for Coincident, DistancePtPt,
+//! Task 2.3 — residual tests for Coincident, `DistancePtPt`,
 //! Horizontal, Vertical, Fixed.
 
 mod common;

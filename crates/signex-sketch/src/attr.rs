@@ -33,7 +33,7 @@ pub enum PadSide {
 }
 
 /// Drill specification for THT / NPT pads.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DrillSpec {
     /// Drill diameter — expression evaluated to a length (mm).
     pub diameter_expr: String,
@@ -46,7 +46,7 @@ pub struct DrillSpec {
     pub plated: bool,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -64,20 +64,18 @@ pub enum ElectricalType {
 }
 
 impl ElectricalType {
-    pub const ALL: &'static [ElectricalType] = &[
-        ElectricalType::Load,
-        ElectricalType::Source,
-        ElectricalType::Terminator,
-    ];
-    pub fn label(self) -> &'static str {
+    pub const ALL: &'static [Self] = &[Self::Load, Self::Source, Self::Terminator];
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            ElectricalType::Load => "Load",
-            ElectricalType::Source => "Source",
-            ElectricalType::Terminator => "Terminator",
+            Self::Load => "Load",
+            Self::Source => "Source",
+            Self::Terminator => "Terminator",
         }
     }
-    pub fn is_default(&self) -> bool {
-        matches!(self, ElectricalType::Load)
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        matches!(self, Self::Load)
     }
 }
 
@@ -108,22 +106,20 @@ pub enum PadFeature {
 }
 
 impl PadFeature {
-    pub const ALL: &'static [PadFeature] = &[
-        PadFeature::None,
-        PadFeature::Counterbore,
-        PadFeature::Countersink,
-    ];
+    pub const ALL: &'static [Self] = &[Self::None, Self::Counterbore, Self::Countersink];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PadFeature::None => "None",
-            PadFeature::Counterbore => "Counterbore",
-            PadFeature::Countersink => "Countersink",
+            Self::None => "None",
+            Self::Counterbore => "Counterbore",
+            Self::Countersink => "Countersink",
         }
     }
 
-    pub fn is_none(&self) -> bool {
-        matches!(self, PadFeature::None)
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
     }
 }
 
@@ -149,7 +145,8 @@ pub struct TestpointFlags {
 }
 
 impl TestpointFlags {
-    pub fn is_default(&self) -> bool {
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
         !self.top_assembly && !self.top_fab && !self.bottom_assembly && !self.bottom_fab
     }
 }
@@ -200,7 +197,8 @@ pub struct PadStackOverrides {
 }
 
 impl PadStackOverrides {
-    pub fn is_default(&self) -> bool {
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
         self.paste_top_expr.is_none()
             && self.paste_top_pct.is_none()
             && self.paste_bottom_expr.is_none()
@@ -383,9 +381,11 @@ pub enum CustomPadShape {
 }
 
 /// Solder-paste aperture layout for a pad.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
+#[derive(Default)]
 pub enum PasteAperturePattern {
+    #[default]
     Single,
     Grid {
         nx_expr: String,
@@ -397,47 +397,41 @@ pub enum PasteAperturePattern {
     },
 }
 
-impl Default for PasteAperturePattern {
-    fn default() -> Self {
-        Self::Single
-    }
-}
-
 /// Closed sketch profile bakes as a silkscreen line/arc set.
 /// v0.13 round-trips; v0.14 bakes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SilkAttr {
     pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as the courtyard polygon.
 /// v0.13 round-trips; v0.14 bakes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CourtyardAttr;
 
 /// Closed sketch profile bakes as a mask opening (cutout).
 /// v0.13 round-trips; v0.14 bakes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MaskOpeningAttr {
     pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as an explicit mask cover.
 /// v0.13 round-trips; v0.14 bakes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MaskExcludeAttr {
     pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as a stencil paste aperture.
 /// v0.13 round-trips; v0.14 bakes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PasteApertureAttr {
     pub layer: SignexLayer,
 }
 
 /// Closed sketch profile bakes as a copper-fill region.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PourAttr {
     pub layer: SignexLayer,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -464,19 +458,16 @@ pub enum PourFillType {
 }
 
 impl PourFillType {
-    /// Display order used by Properties-panel pick_lists. Mirrors the
+    /// Display order used by Properties-panel `pick_lists`. Mirrors the
     /// declaration order on the enum.
-    pub const ALL: &'static [PourFillType] = &[
-        PourFillType::Solid,
-        PourFillType::Hatched,
-        PourFillType::Outline,
-    ];
+    pub const ALL: &'static [Self] = &[Self::Solid, Self::Hatched, Self::Outline];
 
-    pub fn label(self) -> &'static str {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
         match self {
-            PourFillType::Solid => "Solid",
-            PourFillType::Hatched => "Hatched",
-            PourFillType::Outline => "Outline",
+            Self::Solid => "Solid",
+            Self::Hatched => "Hatched",
+            Self::Outline => "Outline",
         }
     }
 }
@@ -488,7 +479,7 @@ impl std::fmt::Display for PourFillType {
 }
 
 /// Thermal relief — how the pour connects to same-net pads.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThermalRelief {
     #[serde(default = "default_thermal_enabled")]
     pub enabled: bool,
@@ -511,7 +502,7 @@ impl Default for ThermalRelief {
     }
 }
 
-fn default_thermal_enabled() -> bool {
+const fn default_thermal_enabled() -> bool {
     true
 }
 fn default_thermal_gap() -> String {
@@ -520,12 +511,12 @@ fn default_thermal_gap() -> String {
 fn default_thermal_spoke() -> String {
     "0.254mm".into()
 }
-fn default_thermal_spoke_count() -> u8 {
+const fn default_thermal_spoke_count() -> u8 {
     4
 }
 
 /// Closed sketch profile bakes as a keepout region.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeepoutAttr {
     pub layer: SignexLayer,
     pub kinds: KeepoutKinds,
@@ -559,7 +550,7 @@ impl KeepoutKinds {
         no_pours: true,
     };
 
-    /// Antenna keep-clear — alias for ALL_COPPER.
+    /// Antenna keep-clear — alias for `ALL_COPPER`.
     pub const ANTENNA: Self = Self::ALL_COPPER;
 
     /// "No traces under this part" — typical for crystals, magnetics.
@@ -574,7 +565,7 @@ impl KeepoutKinds {
 }
 
 /// Closed sketch profile on a `BoardTopPlane` bakes as a board cutout.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BoardCutoutAttr {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edge_radius_expr: Option<String>,
@@ -582,12 +573,12 @@ pub struct BoardCutoutAttr {
     pub through: bool,
 }
 
-fn default_through() -> bool {
+const fn default_through() -> bool {
     true
 }
 
 /// Line entity attribute: this line is a V-score path.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VScoreHintAttr {
     #[serde(default = "default_v_depth")]
     pub depth_fraction_expr: String,
@@ -612,7 +603,7 @@ pub enum VScoreSide {
 
 /// v0.24 Track A — Linked-radius semantics for parametric pad corners.
 ///
-/// When a RoundRect pad is minted into a sketch, all four corner Arcs
+/// When a `RoundRect` pad is minted into a sketch, all four corner Arcs
 /// share a single `corner_r_<pad_id>` parameter so changing it updates
 /// every corner in lockstep — Fusion-parity behaviour. The user can
 /// later right-click an individual corner and "Unlink" to override one
@@ -624,11 +615,11 @@ pub enum VScoreSide {
 /// This A1 phase introduces the type only — the geometry generator
 /// reads radius implicitly through the shared parameter and does not
 /// store a `LinkedRadius` value yet.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
 pub enum LinkedRadius {
     /// All four corners read from the same sketch parameter. Default
-    /// state when a RoundRect pad is first minted into the sketch.
+    /// state when a `RoundRect` pad is first minted into the sketch.
     Shared { param: String },
     /// Each corner reads from its own sketch parameter — the user has
     /// "Unlinked" one or more corners and can override them

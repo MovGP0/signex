@@ -6,7 +6,7 @@
 //!
 //! by iterating the damped Newton update
 //!
-//!   (JᵀJ + λI) Δx = −Jᵀr
+//!   (`JᵀJ` + λI) Δx = −Jᵀr
 //!   x ← x + Δx       (if step reduces |r|²)
 //!   λ ← λ / 10       (good step — be more Gauss–Newton next time)
 //!   λ ← λ · 10       (bad step — be more steepest-descent next time)
@@ -53,7 +53,7 @@ use crate::solver::state::{EntityIndex, pack};
 pub const LAMBDA_INIT: f64 = 1e-3;
 
 /// CRIT-6: upper bound on Marquardt damping. After ~300 consecutive
-/// rejected steps `lambda` would otherwise grow to `1e297`; (JᵀJ + λI)
+/// rejected steps `lambda` would otherwise grow to `1e297`; (`JᵀJ` + λI)
 /// then overflows to Inf, the LU pivot check passes, and `lu_solve`
 /// produces NaN that silently poisons the state vector. We bail out
 /// before that happens with `DidNotConverge`.
@@ -185,13 +185,12 @@ pub fn solve_lm(
         let mut trial = state.clone();
         axpy(1.0, &delta, &mut trial);
 
-        let trial_r = match total_residual(sketch, &trial, &packed.index, params) {
-            Ok(rr) => rr,
-            Err(_) => {
-                lambda *= 10.0;
-                iterations += 1;
-                continue;
-            }
+        let trial_r = if let Ok(rr) = total_residual(sketch, &trial, &packed.index, params) {
+            rr
+        } else {
+            lambda *= 10.0;
+            iterations += 1;
+            continue;
         };
         let trial_norm_sq = norm_sq(&trial_r);
 

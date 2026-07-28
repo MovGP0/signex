@@ -55,12 +55,12 @@ fn make_matrix(n: usize) -> (Vec<Vec<f64>>, Vec<f64>) {
     for i in 0..n {
         for j in 0..n {
             a[i][j] = if i == j {
-                4.0 + (i as f64) * 0.01
+                (i as f64).mul_add(0.01, 4.0)
             } else {
                 1.0 / (1.0 + ((i as f64) - (j as f64)).abs())
             };
         }
-        b[i] = (i as f64) * 0.5 + 1.0;
+        b[i] = (i as f64).mul_add(0.5, 1.0);
     }
     (a, b)
 }
@@ -116,12 +116,11 @@ fn main() {
         });
 
         // Approximate FLOPS for solve = (2/3)·n³ (decompose) + 2·n² (subs).
-        let flops = (2.0 / 3.0) * (n as f64).powi(3) + 2.0 * (n as f64).powi(2);
+        let flops = 2.0f64.mul_add((n as f64).powi(2), (2.0 / 3.0) * (n as f64).powi(3));
         let gflops = flops / solve_ns;
 
         println!(
-            "{:>4}  {:>12.0}  {:>12.0}  {:>12.0}  {:>14.3}",
-            n, decompose_ns, lu_solve_ns, solve_ns, gflops
+            "{n:>4}  {decompose_ns:>12.0}  {lu_solve_ns:>12.0}  {solve_ns:>12.0}  {gflops:>14.3}"
         );
     }
 

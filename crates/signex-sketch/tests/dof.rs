@@ -165,7 +165,7 @@ fn dof_over_constrained_marks_red() {
                 .expect("residual evaluates at initial state");
             SolveResult {
                 state,
-                index: packed.index.clone(),
+                index: packed.index,
                 iterations: MAX_ITERS,
                 final_residual_norm: norm_vec(&r),
                 elapsed_ms: 0,

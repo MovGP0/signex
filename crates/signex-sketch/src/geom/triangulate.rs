@@ -3,7 +3,7 @@
 //! Time complexity: O(n²) for the basic form; with holes
 //! pre-merged via the bridge-edge technique it stays O((n+h)²)
 //! where h is the total hole-vertex count. Typical sketch closed
-//! loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
+//! loops have ≤ ~64 vertices (rounded rect = 8 + `4·arc_segments`),
 //! where the basic form's constant factors beat the more
 //! sophisticated O(n log n) variants.
 
@@ -24,6 +24,7 @@ use super::predicates::{Sign, orient2d, signed_area};
 /// Returns an empty Vec for fewer than three vertices, or when the
 /// polygon is self-intersecting / has collinear vertices that make
 /// every candidate degenerate.
+#[must_use]
 pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
     if polygon.len() < 3 {
         return Vec::new();
@@ -131,7 +132,7 @@ fn is_ear(polygon: &[Point2], ring: &[usize], prev: usize, curr: usize, next: us
     // different index — `ear_clip_with_holes`'s bridge stitch deliberately
     // duplicates the two cut vertices this way, so a coincident duplicate
     // must not block the ear it is itself a corner of.
-    for &i in ring.iter() {
+    for &i in ring {
         if i == prev || i == curr || i == next {
             continue;
         }
@@ -185,6 +186,7 @@ fn point_in_triangle(p: Point2, a: Point2, b: Point2, c: Point2) -> bool {
 /// the same order as the input. Hole rings should wind opposite
 /// to the outer ring (CCW outer + CW holes by convention) but
 /// the implementation normalises before merging.
+#[must_use]
 pub fn ear_clip_with_holes(
     outer: &[Point2],
     holes: &[Vec<Point2>],
@@ -266,7 +268,7 @@ fn bridge_hole_into_outer(outer: &[Point2], hole: &[Point2]) -> Vec<Point2> {
     for (i, p) in outer.iter().enumerate() {
         let dx = p.x - target.x;
         let dy = p.y - target.y;
-        let d = dx * dx + dy * dy;
+        let d = dy.mul_add(dy, dx * dx);
         if d < best_d {
             best_d = d;
             outer_idx = i;

@@ -29,11 +29,12 @@ use crate::unit::{Quantity, UnitFamily};
 /// strings carry an optional `=` prefix (Altium-style) and are
 /// otherwise the same expression-language input that the parser
 /// accepts.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ParameterTable(pub BTreeMap<String, String>);
 
 impl ParameterTable {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -51,10 +52,12 @@ impl ParameterTable {
         self.0.iter()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -64,7 +67,7 @@ impl ParameterTable {
 /// whitespace from a parameter source string.
 fn strip_eq_prefix(src: &str) -> &str {
     let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
+    s.strip_prefix('=').map_or(s, str::trim_start)
 }
 
 /// Resolve every parameter to a canonical-unit `f64` (mm for

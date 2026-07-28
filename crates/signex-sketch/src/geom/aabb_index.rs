@@ -29,12 +29,14 @@ pub struct Aabb {
 }
 
 impl Aabb {
-    pub fn new(min: Point2, max: Point2) -> Self {
+    #[must_use]
+    pub const fn new(min: Point2, max: Point2) -> Self {
         Self { min, max }
     }
 
     /// Build an Aabb covering all `points`. Returns `None` for an
     /// empty slice.
+    #[must_use]
     pub fn from_points(points: &[Point2]) -> Option<Self> {
         let first = points.first().copied()?;
         let mut min = first;
@@ -56,13 +58,15 @@ impl Aabb {
         Some(Self { min, max })
     }
 
+    #[must_use]
     pub fn contains(&self, p: Point2) -> bool {
         p.x >= self.min.x && p.x <= self.max.x && p.y >= self.min.y && p.y <= self.max.y
     }
 
     /// `true` when this box overlaps `other` — inclusive on the
     /// shared boundary.
-    pub fn overlaps(&self, other: Aabb) -> bool {
+    #[must_use]
+    pub fn overlaps(&self, other: Self) -> bool {
         !(self.max.x < other.min.x
             || other.max.x < self.min.x
             || self.max.y < other.min.y
@@ -71,6 +75,7 @@ impl Aabb {
 
     /// Expand the box by `pad` in every direction. Used to query
     /// "anything within `pad` of this point" via point-vs-box.
+    #[must_use]
     pub fn expanded(&self, pad: f64) -> Self {
         Self {
             min: Point2::new(self.min.x - pad, self.min.y - pad),
@@ -88,10 +93,12 @@ pub struct AabbIndex<T> {
 }
 
 impl<T: Clone> AabbIndex<T> {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { items: Vec::new() }
     }
 
+    #[must_use]
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             items: Vec::with_capacity(cap),
@@ -102,11 +109,13 @@ impl<T: Clone> AabbIndex<T> {
         self.items.push((item, bbox));
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.items.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
@@ -116,6 +125,7 @@ impl<T: Clone> AabbIndex<T> {
 
     /// Items whose bbox contains `p`. Returns clones so callers
     /// can use the items after the index goes out of scope.
+    #[must_use]
     pub fn query_point(&self, p: Point2) -> Vec<T> {
         self.items
             .iter()
@@ -127,7 +137,7 @@ impl<T: Clone> AabbIndex<T> {
     /// Items whose bbox overlaps `region`. Iterator-style so
     /// callers that just want to walk hits don't pay the Vec
     /// allocation.
-    pub fn query_region<'a>(&'a self, region: Aabb) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn query_region(&self, region: Aabb) -> impl Iterator<Item = &T> + '_ {
         self.items.iter().filter_map(move |(item, bb)| {
             if bb.overlaps(region) {
                 Some(item)

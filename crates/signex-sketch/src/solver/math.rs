@@ -36,39 +36,45 @@ pub type Vec2 = (f64, f64);
 
 /// Component-wise subtraction `a − b`.
 #[inline]
+#[must_use]
 pub fn sub(a: Vec2, b: Vec2) -> Vec2 {
     (a.0 - b.0, a.1 - b.1)
 }
 
 /// Component-wise addition `a + b`.
 #[inline]
+#[must_use]
 pub fn add(a: Vec2, b: Vec2) -> Vec2 {
     (a.0 + b.0, a.1 + b.1)
 }
 
 /// Scalar multiply `a · v`.
 #[inline]
+#[must_use]
 pub fn scale(s: f64, v: Vec2) -> Vec2 {
     (s * v.0, s * v.1)
 }
 
 /// Dot product `a · b = a.x·b.x + a.y·b.y`.
 #[inline]
+#[must_use]
 pub fn dot(a: Vec2, b: Vec2) -> f64 {
-    a.0 * b.0 + a.1 * b.1
+    a.1.mul_add(b.1, a.0 * b.0)
 }
 
 /// 2D scalar cross product `a × b = a.x·b.y − a.y·b.x`. Returns the
 /// signed magnitude of the 3D cross's z-component, useful as a
 /// "side of line" test (positive = `b` is left of `a`).
 #[inline]
+#[must_use]
 pub fn cross(a: Vec2, b: Vec2) -> f64 {
-    a.0 * b.1 - a.1 * b.0
+    a.1.mul_add(-b.0, a.0 * b.1)
 }
 
 /// Euclidean norm `|v| = sqrt(v.x² + v.y²)`. Uses [`f64::hypot`]
 /// for numerical stability on extreme-magnitude inputs.
 #[inline]
+#[must_use]
 pub fn norm(v: Vec2) -> f64 {
     v.0.hypot(v.1)
 }
@@ -77,12 +83,14 @@ pub fn norm(v: Vec2) -> f64 {
 /// when only relative magnitudes matter (e.g. distance comparisons,
 /// LM convergence test on `|r|²`).
 #[inline]
+#[must_use]
 pub fn norm_sq_2(v: Vec2) -> f64 {
-    v.0 * v.0 + v.1 * v.1
+    v.1.mul_add(v.1, v.0 * v.0)
 }
 
 /// Euclidean distance between two points.
 #[inline]
+#[must_use]
 pub fn distance(a: Vec2, b: Vec2) -> f64 {
     norm(sub(b, a))
 }
@@ -95,6 +103,7 @@ pub fn distance(a: Vec2, b: Vec2) -> f64 {
 /// continuous across a sketch that crosses the ±π branch cut so the
 /// LM driver sees a well-formed derivative instead of a 2π jump.
 #[inline]
+#[must_use]
 pub fn wrap_to_pi(theta: f64) -> f64 {
     use std::f64::consts::PI;
     let two_pi = 2.0 * PI;
@@ -114,12 +123,14 @@ pub fn wrap_to_pi(theta: f64) -> f64 {
 /// `|x|²` for a flat vector. The LM convergence test compares this
 /// to a tolerance.
 #[inline]
+#[must_use]
 pub fn norm_sq(x: &[f64]) -> f64 {
     x.iter().map(|&xi| xi * xi).sum()
 }
 
 /// `|x|` for a flat vector.
 #[inline]
+#[must_use]
 pub fn norm_vec(x: &[f64]) -> f64 {
     norm_sq(x).sqrt()
 }
@@ -129,13 +140,14 @@ pub fn norm_vec(x: &[f64]) -> f64 {
 pub fn axpy(alpha: f64, x: &[f64], y: &mut [f64]) {
     assert_eq!(x.len(), y.len(), "axpy: length mismatch");
     for i in 0..x.len() {
-        y[i] += alpha * x[i];
+        y[i] = alpha.mul_add(x[i], y[i]);
     }
 }
 
 /// `y = A · x` for an `m × n` matrix `A` (row-major, `Vec<Vec<f64>>`).
 /// Returns a fresh `Vec<f64>` of length `m`. Panics if any row of
 /// `A` has length ≠ `x.len()`.
+#[must_use]
 pub fn matvec(a: &[Vec<f64>], x: &[f64]) -> Vec<f64> {
     let n = x.len();
     let mut y = Vec::with_capacity(a.len());
@@ -143,7 +155,7 @@ pub fn matvec(a: &[Vec<f64>], x: &[f64]) -> Vec<f64> {
         assert_eq!(row.len(), n, "matvec: row width mismatch");
         let mut sum = 0.0;
         for j in 0..n {
-            sum += row[j] * x[j];
+            sum = row[j].mul_add(x[j], sum);
         }
         y.push(sum);
     }
@@ -153,6 +165,7 @@ pub fn matvec(a: &[Vec<f64>], x: &[f64]) -> Vec<f64> {
 /// `y = Aᵀ · x` for an `m × n` matrix `A` (row-major). Returns a
 /// fresh `Vec<f64>` of length `n`. Panics if `x.len() != m` or any
 /// row width differs.
+#[must_use]
 pub fn matvec_t(a: &[Vec<f64>], x: &[f64]) -> Vec<f64> {
     let m = a.len();
     assert_eq!(x.len(), m, "matvec_t: vector length must equal matrix rows");
@@ -165,7 +178,7 @@ pub fn matvec_t(a: &[Vec<f64>], x: &[f64]) -> Vec<f64> {
         assert_eq!(a[i].len(), n, "matvec_t: row width mismatch");
         let xi = x[i];
         for j in 0..n {
-            y[j] += a[i][j] * xi;
+            y[j] = a[i][j].mul_add(xi, y[j]);
         }
     }
     y
@@ -178,6 +191,7 @@ pub fn matvec_t(a: &[Vec<f64>], x: &[f64]) -> Vec<f64> {
 ///
 /// LM's normal equations need this on every iteration: `(AᵀA + λI)
 /// Δx = −Aᵀr`.
+#[must_use]
 pub fn matmul_ata(a: &[Vec<f64>]) -> Vec<Vec<f64>> {
     let m = a.len();
     if m == 0 {
@@ -190,7 +204,7 @@ pub fn matmul_ata(a: &[Vec<f64>]) -> Vec<Vec<f64>> {
             let mut sum = 0.0;
             for i in 0..m {
                 debug_assert_eq!(a[i].len(), n, "matmul_ata: ragged matrix");
-                sum += a[i][j] * a[i][k];
+                sum = a[i][j].mul_add(a[i][k], sum);
             }
             gram[j][k] = sum;
             if j != k {

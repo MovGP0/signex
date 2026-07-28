@@ -21,10 +21,11 @@ use super::segment::{Arc2, Circle2};
 ///       hits = midpoint ± h * perpendicular(c1 - c0) / d
 ///   - Tangent (d == r0 + r1 or d == |r0 - r1|) collapses to one
 ///     hit at the tangency point.
+#[must_use]
 pub fn circle_circle_intersections(a: Circle2, b: Circle2) -> Vec<Point2> {
     let dx = b.center.x - a.center.x;
     let dy = b.center.y - a.center.y;
-    let d_sq = dx * dx + dy * dy;
+    let d_sq = dy.mul_add(dy, dx * dx);
     if d_sq < 1e-24 {
         // Concentric circles — either coincident (infinite hits,
         // we return empty) or nested (0 hits).
@@ -36,8 +37,8 @@ pub fn circle_circle_intersections(a: Circle2, b: Circle2) -> Vec<Point2> {
     if d > r_sum + 1e-12 || d < r_diff - 1e-12 {
         return Vec::new();
     }
-    let aa = (a.radius * a.radius - b.radius * b.radius + d_sq) / (2.0 * d);
-    let h_sq = a.radius * a.radius - aa * aa;
+    let aa = (b.radius.mul_add(-b.radius, a.radius * a.radius) + d_sq) / (2.0 * d);
+    let h_sq = a.radius.mul_add(a.radius, -(aa * aa));
     let h = h_sq.max(0.0).sqrt();
     let mid = Point2::new(a.center.x + aa * dx / d, a.center.y + aa * dy / d);
     let perp_x = -dy / d;
@@ -55,6 +56,7 @@ pub fn circle_circle_intersections(a: Circle2, b: Circle2) -> Vec<Point2> {
 /// Find intersection points of an arc and a circle. Wraps
 /// `circle_circle_intersections` and filters by the arc's angular
 /// range.
+#[must_use]
 pub fn arc_circle_intersections(arc: Arc2, circle: Circle2) -> Vec<Point2> {
     let a_circle = Circle2::new(arc.center, arc.radius);
     circle_circle_intersections(a_circle, circle)
@@ -68,6 +70,7 @@ pub fn arc_circle_intersections(arc: Arc2, circle: Circle2) -> Vec<Point2> {
 
 /// Find intersection points of two arcs. Wraps the circle solver
 /// and filters BOTH arcs' angular ranges.
+#[must_use]
 pub fn arc_arc_intersections(a: Arc2, b: Arc2) -> Vec<Point2> {
     let circle_a = Circle2::new(a.center, a.radius);
     let circle_b = Circle2::new(b.center, b.radius);

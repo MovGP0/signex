@@ -20,6 +20,7 @@ use super::predicates::{Sign, orient2d};
 /// Build the convex hull of `points`. Returns the hull vertices in
 /// counter-clockwise order. An input with fewer than 3 distinct
 /// points returns the deduplicated input as-is (a zero-area hull).
+#[must_use]
 pub fn convex_hull(points: &[Point2]) -> Vec<Point2> {
     if points.len() < 2 {
         return points.to_vec();
@@ -37,7 +38,7 @@ pub fn convex_hull(points: &[Point2]) -> Vec<Point2> {
 
     // Lower hull.
     let mut lower: Vec<Point2> = Vec::with_capacity(sorted.len());
-    for &pt in sorted.iter() {
+    for &pt in &sorted {
         while lower.len() >= 2 {
             let a = lower[lower.len() - 2];
             let b = lower[lower.len() - 1];

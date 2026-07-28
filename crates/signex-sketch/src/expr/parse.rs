@@ -102,7 +102,7 @@ struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    fn new(src: &'a str) -> Self {
+    const fn new(src: &'a str) -> Self {
         Self { src, cursor: 0 }
     }
 

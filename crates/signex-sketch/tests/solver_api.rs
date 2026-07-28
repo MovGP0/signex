@@ -103,24 +103,21 @@ fn solver_detects_over_constrained() {
     });
 
     let solver = Solver::default();
-    match solver.solve(&s.data, &empty_params()) {
-        Ok(out) => {
-            // LM converged to a least-squares compromise; both
-            // Distance constraints have non-trivial residuals and
-            // should be in over_constraints.
-            assert!(
-                !out.over_constraints.is_empty(),
-                "expected at least one over-constrained constraint, got {:?}",
-                out.over_constraints
-            );
-            // The conflicting point should be flagged Over.
-            assert_eq!(out.colours.get(&p2), Some(&DofColor::Over));
-        }
-        Err(_) => {
-            // LM may fail to converge on irreconcilable constraints.
-            // Either outcome is acceptable; we just don't want a
-            // silent success.
-        }
+    if let Ok(out) = solver.solve(&s.data, &empty_params()) {
+        // LM converged to a least-squares compromise; both
+        // Distance constraints have non-trivial residuals and
+        // should be in over_constraints.
+        assert!(
+            !out.over_constraints.is_empty(),
+            "expected at least one over-constrained constraint, got {:?}",
+            out.over_constraints
+        );
+        // The conflicting point should be flagged Over.
+        assert_eq!(out.colours.get(&p2), Some(&DofColor::Over));
+    } else {
+        // LM may fail to converge on irreconcilable constraints.
+        // Either outcome is acceptable; we just don't want a
+        // silent success.
     }
 }
 

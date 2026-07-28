@@ -1,4 +1,4 @@
-//! Task 2.5 — PointOnLine / PointOnArc / DistancePtLine residuals.
+//! Task 2.5 — `PointOnLine` / `PointOnArc` / `DistancePtLine` residuals.
 //!
 //! Each helper returns a single scalar residual (`Vec<f64>` of length 1)
 //! that the Levenberg–Marquardt driver in Phase 3 will drive to zero.
@@ -61,7 +61,7 @@ fn point_and_line(
     Ok((p, a, b))
 }
 
-/// PointOnLine: signed perpendicular distance from `point` to the
+/// `PointOnLine`: signed perpendicular distance from `point` to the
 /// infinite line through `line`'s endpoints. Zero when `point` sits
 /// on the line.
 ///
@@ -79,7 +79,7 @@ pub fn point_on_line(
     Ok(vec![d])
 }
 
-/// PointOnArc: distance from `point` to the arc's centre equals the
+/// `PointOnArc`: distance from `point` to the arc's centre equals the
 /// arc's underlying radius. The radius is implied by the arc's start
 /// Point — `radius = |start − center|`.
 ///
@@ -101,7 +101,7 @@ pub fn point_on_arc(
     Ok(vec![distance(p, c) - distance(s, c)])
 }
 
-/// DistancePtLine: signed perpendicular distance from `point` to the
+/// `DistancePtLine`: signed perpendicular distance from `point` to the
 /// infinite line, minus `target_mm`. Zero when `point` is exactly
 /// `target_mm` away on the line's right-hand side (cross-product
 /// sign convention; left-hand side requires negative target).
@@ -120,7 +120,7 @@ pub fn distance_pt_line(
     Ok(vec![d - target_mm])
 }
 
-/// v0.23 — DistancePtCircle: signed offset from `point` to the
+/// v0.23 — `DistancePtCircle`: signed offset from `point` to the
 /// boundary of `circle`. Residual is `|p - centre| - radius - target`.
 /// `target = 0` reduces to "point on the circle". Positive target
 /// offsets outward (further from centre); negative offsets inward.

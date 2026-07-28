@@ -120,8 +120,14 @@ pub enum ConstraintKind {
 
 impl ConstraintKind {
     /// Number of scalar residuals this constraint contributes.
-    pub fn residual_count(&self) -> usize {
-        use ConstraintKind::*;
+    #[must_use]
+    pub const fn residual_count(&self) -> usize {
+        use ConstraintKind::{
+            Angle, Coincident, DistancePtCircle, DistancePtLine, DistancePtPt, EqualLength,
+            EqualRadius, Fixed, Horizontal, Midpoint, Parallel, Perpendicular, PointOnArc,
+            PointOnLine, SymmetricAboutLine, SymmetricAboutPoint, TangentArcArc, TangentLineArc,
+            Vertical,
+        };
         match self {
             Coincident { .. } => 2,
             PointOnLine { .. } => 1,

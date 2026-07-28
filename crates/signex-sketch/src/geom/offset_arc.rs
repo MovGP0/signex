@@ -44,15 +44,15 @@ pub enum PolyElement {
 impl PolyElement {
     fn end(&self) -> Point2 {
         match *self {
-            PolyElement::Line { b, .. } => b,
-            PolyElement::Arc {
+            Self::Line { b, .. } => b,
+            Self::Arc {
                 centre,
                 radius,
                 end_rad,
                 ..
             } => Point2::new(
-                centre.x + radius * end_rad.cos(),
-                centre.y + radius * end_rad.sin(),
+                radius.mul_add(end_rad.cos(), centre.x),
+                radius.mul_add(end_rad.sin(), centre.y),
             ),
         }
     }
@@ -63,8 +63,8 @@ impl PolyElement {
     /// (outward from centre = positive offset direction for CCW).
     fn start_outward_normal(&self, polygon_ccw: bool) -> (f64, f64) {
         match *self {
-            PolyElement::Line { a, b } => unit_perp_outward(a, b, polygon_ccw),
-            PolyElement::Arc {
+            Self::Line { a, b } => unit_perp_outward(a, b, polygon_ccw),
+            Self::Arc {
                 centre,
                 radius,
                 start_rad,
@@ -88,8 +88,8 @@ impl PolyElement {
 
     fn end_outward_normal(&self, polygon_ccw: bool) -> (f64, f64) {
         match *self {
-            PolyElement::Line { a, b } => unit_perp_outward(a, b, polygon_ccw),
-            PolyElement::Arc {
+            Self::Line { a, b } => unit_perp_outward(a, b, polygon_ccw),
+            Self::Arc {
                 end_rad, sweep_ccw, ..
             } => {
                 let radial = (end_rad.cos(), end_rad.sin());
@@ -108,7 +108,7 @@ impl PolyElement {
 fn unit_perp_outward(a: Point2, b: Point2, ccw: bool) -> (f64, f64) {
     let dx = b.x - a.x;
     let dy = b.y - a.y;
-    let len = (dx * dx + dy * dy).sqrt().max(1e-12);
+    let len = dx.hypot(dy).max(1e-12);
     let perp = (dy / len, -dx / len);
     if ccw { perp } else { (-perp.0, -perp.1) }
 }
@@ -126,6 +126,7 @@ fn unit_perp_outward(a: Point2, b: Point2, ccw: bool) -> (f64, f64) {
 /// `polygon_ccw` tells us the original polyline's winding so the
 /// outward normal direction is unambiguous. Caller computes this
 /// via the shoelace area on the polyline endpoints.
+#[must_use]
 pub fn offset_arc_polyline(
     elements: &[PolyElement],
     d: f64,
@@ -141,12 +142,16 @@ pub fn offset_arc_polyline(
         let prev = elements[(i + n - 1) % n];
         let in_normal = prev.end_outward_normal(polygon_ccw);
         let out_normal = el.start_outward_normal(polygon_ccw);
-        let break_dot = in_normal.0 * out_normal.0 + in_normal.1 * out_normal.1;
+        let break_dot = in_normal
+            .1
+            .mul_add(out_normal.1, in_normal.0 * out_normal.0);
         if break_dot < 1.0 - 1e-9 {
             // Normals diverge → there's a corner break to bridge.
             // Convex iff cross of the two normals matches polygon
             // orientation.
-            let cross = in_normal.0 * out_normal.1 - in_normal.1 * out_normal.0;
+            let cross = in_normal
+                .1
+                .mul_add(-out_normal.0, in_normal.0 * out_normal.1);
             let convex = (cross > 0.0) == polygon_ccw;
             if convex && d.abs() > 1e-12 {
                 let pivot = prev.end();
@@ -179,8 +184,8 @@ fn offset_element(el: PolyElement, d: f64, polygon_ccw: bool) -> PolyElement {
         PolyElement::Line { a, b } => {
             let n = unit_perp_outward(a, b, polygon_ccw);
             PolyElement::Line {
-                a: Point2::new(a.x + d * n.0, a.y + d * n.1),
-                b: Point2::new(b.x + d * n.0, b.y + d * n.1),
+                a: Point2::new(d.mul_add(n.0, a.x), d.mul_add(n.1, a.y)),
+                b: Point2::new(d.mul_add(n.0, b.x), d.mul_add(n.1, b.y)),
             }
         }
         PolyElement::Arc {

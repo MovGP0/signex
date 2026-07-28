@@ -81,13 +81,14 @@ pub enum EntityKind {
     Circle { center: SketchEntityId, radius: f64 },
 }
 
-fn default_sweep_ccw() -> bool {
+const fn default_sweep_ccw() -> bool {
     true
 }
 
 impl Entity {
     /// Construct a bare entity with no bake attributes attached.
-    pub fn new(id: SketchEntityId, plane: PlaneId, kind: EntityKind) -> Self {
+    #[must_use]
+    pub const fn new(id: SketchEntityId, plane: PlaneId, kind: EntityKind) -> Self {
         Self {
             id,
             plane,
@@ -111,12 +112,14 @@ impl Entity {
     /// entity. Construction and Centerline both qualify. Used by every
     /// `bake_*` site in `signex-bake` to avoid lit-by-N copy of the
     /// same `if entity.construction || entity.centerline` check.
-    pub fn bake_skipped(&self) -> bool {
+    #[must_use]
+    pub const fn bake_skipped(&self) -> bool {
         self.construction || self.centerline
     }
 
     /// Point endpoints reachable from this entity. Used by the
     /// solver to discover entity → state-vector mapping.
+    #[must_use]
     pub fn point_refs(&self) -> Vec<SketchEntityId> {
         match self.kind {
             EntityKind::Point { .. } => vec![self.id],

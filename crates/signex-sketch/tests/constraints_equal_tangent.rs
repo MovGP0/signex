@@ -1,5 +1,5 @@
-//! Task 2.6 — residual tests for EqualLength, EqualRadius,
-//! TangentLineArc, TangentArcArc.
+//! Task 2.6 — residual tests for `EqualLength`, `EqualRadius`,
+//! `TangentLineArc`, `TangentArcArc`.
 
 mod common;
 use common::Sketch;

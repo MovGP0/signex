@@ -67,7 +67,7 @@ impl Ord for Cell {
 impl Cell {
     fn new(centre: Point2, half: f64, polygon: &[Point2]) -> Self {
         let distance = signed_distance_to_polygon(centre, polygon);
-        let upper_bound = distance + half * std::f64::consts::SQRT_2;
+        let upper_bound = half.mul_add(std::f64::consts::SQRT_2, distance);
         Self {
             centre,
             half,
@@ -84,6 +84,7 @@ impl Cell {
 /// `precision` controls when subdivision stops. Smaller =
 /// better label position but more work; `0.5 mm` is plenty for
 /// PCB designator placement on typical pads.
+#[must_use]
 pub fn pole_of_inaccessibility(polygon: &[Point2], precision: f64) -> Option<Point2> {
     if polygon.len() < 3 {
         return None;
@@ -149,8 +150,8 @@ pub fn pole_of_inaccessibility(polygon: &[Point2], precision: f64) -> Option<Poi
             continue;
         }
         let h = cell.half / 2.0;
-        for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-            let centre = Point2::new(cell.centre.x + sx * h, cell.centre.y + sy * h);
+        for (sx, sy) in [(-1.0_f64, -1.0_f64), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+            let centre = Point2::new(sx.mul_add(h, cell.centre.x), sy.mul_add(h, cell.centre.y));
             queue.push(Cell::new(centre, h, polygon));
         }
     }
@@ -212,15 +213,15 @@ fn point_in_polygon(p: Point2, polygon: &[Point2]) -> bool {
 fn point_to_segment_distance(p: Point2, a: Point2, b: Point2) -> f64 {
     let dx = b.x - a.x;
     let dy = b.y - a.y;
-    let len_sq = dx * dx + dy * dy;
+    let len_sq = dy.mul_add(dy, dx * dx);
     if len_sq < 1e-12 {
-        return ((p.x - a.x).powi(2) + (p.y - a.y).powi(2)).sqrt();
+        return (p.x - a.x).hypot(p.y - a.y);
     }
-    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq;
+    let t = (p.y - a.y).mul_add(dy, (p.x - a.x) * dx) / len_sq;
     let t = t.clamp(0.0, 1.0);
     let qx = a.x + t * dx;
     let qy = a.y + t * dy;
-    ((p.x - qx).powi(2) + (p.y - qy).powi(2)).sqrt()
+    (p.x - qx).hypot(p.y - qy)
 }
 
 #[cfg(test)]

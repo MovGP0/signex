@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct PlaneId(pub Uuid);
 
 impl PlaneId {
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -17,14 +18,14 @@ impl Default for PlaneId {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plane {
     pub id: PlaneId,
     #[serde(flatten)]
     pub kind: PlaneKind,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
 pub enum PlaneKind {
     /// Board top — Z=0 in footprint local coords. Geometry on this

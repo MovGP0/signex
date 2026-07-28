@@ -17,6 +17,7 @@ pub struct Segment2 {
 }
 
 impl Segment2 {
+    #[must_use]
     pub const fn new(a: Point2, b: Point2) -> Self {
         Self { a, b }
     }
@@ -24,25 +25,29 @@ impl Segment2 {
     /// Linearly interpolate along the segment. `t = 0` returns `a`,
     /// `t = 1` returns `b`. Outside `[0, 1]` extrapolates onto the
     /// underlying line.
+    #[must_use]
     pub fn at(&self, t: f64) -> Point2 {
         Point2 {
-            x: self.a.x + t * (self.b.x - self.a.x),
-            y: self.a.y + t * (self.b.y - self.a.y),
+            x: t.mul_add(self.b.x - self.a.x, self.a.x),
+            y: t.mul_add(self.b.y - self.a.y, self.a.y),
         }
     }
 
+    #[must_use]
     pub fn dx(&self) -> f64 {
         self.b.x - self.a.x
     }
 
+    #[must_use]
     pub fn dy(&self) -> f64 {
         self.b.y - self.a.y
     }
 
+    #[must_use]
     pub fn length_sq(&self) -> f64 {
         let dx = self.dx();
         let dy = self.dy();
-        dx * dx + dy * dy
+        dy.mul_add(dy, dx * dx)
     }
 }
 
@@ -54,6 +59,7 @@ pub struct Circle2 {
 }
 
 impl Circle2 {
+    #[must_use]
     pub const fn new(center: Point2, radius: f64) -> Self {
         Self { center, radius }
     }
@@ -74,7 +80,14 @@ pub struct Arc2 {
 }
 
 impl Arc2 {
-    pub fn new(center: Point2, radius: f64, start_rad: f64, end_rad: f64, sweep_ccw: bool) -> Self {
+    #[must_use]
+    pub const fn new(
+        center: Point2,
+        radius: f64,
+        start_rad: f64,
+        end_rad: f64,
+        sweep_ccw: bool,
+    ) -> Self {
         Self {
             center,
             radius,
@@ -87,6 +100,7 @@ impl Arc2 {
     /// `true` when the angle `theta` (any reference frame, will be
     /// normalised) lies within the arc's sweep — inclusive on both
     /// ends. Handles arcs that cross the seam.
+    #[must_use]
     pub fn contains_angle(&self, theta: f64) -> bool {
         let two_pi = std::f64::consts::TAU;
         let normalise = |a: f64| -> f64 {
@@ -146,15 +160,16 @@ pub enum SegmentIntersection {
 /// determinant of the 2x2 system tells us the lines aren't parallel;
 /// when it's zero we fall through to a colinear-overlap check using
 /// projection onto the longest axis.
+#[must_use]
 pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersection {
     let r = (p.dx(), p.dy());
     let s = (q.dx(), q.dy());
     // Cross product of the two direction vectors.
-    let denom = r.0 * s.1 - r.1 * s.0;
+    let denom = r.1.mul_add(-s.0, r.0 * s.1);
     let qmp = (q.a.x - p.a.x, q.a.y - p.a.y);
     if denom.abs() <= DEFAULT_TOL * (r.0.abs() + r.1.abs() + s.0.abs() + s.1.abs()).max(1.0) {
         // Parallel — colinear iff (q-p) × r == 0 too.
-        let cross = qmp.0 * r.1 - qmp.1 * r.0;
+        let cross = qmp.1.mul_add(-r.0, qmp.0 * r.1);
         if cross.abs() > DEFAULT_TOL * (qmp.0.abs() + qmp.1.abs() + r.0.abs() + r.1.abs()).max(1.0)
         {
             return SegmentIntersection::None;
@@ -162,10 +177,10 @@ pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersec
         // Colinear: parameterise q on p's line via projection along
         // the dominant axis. Avoids divide-by-near-zero on degenerate
         // r where both components are tiny.
-        let len_sq = r.0 * r.0 + r.1 * r.1;
+        let len_sq = r.1.mul_add(r.1, r.0 * r.0);
         if len_sq <= DEFAULT_TOL {
             // p is a point — it intersects iff q contains it.
-            return if (q.a == p.a) || (q.b == p.a) {
+            return if (q.a == p.a) || (q.b == p.b) {
                 SegmentIntersection::Point {
                     pt: p.a,
                     t0: 0.0,
@@ -175,8 +190,8 @@ pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersec
                 SegmentIntersection::None
             };
         }
-        let t_q_a = (qmp.0 * r.0 + qmp.1 * r.1) / len_sq;
-        let t_q_b = ((q.b.x - p.a.x) * r.0 + (q.b.y - p.a.y) * r.1) / len_sq;
+        let t_q_a = qmp.1.mul_add(r.1, qmp.0 * r.0) / len_sq;
+        let t_q_b = (q.b.y - p.a.y).mul_add(r.1, (q.b.x - p.a.x) * r.0) / len_sq;
         let (t_lo, t_hi) = if t_q_a <= t_q_b {
             (t_q_a, t_q_b)
         } else {
@@ -201,8 +216,8 @@ pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersec
     }
     // Non-parallel: solve for t and s. Both must lie in [0, 1] for a
     // proper segment intersection.
-    let t = (qmp.0 * s.1 - qmp.1 * s.0) / denom;
-    let u = (qmp.0 * r.1 - qmp.1 * r.0) / denom;
+    let t = qmp.1.mul_add(-s.0, qmp.0 * s.1) / denom;
+    let u = qmp.1.mul_add(-r.0, qmp.0 * r.1) / denom;
     if (-DEFAULT_TOL..=1.0 + DEFAULT_TOL).contains(&t)
         && (-DEFAULT_TOL..=1.0 + DEFAULT_TOL).contains(&u)
     {
@@ -229,21 +244,24 @@ pub fn segment_segment_intersection(p: Segment2, q: Segment2) -> SegmentIntersec
 /// The discriminant `b² - 4ac` discriminates the three cases. Both
 /// roots are filtered to `[0, 1]` so the returned hits lie on the
 /// segment, not the extended line.
+#[must_use]
 pub fn segment_circle_intersections(seg: Segment2, circle: Circle2) -> Vec<(Point2, f64)> {
     let d = (seg.dx(), seg.dy());
     let f = (seg.a.x - circle.center.x, seg.a.y - circle.center.y);
-    let a = d.0 * d.0 + d.1 * d.1;
+    let a = d.1.mul_add(d.1, d.0 * d.0);
     if a <= DEFAULT_TOL {
         // Degenerate segment (a == b).
-        let dist_sq = f.0 * f.0 + f.1 * f.1;
-        if (dist_sq - circle.radius * circle.radius).abs() <= DEFAULT_TOL {
+        let dist_sq = f.1.mul_add(f.1, f.0 * f.0);
+        if circle.radius.mul_add(-circle.radius, dist_sq).abs() <= DEFAULT_TOL {
             return vec![(seg.a, 0.0)];
         }
         return Vec::new();
     }
-    let b = 2.0 * (f.0 * d.0 + f.1 * d.1);
-    let c = f.0 * f.0 + f.1 * f.1 - circle.radius * circle.radius;
-    let disc = b * b - 4.0 * a * c;
+    let b = 2.0 * f.1.mul_add(d.1, f.0 * d.0);
+    let c = circle
+        .radius
+        .mul_add(-circle.radius, f.1.mul_add(f.1, f.0 * f.0));
+    let disc = (4.0 * a).mul_add(-c, b * b);
     if disc < -DEFAULT_TOL {
         return Vec::new();
     }
@@ -252,7 +270,7 @@ pub fn segment_circle_intersections(seg: Segment2, circle: Circle2) -> Vec<(Poin
     let t0 = (-b - sqrt_disc) / (2.0 * a);
     let t1 = (-b + sqrt_disc) / (2.0 * a);
     let mut out = Vec::new();
-    let on_seg = |t: f64| t >= -DEFAULT_TOL && t <= 1.0 + DEFAULT_TOL;
+    let on_seg = |t: f64| (-DEFAULT_TOL..=1.0 + DEFAULT_TOL).contains(&t);
     if on_seg(t0) {
         let tc = t0.clamp(0.0, 1.0);
         out.push((seg.at(tc), tc));
@@ -269,6 +287,7 @@ pub fn segment_circle_intersections(seg: Segment2, circle: Circle2) -> Vec<(Poin
 /// Intersect a segment with an arc. Built on top of
 /// `segment_circle_intersections` with an angular containment filter
 /// so only points lying within the arc's sweep are returned.
+#[must_use]
 pub fn segment_arc_intersections(seg: Segment2, arc: Arc2) -> Vec<(Point2, f64)> {
     let circle = Circle2::new(arc.center, arc.radius);
     segment_circle_intersections(seg, circle)
@@ -284,6 +303,7 @@ pub fn segment_arc_intersections(seg: Segment2, arc: Arc2) -> Vec<(Point2, f64)>
 /// `b` is colinear and on the segment from `a` to `c`). Useful for
 /// convex-hull-style "remove right turns" loops where colinear-on-
 /// segment points should NOT be removed.
+#[must_use]
 pub fn left_turn_or_colinear(a: Point2, b: Point2, c: Point2) -> bool {
     !matches!(orient2d(a, b, c), Sign::Negative)
 }

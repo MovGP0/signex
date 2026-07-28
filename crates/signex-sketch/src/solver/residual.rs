@@ -62,13 +62,12 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
             if !body.is_empty()
                 && body.chars().all(|c| c.is_alphanumeric() || c == '_')
                 && !body.chars().next().unwrap().is_ascii_digit()
+                && let Some(v) = params.get(body)
             {
-                if let Some(v) = params.get(body) {
-                    return Ok(*v);
-                }
-                // Bare-name with no entry — fall through to full parse so
-                // the error path produces a structured ExprError.
+                return Ok(*v);
             }
+            // Bare-name with no entry — fall through to full parse so
+            // the error path produces a structured ExprError.
 
             let ast = parse_expr(body).map_err(SketchError::Expr)?;
             let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
@@ -125,7 +124,11 @@ pub fn residual(
     sketch: &SketchData,
     params: &ResolvedParams,
 ) -> Result<Vec<f64>, SketchError> {
-    use ConstraintKind::*;
+    use ConstraintKind::{
+        Angle, Coincident, DistancePtCircle, DistancePtLine, DistancePtPt, EqualLength,
+        EqualRadius, Fixed, Horizontal, Midpoint, Parallel, Perpendicular, PointOnArc, PointOnLine,
+        SymmetricAboutLine, SymmetricAboutPoint, TangentArcArc, TangentLineArc, Vertical,
+    };
     match &c.kind {
         // ─── Task 2.3: Coincident, DistancePtPt, Horizontal, Vertical, Fixed ───
         Coincident { p1, p2 } => {
@@ -140,7 +143,7 @@ pub fn residual(
                 point_xy(*p1, state, index, sketch).ok_or(SketchError::EntityNotFound(*p1))?;
             let (x2, y2) =
                 point_xy(*p2, state, index, sketch).ok_or(SketchError::EntityNotFound(*p2))?;
-            let d = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
+            let d = (x2 - x1).hypot(y2 - y1);
             let t = resolve_dim(target, params)?;
             Ok(vec![d - t])
         }

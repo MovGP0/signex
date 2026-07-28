@@ -1,4 +1,4 @@
-//! Task 2.7 — SymmetricAboutLine / SymmetricAboutPoint / Midpoint
+//! Task 2.7 — `SymmetricAboutLine` / `SymmetricAboutPoint` / Midpoint
 //! residuals.
 //!
 //! All three are derived from first-principles 2D vector geometry

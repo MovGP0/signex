@@ -50,11 +50,11 @@ pub fn point_to_segment_distance_sq(
     let (p, a, b) = (p.into(), a.into(), b.into());
     let dx = b.x - a.x;
     let dy = b.y - a.y;
-    let len_sq = dx * dx + dy * dy;
+    let len_sq = dy.mul_add(dy, dx * dx);
     if len_sq <= f64::EPSILON {
         return a.distance_sq(p);
     }
-    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq).clamp(0.0, 1.0);
+    let t = ((p.y - a.y).mul_add(dy, (p.x - a.x) * dx) / len_sq).clamp(0.0, 1.0);
     let cx = a.x + t * dx;
     let cy = a.y + t * dy;
     let ddx = p.x - cx;

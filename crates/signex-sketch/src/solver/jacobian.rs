@@ -1,11 +1,11 @@
 //! Numerical Jacobian via central differences.
 //!
 //! The Jacobian J is an (m × n) matrix where m = total residual count
-//! and n = state vector length. Each entry J[i][j] is dr_i/dx_j, the
+//! and n = state vector length. Each entry J[i][j] is `dr_i/dx_j`, the
 //! sensitivity of residual i to state coordinate j. Computed by
 //! finite difference at a step `H = 1e-7`:
 //!
-//!   J[i][j] ≈ (r_i(x + h e_j) − r_i(x − h e_j)) / (2h)
+//!   J[i][j] ≈ (`r_i(x` + h `e_j`) − `r_i(x` − h `e_j`)) / (2h)
 //!
 //! Reference: *Numerical Recipes* (Press et al., 3rd ed.) §5.7
 //! (numerical derivatives — central difference is second-order

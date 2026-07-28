@@ -91,10 +91,10 @@ pub fn eval(node: &ExprNode, ctx: &EvalContext) -> Result<Quantity, ExprError> {
         ExprNode::Ternary(cond, then_branch, else_branch) => {
             let cv = eval(cond, ctx)?;
             let raw = cv.as_count()?;
-            if raw != 0.0 {
-                eval(then_branch, ctx)
-            } else {
+            if raw == 0.0 {
                 eval(else_branch, ctx)
+            } else {
+                eval(then_branch, ctx)
             }
         }
         ExprNode::Lookup { key, keys, values } => eval_lookup(key, keys, values, ctx),
@@ -372,7 +372,7 @@ fn convert_to(q: Quantity, target_unit: Unit) -> Result<f64, ExprError> {
             let rad = q.as_rad()?;
             Ok(match target_unit {
                 Unit::Rad => rad,
-                Unit::Deg => rad * 180.0 / std::f64::consts::PI,
+                Unit::Deg => rad.to_degrees(),
                 _ => unreachable!("target_unit family was Angle"),
             })
         }

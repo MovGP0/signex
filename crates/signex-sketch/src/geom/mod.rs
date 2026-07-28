@@ -57,17 +57,20 @@ pub struct Point2 {
 }
 
 impl Point2 {
+    #[must_use]
     pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
 
-    pub fn distance_sq(self, other: Point2) -> f64 {
+    #[must_use]
+    pub fn distance_sq(self, other: Self) -> f64 {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
-        dx * dx + dy * dy
+        dy.mul_add(dy, dx * dx)
     }
 
-    pub fn distance(self, other: Point2) -> f64 {
+    #[must_use]
+    pub fn distance(self, other: Self) -> f64 {
         self.distance_sq(other).sqrt()
     }
 }

@@ -14,6 +14,7 @@ use super::Sign;
 use super::predicates::orient2d;
 
 /// Multi-contour polygon: one outer ring plus zero or more holes.
+///
 /// Outer winds CCW; holes wind CW by convention. Useful as a
 /// type to express "polygon with holes" even before the full
 /// hole-aware boolean implementation lands.
@@ -24,14 +25,16 @@ pub struct MultiContour {
 }
 
 impl MultiContour {
-    pub fn new(outer: Vec<Point2>) -> Self {
+    #[must_use]
+    pub const fn new(outer: Vec<Point2>) -> Self {
         Self {
             outer,
             holes: Vec::new(),
         }
     }
 
-    pub fn with_holes(outer: Vec<Point2>, holes: Vec<Vec<Point2>>) -> Self {
+    #[must_use]
+    pub const fn with_holes(outer: Vec<Point2>, holes: Vec<Vec<Point2>>) -> Self {
         Self { outer, holes }
     }
 }
@@ -39,13 +42,15 @@ impl MultiContour {
 /// Drop adjacent duplicate vertices (within `eps`). The closing
 /// vertex of a closed ring isn't stored in the input convention
 /// (last != first), so the wrap-around comparison runs separately.
+#[must_use]
 pub fn dedup(polygon: &[Point2], eps: f64) -> Vec<Point2> {
     let mut out: Vec<Point2> = Vec::with_capacity(polygon.len());
     for &p in polygon {
-        if let Some(last) = out.last() {
-            if (p.x - last.x).abs() <= eps && (p.y - last.y).abs() <= eps {
-                continue;
-            }
+        if let Some(last) = out.last()
+            && (p.x - last.x).abs() <= eps
+            && (p.y - last.y).abs() <= eps
+        {
+            continue;
         }
         out.push(p);
     }
@@ -63,6 +68,7 @@ pub fn dedup(polygon: &[Point2], eps: f64) -> Vec<Point2> {
 /// (a, b, c) where b lies on segment a→c within `eps`. After this
 /// pass the polygon has only "essential" corners — no spurious
 /// midpoints on a straight edge.
+#[must_use]
 pub fn merge_colinear(polygon: &[Point2]) -> Vec<Point2> {
     if polygon.len() < 3 {
         return polygon.to_vec();
@@ -86,6 +92,7 @@ pub fn merge_colinear(polygon: &[Point2]) -> Vec<Point2> {
 /// looser eps. Use a step matching the user-facing precision —
 /// too loose snaps two distinct features together; too tight is
 /// a no-op.
+#[must_use]
 pub fn snap_to_grid(polygon: &[Point2], step: f64) -> Vec<Point2> {
     if step <= 0.0 {
         return polygon.to_vec();
@@ -99,6 +106,7 @@ pub fn snap_to_grid(polygon: &[Point2], step: f64) -> Vec<Point2> {
 /// One-call pipeline: snap to grid, dedup adjacent duplicates,
 /// merge colinear runs. Pre-processes a polygon for the boolean
 /// operations.
+#[must_use]
 pub fn simplify_polygon(polygon: &[Point2], snap_step: f64, dedup_eps: f64) -> Vec<Point2> {
     let snapped = snap_to_grid(polygon, snap_step);
     let deduped = dedup(&snapped, dedup_eps);

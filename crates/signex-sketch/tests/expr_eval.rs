@@ -25,7 +25,7 @@ fn lit_mm(v: f64) -> ExprNode {
     ExprNode::Literal(Quantity::length(v))
 }
 
-fn lit(v: f64, u: Unit) -> ExprNode {
+const fn lit(v: f64, u: Unit) -> ExprNode {
     ExprNode::Literal(Quantity { value: v, unit: u })
 }
 
@@ -343,7 +343,7 @@ fn eval_lookup_with_unit_conversion_in_keys() {
 fn eval_ref_chains_recursively() {
     // a = b * 2; b = 3mm   → a = 6 mm
     let a = bin(BinOp::Mul, r#ref("b"), lit_count(2.0));
-    let ctx = ctx_with(&[("a", a.clone()), ("b", lit_mm(3.0))]);
+    let ctx = ctx_with(&[("a", a), ("b", lit_mm(3.0))]);
     let q = eval(&r#ref("a"), &ctx).unwrap();
     assert_eq!(q.unit, Unit::Mm);
     assert!((q.value - 6.0).abs() < EPS);

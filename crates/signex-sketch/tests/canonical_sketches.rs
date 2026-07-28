@@ -369,7 +369,7 @@ fn isosceles_triangle_apex_60() {
     // equilateral triangle with side 10).
     let base_dx = x3 - x2;
     let base_dy = y3 - y2;
-    let base_len = (base_dx * base_dx + base_dy * base_dy).sqrt();
+    let base_len = base_dx.hypot(base_dy);
     assert!(
         (base_len - 10.0).abs() < COORD_TOL,
         "base length = {base_len}, expected 10.0"
@@ -411,7 +411,7 @@ fn regular_hexagon_circumradius_10() {
     let mut vertices = Vec::with_capacity(6);
     let mut spokes = Vec::with_capacity(6);
     for i in 0..6 {
-        let theta = (i as f64) * PI / 3.0;
+        let theta = f64::from(i) * PI / 3.0;
         let id = s.add_point(theta.cos(), theta.sin());
         vertices.push(id);
     }

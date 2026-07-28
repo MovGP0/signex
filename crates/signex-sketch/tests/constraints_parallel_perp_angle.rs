@@ -49,7 +49,7 @@ fn parallel_residual_zero_on_two_lines_at_30_degrees() {
 
     // line 2: from (1,2) toward same angle, length 7 (different length, same direction)
     let b1 = s.add_point(1.0, 2.0);
-    let b2 = s.add_point(1.0 + 7.0 * cx, 2.0 + 7.0 * cy);
+    let b2 = s.add_point(7.0f64.mul_add(cx, 1.0), 7.0f64.mul_add(cy, 2.0));
     let l2 = s.add_line(b1, b2);
 
     let packed = pack(&s.data);

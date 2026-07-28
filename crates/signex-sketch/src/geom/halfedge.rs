@@ -65,6 +65,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -74,6 +75,7 @@ impl Mesh {
     /// Returns `None` for degenerate input. Output mesh has two
     /// faces — face 0 is the inside (CCW boundary), face 1 is the
     /// unbounded outer (CW boundary).
+    #[must_use]
     pub fn from_polygon(polygon: &[Point2]) -> Option<Self> {
         if polygon.len() < 3 {
             return None;
@@ -91,7 +93,7 @@ impl Mesh {
         };
         let n = positions.len();
 
-        let mut mesh = Mesh::new();
+        let mut mesh = Self::new();
         mesh.faces.push(Face {
             boundary: HalfEdgeId(0),
             outer: false,
@@ -138,19 +140,23 @@ impl Mesh {
         Some(mesh)
     }
 
+    #[must_use]
     pub fn vertex(&self, v: VertexId) -> &Vertex {
         &self.vertices[v.0]
     }
 
+    #[must_use]
     pub fn half_edge(&self, h: HalfEdgeId) -> &HalfEdge {
         &self.halfedges[h.0]
     }
 
+    #[must_use]
     pub fn face(&self, f: FaceId) -> &Face {
         &self.faces[f.0]
     }
 
     /// Iterate the half-edges along a face's boundary.
+    #[must_use]
     pub fn face_halfedges(&self, f: FaceId) -> Vec<HalfEdgeId> {
         let start = self.faces[f.0].boundary;
         let mut out = Vec::with_capacity(self.halfedges.len());
@@ -170,6 +176,7 @@ impl Mesh {
     }
 
     /// Vertices around a face in boundary order.
+    #[must_use]
     pub fn face_vertices(&self, f: FaceId) -> Vec<VertexId> {
         self.face_halfedges(f)
             .into_iter()
@@ -179,6 +186,7 @@ impl Mesh {
 
     /// Half-edges originating at a vertex. Walks via `twin.next`
     /// which advances around the vertex's incident half-edges.
+    #[must_use]
     pub fn vertex_outgoing(&self, v: VertexId) -> Vec<HalfEdgeId> {
         let start = self.vertices[v.0].outgoing;
         let mut out = vec![start];
@@ -204,6 +212,7 @@ impl Mesh {
     /// Convenience: positions of the boundary vertices of `f` in
     /// boundary order. The classic "extract the polygon outline
     /// from face X" primitive.
+    #[must_use]
     pub fn face_polygon(&self, f: FaceId) -> Vec<Point2> {
         self.face_vertices(f)
             .into_iter()

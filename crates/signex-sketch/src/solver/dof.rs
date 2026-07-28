@@ -1,7 +1,7 @@
 //! DOF analysis — rank-based per-entity colour classification.
 //!
 //! After solve, examine the Jacobian to classify each entity:
-//! - **Under**-constrained (blue) — the entity has free DoF the
+//! - **Under**-constrained (blue) — the entity has free `DoF` the
 //!   constraint set didn't pin down.
 //! - **Full** (black) — fully constrained.
 //! - **Over**-constrained (red) — the entity participates in
@@ -11,11 +11,11 @@
 //! 1. Compute the QR factorisation of the Jacobian J (m × n).
 //! 2. The numerical rank `r = rank(J, tol)` tells us how many of the
 //!    `n` state variables are pinned by the constraint set. Effective
-//!    free DoF = `n − r`.
+//!    free `DoF` = `n − r`.
 //! 3. For per-entity colouring, examine the columns of J belonging
 //!    to that entity. If those columns are full-column-rank in J,
 //!    the entity is fully constrained (black); otherwise it has
-//!    free DoF (blue).
+//!    free `DoF` (blue).
 //! 4. For per-constraint over-detection: a constraint whose row is
 //!    in the rank-deficient null-space of J^T AND whose residual is
 //!    larger than `tol` after solve is over-constrained (red).
@@ -34,10 +34,10 @@ use crate::solver::linalg::QrDecomposition;
 use crate::solver::lm::SolveResult;
 use crate::solver::state::EntityIndex;
 
-/// Per-entity DoF colour.
+/// Per-entity `DoF` colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DofColor {
-    /// Under-constrained — entity has at least one free DoF.
+    /// Under-constrained — entity has at least one free `DoF`.
     Under,
     /// Fully constrained.
     Full,
@@ -53,7 +53,7 @@ pub enum DofColor {
 /// `1e-9` rank threshold provides a comfortable margin above that).
 pub const RANK_TOL: f64 = 1e-9;
 
-/// Per-entity DoF colour. Returns one entry per Point entity that
+/// Per-entity `DoF` colour. Returns one entry per Point entity that
 /// participates in the solve — both free Points (in `index.points`)
 /// AND Fixed Points (in `index.fixed`). Non-Point entities (lines,
 /// arcs, circles) are not included; they inherit their endpoints'
@@ -72,6 +72,7 @@ pub const RANK_TOL: f64 = 1e-9;
 /// rank-vs-`n` test with per-column rank-deficiency detection
 /// (rank-1 update / column-zeroing test) for finer per-entity
 /// granularity.
+#[must_use]
 pub fn entity_colours(
     sketch: &SketchData,
     solve_result: &SolveResult,
@@ -158,6 +159,7 @@ pub fn entity_colours(
 /// `DistancePtPt` / `Angle` / etc. constraint with a parametric target
 /// to evaluate to `ExprError::Unknown`, get caught by `Err(_) =>
 /// continue`, and silently miss real over-constraints.
+#[must_use]
 pub fn over_constraint_ids(
     sketch: &SketchData,
     solve_result: &SolveResult,
@@ -185,7 +187,11 @@ pub fn over_constraint_ids(
 /// constraint. Used to attribute over-constrained constraints to
 /// per-entity colours.
 fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntityId> {
-    use ConstraintKind::*;
+    use ConstraintKind::{
+        Angle, Coincident, DistancePtCircle, DistancePtLine, DistancePtPt, EqualLength,
+        EqualRadius, Fixed, Horizontal, Midpoint, Parallel, Perpendicular, PointOnArc, PointOnLine,
+        SymmetricAboutLine, SymmetricAboutPoint, TangentArcArc, TangentLineArc, Vertical,
+    };
     let mut out = Vec::new();
     match kind {
         Coincident { p1, p2 } => {

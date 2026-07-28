@@ -31,6 +31,7 @@ use super::predicates::signed_area;
 /// without branching into separate output rings — any subject
 /// edge can cross a clip edge at most twice (once entering,
 /// once exiting), and the kept-inside vertices stay connected.
+#[must_use]
 pub fn intersect_convex_clip(subject: &[Point2], clip: &[Point2]) -> Vec<Point2> {
     if subject.len() < 3 || clip.len() < 3 {
         return Vec::new();
@@ -100,7 +101,7 @@ fn clip_against_edge(subject: &[Point2], a: Point2, b: Point2) -> Vec<Point2> {
 /// inside so the polygon's own vertices on a clip boundary aren't
 /// dropped.
 fn is_inside(p: Point2, a: Point2, b: Point2) -> bool {
-    let cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    let cross = (b.y - a.y).mul_add(-(p.x - a.x), (b.x - a.x) * (p.y - a.y));
     cross >= -1e-12
 }
 
@@ -114,12 +115,12 @@ fn line_edge_intersection(p1: Point2, p2: Point2, a: Point2, b: Point2) -> Optio
     let dy_ab = b.y - a.y;
     let dx_p = p2.x - p1.x;
     let dy_p = p2.y - p1.y;
-    let denom = dx_ab * dy_p - dy_ab * dx_p;
+    let denom = dy_ab.mul_add(-dx_p, dx_ab * dy_p);
     if denom.abs() < 1e-12 {
         return None;
     }
-    let t = ((a.x - p1.x) * dy_ab - (a.y - p1.y) * dx_ab) / -denom;
-    Some(Point2::new(p1.x + t * dx_p, p1.y + t * dy_p))
+    let t = (a.y - p1.y).mul_add(-dx_ab, (a.x - p1.x) * dy_ab) / -denom;
+    Some(Point2::new(t.mul_add(dx_p, p1.x), t.mul_add(dy_p, p1.y)))
 }
 
 #[cfg(test)]

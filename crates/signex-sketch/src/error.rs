@@ -32,7 +32,7 @@ pub enum SolveError {
     #[error("solve exceeded time budget ({elapsed_ms} ms > {budget_ms} ms)")]
     Timeout { elapsed_ms: u64, budget_ms: u64 },
     /// LO-12: covers genuine internal failures (LU dimension mismatch,
-    /// lu.solve back-sub error, total_residual error on initial pass).
+    /// lu.solve back-sub error, `total_residual` error on initial pass).
     /// Reserve `OverConstrained` for the semantic case where a real
     /// constraint id can be named.
     #[error("solver internal error: {0}")]

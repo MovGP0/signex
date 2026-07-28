@@ -25,13 +25,14 @@ pub enum Sign {
 }
 
 impl Sign {
+    #[must_use]
     pub fn from_signed(value: f64, tol: f64) -> Self {
         if value.abs() <= tol {
-            Sign::Zero
+            Self::Zero
         } else if value > 0.0 {
-            Sign::Positive
+            Self::Positive
         } else {
-            Sign::Negative
+            Self::Negative
         }
     }
 }
@@ -55,6 +56,7 @@ pub const DEFAULT_TOL: f64 = 1.0e-9;
 /// scales with the magnitude of the products; we apply a relative
 /// bound plus an absolute floor at `DEFAULT_TOL` for robustness
 /// when both terms are tiny.
+#[must_use]
 pub fn orient2d(a: Point2, b: Point2, c: Point2) -> Sign {
     let l = (b.x - a.x) * (c.y - a.y);
     let r = (b.y - a.y) * (c.x - a.x);
@@ -69,6 +71,7 @@ pub fn orient2d(a: Point2, b: Point2, c: Point2) -> Sign {
 /// as a closed ring — last vertex connects back to first). The
 /// shoelace formula. Positive = CCW winding, Negative = CW, Zero
 /// = degenerate. Returns `0.0` for fewer than three vertices.
+#[must_use]
 pub fn signed_area(points: &[Point2]) -> f64 {
     if points.len() < 3 {
         return 0.0;
@@ -76,8 +79,8 @@ pub fn signed_area(points: &[Point2]) -> f64 {
     let mut acc = 0.0_f64;
     for i in 0..points.len() {
         let j = (i + 1) % points.len();
-        acc += points[i].x * points[j].y;
-        acc -= points[j].x * points[i].y;
+        acc = points[i].x.mul_add(points[j].y, acc);
+        acc = points[j].x.mul_add(-points[i].y, acc);
     }
     acc / 2.0
 }

@@ -20,7 +20,7 @@ use crate::unit::{Unit, UnitError, UnitFamily};
 
 /// Errors produced by the expression layer (parse + evaluate +
 /// parameter resolution).
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ExprError {
     /// Parser found a syntactically invalid expression.
     #[error("expression parse error at byte {pos}: {msg}")]
@@ -72,9 +72,9 @@ pub enum ExprError {
 impl From<UnitError> for ExprError {
     fn from(e: UnitError) -> Self {
         match e {
-            UnitError::Parse(s) => ExprError::BadQuantity(s),
-            UnitError::WrongFamily { expected, got } => ExprError::WrongFamily { expected, got },
-            UnitError::Incompatible(lhs, rhs) => ExprError::UnitMismatch { lhs, rhs },
+            UnitError::Parse(s) => Self::BadQuantity(s),
+            UnitError::WrongFamily { expected, got } => Self::WrongFamily { expected, got },
+            UnitError::Incompatible(lhs, rhs) => Self::UnitMismatch { lhs, rhs },
         }
     }
 }

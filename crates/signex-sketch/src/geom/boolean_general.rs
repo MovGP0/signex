@@ -63,7 +63,7 @@ struct Vertex {
 }
 
 impl Vertex {
-    fn corner(pos: Point2, next: usize, prev: usize) -> Self {
+    const fn corner(pos: Point2, next: usize, prev: usize) -> Self {
         Self {
             pos,
             next,
@@ -76,7 +76,7 @@ impl Vertex {
         }
     }
 
-    fn intersection(pos: Point2, alpha: f64) -> Self {
+    const fn intersection(pos: Point2, alpha: f64) -> Self {
         Self {
             pos,
             next: usize::MAX,
@@ -315,31 +315,29 @@ fn walk_one_ring(
             };
             (v.intersect, v.neighbor, v.pos)
         };
-        if next_intersect {
-            if let Some(nb) = next_neighbor {
-                if on_subject {
-                    subject[next_idx].visited = true;
-                    clip[nb].visited = true;
-                } else {
-                    clip[next_idx].visited = true;
-                    subject[nb].visited = true;
-                }
-                out.push(next_pos);
-                on_subject = !on_subject;
-                cur = nb;
-                // Termination check — we've looped back to the
-                // start vertex's position via the neighbor link.
-                let start_pos = subject_start_pos_or_default(subject, start);
-                let last = out
-                    .last()
-                    .copied()
-                    .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
-                if (last.x - start_pos.x).abs() < 1e-12 && (last.y - start_pos.y).abs() < 1e-12 {
-                    out.pop();
-                    break;
-                }
-                continue;
+        if next_intersect && let Some(nb) = next_neighbor {
+            if on_subject {
+                subject[next_idx].visited = true;
+                clip[nb].visited = true;
+            } else {
+                clip[next_idx].visited = true;
+                subject[nb].visited = true;
             }
+            out.push(next_pos);
+            on_subject = !on_subject;
+            cur = nb;
+            // Termination check — we've looped back to the
+            // start vertex's position via the neighbor link.
+            let start_pos = subject_start_pos_or_default(subject, start);
+            let last = out
+                .last()
+                .copied()
+                .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
+            if (last.x - start_pos.x).abs() < 1e-12 && (last.y - start_pos.y).abs() < 1e-12 {
+                out.pop();
+                break;
+            }
+            continue;
         }
         cur = next_idx;
         // Termination: returned to start (subject side).
@@ -353,8 +351,7 @@ fn walk_one_ring(
 fn subject_start_pos_or_default(subject: &[Vertex], idx: usize) -> Point2 {
     subject
         .get(idx)
-        .map(|v| v.pos)
-        .unwrap_or(Point2::new(f64::NAN, f64::NAN))
+        .map_or(Point2::new(f64::NAN, f64::NAN), |v| v.pos)
 }
 
 /// Compute `subject ∩ clip`, `subject ∪ clip`, or `subject − clip`
@@ -379,6 +376,7 @@ fn subject_start_pos_or_default(subject: &[Vertex], idx: usize) -> Point2 {
 ///   (callers needing hole support should request the result
 ///   rings separately — for now this path returns the subject
 ///   ring only and is documented as a limitation).
+#[must_use]
 pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Point2>> {
     let mut subj = match build_ring(subject) {
         Some(v) => v,
@@ -466,16 +464,16 @@ fn proper_segment_intersection(
 ) -> Option<(Point2, f64, f64)> {
     let r = (b.x - a.x, b.y - a.y);
     let s = (d.x - c.x, d.y - c.y);
-    let denom = r.0 * s.1 - r.1 * s.0;
+    let denom = r.1.mul_add(-s.0, r.0 * s.1);
     if denom.abs() < 1e-12 {
         return None;
     }
     let qmp = (c.x - a.x, c.y - a.y);
-    let t = (qmp.0 * s.1 - qmp.1 * s.0) / denom;
-    let u = (qmp.0 * r.1 - qmp.1 * r.0) / denom;
+    let t = qmp.1.mul_add(-s.0, qmp.0 * s.1) / denom;
+    let u = qmp.1.mul_add(-r.0, qmp.0 * r.1) / denom;
     let eps = 1e-9;
     if t > eps && t < 1.0 - eps && u > eps && u < 1.0 - eps {
-        Some((Point2::new(a.x + t * r.0, a.y + t * r.1), t, u))
+        Some((Point2::new(t.mul_add(r.0, a.x), t.mul_add(r.1, a.y)), t, u))
     } else {
         None
     }

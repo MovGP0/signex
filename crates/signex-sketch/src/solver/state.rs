@@ -25,6 +25,7 @@ pub struct PackedState {
 /// Build a state vector from a sketch. Fixed-constrained Points are
 /// excluded from the state vector; their coordinates are read directly
 /// from the [`Entity`] at residual time so the solver cannot move them.
+#[must_use]
 pub fn pack(sketch: &SketchData) -> PackedState {
     let fixed: HashSet<SketchEntityId> = sketch
         .constraints
@@ -67,6 +68,7 @@ pub fn pack(sketch: &SketchData) -> PackedState {
 
 /// Look up a Point's current `(x, y)` — either from the state vector
 /// (free variable) or directly from the [`Entity`] (Fixed-constrained).
+#[must_use]
 pub fn point_xy(
     id: SketchEntityId,
     state: &[f64],
@@ -86,12 +88,14 @@ pub fn point_xy(
 
 /// Look up the radius of a [`EntityKind::Circle`] from the state
 /// vector. Returns `None` for non-circle entities.
+#[must_use]
 pub fn circle_radius(id: SketchEntityId, state: &[f64], index: &EntityIndex) -> Option<f64> {
     let ri = index.radii.get(&id)?;
     Some(state[*ri])
 }
 
 /// Resolve the start/end Point IDs for a [`EntityKind::Line`].
+#[must_use]
 pub fn line_endpoints(
     id: SketchEntityId,
     sketch: &SketchData,
@@ -105,6 +109,7 @@ pub fn line_endpoints(
 
 /// Resolve the centre/start/end Point IDs and CCW flag for an
 /// [`EntityKind::Arc`].
+#[must_use]
 pub fn arc_refs(
     id: SketchEntityId,
     sketch: &SketchData,
@@ -123,6 +128,7 @@ pub fn arc_refs(
 
 /// Resolve the centre Point ID for either an [`EntityKind::Arc`] or
 /// [`EntityKind::Circle`].
+#[must_use]
 pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntityId> {
     let entity = sketch.entities.iter().find(|e| e.id == id)?;
     match entity.kind {
@@ -133,6 +139,7 @@ pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntity
 }
 
 /// Lookup helper used by tests that need an [`Entity`] by ID.
-pub fn find_entity<'a>(id: SketchEntityId, sketch: &'a SketchData) -> Option<&'a Entity> {
+#[must_use]
+pub fn find_entity(id: SketchEntityId, sketch: &SketchData) -> Option<&Entity> {
     sketch.entities.iter().find(|e| e.id == id)
 }

@@ -37,7 +37,7 @@ pub enum CornerStyle {
 
 impl Default for CornerStyle {
     fn default() -> Self {
-        CornerStyle::Round { arc_segments: 8 }
+        Self::Round { arc_segments: 8 }
     }
 }
 
@@ -62,6 +62,7 @@ impl Default for CornerStyle {
 ///
 /// Degenerate inputs (< 3 vertices, zero-area, or self-intersecting)
 /// return an empty Vec.
+#[must_use]
 pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Point2> {
     if polygon.len() < 3 {
         return Vec::new();
@@ -90,10 +91,8 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
         // Edge directions normalised.
         let (e_in_dx, e_in_dy) = (curr.x - prev.x, curr.y - prev.y);
         let (e_out_dx, e_out_dy) = (next.x - curr.x, next.y - curr.y);
-        let l_in = (e_in_dx * e_in_dx + e_in_dy * e_in_dy).sqrt().max(1e-12);
-        let l_out = (e_out_dx * e_out_dx + e_out_dy * e_out_dy)
-            .sqrt()
-            .max(1e-12);
+        let l_in = e_in_dx.hypot(e_in_dy).max(1e-12);
+        let l_out = e_out_dx.hypot(e_out_dy).max(1e-12);
         let in_dir = (e_in_dx / l_in, e_in_dy / l_in);
         let out_dir = (e_out_dx / l_out, e_out_dy / l_out);
 
@@ -131,7 +130,7 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
                     // `p[i] + d*n_in + t*in_dir` and
                     // `p[i] + d*n_out + s*out_dir`. Solve for the
                     // join point.
-                    let denom = in_dir.0 * out_dir.1 - in_dir.1 * out_dir.0;
+                    let denom = in_dir.1.mul_add(-out_dir.0, in_dir.0 * out_dir.1);
                     if denom.abs() <= 1e-12 {
                         out.push(in_off);
                         out.push(out_off);
@@ -140,7 +139,7 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
                         let dy = out_off.y - in_off.y;
                         let t = (dx * out_dir.1 - dy * out_dir.0) / denom;
                         let join = Point2::new(in_off.x + t * in_dir.0, in_off.y + t * in_dir.1);
-                        let bulge = ((join.x - curr.x).powi(2) + (join.y - curr.y).powi(2)).sqrt();
+                        let bulge = (join.x - curr.x).hypot(join.y - curr.y);
                         if bulge <= miter_limit * signed_d.abs().max(1e-9) {
                             out.push(join);
                         } else {
@@ -177,7 +176,7 @@ pub fn offset_polygon(polygon: &[Point2], d: f64, style: CornerStyle) -> Vec<Poi
             }
             let r = signed_d.abs();
             for k in 1..arc_segments {
-                let t = k as f64 / arc_segments as f64;
+                let t = f64::from(k) / f64::from(arc_segments);
                 let theta = theta_a + sweep * t;
                 out.push(Point2::new(
                     curr.x + r * theta.cos(),

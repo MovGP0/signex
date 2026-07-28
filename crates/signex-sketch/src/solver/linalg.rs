@@ -51,7 +51,7 @@ pub fn solve(a: &[Vec<f64>], b: &[f64]) -> Result<Vec<f64>, LinAlgError> {
         }
     }
 
-    let mut lu: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+    let mut lu: Vec<Vec<f64>> = a.to_vec();
     let perm = lu_decompose(&mut lu)?;
     lu_solve(&lu, &perm, b)
 }
@@ -116,7 +116,7 @@ pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
             a[i][k] = factor;
             for j in (k + 1)..n {
                 let akj = a[k][j];
-                a[i][j] -= factor * akj;
+                a[i][j] = factor.mul_add(-akj, a[i][j]);
             }
         }
     }
@@ -142,7 +142,7 @@ impl LuDecomposition {
     /// Factor a square matrix into its packed LU form. The input is
     /// borrowed and cloned internally so callers can reuse `a`.
     pub fn new(a: &[Vec<f64>]) -> Result<Self, LinAlgError> {
-        let mut lu: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+        let mut lu: Vec<Vec<f64>> = a.to_vec();
         let perm = lu_decompose(&mut lu)?;
         Ok(Self { lu, perm })
     }
@@ -188,7 +188,7 @@ pub fn lu_solve(lu: &[Vec<f64>], perm: &[usize], b: &[f64]) -> Result<Vec<f64>, 
     for i in 0..n {
         let mut sum = x[i];
         for j in 0..i {
-            sum -= lu[i][j] * x[j];
+            sum = lu[i][j].mul_add(-x[j], sum);
         }
         x[i] = sum;
     }
@@ -198,7 +198,7 @@ pub fn lu_solve(lu: &[Vec<f64>], perm: &[usize], b: &[f64]) -> Result<Vec<f64>, 
     for i in (0..n).rev() {
         let mut sum = x[i];
         for j in (i + 1)..n {
-            sum -= lu[i][j] * x[j];
+            sum = lu[i][j].mul_add(-x[j], sum);
         }
         let pivot = lu[i][i];
         if pivot.abs() < PIVOT_EPS {
@@ -287,14 +287,14 @@ impl QrDecomposition {
         }
 
         // Working buffer (clone so the caller's input is untouched).
-        let mut r: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+        let mut r: Vec<Vec<f64>> = a.to_vec();
 
         let steps = m.min(n);
         for k in 0..steps {
             // 1. Compute |x| for the sub-vector x = r[k..m][k].
             let mut norm_sq: f64 = 0.0;
             for i in k..m {
-                norm_sq += r[i][k] * r[i][k];
+                norm_sq = r[i][k].mul_add(r[i][k], norm_sq);
             }
             let norm = norm_sq.sqrt();
 
@@ -319,7 +319,7 @@ impl QrDecomposition {
             // 4. Compute v · v (used for β denominator).
             let mut vtv: f64 = 0.0;
             for i in k..m {
-                vtv += r[i][k] * r[i][k];
+                vtv = r[i][k].mul_add(r[i][k], vtv);
             }
             if vtv < QR_ZERO_EPS {
                 // Defensive: x was non-zero but v collapsed (only
@@ -336,7 +336,7 @@ impl QrDecomposition {
             for j in (k + 1)..n {
                 let mut beta: f64 = 0.0;
                 for i in k..m {
-                    beta += r[i][k] * r[i][j];
+                    beta = r[i][k].mul_add(r[i][j], beta);
                 }
                 let factor = 2.0 * beta / vtv;
                 for i in k..m {
@@ -364,6 +364,7 @@ impl QrDecomposition {
     ///
     /// For an `m × n` matrix the diagonal runs from `(0,0)` to
     /// `(min(m,n)-1, min(m,n)-1)`. Empty matrices have rank 0.
+    #[must_use]
     pub fn rank(&self, tol: f64) -> usize {
         let m = self.r.len();
         if m == 0 {

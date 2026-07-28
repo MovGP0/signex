@@ -39,19 +39,19 @@ pub enum ExprNode {
     /// or per-instance expression.
     ArrayIndex(ArrayIndex),
     /// Binary infix operator.
-    Binary(BinOp, Box<ExprNode>, Box<ExprNode>),
+    Binary(BinOp, Box<Self>, Box<Self>),
     /// Prefix unary operator.
-    Unary(UnaryOp, Box<ExprNode>),
+    Unary(UnaryOp, Box<Self>),
     /// `cond ? then : else`.
-    Ternary(Box<ExprNode>, Box<ExprNode>, Box<ExprNode>),
+    Ternary(Box<Self>, Box<Self>, Box<Self>),
     /// Table lookup — `lookup(key, [k1, k2, ...], [v1, v2, ...])`.
     /// Returns the value whose key matches; the evaluator errors if no
     /// match is found. `keys.len() == values.len()` is a parser-level
     /// invariant.
     Lookup {
-        key: Box<ExprNode>,
-        keys: Vec<ExprNode>,
-        values: Vec<ExprNode>,
+        key: Box<Self>,
+        keys: Vec<Self>,
+        values: Vec<Self>,
     },
 }
 
@@ -102,12 +102,14 @@ pub enum ArrayIndex {
 
 impl ExprNode {
     /// Construct a length literal in millimetres.
-    pub fn literal_mm(value: f64) -> Self {
+    #[must_use]
+    pub const fn literal_mm(value: f64) -> Self {
         Self::Literal(Quantity::length(value))
     }
 
     /// Construct a dimensionless count literal.
-    pub fn literal_count(value: f64) -> Self {
+    #[must_use]
+    pub const fn literal_count(value: f64) -> Self {
         Self::Literal(Quantity::count(value))
     }
 }

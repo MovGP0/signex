@@ -1,4 +1,4 @@
-//! Task 2.6 — EqualLength / EqualRadius / TangentLineArc / TangentArcArc
+//! Task 2.6 — `EqualLength` / `EqualRadius` / `TangentLineArc` / `TangentArcArc`
 //! residuals.
 //!
 //! Each helper returns a single scalar residual (`Vec<f64>` of length 1)
@@ -80,7 +80,7 @@ fn entity_center_xy(
     point_xy(center_id, state, index, sketch).ok_or(SketchError::EntityNotFound(center_id))
 }
 
-/// EqualLength: `|d2| − |d1| = 0`.
+/// `EqualLength`: `|d2| − |d1| = 0`.
 pub fn equal_length(
     l1: SketchEntityId,
     l2: SketchEntityId,
@@ -93,7 +93,7 @@ pub fn equal_length(
     Ok(vec![len2 - len1])
 }
 
-/// EqualRadius: `r2 − r1 = 0`. Each entity may be a Circle or an
+/// `EqualRadius`: `r2 − r1 = 0`. Each entity may be a Circle or an
 /// Arc; the dispatch is handled by [`entity_radius`].
 pub fn equal_radius(
     e1: SketchEntityId,
@@ -107,7 +107,7 @@ pub fn equal_radius(
     Ok(vec![r2 - r1])
 }
 
-/// TangentLineArc: perpendicular distance from the arc centre to the
+/// `TangentLineArc`: perpendicular distance from the arc centre to the
 /// line equals the arc radius.
 ///
 /// Residual = `|signed_perp_dist| − r_arc`. The line can sit on
@@ -139,7 +139,7 @@ pub fn tangent_line_arc(
     Ok(vec![signed.abs() - r])
 }
 
-/// TangentArcArc:
+/// `TangentArcArc`:
 ///   external (`internal = false`): `|C2 − C1| − (r1 + r2) = 0`.
 ///   internal (`internal = true`):  `|C2 − C1| − |r1 − r2| = 0`.
 ///
