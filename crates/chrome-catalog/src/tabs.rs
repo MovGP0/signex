@@ -1,3 +1,8 @@
+#![expect(
+    clippy::fn_params_excessive_bools,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 use iced::widget::{Column, Row, Space, column, container, text};
 use iced::{Background, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;

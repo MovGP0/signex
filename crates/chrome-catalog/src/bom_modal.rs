@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Bill-of-materials modal catalog slice.
 
 use iced::widget::{Column, Space, column, container, row, svg, text};
