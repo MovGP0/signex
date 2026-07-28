@@ -10,6 +10,30 @@ use signex_widgets::grid_editor::{
     GerberGridEditorState,
 };
 
+const GERBER_RS274X_EXTENSIONS: &[&str] = &[
+    "gbr", "ger", "pho", "art", "gbx", "gtl", "gbl", "gto", "gbo",
+    "gts", "gbs", "gtp", "gbp", "gm1", "gm2", "gko", "gvc", "gsp",
+];
+const EXCELLON_DRILL_EXTENSIONS: &[&str] = &["drl", "drd"];
+const GERBER_JOB_EXTENSIONS: &[&str] = &["gbrjob"];
+const ZIP_ARCHIVE_EXTENSIONS: &[&str] = &["zip"];
+const ALL_SUPPORTED_FABRICATION_EXTENSIONS: &[&str] = &[
+    "gbr", "ger", "pho", "art", "gbx", "gtl", "gbl", "gto", "gbo",
+    "gts", "gbs", "gtp", "gbp", "gm1", "gm2", "gko", "gvc", "gsp",
+    "drl", "drd", "gbrjob", "zip",
+];
+const FABRICATION_FILE_FILTERS: [(&str, &[&str]); 6] = [
+    (
+        "All supported file formats",
+        ALL_SUPPORTED_FABRICATION_EXTENSIONS,
+    ),
+    ("Gerber RS-274X", GERBER_RS274X_EXTENSIONS),
+    ("Excellon Drill", EXCELLON_DRILL_EXTENSIONS),
+    ("Gerber job", GERBER_JOB_EXTENSIONS),
+    ("ZIP archive", ZIP_ARCHIVE_EXTENSIONS),
+    ("All files", &["*"]),
+];
+
 impl GerberShortcutResolver for crate::keymap::CompiledKeymap
 {
     fn resolve_gerber_shortcut(
@@ -316,19 +340,15 @@ impl Signex
                 gerber_viewer.begin_loading();
                 Task::perform(
                     async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Open Fabrication File(s)")
-                            .add_filter(
-                                "Gerber RS-274X",
-                                &[
-                                    "gbr", "ger", "pho", "art", "gbx", "gtl", "gbl", "gto", "gbo",
-                                    "gts", "gbs", "gtp", "gbp", "gm1", "gm2", "gko", "gvc",
-                                    "gsp",
-                                ],
+                        FABRICATION_FILE_FILTERS
+                            .iter()
+                            .fold(
+                                rfd::AsyncFileDialog::new()
+                                    .set_title("Open Fabrication File(s)"),
+                                |dialog, (label, extensions)| {
+                                    dialog.add_filter(*label, *extensions)
+                                },
                             )
-                            .add_filter("Excellon Drill", &["drl", "drd"])
-                            .add_filter("Gerber job", &["gbrjob"])
-                            .add_filter("ZIP archive", &["zip"])
                             .pick_files()
                             .await
                             .map(|files| {
@@ -947,6 +967,32 @@ mod tests
     use std::io::Cursor;
 
     use super::*;
+
+    #[test]
+    fn fabrication_file_filters_default_to_all_supported_and_end_with_all_files()
+    {
+        assert_eq!(
+            FABRICATION_FILE_FILTERS.first(),
+            Some(&(
+                "All supported file formats",
+                ALL_SUPPORTED_FABRICATION_EXTENSIONS,
+            )),
+        );
+        let all_files = FABRICATION_FILE_FILTERS
+            .last()
+            .expect("All files filter");
+        assert_eq!(all_files.0, "All files");
+        assert_eq!(all_files.1, ["*"]);
+
+        let specific_extensions = FABRICATION_FILE_FILTERS[1..5]
+            .iter()
+            .flat_map(|(_, extensions)| extensions.iter().copied())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            specific_extensions,
+            ALL_SUPPORTED_FABRICATION_EXTENSIONS,
+        );
+    }
 
     fn gerber_document_ids(app: &Signex) -> Vec<GerberDocumentId>
     {
