@@ -16,7 +16,7 @@ use signex_sketch::solver::FullSolveOutput;
 
 use super::numbering::{derive_pad_number, strip_eq_prefix};
 
-/// One LinearArray expansion. Steps `0..count`, evaluating `dx_expr`
+/// One `LinearArray` expansion. Steps `0..count`, evaluating `dx_expr`
 /// / `dy_expr` once per step (each in its own `EvalContext` with the
 /// instance index), and dispatches per-instance to
 /// [`bake_one_pad`].
@@ -35,23 +35,17 @@ pub(super) fn bake_linear(
 ) -> Result<(), SketchError> {
     // Find the source entity's PadAttr. Without it there's nothing to
     // replicate; warn and skip the array.
-    let source_entity = match sketch.entities.iter().find(|e| e.id == source) {
-        Some(e) => e,
-        None => {
-            warnings.push(format!(
-                "linear array source {source}: entity not found — array skipped"
-            ));
-            return Ok(());
-        }
+    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) { e } else {
+        warnings.push(format!(
+            "linear array source {source}: entity not found — array skipped"
+        ));
+        return Ok(());
     };
-    let pad_attr = match source_entity.pad.as_ref() {
-        Some(p) => p,
-        None => {
-            warnings.push(format!(
-                "linear array source {source}: no PadAttr on source entity — array skipped"
-            ));
-            return Ok(());
-        }
+    let pad_attr = if let Some(p) = source_entity.pad.as_ref() { p } else {
+        warnings.push(format!(
+            "linear array source {source}: no PadAttr on source entity — array skipped"
+        ));
+        return Ok(());
     };
 
     // MD-1: parse the dx/dy/count expressions ONCE outside the loop —

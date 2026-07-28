@@ -1,6 +1,6 @@
 //! Integration tests for the v0.13 sketch → footprint pad bake.
 //!
-//! Phase 7 Task 7.1 + 7.2 of the SKETCH_MODE_v0.13_PLAN. Each test
+//! Phase 7 Task 7.1 + 7.2 of the `SKETCH_MODE_v0.13_PLAN`. Each test
 //! constructs a small `SketchData` inline, runs the solver to produce
 //! a `FullSolveOutput`, then bakes via `signex_bake::bake_pads`
 //! / `bake_arrays` and asserts the resulting `LibPad` set.

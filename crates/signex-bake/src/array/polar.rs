@@ -42,43 +42,31 @@ pub(super) fn bake_polar(
 ) -> Result<(), SketchError> {
     use signex_sketch::solver::state::point_xy;
 
-    let source_entity = match sketch.entities.iter().find(|e| e.id == source) {
-        Some(e) => e,
-        None => {
-            warnings.push(format!(
-                "polar array source {source}: entity not found — array skipped"
-            ));
-            return Ok(());
-        }
+    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) { e } else {
+        warnings.push(format!(
+            "polar array source {source}: entity not found — array skipped"
+        ));
+        return Ok(());
     };
-    let pad_attr = match source_entity.pad.as_ref() {
-        Some(p) => p,
-        None => {
-            warnings.push(format!(
-                "polar array source {source}: no PadAttr on source entity — array skipped"
-            ));
-            return Ok(());
-        }
+    let pad_attr = if let Some(p) = source_entity.pad.as_ref() { p } else {
+        warnings.push(format!(
+            "polar array source {source}: no PadAttr on source entity — array skipped"
+        ));
+        return Ok(());
     };
 
     // Resolve source + center positions in mm.
-    let (sx, sy) = match point_xy(source, &solve.result.state, &solve.result.index, sketch) {
-        Some(p) => p,
-        None => {
-            warnings.push(format!(
-                "polar array source {source}: position unknown — array skipped"
-            ));
-            return Ok(());
-        }
+    let (sx, sy) = if let Some(p) = point_xy(source, &solve.result.state, &solve.result.index, sketch) { p } else {
+        warnings.push(format!(
+            "polar array source {source}: position unknown — array skipped"
+        ));
+        return Ok(());
     };
-    let (cx, cy) = match point_xy(center, &solve.result.state, &solve.result.index, sketch) {
-        Some(p) => p,
-        None => {
-            warnings.push(format!(
-                "polar array center {center}: position unknown — array skipped"
-            ));
-            return Ok(());
-        }
+    let (cx, cy) = if let Some(p) = point_xy(center, &solve.result.state, &solve.result.index, sketch) { p } else {
+        warnings.push(format!(
+            "polar array center {center}: position unknown — array skipped"
+        ));
+        return Ok(());
     };
 
     let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
@@ -103,14 +91,11 @@ pub(super) fn bake_polar(
     // expression's unit family. We expect rad here (the parser
     // resolves `deg` → rad). On unit error, surface and skip.
     let sweep_q = eval(&sweep_ast, &setup_ctx).map_err(SketchError::Expr)?;
-    let sweep_rad = match sweep_q.unit.family() {
-        signex_sketch::unit::UnitFamily::Angle => sweep_q.value,
-        _ => {
-            warnings.push(format!(
-                "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
-            ));
-            return Ok(());
-        }
+    let sweep_rad = if sweep_q.unit.family() == signex_sketch::unit::UnitFamily::Angle { sweep_q.value } else {
+        warnings.push(format!(
+            "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
+        ));
+        return Ok(());
     };
 
     let denom = (count as f64).max(1.0);
@@ -165,8 +150,8 @@ pub(super) fn bake_polar(
         let theta = (i as f64) * sweep_rad / denom;
         let cos_t = theta.cos();
         let sin_t = theta.sin();
-        let rx = cx + dx_src * cos_t - dy_src * sin_t;
-        let ry = cy + dx_src * sin_t + dy_src * cos_t;
+        let rx = dy_src.mul_add(-sin_t, dx_src.mul_add(cos_t, cx));
+        let ry = dy_src.mul_add(cos_t, dx_src.mul_add(sin_t, cy));
         // Position offset = rotated_source - source. bake_one_pad
         // adds this on top of the source's own position so the i=0
         // case matches the source exactly.

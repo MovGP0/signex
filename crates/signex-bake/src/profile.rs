@@ -34,7 +34,7 @@ use signex_sketch::solver::state::point_xy;
 
 /// Trace failure modes — the bake site decides whether to warn or
 /// error per-attr.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TraceError {
     /// `start` is not a Line / Arc / Circle in the sketch (or doesn't
     /// exist at all).
@@ -105,7 +105,7 @@ pub struct ProfileEntities {
 /// 3. Walk: from the current endpoint, find the unique non-visited
 ///    incident edge (excluding the entity we just came from). If
 ///    there's exactly one, advance; otherwise return Branching /
-///    OpenChain.
+///    `OpenChain`.
 /// 4. Loop closes when the next endpoint equals the anchor.
 ///
 /// This is the single loop-walk implementation;
@@ -143,7 +143,7 @@ pub fn trace_closed_profile_entities(
     for _ in 0..max_steps {
         let candidates: Vec<SketchEntityId> = adj
             .get(&current_endpoint)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[])
             .iter()
             .copied()
@@ -256,7 +256,7 @@ pub fn trace_closed_profile(
 /// interior vertices interpolated along the arc from `from` to `to`.
 /// Lines are no-ops.
 ///
-/// Sampling: compute the arc's center, radius, start_angle, end_angle.
+/// Sampling: compute the arc's center, radius, `start_angle`, `end_angle`.
 /// Walk N intermediate angles in the direction the arc sweeps from
 /// `from` to `to` (which depends on `sweep_ccw` AND on whether `from`
 /// is the arc's `start` or `end` Point — if the trace approaches the
@@ -286,7 +286,7 @@ fn push_arc_interior_if_arc(
     let t = point_xy(to, &solve.result.state, &solve.result.index, sketch)
         .ok_or(TraceError::MissingEndpoint(to))?;
 
-    let radius = ((f.0 - c.0).powi(2) + (f.1 - c.1).powi(2)).sqrt();
+    let radius = (f.0 - c.0).hypot(f.1 - c.1);
     let from_angle = (f.1 - c.1).atan2(f.0 - c.0);
     let to_angle = (t.1 - c.1).atan2(t.0 - c.0);
 
@@ -327,9 +327,9 @@ fn push_arc_interior_if_arc(
     // themselves — those are already pushed by the caller).
     for i in 1..ARC_SAMPLES {
         let frac = i as f64 / ARC_SAMPLES as f64;
-        let theta = from_angle + sweep_magnitude * frac;
-        let x = c.0 + radius * theta.cos();
-        let y = c.1 + radius * theta.sin();
+        let theta = sweep_magnitude.mul_add(frac, from_angle);
+        let x = radius.mul_add(theta.cos(), c.0);
+        let y = radius.mul_add(theta.sin(), c.1);
         out.push([x, y]);
     }
     Ok(())
@@ -366,7 +366,7 @@ fn build_adjacency(
 
 /// Endpoint Points of an edge — Line `(start, end)` or Arc
 /// `(start, end)` (the Arc's `center` Point is NOT a topology vertex).
-fn edge_endpoints(entity: &Entity) -> Option<(SketchEntityId, SketchEntityId)> {
+const fn edge_endpoints(entity: &Entity) -> Option<(SketchEntityId, SketchEntityId)> {
     match entity.kind {
         EntityKind::Line { start, end } => Some((start, end)),
         EntityKind::Arc { start, end, .. } => Some((start, end)),
@@ -539,7 +539,7 @@ mod tests {
         for sample in &polygon[2..] {
             let dx = sample[0] - 1.0;
             let dy = sample[1];
-            let r = (dx * dx + dy * dy).sqrt();
+            let r = dx.hypot(dy);
             assert!(
                 (r - 1.0).abs() < 1e-9,
                 "arc vertex {sample:?} not on r=1 circle"

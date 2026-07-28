@@ -13,13 +13,13 @@
 //! - `EntityKind::Arc`  → `FpGraphicKind::Arc { center, radius,
 //!     start_deg, end_deg }`
 //! - `EntityKind::Circle` → `FpGraphicKind::Circle { center, radius }`
-//! - `EntityKind::Point` carrying a SilkAttr emits no graphic and
+//! - `EntityKind::Point` carrying a `SilkAttr` emits no graphic and
 //!   triggers a warning (a Point is not a renderable silk primitive).
 //! - Construction entities are skipped silently.
 //!
 //! Layer routing: SilkAttr.layer is used directly. `TopSilk` →
 //! `silk_f`, `BottomSilk` → `silk_b`. Other layers (e.g. someone tags
-//! a SilkAttr with TopAssembly) emit a warning and skip — silk
+//! a `SilkAttr` with `TopAssembly`) emit a warning and skip — silk
 //! semantics only make sense on silk layers.
 //!
 //! Cleanroom: per-entity translation only; no third-party
@@ -117,7 +117,7 @@ fn entity_to_graphic(
             let c = pos(sketch, solve, center)?;
             let s = pos(sketch, solve, start)?;
             let e = pos(sketch, solve, end)?;
-            let radius = ((s[0] - c[0]).powi(2) + (s[1] - c[1]).powi(2)).sqrt();
+            let radius = (s[0] - c[0]).hypot(s[1] - c[1]);
             let mut start_deg = (s[1] - c[1]).atan2(s[0] - c[0]).to_degrees();
             let mut end_deg = (e[1] - c[1]).atan2(e[0] - c[0]).to_degrees();
             if start_deg < 0.0 {

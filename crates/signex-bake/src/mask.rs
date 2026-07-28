@@ -1,9 +1,9 @@
-//! Mask + paste-aperture bake — turns MaskOpeningAttr,
-//! MaskExcludeAttr, and PasteApertureAttr-tagged closed profiles into
+//! Mask + paste-aperture bake — turns `MaskOpeningAttr`,
+//! `MaskExcludeAttr`, and PasteApertureAttr-tagged closed profiles into
 //! `Footprint::mask_openings`, `mask_excludes`, and `paste_apertures`.
 //!
 //! Phase B / Stage 3 of the v0.14 sketch-mode plan. All three follow
-//! the same recipe: walker → polygon, attr.layer → LayerId, append to
+//! the same recipe: walker → polygon, attr.layer → `LayerId`, append to
 //! the corresponding output Vec.
 //!
 //! v0.14 scope: Lines only (walker limitation). Arcs / Circles in a

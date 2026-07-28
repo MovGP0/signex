@@ -109,7 +109,7 @@ fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, 
         Some(s) => s.trim(),
         None => return Ok(None),
     };
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let body = s.strip_prefix('=').map_or(s, str::trim_start);
     let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
     let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
     let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;

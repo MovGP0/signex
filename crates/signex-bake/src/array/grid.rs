@@ -33,23 +33,17 @@ pub(super) fn bake_grid(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let source_entity = match sketch.entities.iter().find(|e| e.id == source) {
-        Some(e) => e,
-        None => {
-            warnings.push(format!(
-                "grid array source {source}: entity not found — array skipped"
-            ));
-            return Ok(());
-        }
+    let source_entity = if let Some(e) = sketch.entities.iter().find(|e| e.id == source) { e } else {
+        warnings.push(format!(
+            "grid array source {source}: entity not found — array skipped"
+        ));
+        return Ok(());
     };
-    let pad_attr = match source_entity.pad.as_ref() {
-        Some(p) => p,
-        None => {
-            warnings.push(format!(
-                "grid array source {source}: no PadAttr on source entity — array skipped"
-            ));
-            return Ok(());
-        }
+    let pad_attr = if let Some(p) = source_entity.pad.as_ref() { p } else {
+        warnings.push(format!(
+            "grid array source {source}: no PadAttr on source entity — array skipped"
+        ));
+        return Ok(());
     };
 
     let nx_ast = parse(strip_eq_prefix(nx_expr)).map_err(SketchError::Expr)?;

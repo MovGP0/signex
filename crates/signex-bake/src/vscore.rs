@@ -9,7 +9,7 @@
 //! The sketch-side `VScoreHintAttr` carries `depth_fraction_expr`
 //! (depth as a fraction of board thickness, evaluated against the
 //! parameter table) and an optional `min_web_expr`. v0.14.1 evaluates
-//! both into mm; the depth_fraction is multiplied by a nominal
+//! both into mm; the `depth_fraction` is multiplied by a nominal
 //! [`NOMINAL_BOARD_THICKNESS_MM`] to get an absolute depth (the lib
 //! field is mm, not a fraction). Real fab houses will substitute the
 //! actual board thickness at panelisation time.
@@ -48,36 +48,27 @@ pub fn bake_v_scores(
             Some(a) => a,
             None => continue,
         };
-        let (start, end) = match entity.kind {
-            EntityKind::Line { start, end } => (start, end),
-            _ => {
-                warnings.push(format!(
-                    "entity {}: VScoreHintAttr requires a Line entity (Arcs / Circles ignored — V-scores are straight cuts); skipping",
-                    entity.id
-                ));
-                continue;
-            }
+        let (start, end) = if let EntityKind::Line { start, end } = entity.kind { (start, end) } else {
+            warnings.push(format!(
+                "entity {}: VScoreHintAttr requires a Line entity (Arcs / Circles ignored — V-scores are straight cuts); skipping",
+                entity.id
+            ));
+            continue;
         };
 
-        let from = match point_xy(start, &solve.result.state, &solve.result.index, sketch) {
-            Some(p) => [p.0, p.1],
-            None => {
-                warnings.push(format!(
-                    "entity {}: VScoreHintAttr start endpoint missing; skipping",
-                    entity.id
-                ));
-                continue;
-            }
+        let from = if let Some(p) = point_xy(start, &solve.result.state, &solve.result.index, sketch) { [p.0, p.1] } else {
+            warnings.push(format!(
+                "entity {}: VScoreHintAttr start endpoint missing; skipping",
+                entity.id
+            ));
+            continue;
         };
-        let to = match point_xy(end, &solve.result.state, &solve.result.index, sketch) {
-            Some(p) => [p.0, p.1],
-            None => {
-                warnings.push(format!(
-                    "entity {}: VScoreHintAttr end endpoint missing; skipping",
-                    entity.id
-                ));
-                continue;
-            }
+        let to = if let Some(p) = point_xy(end, &solve.result.state, &solve.result.index, sketch) { [p.0, p.1] } else {
+            warnings.push(format!(
+                "entity {}: VScoreHintAttr end endpoint missing; skipping",
+                entity.id
+            ));
+            continue;
         };
 
         let depth = match eval_dimensionless(&attr.depth_fraction_expr, &ctx) {
@@ -114,7 +105,7 @@ pub fn bake_v_scores(
     Ok(())
 }
 
-fn map_side(
+const fn map_side(
     s: signex_sketch::attr::VScoreSide,
 ) -> signex_library::primitive::footprint::VScoreSide {
     use signex_library::primitive::footprint::VScoreSide as Lib;
@@ -131,7 +122,7 @@ fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, 
         Some(s) => s.trim(),
         None => return Ok(None),
     };
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let body = s.strip_prefix('=').map_or(s, str::trim_start);
     let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
     let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
     let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;
@@ -151,7 +142,7 @@ fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
 
 fn eval_dimensionless(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
     let s = expr.trim();
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let body = s.strip_prefix('=').map_or(s, str::trim_start);
     let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
     let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
     q.as_count().map_err(|e| format!("unit: {e:?}"))

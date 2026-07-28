@@ -1,4 +1,4 @@
-//! Pad bake — turns SketchData + solved state into Vec<Pad>.
+//! Pad bake — turns `SketchData` + solved state into Vec<Pad>.
 //!
 //! Phase 7 Task 7.1 of the v0.13 sketch-mode plan. Walks every entity
 //! tagged with [`PadAttr`], evaluates its expression strings against
@@ -22,7 +22,7 @@
 //!   back Castellated→Tht and Fiducial→Smd with warnings; v0.14 ships
 //!   the variants directly so those warnings are gone.
 //! - `PadShape::Chamfered { chamfer_ratio_expr, corners }` bakes to
-//!   `LibPadShape::Chamfered` natively (was RoundRect approximation
+//!   `LibPadShape::Chamfered` natively (was `RoundRect` approximation
 //!   in v0.13).
 //! - `PadShape::Custom(SketchProfile)` still falls back to
 //!   `LibPadShape::Rect` with a warning (sketch-profile bake lands
@@ -30,8 +30,8 @@
 //! - `PasteAperturePattern::{Grid, Custom}` warn + fall back to
 //!   `Single` (one aperture).
 //! - Closed-profile attrs other than `pad` (silk / courtyard /
-//!   mask_opening / mask_exclude / paste_aperture / pour / keepout /
-//!   board_cutout / v_score) are baked by their respective
+//!   `mask_opening` / `mask_exclude` / `paste_aperture` / pour / keepout /
+//!   `board_cutout` / `v_score`) are baked by their respective
 //!   `crate::silk` / `crate::courtyard` / `crate::mask` / `crate::pour`
 //!   modules. `bake_pads` no longer warns about them — the dispatcher
 //!   invokes those modules separately.
@@ -114,7 +114,7 @@ pub fn bake_pads(
 /// `extra_dx` / `extra_dy` are the array offset (mm) added on top of
 /// the pad's own `offset_x_expr` / `offset_y_expr`.
 /// `extra_pad_number`, when `Some`, overrides `pad_attr.number`
-/// (LinearArray numbering scheme).
+/// (`LinearArray` numbering scheme).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bake_one_pad(
     sketch_point_id: SketchEntityId,
@@ -165,8 +165,7 @@ pub(crate) fn bake_one_pad(
     let paste_margin = if is_fiducial {
         if pad_attr.paste_margin_expr.is_some() {
             warnings.push(format!(
-                "pad {}: paste_margin_expr ignored on Fiducial (no paste applied)",
-                pad_number
+                "pad {pad_number}: paste_margin_expr ignored on Fiducial (no paste applied)"
             ));
         }
         None
@@ -183,16 +182,14 @@ pub(crate) fn bake_one_pad(
     };
     if is_fiducial && drill.is_some() {
         warnings.push(format!(
-            "pad {}: drill ignored on Fiducial (vision marker has no hole)",
-            pad_number
+            "pad {pad_number}: drill ignored on Fiducial (vision marker has no hole)"
         ));
     }
 
     let shape = if is_fiducial {
         if !matches!(pad_attr.shape, PadShape::Round) {
             warnings.push(format!(
-                "pad {}: Fiducial shape forced to Round",
-                pad_number
+                "pad {pad_number}: Fiducial shape forced to Round"
             ));
         }
         LibPadShape::Round
@@ -212,12 +209,10 @@ pub(crate) fn bake_one_pad(
     match &pad_attr.paste_apertures {
         PasteAperturePattern::Single => {}
         PasteAperturePattern::Grid { .. } => warnings.push(format!(
-            "pad {}: PasteAperturePattern::Grid ignored (v0.14 feature) — falling back to Single aperture",
-            pad_number
+            "pad {pad_number}: PasteAperturePattern::Grid ignored (v0.14 feature) — falling back to Single aperture"
         )),
         PasteAperturePattern::Custom { .. } => warnings.push(format!(
-            "pad {}: PasteAperturePattern::Custom ignored (v0.14 feature) — falling back to Single aperture",
-            pad_number
+            "pad {pad_number}: PasteAperturePattern::Custom ignored (v0.14 feature) — falling back to Single aperture"
         )),
     }
 
@@ -279,7 +274,7 @@ pub(crate) fn bake_one_pad(
 /// [`signex_sketch::solver::residual::resolve_dim`].
 fn strip_eq_prefix(src: &str) -> &str {
     let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
+    s.strip_prefix('=').map_or(s, str::trim_start)
 }
 
 fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
@@ -318,7 +313,7 @@ fn rotation_deg(expr: &Option<String>, ctx: &EvalContext) -> Result<f64, SketchE
 // Helpers — kind / shape / layer mapping
 // ─────────────────────────────────────────────────────────────────────
 
-fn lib_kind(k: PadKind, _warnings: &mut Vec<String>, _pad_number: &str) -> LibPadKind {
+const fn lib_kind(k: PadKind, _warnings: &mut Vec<String>, _pad_number: &str) -> LibPadKind {
     match k {
         PadKind::Smd => LibPadKind::Smd,
         PadKind::Tht => LibPadKind::Tht,
@@ -336,8 +331,8 @@ fn signex_layer_id(l: SignexLayer) -> LayerId {
     LayerId::new(l.altium_label())
 }
 
-/// Translate sketch ChamferedCorners into the lib mirror enum.
-fn map_corners(c: &SkChamferedCorners) -> LibChamferedCorners {
+/// Translate sketch `ChamferedCorners` into the lib mirror enum.
+const fn map_corners(c: &SkChamferedCorners) -> LibChamferedCorners {
     LibChamferedCorners {
         top_left: c.top_left,
         top_right: c.top_right,
@@ -461,15 +456,11 @@ fn bake_shape(
             // LibPadShape::Custom. On any trace failure, fall back to
             // bbox Rect with a warning so the bake doesn't poison the
             // whole pad.
-            let seed = match source.first() {
-                Some(id) => *id,
-                None => {
-                    warnings.push(format!(
-                        "pad {}: Custom::SketchProfile.source is empty; falling back to Rect",
-                        pad_number
-                    ));
-                    return Ok(LibPadShape::Rect);
-                }
+            let seed = if let Some(id) = source.first() { *id } else {
+                warnings.push(format!(
+                    "pad {pad_number}: Custom::SketchProfile.source is empty; falling back to Rect"
+                ));
+                return Ok(LibPadShape::Rect);
             };
             match crate::profile::trace_closed_profile(sketch, solve, seed) {
                 Ok(world_pts) => {
@@ -481,8 +472,7 @@ fn bake_shape(
                 }
                 Err(e) => {
                     warnings.push(format!(
-                        "pad {}: Custom::SketchProfile trace failed ({e:?}); falling back to Rect",
-                        pad_number
+                        "pad {pad_number}: Custom::SketchProfile trace failed ({e:?}); falling back to Rect"
                     ));
                     LibPadShape::Rect
                 }

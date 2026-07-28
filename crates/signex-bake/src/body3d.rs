@@ -21,9 +21,9 @@
 //! - Trace a closed profile through the walker.
 //! - Set `body_3d.outline = Some(Polygon)` and
 //!   `body_3d.offset_z_mm = eval(plane.offset_z_expr)`.
-//! - `height_mm` stays at whatever the caller had pre-set (Body3D
+//! - `height_mm` stays at whatever the caller had pre-set (`Body3D`
 //!   defaults to 1.0 mm; user-edited values are preserved).
-//! - Multiple BodyTop planes / multiple closed profiles per plane:
+//! - Multiple `BodyTop` planes / multiple closed profiles per plane:
 //!   first wins; subsequent emit warnings.
 
 use std::collections::BTreeMap;
@@ -92,7 +92,7 @@ pub fn bake_body3d(
                             "BodyTop plane offset_z_expr `{offset_z_expr}` evaluated to non-finite {z_mm}; keeping prior offset_z_mm = {}",
                             body_3d.offset_z_mm
                         ));
-                    } else if z_mm.abs() > f32::MAX as f64 {
+                    } else if z_mm.abs() > f64::from(f32::MAX) {
                         warnings.push(format!(
                             "BodyTop plane offset_z_expr `{offset_z_expr}` evaluated to {z_mm} which exceeds f32 range; keeping prior offset_z_mm = {}",
                             body_3d.offset_z_mm
@@ -145,7 +145,7 @@ fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
 
 fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
     let s = expr.trim();
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let body = s.strip_prefix('=').map_or(s, str::trim_start);
     let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
     let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
     q.as_mm().map_err(|e| format!("unit: {e:?}"))

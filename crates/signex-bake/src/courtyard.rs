@@ -9,7 +9,7 @@
 //! courtyard; subsequent tagged profiles emit a warning.
 //!
 //! v0.14 scope:
-//! - One CourtyardAttr per footprint becomes the courtyard polygon.
+//! - One `CourtyardAttr` per footprint becomes the courtyard polygon.
 //! - Additional CourtyardAttr-tagged entities warn + skip.
 //! - Open / branching / arc-containing profiles surface a warning
 //!   from `signex_bake::trace_closed_profile` and skip.
@@ -25,7 +25,7 @@ use crate::profile::{TraceError, trace_closed_profile};
 
 /// Bake the first CourtyardAttr-tagged closed profile into
 /// `courtyard_out`. The first non-construction Line entity carrying
-/// CourtyardAttr is used as the trace seed.
+/// `CourtyardAttr` is used as the trace seed.
 ///
 /// Returns Ok even when the trace fails — failures are reported via
 /// `warnings` so the bake pipeline can continue.
@@ -106,7 +106,7 @@ mod tests {
     }
 
     /// Build a 1×1 mm rectangle of 4 Lines and tag the first Line with
-    /// CourtyardAttr. Returns the sketch + the seed Line ID.
+    /// `CourtyardAttr`. Returns the sketch + the seed Line ID.
     fn rectangle_with_courtyard() -> (SketchData, SketchEntityId) {
         let plane = PlaneId::new();
         let mut data = SketchData::default();

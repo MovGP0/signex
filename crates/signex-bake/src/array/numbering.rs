@@ -23,7 +23,7 @@ pub(super) fn derive_pad_number(
             start_expr,
             step_expr,
         } => linear_increment_number(start_expr, step_expr, i, params_ast)
-            .unwrap_or_else(|| format!("{}", i)),
+            .unwrap_or_else(|| format!("{i}")),
         NumberingScheme::BgaRowCol { .. } => {
             warnings.push(format!(
                 "linear array source {source}: BgaRowCol numbering not meaningful on a 1D Linear array — falling back to LinearIncrement defaults",
@@ -38,7 +38,7 @@ pub(super) fn derive_pad_number(
                 warnings.push(format!(
                     "linear array source {source}: Explicit numbering ran out of names at i={i}; using fallback \"{i}\"",
                     ));
-                format!("{}", i)
+                format!("{i}")
             }
         }
     }
@@ -64,15 +64,15 @@ pub(super) fn linear_increment_number(
     let step = eval(&parse(strip_eq_prefix(step_expr)).ok()?, &ctx)
         .ok()?
         .value;
-    let n = (start + i as f64 * step).round() as i64;
-    Some(format!("{}", n))
+    let n = (i as f64).mul_add(step, start).round() as i64;
+    Some(format!("{n}"))
 }
 
 /// Strip the optional Altium-style leading `=` and surrounding
 /// whitespace so authored expressions like `= count` parse cleanly.
 pub(super) fn strip_eq_prefix(src: &str) -> &str {
     let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
+    s.strip_prefix('=').map_or(s, str::trim_start)
 }
 
 /// v0.22 Phase B3 — bake `ArrayKind::Grid`. Walks `(i, j)` with
@@ -121,7 +121,7 @@ pub(super) fn derive_pad_number_2d(
                 warnings.push(format!(
                     "grid array source {source}: Explicit numbering ran out of names at ({i}, {j}); using fallback \"{idx}\"",
                 ));
-                format!("{}", idx)
+                format!("{idx}")
             }
         }
     }

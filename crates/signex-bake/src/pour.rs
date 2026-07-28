@@ -2,8 +2,8 @@
 //! `Footprint::pours: Vec<FpPour>` records.
 //!
 //! Phase B / Stage 3 of the v0.14 sketch-mode plan. v0.14 records the
-//! polygon boundary + all PourAttr metadata (layer, net, fill_type,
-//! thermal_relief, clearance, min_thickness, priority). Actual fill
+//! polygon boundary + all `PourAttr` metadata (layer, net, `fill_type`,
+//! `thermal_relief`, clearance, `min_thickness`, priority). Actual fill
 //! generation (polygon offset + raster fill + thermal-relief geometry)
 //! lands in v0.15.
 
@@ -107,7 +107,7 @@ pub fn bake_pours(
             thermal_relief: map_thermal(&attr.thermal_relief),
             clearance,
             min_thickness,
-            priority: attr.priority.min(u8::MAX as u32) as u8,
+            priority: attr.priority.min(u32::from(u8::MAX)) as u8,
         });
     }
     Ok(())
@@ -129,14 +129,14 @@ fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, 
         Some(s) => s.trim(),
         None => return Ok(None),
     };
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
+    let body = s.strip_prefix('=').map_or(s, str::trim_start);
     let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
     let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
     let mm = q.as_mm().map_err(|e| format!("unit: {e:?}"))?;
     Ok(Some(mm))
 }
 
-fn map_fill(s: SkPourFill) -> LibPourFill {
+const fn map_fill(s: SkPourFill) -> LibPourFill {
     match s {
         SkPourFill::Solid => LibPourFill::Solid,
         SkPourFill::Hatched => LibPourFill::Hatched,
@@ -144,7 +144,7 @@ fn map_fill(s: SkPourFill) -> LibPourFill {
     }
 }
 
-fn map_thermal(t: &signex_sketch::attr::ThermalRelief) -> LibThermal {
+const fn map_thermal(t: &signex_sketch::attr::ThermalRelief) -> LibThermal {
     if !t.enabled {
         LibThermal::Direct
     } else if t.spoke_count == 0 {

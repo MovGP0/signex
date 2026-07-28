@@ -2,8 +2,8 @@
 //! `Footprint::keepouts: Vec<FpKeepout>` records.
 //!
 //! Phase B / Stage 4 of the v0.14.1 sketch-mode plan. v0.14.1 records
-//! the polygon boundary + layer + KeepoutForbid (mapped from the
-//! sketch-side KeepoutKinds bitfield). DRC enforcement is a v0.15
+//! the polygon boundary + layer + `KeepoutForbid` (mapped from the
+//! sketch-side `KeepoutKinds` bitfield). DRC enforcement is a v0.15
 //! consumer concern.
 //!
 //! Mapping `KeepoutKinds` (6 booleans) to `KeepoutForbid` (5
