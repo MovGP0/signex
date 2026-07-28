@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Canonical draw order for a [`Scene`](crate::scene::Scene)'s primitive
 //! buckets, shared by the CPU `canvas::Frame` renderer and the GPU shader path
 //! so the two cannot silently diverge.

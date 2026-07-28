@@ -1,3 +1,9 @@
+#![expect(
+    clippy::field_reassign_with_default,
+    clippy::float_cmp,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Full-board scenario coverage for the CPU side of the GPU render path.
 //!
 //! CLEAN ROOM DECLARATION

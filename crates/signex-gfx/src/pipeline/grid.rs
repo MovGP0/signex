@@ -26,7 +26,7 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
 
 #[must_use]
 pub fn lod_fade_factors(mm_per_px: f32) -> GridLodFactors {
-    let safe_mm_per_px = mm_per_px.max(0.000001);
+    let safe_mm_per_px = mm_per_px.max(0.000_001);
     let px_per_mm = 1.0 / safe_mm_per_px;
 
     let minor_spacing_px = MINOR_GRID_MM * px_per_mm;

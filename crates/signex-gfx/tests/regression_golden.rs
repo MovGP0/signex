@@ -1,3 +1,9 @@
+#![expect(
+    clippy::expect_used,
+    clippy::too_many_lines,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Phase 6 regression and golden fixtures for renderer hardening.
 //!
 //! CLEAN ROOM DECLARATION
@@ -393,12 +399,12 @@ fn regression_golden_smoke_reports_match_fixture_baseline() {
     assert_float_eq(
         grid.minor_lod_alpha,
         golden.smoke.grid_minor_lod_alpha,
-        0.000001,
+        0.000_001,
     );
     assert_float_eq(
         grid.major_lod_alpha,
         golden.smoke.grid_major_lod_alpha,
-        0.000001,
+        0.000_001,
     );
 
     assert_eq!(

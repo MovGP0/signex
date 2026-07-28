@@ -1,3 +1,8 @@
+#![expect(
+    clippy::pub_underscore_fields,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Line primitive type.
 //!
 //! CLEAN ROOM DECLARATION

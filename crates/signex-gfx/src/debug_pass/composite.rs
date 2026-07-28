@@ -1,6 +1,16 @@
+#![expect(
+    clippy::missing_errors_doc,
+    clippy::too_many_lines,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Composite (text+geometry / grid+overlay+text) smoke passes.
 
-use super::{GpuPolygon, TextItem, CompositeSmokeReport, CameraUniform, CameraGpu, PolygonPipeline, GlyphonTextPipeline, CompositeStage, TextHAlign, TextVAlign, LineSegment, OverlayCompositeSmokeReport, GridPipeline, LinePipeline};
+use super::{
+    CameraGpu, CameraUniform, CompositeSmokeReport, CompositeStage, GlyphonTextPipeline,
+    GpuPolygon, GridPipeline, LinePipeline, LineSegment, OverlayCompositeSmokeReport,
+    PolygonPipeline, TextHAlign, TextItem, TextVAlign,
+};
 
 async fn run_text_geometry_composite_smoke_pass_with(
     scale_px_per_mm: f32,

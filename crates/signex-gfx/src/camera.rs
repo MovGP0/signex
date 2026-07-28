@@ -1,3 +1,8 @@
+#![expect(
+    clippy::pub_underscore_fields,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Camera uniform definitions for 2D and 3D views.
 //!
 //! CLEAN ROOM DECLARATION

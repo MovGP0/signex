@@ -1,3 +1,9 @@
+#![expect(
+    clippy::cast_precision_loss,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Dirty-flag driven scene upload gating.
 //!
 //! CLEAN ROOM DECLARATION

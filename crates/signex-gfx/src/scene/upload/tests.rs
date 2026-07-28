@@ -1,3 +1,8 @@
+#![expect(
+    clippy::used_underscore_binding,
+    reason = "test and benchmark code intentionally favors direct assertions and compact notation"
+)]
+
 //! Tests for dirty-driven scene uploads + viewport culling.
 use super::{
     SceneUploadTarget, TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,

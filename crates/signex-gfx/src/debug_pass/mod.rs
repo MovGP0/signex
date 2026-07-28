@@ -1,3 +1,8 @@
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Minimal debug render pass helpers.
 //!
 //! CLEAN ROOM DECLARATION
@@ -189,6 +194,12 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
 /// for `tests/regression_golden.rs` to call as a separate crate): this one
 /// has no caller outside `debug_pass::tests`.
 #[cfg(test)]
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    reason = "GPU smoke-test setup keeps its local shader constants and pixel conversions together"
+)]
 async fn run_line_dash_readback_smoke_pass(sample_x_px: &[u32]) -> Result<Vec<u8>, String> {
     let instance = wgpu::Instance::default();
 
@@ -412,7 +423,7 @@ pub async fn run_arc_smoke_pass() -> Result<u32, String> {
         center: [4.0, 4.0],
         radius: 2.0,
         start_angle: 0.0,
-        end_angle: 1.5707964,
+        end_angle: 1.570_796_4,
         width: 0.2,
         color: [1.0, 1.0, 1.0, 1.0],
         _pad: [0.0; 3],

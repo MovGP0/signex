@@ -1,3 +1,8 @@
+#![expect(
+    clippy::too_many_arguments,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Shared instance/vertex buffer growth for the GPU pipelines.
 //!
 //! CLEAN ROOM DECLARATION
@@ -31,7 +36,8 @@ pub fn ensure_capacity(
     usage: wgpu::BufferUsages,
     max_buffer_size: u64,
 ) -> usize {
-    let max_elems = (max_buffer_size / elem_size.max(1) as u64).max(1) as usize;
+    let max_elems =
+        usize::try_from((max_buffer_size / elem_size.max(1) as u64).max(1)).unwrap_or(usize::MAX);
     let writable = required.min(max_elems);
     if writable < required {
         warn_clamp_once(label, required, writable);
@@ -78,7 +84,8 @@ mod tests {
         elem_size: usize,
         max_buffer_size: u64,
     ) -> (usize, usize) {
-        let max_elems = (max_buffer_size / elem_size.max(1) as u64).max(1) as usize;
+        let max_elems = usize::try_from((max_buffer_size / elem_size.max(1) as u64).max(1))
+            .unwrap_or(usize::MAX);
         let writable = required.min(max_elems);
         let capacity = if writable > current {
             writable.next_power_of_two().min(max_elems)

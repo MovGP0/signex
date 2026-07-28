@@ -180,7 +180,7 @@ impl CirclePipeline {
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             device.limits().max_buffer_size,
         );
-        *count = writable as u32;
+        *count = u32::try_from(writable).unwrap_or(u32::MAX);
 
         queue.write_buffer(buffer, 0, bytemuck::cast_slice(&circles[..writable]));
     }

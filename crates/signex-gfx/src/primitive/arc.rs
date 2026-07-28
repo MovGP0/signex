@@ -1,3 +1,9 @@
+#![expect(
+    clippy::pub_underscore_fields,
+    clippy::too_long_first_doc_paragraph,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Arc primitive type.
 //!
 //! CLEAN ROOM DECLARATION

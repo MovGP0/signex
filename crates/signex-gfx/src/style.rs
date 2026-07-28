@@ -1,3 +1,8 @@
+#![expect(
+    clippy::pub_underscore_fields,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Semantic style references used by scene primitives.
 //!
 //! CLEAN ROOM DECLARATION

@@ -1,3 +1,11 @@
+#![expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::missing_errors_doc,
+    reason = "domain geometry, schemas, and public APIs intentionally retain this representation"
+)]
+
 //! Text pipeline foundation.
 //!
 //! CLEAN ROOM DECLARATION
@@ -134,8 +142,8 @@ const fn viewport_bounds(viewport_size_px: [u32; 2]) -> cryoglyph::TextBounds {
     cryoglyph::TextBounds {
         left: 0,
         top: 0,
-        right: viewport_size_px[0] as i32,
-        bottom: viewport_size_px[1] as i32,
+        right: viewport_size_px[0].cast_signed(),
+        bottom: viewport_size_px[1].cast_signed(),
     }
 }
 
@@ -304,7 +312,7 @@ impl GlyphonTextPipeline {
             self.buffers.push(buffer);
         }
 
-        self.text_count = self.prepared_texts.len() as u32;
+        self.text_count = u32::try_from(self.prepared_texts.len()).unwrap_or(u32::MAX);
         if self.text_count == 0 {
             return Ok(());
         }
@@ -370,6 +378,11 @@ impl GlyphonTextPipeline {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::float_cmp,
+        reason = "text layout tests assert exact generated fixture coordinates"
+    )]
+
     use super::{
         alignment_offset_px, anchored_top_left_px, attrs_for_item, normalize_rotation_radians,
         overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,

@@ -134,7 +134,7 @@ impl ArcPipeline {
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             device.limits().max_buffer_size,
         );
-        self.instance_count = writable as u32;
+        self.instance_count = u32::try_from(writable).unwrap_or(u32::MAX);
 
         queue.write_buffer(
             &self.instance_buffer,

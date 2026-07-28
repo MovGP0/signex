@@ -90,7 +90,7 @@ fn arc_smoke_pass_handles_tiny_radius() {
         center: [4.0, 4.0],
         radius: 0.01,
         start_angle: 0.0,
-        end_angle: 1.5707964,
+        end_angle: 1.570_796_4,
         width: 0.005,
         color: [1.0, 1.0, 1.0, 1.0],
         _pad: [0.0; 3],

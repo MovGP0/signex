@@ -116,9 +116,9 @@ fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
     if !polygon.is_stroked() {
         return;
     }
-    let stroke_color = polygon
-        .stroke_color
-        .expect("is_stroked() guarantees a stroke colour");
+    let Some(stroke_color) = polygon.stroke_color else {
+        return;
+    };
 
     let points = &polygon.vertices;
     let half = polygon.stroke_width * 0.5;
@@ -321,7 +321,7 @@ impl PolygonPipeline {
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             device.limits().max_buffer_size,
         );
-        *count = writable as u32;
+        *count = u32::try_from(writable).unwrap_or(u32::MAX);
 
         queue.write_buffer(buffer, 0, bytemuck::cast_slice(&vertices[..writable]));
     }
@@ -382,6 +382,11 @@ impl PolygonPipeline {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::float_cmp,
+        reason = "GPU vertex tests assert exact generated fixture coordinates"
+    )]
+
     use super::triangulate_polygons;
     use crate::primitive::polygon::GpuPolygon;
 
