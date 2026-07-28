@@ -178,16 +178,16 @@ impl Signex {
         gerber_viewer: &mut GerberViewerState,
         batch: signex_gerber::GerberLoadBatch,
     ) {
-        if gerber_viewer.layers.is_empty() {
-            if let Some(first_layer) = batch.layers.first() {
-                let title = match batch.layers.len() {
-                    1 => first_layer.name.clone(),
-                    count => format!("{} +{}", first_layer.name, count - 1),
-                };
-                self.ui_state
-                    .gerber_workspace
-                    .rename_document(document_id, title);
-            }
+        if gerber_viewer.layers.is_empty()
+            && let Some(first_layer) = batch.layers.first()
+        {
+            let title = match batch.layers.len() {
+                1 => first_layer.name.clone(),
+                count => format!("{} +{}", first_layer.name, count - 1),
+            };
+            self.ui_state
+                .gerber_workspace
+                .rename_document(document_id, title);
         }
 
         gerber_viewer.apply_load_batch(batch);
@@ -240,9 +240,7 @@ impl Signex {
                             .iter()
                             .fold(
                                 rfd::AsyncFileDialog::new().set_title("Open Fabrication File(s)"),
-                                |dialog, (label, extensions)| {
-                                    dialog.add_filter(*label, *extensions)
-                                },
+                                |dialog, (label, extensions)| dialog.add_filter(*label, extensions),
                             )
                             .pick_files()
                             .await
