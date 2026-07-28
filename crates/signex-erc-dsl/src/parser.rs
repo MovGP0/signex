@@ -39,7 +39,10 @@
 use chumsky::prelude::*;
 use chumsky::text::ascii;
 
-use crate::ast::{RuleAst, ApplicabilityAst, TargetKind, ScopeKind, SeverityKind, ExprAst, CmpOp, FieldExprAst, LiteralAst};
+use crate::ast::{
+    ApplicabilityAst, CmpOp, ExprAst, FieldExprAst, LiteralAst, RuleAst, ScopeKind, SeverityKind,
+    TargetKind,
+};
 
 type Err<'src> = extra::Err<Simple<'src, char>>;
 
@@ -49,6 +52,10 @@ type Err<'src> = extra::Err<Simple<'src, char>>;
 
 /// Parse DSL source text into a list of rule declarations.
 /// Returns the list of parse errors (byte offsets) on failure.
+///
+/// # Errors
+///
+/// Returns all parser diagnostics with their source byte offsets.
 pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<(usize, String)>> {
     let (rules, errs) = program_parser().parse(src).into_output_errors();
     if errs.is_empty() {

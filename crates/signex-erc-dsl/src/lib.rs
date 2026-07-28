@@ -13,6 +13,10 @@ pub use error::DslError;
 /// Parse DSL source text into `RuleAst` items.
 ///
 /// This API converts parser diagnostics into `DslError::Parse` values.
+///
+/// # Errors
+///
+/// Returns all parser diagnostics as [`DslError::Parse`] values.
 pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<DslError>> {
     match parser::parse(src) {
         Ok(rules) => Ok(rules),
@@ -30,11 +34,19 @@ pub fn validate(rules: &[RuleAst]) -> Vec<DslError> {
 }
 
 /// Compile validated AST rules into executable evaluator closures.
+///
+/// # Errors
+///
+/// Returns every independent rule-compilation error found in the input.
 pub fn compile(rules: &[RuleAst]) -> Result<Vec<CompiledRule>, Vec<DslError>> {
     compiler::compile(rules)
 }
 
 /// Parse, validate, and compile DSL source in a single call.
+///
+/// # Errors
+///
+/// Returns parse, validation, or compilation errors collected for the source.
 pub fn parse_validate_compile(src: &str) -> Result<Vec<CompiledRule>, Vec<DslError>> {
     let rules = parse(src)?;
     let validation_errors = validate(&rules);
@@ -45,6 +57,10 @@ pub fn parse_validate_compile(src: &str) -> Result<Vec<CompiledRule>, Vec<DslErr
 }
 
 /// Parse, validate, compile, and convert rules into engine evaluator closures.
+///
+/// # Errors
+///
+/// Returns parse, validation, or compilation errors collected for the source.
 pub fn parse_validate_compile_to_eval_fns(
     src: &str,
 ) -> Result<Vec<signex_erc::engine::EvalFn>, Vec<DslError>> {
@@ -126,9 +142,8 @@ mod tests {
             then error "bad"
         "#;
 
-        let errors = match parse_validate_compile(src) {
-            Ok(_) => panic!("regex should fail"),
-            Err(errors) => errors,
+        let Err(errors) = parse_validate_compile(src) else {
+            panic!("regex should fail");
         };
         assert!(
             errors

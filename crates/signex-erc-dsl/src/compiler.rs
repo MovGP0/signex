@@ -10,7 +10,10 @@ use signex_erc::{
 };
 use signex_types::schematic::{PinDirection, Point, SelectedItem, SelectedKind};
 
-use crate::ast::{LiteralAst, FieldExprAst, CmpOp, RuleAst, ExprAst, TargetKind, ScopeKind, ApplicabilityAst, SeverityKind};
+use crate::ast::{
+    ApplicabilityAst, CmpOp, ExprAst, FieldExprAst, LiteralAst, RuleAst, ScopeKind, SeverityKind,
+    TargetKind,
+};
 use crate::error::DslError;
 
 /// A compiled helper call. For regex-capable helpers, regexes are compiled once.
@@ -59,6 +62,10 @@ impl CompiledRule {
 
 /// Compile all rules. Continues compiling independent rules and returns all
 /// compile-time errors (e.g. invalid regexes) together.
+///
+/// # Errors
+///
+/// Returns every independent rule-compilation error found in the input.
 pub fn compile(rules: &[RuleAst]) -> Result<Vec<CompiledRule>, Vec<DslError>> {
     let mut out = Vec::with_capacity(rules.len());
     let mut errors = Vec::new();
@@ -291,13 +298,10 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
             .first()
             .and_then(|a| parse_pin_type(a.as_str_value()))
             .is_some_and(|t| net.pin_types.contains(&t)),
-        ("name_matches", Subject::Net(net)) => {
-            if let Some(regex) = &helper.regex_arg {
-                regex.is_match(&net.name)
-            } else {
-                false
-            }
-        }
+        ("name_matches", Subject::Net(net)) => helper
+            .regex_arg
+            .as_ref()
+            .is_some_and(|regex| regex.is_match(&net.name)),
         ("class_is", Subject::Net(net)) => helper
             .args
             .first()

@@ -1,6 +1,6 @@
 //! AST validator: checks predicate whitelist and target compatibility.
 
-use crate::ast::{TargetKind, RuleAst, ExprAst, FieldExprAst};
+use crate::ast::{ExprAst, FieldExprAst, RuleAst, TargetKind};
 use crate::error::DslError;
 
 // ---------------------------------------------------------------------------
