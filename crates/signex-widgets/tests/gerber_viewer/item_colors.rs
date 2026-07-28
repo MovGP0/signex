@@ -37,13 +37,13 @@ macro_rules! gerber_item_color_tests
                 let alternate_index = state
                     .palette
                     .iter()
-                    .position(|color|
+                    .position(|material_color|
                     {
-                        *color != state.grid_color
-                            && *color != state.d_code_color
+                        material_color.color != state.grid_color
+                            && material_color.color != state.d_code_color
                     })
                     .expect("alternate Material color");
-                let expected = state.palette[alternate_index];
+                let expected = state.palette[alternate_index].color;
                 let generation = state.redraw_generation;
 
                 state.set_grid_color(alternate_index);
@@ -64,12 +64,18 @@ macro_rules! gerber_item_color_tests
                 let grid_index = state
                     .palette
                     .iter()
-                    .position(|color| *color == state.grid_color)
+                    .position(|material_color|
+                    {
+                        material_color.color == state.grid_color
+                    })
                     .expect("grid color in Material palette");
                 let d_code_index = state
                     .palette
                     .iter()
-                    .position(|color| *color == state.d_code_color)
+                    .position(|material_color|
+                    {
+                        material_color.color == state.d_code_color
+                    })
                     .expect("D-code color in Material palette");
 
                 state.set_grid_color(grid_index);

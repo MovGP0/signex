@@ -1556,7 +1556,62 @@ struct LayerPalette
     grid_color: String,
     d_code_color: String,
     compare_colors: Vec<String>,
-    layer_colors: Vec<String>,
+    picker_families: Vec<MaterialColorFamily>,
+    layer_slots: LayerSlots,
+}
+
+#[derive(Debug, Deserialize)]
+struct MaterialColorFamily
+{
+    name: String,
+    shades: Vec<String>,
+    colors: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LayerSlots
+{
+    colors: Vec<String>,
+}
+
+pub(super) fn material_color_palette() -> Vec<GerberMaterialColor>
+{
+    let palette: LayerPalette = toml::from_str(include_str!(
+        "../../../../assets/gerber-viewer/material-layer-colors.toml"
+    ))
+    .expect("bundled Material Design Gerber layer palette must parse");
+    let colors = palette
+        .picker_families
+        .iter()
+        .enumerate()
+        .flat_map(|(family_index, family)|
+        {
+            family
+                .shades
+                .iter()
+                .zip(&family.colors)
+                .filter_map(move |(shade, value)|
+                {
+                    parse_hex_color(value).map(|color| GerberMaterialColor {
+                        color,
+                        family_index,
+                        label: format!("{} {}", family.name, shade),
+                    })
+                })
+        })
+        .collect::<Vec<_>>();
+    if colors.is_empty()
+    {
+        vec![GerberMaterialColor {
+            color: Color::from_rgb8(211, 47, 47),
+            family_index: 0,
+            label: "Red 700".to_owned(),
+        }]
+    }
+    else
+    {
+        colors
+    }
 }
 
 pub(super) fn material_layer_palette() -> Vec<Color>
@@ -1566,7 +1621,8 @@ pub(super) fn material_layer_palette() -> Vec<Color>
     ))
     .expect("bundled Material Design Gerber layer palette must parse");
     let colors = palette
-        .layer_colors
+        .layer_slots
+        .colors
         .iter()
         .filter_map(|value| parse_hex_color(value))
         .collect::<Vec<_>>();

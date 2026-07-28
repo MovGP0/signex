@@ -61,27 +61,6 @@ pub fn view<'a>(
 
     let toolbar: Element<'_, GerberViewerMessage> = container(
         row![
-            text("Layer").size(11).color(text_muted),
-            button(text("Previous Layer (PgUp)")).on_press_maybe(
-                previous_layer_index(state.active_layer, state.layers.len())
-                    .map(|_| GerberViewerMessage::PreviousLayer),
-            ),
-            button(text("Next Layer (PgDn)")).on_press_maybe(
-                next_layer_index(state.active_layer, state.layers.len())
-                    .map(|_| GerberViewerMessage::NextLayer),
-            ),
-            button(text("Move Layer Up (+)")).on_press_maybe(
-                state
-                    .active_layer
-                    .filter(|index| *index + 1 < state.layers.len())
-                    .map(|_| GerberViewerMessage::MoveLayerUp),
-            ),
-            button(text("Move Layer Down (-)")).on_press_maybe(
-                state
-                    .active_layer
-                    .filter(|index| *index > 0)
-                    .map(|_| GerberViewerMessage::MoveLayerDown),
-            ),
             text("Highlight").size(11).color(text_muted),
             component_picker,
             net_picker,
@@ -456,7 +435,9 @@ fn view_layers<'a>(
         state.selected_color_choice(state.negative_ghost_color);
     layer_list = layer_list
         .push(horizontal_rule(tokens))
-        .push(text("Item colors · Material Design").size(12).color(text_primary))
+        .push(layer_controls::view(state, tokens))
+        .push(horizontal_rule(tokens))
+        .push(text("Item colors").size(12).color(text_primary))
         .push(
             row![
                 text("Grid").size(11).width(70),

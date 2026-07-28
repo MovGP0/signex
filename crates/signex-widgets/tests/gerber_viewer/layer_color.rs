@@ -37,9 +37,14 @@ macro_rules! gerber_layer_color_tests
             {
                 let mut state = two_layer_state();
                 let generation = state.redraw_generation;
-                let expected = state.palette[5];
+                let palette_index = state
+                    .palette
+                    .iter()
+                    .position(|choice| choice.label == "Blue Grey 200")
+                    .expect("Blue Grey 200 in full Material palette");
+                let expected = state.palette[palette_index].color;
 
-                state.set_layer_color(0, 5);
+                state.set_layer_color(0, palette_index);
 
                 assert_eq!(state.layers[0].color, expected);
                 assert_eq!(state.redraw_generation, generation + 1);
@@ -49,7 +54,7 @@ macro_rules! gerber_layer_color_tests
                         .selected_layer_color_choice(0)
                         .expect("selected color")
                         .palette_index,
-                    5,
+                    palette_index,
                 );
             }
 
@@ -57,7 +62,7 @@ macro_rules! gerber_layer_color_tests
             fn customized_color_stays_with_layer_after_reordering()
             {
                 let mut state = two_layer_state();
-                let expected = state.palette[5];
+                let expected = state.palette[5].color;
                 state.set_layer_color(0, 5);
                 state.select_layer(0);
 
@@ -68,23 +73,37 @@ macro_rules! gerber_layer_color_tests
             }
 
             #[test]
-            fn material_color_choices_do_not_repeat_palette_colors()
+            fn color_picker_contains_the_complete_material_palette()
             {
                 let state = two_layer_state();
                 let choices = state.layer_color_choices();
 
-                assert!(choices.len() > 1);
-                assert!(choices.len() < state.palette.len());
+                assert_eq!(choices.len(), 256);
+                assert_eq!(choices.len(), state.palette.len());
+                assert_eq!(choices[0].label, "Red 50");
+                assert_eq!(choices[13].label, "Red A700");
+                assert_eq!(choices[224].label, "Brown 50");
+                assert_eq!(choices[234].label, "Grey 50");
+                assert_eq!(choices[244].label, "Blue Grey 50");
+                assert_eq!(choices[254].label, "Neutral White");
+                assert_eq!(choices[255].label, "Neutral Black");
+                assert_eq!(
+                    choices
+                        .iter()
+                        .map(|choice| choice.family_index)
+                        .max(),
+                    Some(19),
+                );
                 for (index, choice) in choices.iter().enumerate()
                 {
                     assert_eq!(
                         choice.color,
-                        state.palette[choice.palette_index],
+                        state.palette[choice.palette_index].color,
                     );
                     assert!(!choices[..index].iter().any(|previous|
                     {
-                        state.palette[previous.palette_index]
-                            == state.palette[choice.palette_index]
+                        state.palette[previous.palette_index].color
+                            == state.palette[choice.palette_index].color
                     }));
                 }
             }
@@ -95,8 +114,13 @@ macro_rules! gerber_layer_color_tests
                 let mut state = two_layer_state();
                 let generation = state.redraw_generation;
                 let original = state.layers[0].color;
+                let original_index = state
+                    .palette
+                    .iter()
+                    .position(|choice| choice.color == original)
+                    .expect("default layer color in full Material palette");
 
-                state.set_layer_color(0, 0);
+                state.set_layer_color(0, original_index);
                 state.set_layer_color(0, usize::MAX);
                 state.set_layer_color(usize::MAX, 1);
 

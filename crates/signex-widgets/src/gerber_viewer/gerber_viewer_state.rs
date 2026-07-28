@@ -66,7 +66,8 @@ pub struct GerberViewerState
     pub(super) edit_grid_y: String,
     pub(super) edit_grid_unit: GridUnit,
     pub(super) grid_editor_error: Option<String>,
-    pub(super) palette: Vec<Color>,
+    pub(super) layer_palette: Vec<Color>,
+    pub(super) palette: Vec<GerberMaterialColor>,
     pub(super) open_color_picker: Option<GerberColorTarget>,
 }
 
@@ -87,14 +88,8 @@ impl Default for GerberViewerState
         let grid_color = material_grid_color();
         let negative_ghost_color = material_negative_ghost_color();
         let d_code_color = material_d_code_color();
-        let mut palette = material_layer_palette();
-        for color in [grid_color, negative_ghost_color, d_code_color]
-        {
-            if !palette.contains(&color)
-            {
-                palette.push(color);
-            }
-        }
+        let layer_palette = material_layer_palette();
+        let palette = material_color_palette();
         Self {
             layers: Vec::new(),
             active_layer: None,
@@ -151,6 +146,7 @@ impl Default for GerberViewerState
             edit_grid_y,
             edit_grid_unit,
             grid_editor_error: None,
+            layer_palette,
             palette,
             open_color_picker: None,
         }
@@ -173,11 +169,11 @@ impl GerberViewerState
 
         for layer in batch.layers.into_iter().take(loaded_count)
         {
-            let color_index = self.layers.len() % self.palette.len();
+            let color_index = self.layers.len() % self.layer_palette.len();
             self.layers.push(ViewerLayer {
                 layer,
                 visible: true,
-                color: self.palette[color_index],
+                color: self.layer_palette[color_index],
             });
         }
 

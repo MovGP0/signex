@@ -23,6 +23,7 @@ mod grid;
 mod highlight;
 mod item_colors;
 mod layer_color;
+mod layer_controls;
 mod layer_order;
 mod menu;
 mod measurement;
@@ -59,11 +60,12 @@ pub use workspace::{
 };
 
 use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index};
+use layer_color::GerberMaterialColor;
 
 use viewport::{
-    material_compare_palette, material_d_code_color, material_layer_palette,
-    material_grid_color, material_negative_ghost_color, page_bounds, visible_bounds,
-    zoom_transform_for_selection,
+    material_color_palette, material_compare_palette, material_d_code_color,
+    material_layer_palette, material_grid_color, material_negative_ghost_color,
+    page_bounds, visible_bounds, zoom_transform_for_selection,
 };
 
 #[cfg(test)]

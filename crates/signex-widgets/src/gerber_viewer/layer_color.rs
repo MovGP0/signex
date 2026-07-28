@@ -14,6 +14,16 @@ pub(super) struct GerberLayerColorChoice
 {
     pub(super) palette_index: usize,
     pub(super) color: Color,
+    pub(super) family_index: usize,
+    pub(super) label: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct GerberMaterialColor
+{
+    pub(super) color: Color,
+    pub(super) family_index: usize,
+    pub(super) label: String,
 }
 
 impl GerberViewerState
@@ -23,15 +33,13 @@ impl GerberViewerState
         self.palette
             .iter()
             .enumerate()
-            .filter(|(palette_index, color)|
-            {
-                !self.palette[..*palette_index].contains(color)
-            })
-            .map(|(palette_index, color)|
+            .map(|(palette_index, material_color)|
             {
                 GerberLayerColorChoice {
                     palette_index,
-                    color: *color,
+                    color: material_color.color,
+                    family_index: material_color.family_index,
+                    label: material_color.label.clone(),
                 }
             })
             .collect()
@@ -46,7 +54,7 @@ impl GerberViewerState
         let palette_index = self
             .palette
             .iter()
-            .position(|candidate| *candidate == color)?;
+            .position(|candidate| candidate.color == color)?;
         self.layer_color_choices()
             .into_iter()
             .find(|choice| choice.palette_index == palette_index)
@@ -60,7 +68,7 @@ impl GerberViewerState
         let palette_index = self
             .palette
             .iter()
-            .position(|candidate| *candidate == color)?;
+            .position(|candidate| candidate.color == color)?;
         self.layer_color_choices()
             .into_iter()
             .find(|choice| choice.palette_index == palette_index)
@@ -91,7 +99,11 @@ impl GerberViewerState
     pub fn set_layer_color(&mut self, layer_index: usize, palette_index: usize)
     {
         self.close_color_picker();
-        let Some(color) = self.palette.get(palette_index).copied() else
+        let Some(color) = self
+            .palette
+            .get(palette_index)
+            .map(|material_color| material_color.color)
+        else
         {
             return;
         };

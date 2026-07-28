@@ -3,8 +3,9 @@ use super::*;
 use iced::widget::{Column, Row, tooltip};
 use iced_aw::{DropDown, drop_down};
 
-const COLORS_PER_ROW: usize = 4;
-const PALETTE_WIDTH: f32 = 142.0;
+const PALETTE_WIDTH: f32 = 304.0;
+const SWATCH_WIDTH: f32 = 17.0;
+const SWATCH_HEIGHT: f32 = 13.0;
 
 pub(super) fn color_dropdown<'a>(
     choices: Vec<GerberLayerColorChoice>,
@@ -69,63 +70,79 @@ pub(super) fn color_dropdown<'a>(
         }
     });
 
-    let mut palette = Column::new().spacing(4);
-    for choices_row in choices.chunks(COLORS_PER_ROW)
+    let overlay: Element<'a, GerberViewerMessage> = if expanded
     {
-        let mut swatch_row = Row::new().spacing(4);
-        for choice in choices_row
+        let mut palette = Column::new().spacing(2);
+        for choices_row in
+            choices.chunk_by(|left, right| left.family_index == right.family_index)
         {
-            let color = choice.color;
-            let palette_index = choice.palette_index;
-            let selected = selected_palette_index == Some(palette_index);
-            let swatch = container(Space::new())
-                .width(24)
-                .height(18)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(color)),
-                    border: Border {
-                        width: if selected { 2.0 } else { 1.0 },
-                        radius: 2.0.into(),
-                        color: if selected { accent_color } else { border_color },
-                    },
-                    ..container::Style::default()
-                });
-            let option = button(swatch)
-                .padding(2)
-                .on_press(on_select(palette_index))
-                .style(move |_: &Theme, status: button::Status| {
-                    button::Style {
-                        background: (status == button::Status::Hovered)
-                            .then_some(Background::Color(hover_color)),
-                        border: Border::default(),
-                        ..button::Style::default()
-                    }
-                });
-            swatch_row = swatch_row.push(tooltip(
-                option,
-                text(format!("Material {:02}", palette_index + 1)).size(11),
-                tooltip::Position::Top,
-            ));
+            let mut swatch_row = Row::new().spacing(2);
+            for choice in choices_row
+            {
+                let color = choice.color;
+                let palette_index = choice.palette_index;
+                let selected = selected_palette_index == Some(palette_index);
+                let swatch = container(Space::new())
+                    .width(SWATCH_WIDTH)
+                    .height(SWATCH_HEIGHT)
+                    .style(move |_: &Theme| container::Style {
+                        background: Some(Background::Color(color)),
+                        border: Border {
+                            width: if selected { 2.0 } else { 1.0 },
+                            radius: 1.0.into(),
+                            color: if selected
+                            {
+                                accent_color
+                            }
+                            else
+                            {
+                                border_color
+                            },
+                        },
+                        ..container::Style::default()
+                    });
+                let option = button(swatch)
+                    .padding(1)
+                    .on_press(on_select(palette_index))
+                    .style(move |_: &Theme, status: button::Status| {
+                        button::Style {
+                            background: (status == button::Status::Hovered)
+                                .then_some(Background::Color(hover_color)),
+                            border: Border::default(),
+                            ..button::Style::default()
+                        }
+                    });
+                swatch_row = swatch_row.push(tooltip(
+                    option,
+                    text(choice.label.clone()).size(11),
+                    tooltip::Position::Top,
+                ));
+            }
+            palette = palette.push(swatch_row);
         }
-        palette = palette.push(swatch_row);
-    }
 
-    let overlay = container(palette)
-        .padding(6)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(panel_background)),
-            border: Border {
-                width: 1.0,
-                radius: 4.0.into(),
-                color: border_color,
-            },
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.45),
-                offset: iced::Vector::new(0.0, 3.0),
-                blur_radius: 10.0,
-            },
-            ..container::Style::default()
-        });
+        container(palette)
+            .padding(6)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(panel_background)),
+                border: Border {
+                    width: 1.0,
+                    radius: 4.0.into(),
+                    color: border_color,
+                },
+                shadow: iced::Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.45),
+                    offset: iced::Vector::new(0.0, 3.0),
+                    blur_radius: 10.0,
+                },
+                ..container::Style::default()
+            })
+            .into()
+    }
+    else
+    {
+        Space::new().into()
+    };
 
     DropDown::new(trigger, overlay, expanded)
         .width(PALETTE_WIDTH)

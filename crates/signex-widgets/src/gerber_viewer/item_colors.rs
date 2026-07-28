@@ -5,7 +5,11 @@ impl GerberViewerState
     pub fn set_grid_color(&mut self, palette_index: usize)
     {
         self.close_color_picker();
-        let Some(color) = self.palette.get(palette_index).copied() else
+        let Some(color) = self
+            .palette
+            .get(palette_index)
+            .map(|material_color| material_color.color)
+        else
         {
             return;
         };
@@ -22,7 +26,11 @@ impl GerberViewerState
     pub fn set_d_code_color(&mut self, palette_index: usize)
     {
         self.close_color_picker();
-        let Some(color) = self.palette.get(palette_index).copied() else
+        let Some(color) = self
+            .palette
+            .get(palette_index)
+            .map(|material_color| material_color.color)
+        else
         {
             return;
         };
@@ -39,7 +47,11 @@ impl GerberViewerState
     pub fn set_negative_object_color(&mut self, palette_index: usize)
     {
         self.close_color_picker();
-        let Some(color) = self.palette.get(palette_index).copied() else
+        let Some(color) = self
+            .palette
+            .get(palette_index)
+            .map(|material_color| material_color.color)
+        else
         {
             return;
         };

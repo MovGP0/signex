@@ -109,6 +109,22 @@ macro_rules! gerber_layer_order_tests
                 assert_eq!(state.active_layer, Some(0));
                 assert_eq!(state.redraw_generation, generation);
             }
+
+            #[test]
+            fn layer_control_icons_are_black_paths_on_transparent_backgrounds()
+            {
+                for asset in layer_controls::LAYER_CONTROL_ICON_ASSETS
+                {
+                    let source = std::str::from_utf8(asset)
+                        .expect("layer-control SVG must be UTF-8");
+
+                    assert!(source.starts_with("<svg "));
+                    assert!(source.contains("<path "));
+                    assert!(source.contains("fill=\"#000000\""));
+                    assert!(!source.contains("<image"));
+                    assert!(!source.contains("background"));
+                }
+            }
         }
     };
 }
