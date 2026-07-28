@@ -8,8 +8,7 @@ use crate::GerberGeometry;
 
 /// A successfully parsed fabrication layer and its render-ready geometry.
 #[derive(Debug, Clone, PartialEq)]
-pub struct LoadedLayer
-{
+pub struct LoadedLayer {
     pub source_path: Option<PathBuf>,
     original_source: Option<String>,
     pub job_context: Option<crate::GerberJobContext>,
@@ -21,27 +20,21 @@ pub struct LoadedLayer
 
 /// An actionable per-file loading failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GerberLoadFailure
-{
+pub struct GerberLoadFailure {
     pub path: PathBuf,
     pub message: String,
 }
 
-impl std::fmt::Display for GerberLoadFailure
-{
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    {
+impl std::fmt::Display for GerberLoadFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "{}: {}", self.path.display(), self.message)
     }
 }
 
-impl LoadedLayer
-{
+impl LoadedLayer {
     /// Returns the exact text supplied to the Gerber parser.
-    pub fn gerber_source(&self) -> Result<&str, &'static str>
-    {
-        if !matches!(self.data, LayerData::Gerber(_))
-        {
+    pub fn gerber_source(&self) -> Result<&str, &'static str> {
+        if !matches!(self.data, LayerData::Gerber(_)) {
             return Err("Source view is available only for Gerber layers.");
         }
         self.original_source
@@ -52,15 +45,13 @@ impl LoadedLayer
 
 /// Partial-success result for a multi-file load.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct GerberLoadBatch
-{
+pub struct GerberLoadBatch {
     pub layers: Vec<LoadedLayer>,
     pub failures: Vec<GerberLoadFailure>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct GerberReloadBatch
-{
+pub struct GerberReloadBatch {
     pub layers: Vec<(usize, LoadedLayer)>,
     pub failures: Vec<GerberLoadFailure>,
 }
@@ -71,11 +62,8 @@ where
     I: IntoIterator<Item = LoadedLayer>,
 {
     let mut batch = GerberReloadBatch::default();
-    for (index, layer) in layers.into_iter().enumerate()
-    {
-        let Some(path) = layer.source_path.clone()
-        else
-        {
+    for (index, layer) in layers.into_iter().enumerate() {
+        let Some(path) = layer.source_path.clone() else {
             batch.failures.push(GerberLoadFailure {
                 path: PathBuf::from(&layer.name),
                 message: "layer has no disk source to reload".to_owned(),
@@ -83,8 +71,7 @@ where
             continue;
         };
         let job_context = layer.job_context.clone();
-        let result = match layer.data
-        {
+        let result = match layer.data {
             LayerData::Gerber(_) => load_gerber_file(&path),
             LayerData::Excellon(_) => load_excellon_file(&path),
             LayerData::Info(_) => Err(GerberLoadFailure {
@@ -92,8 +79,7 @@ where
                 message: "information layers cannot be reloaded as fabrication data".to_owned(),
             }),
         };
-        match result
-        {
+        match result {
             Ok(mut layer) => {
                 layer.job_context = job_context;
                 batch.layers.push((index, layer));
@@ -105,8 +91,7 @@ where
 }
 
 /// Loads one RS-274X file from disk.
-pub fn load_gerber_file(path: impl AsRef<Path>) -> Result<LoadedLayer, GerberLoadFailure>
-{
+pub fn load_gerber_file(path: impl AsRef<Path>) -> Result<LoadedLayer, GerberLoadFailure> {
     let path = path.as_ref();
     let file = File::open(path).map_err(|error| GerberLoadFailure {
         path: path.to_path_buf(),
@@ -131,10 +116,8 @@ where
     P: AsRef<Path>,
 {
     let mut batch = GerberLoadBatch::default();
-    for path in paths
-    {
-        match load_gerber_file(path.as_ref())
-        {
+    for path in paths {
+        match load_gerber_file(path.as_ref()) {
             Ok(layer) => batch.layers.push(layer),
             Err(failure) => batch.failures.push(failure),
         }
@@ -144,10 +127,7 @@ where
 
 /// Loads one fabrication file after detecting Gerber or Excellon from content
 /// signatures, falling back to a documented filename extension.
-pub fn load_autodetected_file(
-    path: impl AsRef<Path>,
-) -> Result<LoadedLayer, GerberLoadFailure>
-{
+pub fn load_autodetected_file(path: impl AsRef<Path>) -> Result<LoadedLayer, GerberLoadFailure> {
     let path = path.as_ref();
     let file = File::open(path).map_err(|error| GerberLoadFailure {
         path: path.to_path_buf(),
@@ -171,10 +151,8 @@ where
     P: AsRef<Path>,
 {
     let mut batch = GerberLoadBatch::default();
-    for path in paths
-    {
-        match load_autodetected_file(path.as_ref())
-        {
+    for path in paths {
+        match load_autodetected_file(path.as_ref()) {
             Ok(layer) => batch.layers.push(layer),
             Err(failure) => batch.failures.push(failure),
         }
@@ -194,21 +172,12 @@ where
     P: AsRef<Path>,
 {
     let mut batch = GerberLoadBatch::default();
-    for path in paths
-    {
+    for path in paths {
         let path = path.as_ref();
-        let mut loaded = match detect_fabrication_container(path)
-        {
-            Ok(Some(FabricationContainerFormat::Zip)) =>
-            {
-                crate::load_zip_archive(path)
-            }
-            Ok(Some(FabricationContainerFormat::GerberJob)) =>
-            {
-                crate::load_gerber_job_file(path)
-            }
-            Ok(None) => match load_autodetected_file(path)
-            {
+        let mut loaded = match detect_fabrication_container(path) {
+            Ok(Some(FabricationContainerFormat::Zip)) => crate::load_zip_archive(path),
+            Ok(Some(FabricationContainerFormat::GerberJob)) => crate::load_gerber_job_file(path),
+            Ok(None) => match load_autodetected_file(path) {
                 Ok(layer) => single_layer(layer),
                 Err(failure) => single_load_failure(failure),
             },
@@ -221,51 +190,41 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FabricationContainerFormat
-{
+enum FabricationContainerFormat {
     Zip,
     GerberJob,
 }
 
 fn detect_fabrication_container(
     path: &Path,
-) -> Result<Option<FabricationContainerFormat>, GerberLoadFailure>
-{
+) -> Result<Option<FabricationContainerFormat>, GerberLoadFailure> {
     let mut file = File::open(path).map_err(|error| GerberLoadFailure {
         path: path.to_path_buf(),
         message: format!("could not open file: {error}"),
     })?;
     let mut prefix = [0_u8; 4096];
-    let prefix_length =
-        file.read(&mut prefix).map_err(|error| GerberLoadFailure {
-            path: path.to_path_buf(),
-            message: format!("could not inspect file type: {error}"),
-        })?;
+    let prefix_length = file.read(&mut prefix).map_err(|error| GerberLoadFailure {
+        path: path.to_path_buf(),
+        message: format!("could not inspect file type: {error}"),
+    })?;
     let prefix = &prefix[..prefix_length];
-    let is_zip = prefix.get(..4).is_some_and(|signature|
-    {
+    let is_zip = prefix.get(..4).is_some_and(|signature| {
         matches!(
             signature,
-            [b'P', b'K', 3, 4]
-                | [b'P', b'K', 5, 6]
-                | [b'P', b'K', 7, 8]
+            [b'P', b'K', 3, 4] | [b'P', b'K', 5, 6] | [b'P', b'K', 7, 8]
         )
     });
-    if is_zip
-    {
+    if is_zip {
         return Ok(Some(FabricationContainerFormat::Zip));
     }
 
-    let text_prefix = prefix
-        .strip_prefix(&[0xEF, 0xBB, 0xBF])
-        .unwrap_or(prefix);
+    let text_prefix = prefix.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(prefix);
     let looks_like_json = text_prefix
         .iter()
         .copied()
         .find(|byte| !byte.is_ascii_whitespace())
         == Some(b'{');
-    if looks_like_json
-    {
+    if looks_like_json {
         let file = File::open(path).map_err(|error| GerberLoadFailure {
             path: path.to_path_buf(),
             message: format!("could not inspect Gerber job: {error}"),
@@ -302,16 +261,14 @@ fn detect_fabrication_container(
     }
 }
 
-fn single_layer(layer: LoadedLayer) -> GerberLoadBatch
-{
+fn single_layer(layer: LoadedLayer) -> GerberLoadBatch {
     GerberLoadBatch {
         layers: vec![layer],
         failures: Vec::new(),
     }
 }
 
-fn single_load_failure(failure: GerberLoadFailure) -> GerberLoadBatch
-{
+fn single_load_failure(failure: GerberLoadFailure) -> GerberLoadBatch {
     GerberLoadBatch {
         layers: Vec::new(),
         failures: vec![failure],
@@ -334,9 +291,8 @@ where
             path: path.clone(),
             message: format!("fabrication source is not valid UTF-8 text: {error}"),
         })?;
-    let gerber_signature = source.contains("%FS")
-        || source.contains("%MO")
-        || source.contains("%AD");
+    let gerber_signature =
+        source.contains("%FS") || source.contains("%MO") || source.contains("%AD");
     let excellon_signature = source
         .lines()
         .map(str::trim)
@@ -361,19 +317,13 @@ where
         })?,
     };
 
-    let synthetic_name = match detected
-    {
+    let synthetic_name = match detected {
         FabricationFormat::Gerber => "autodetected.gbr",
         FabricationFormat::Excellon => "autodetected.drl",
     };
-    let mut layer = match detected
-    {
-        FabricationFormat::Gerber => {
-            load_gerber_reader(synthetic_name, source.as_bytes())
-        }
-        FabricationFormat::Excellon => {
-            load_excellon_reader(synthetic_name, source.as_bytes())
-        }
+    let mut layer = match detected {
+        FabricationFormat::Gerber => load_gerber_reader(synthetic_name, source.as_bytes()),
+        FabricationFormat::Excellon => load_excellon_reader(synthetic_name, source.as_bytes()),
     }
     .map_err(|failure| GerberLoadFailure {
         path: path.clone(),
@@ -384,25 +334,21 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FabricationFormat
-{
+enum FabricationFormat {
     Gerber,
     Excellon,
 }
 
-fn format_from_extension(name: &str) -> Option<FabricationFormat>
-{
+fn format_from_extension(name: &str) -> Option<FabricationFormat> {
     let extension = Path::new(name)
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default();
-    if matches!(extension.to_ascii_lowercase().as_str(), "drl" | "drd")
-    {
+    if matches!(extension.to_ascii_lowercase().as_str(), "drl" | "drd") {
         return Some(FabricationFormat::Excellon);
     }
     if matches!(extension.to_ascii_lowercase().as_str(), "ger" | "pho")
-        || LayerType::try_from(extension)
-            .is_ok_and(|layer_type| layer_type != LayerType::Drill)
+        || LayerType::try_from(extension).is_ok_and(|layer_type| layer_type != LayerType::Drill)
     {
         return Some(FabricationFormat::Gerber);
     }
@@ -432,8 +378,7 @@ where
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default();
-    let requested_type = match extension.to_ascii_lowercase().as_str()
-    {
+    let requested_type = match extension.to_ascii_lowercase().as_str() {
         "ger" | "pho" => LayerType::UndefinedGerber,
         _ => LayerType::try_from(extension).map_err(|_| GerberLoadFailure {
             path: path.clone(),
@@ -441,24 +386,21 @@ where
         })?,
     };
 
-    if requested_type == LayerType::Drill
-    {
+    if requested_type == LayerType::Drill {
         return Err(GerberLoadFailure {
             path,
             message: "the file is an Excellon drill layer, not an RS-274X Gerber layer".into(),
         });
     }
 
-    let (layer_type, data) = LayerData::parse(
-        requested_type,
-        BufReader::new(original_source.as_bytes()),
-    )
-    .map_err(|error| GerberLoadFailure {
-        path: path.clone(),
-        message: error.to_string(),
-    })?;
-    let LayerData::Gerber(data) = data else
-    {
+    let (layer_type, data) =
+        LayerData::parse(requested_type, BufReader::new(original_source.as_bytes())).map_err(
+            |error| GerberLoadFailure {
+                path: path.clone(),
+                message: error.to_string(),
+            },
+        )?;
+    let LayerData::Gerber(data) = data else {
         return Err(GerberLoadFailure {
             path,
             message: "the file was detected as Excellon drill data".into(),
@@ -478,8 +420,7 @@ where
 }
 
 /// Loads one Excellon drill file from disk.
-pub fn load_excellon_file(path: impl AsRef<Path>) -> Result<LoadedLayer, GerberLoadFailure>
-{
+pub fn load_excellon_file(path: impl AsRef<Path>) -> Result<LoadedLayer, GerberLoadFailure> {
     let path = path.as_ref();
     let file = File::open(path).map_err(|error| GerberLoadFailure {
         path: path.to_path_buf(),
@@ -504,10 +445,8 @@ where
     P: AsRef<Path>,
 {
     let mut batch = GerberLoadBatch::default();
-    for path in paths
-    {
-        match load_excellon_file(path.as_ref())
-        {
+    for path in paths {
+        match load_excellon_file(path.as_ref()) {
             Ok(layer) => batch.layers.push(layer),
             Err(failure) => batch.failures.push(failure),
         }
@@ -540,24 +479,19 @@ where
         path: path.clone(),
         message: format!("unsupported Excellon file extension '.{extension}'"),
     })?;
-    if requested_type != LayerType::Drill
-    {
+    if requested_type != LayerType::Drill {
         return Err(GerberLoadFailure {
             path,
             message: "the file extension does not identify an Excellon drill layer".into(),
         });
     }
 
-    let (_, data) = LayerData::parse(
-        LayerType::Drill,
-        BufReader::new(original_source.as_bytes()),
-    )
-    .map_err(|error| GerberLoadFailure {
-        path: path.clone(),
-        message: error.to_string(),
-    })?;
-    let LayerData::Excellon(data) = data else
-    {
+    let (_, data) = LayerData::parse(LayerType::Drill, BufReader::new(original_source.as_bytes()))
+        .map_err(|error| GerberLoadFailure {
+            path: path.clone(),
+            message: error.to_string(),
+        })?;
+    let LayerData::Excellon(data) = data else {
         return Err(GerberLoadFailure {
             path,
             message: "the file was detected as RS-274X Gerber data".into(),

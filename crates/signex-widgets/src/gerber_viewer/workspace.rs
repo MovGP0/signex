@@ -3,35 +3,29 @@ use super::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GerberDocumentId(u64);
 
-impl GerberDocumentId
-{
-    pub const fn value(self) -> u64
-    {
+impl GerberDocumentId {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
 
 #[derive(Debug)]
-pub struct GerberDocumentState
-{
+pub struct GerberDocumentState {
     pub id: GerberDocumentId,
     pub title: String,
     pub viewer: GerberViewerState,
 }
 
 #[derive(Debug)]
-pub struct GerberWorkspaceState
-{
+pub struct GerberWorkspaceState {
     pub(super) dock: super::dock::GerberDockState,
     documents: Vec<GerberDocumentState>,
     active_document: GerberDocumentId,
     next_document_id: u64,
 }
 
-impl Default for GerberWorkspaceState
-{
-    fn default() -> Self
-    {
+impl Default for GerberWorkspaceState {
+    fn default() -> Self {
         let id = GerberDocumentId(1);
         let title = "Gerber Viewer 1".to_owned();
         Self {
@@ -47,50 +41,34 @@ impl Default for GerberWorkspaceState
     }
 }
 
-impl GerberWorkspaceState
-{
-    pub fn documents(&self) -> &[GerberDocumentState]
-    {
+impl GerberWorkspaceState {
+    pub fn documents(&self) -> &[GerberDocumentState] {
         &self.documents
     }
 
-    pub const fn active_document_id(&self) -> GerberDocumentId
-    {
+    pub const fn active_document_id(&self) -> GerberDocumentId {
         self.active_document
     }
 
-    pub fn active_viewer(&self) -> Option<&GerberViewerState>
-    {
+    pub fn active_viewer(&self) -> Option<&GerberViewerState> {
         self.viewer(self.active_document)
     }
 
-    pub fn viewer(
-        &self,
-        document_id: GerberDocumentId,
-    ) -> Option<&GerberViewerState>
-    {
+    pub fn viewer(&self, document_id: GerberDocumentId) -> Option<&GerberViewerState> {
         self.documents
             .iter()
             .find(|document| document.id == document_id)
             .map(|document| &document.viewer)
     }
 
-    pub fn viewer_mut(
-        &mut self,
-        document_id: GerberDocumentId,
-    ) -> Option<&mut GerberViewerState>
-    {
+    pub fn viewer_mut(&mut self, document_id: GerberDocumentId) -> Option<&mut GerberViewerState> {
         self.documents
             .iter_mut()
             .find(|document| document.id == document_id)
             .map(|document| &mut document.viewer)
     }
 
-    pub fn take_viewer(
-        &mut self,
-        document_id: GerberDocumentId,
-    ) -> Option<GerberViewerState>
-    {
+    pub fn take_viewer(&mut self, document_id: GerberDocumentId) -> Option<GerberViewerState> {
         let document = self
             .documents
             .iter_mut()
@@ -98,12 +76,7 @@ impl GerberWorkspaceState
         Some(std::mem::take(&mut document.viewer))
     }
 
-    pub fn restore_viewer(
-        &mut self,
-        document_id: GerberDocumentId,
-        viewer: GerberViewerState,
-    )
-    {
+    pub fn restore_viewer(&mut self, document_id: GerberDocumentId, viewer: GerberViewerState) {
         if let Some(document) = self
             .documents
             .iter_mut()
@@ -113,14 +86,12 @@ impl GerberWorkspaceState
         }
     }
 
-    pub fn new_document(&mut self) -> GerberDocumentId
-    {
+    pub fn new_document(&mut self) -> GerberDocumentId {
         let id = GerberDocumentId(self.next_document_id);
         self.next_document_id += 1;
         let title = format!("Gerber Viewer {}", id.value());
         let mut viewer = GerberViewerState::default();
-        for panel in GerberDockPanel::TOOL_PANELS
-        {
+        for panel in GerberDockPanel::TOOL_PANELS {
             viewer.set_tool_panel_visible(panel, self.dock.is_open(panel));
         }
         self.documents.push(GerberDocumentState {
@@ -133,12 +104,7 @@ impl GerberWorkspaceState
         id
     }
 
-    pub fn rename_document(
-        &mut self,
-        document_id: GerberDocumentId,
-        title: String,
-    )
-    {
+    pub fn rename_document(&mut self, document_id: GerberDocumentId, title: String) {
         if let Some(document) = self
             .documents
             .iter_mut()
@@ -149,22 +115,13 @@ impl GerberWorkspaceState
         }
     }
 
-    pub fn set_tool_visible(
-        &mut self,
-        panel: GerberDockPanel,
-        visible: bool,
-    )
-    {
-        for document in &mut self.documents
-        {
+    pub fn set_tool_visible(&mut self, panel: GerberDockPanel, visible: bool) {
+        for document in &mut self.documents {
             document.viewer.set_tool_panel_visible(panel, visible);
         }
-        if visible
-        {
+        if visible {
             self.dock.show_tool(panel);
-        }
-        else
-        {
+        } else {
             self.dock.close_tool(panel);
         }
     }
@@ -172,10 +129,8 @@ impl GerberWorkspaceState
     pub fn handle_dock_event(
         &mut self,
         event: &iced_dock::DockEvent<GerberDockPanel>,
-    ) -> Option<GerberDocumentId>
-    {
-        match event
-        {
+    ) -> Option<GerberDocumentId> {
+        match event {
             iced_dock::DockEvent::TabSelected {
                 panel: GerberDockPanel::Document(document_id),
                 ..
@@ -183,30 +138,24 @@ impl GerberWorkspaceState
             | iced_dock::DockEvent::PaneFocused {
                 panel: Some(GerberDockPanel::Document(document_id)),
                 ..
-            } =>
-            {
+            } => {
                 self.active_document = *document_id;
                 None
             }
             iced_dock::DockEvent::TabClosed {
                 panel: GerberDockPanel::Document(document_id),
-            } =>
-            {
+            } => {
                 self.documents
                     .retain(|document| document.id != *document_id);
-                if self.documents.is_empty()
-                {
+                if self.documents.is_empty() {
                     self.new_document();
-                }
-                else if self.active_document == *document_id
-                {
+                } else if self.active_document == *document_id {
                     self.active_document = self.documents[0].id;
                     self.dock.select_document(self.active_document);
                 }
                 Some(*document_id)
             }
-            iced_dock::DockEvent::TabClosed { panel } =>
-            {
+            iced_dock::DockEvent::TabClosed { panel } => {
                 self.set_tool_visible(*panel, false);
                 None
             }

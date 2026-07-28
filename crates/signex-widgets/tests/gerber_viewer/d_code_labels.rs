@@ -1,17 +1,14 @@
 // Shared private unit-test definitions for viewport D-code labels.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_d_code_labels_tests
-{
+macro_rules! gerber_d_code_labels_tests {
     () => {
         #[cfg(test)]
-        mod d_code_labels_tests
-        {
+        mod d_code_labels_tests {
             use super::*;
 
             #[test]
-            fn labels_project_flash_and_stroke_d_codes_to_useful_anchors()
-            {
+            fn labels_project_flash_and_stroke_d_codes_to_useful_anchors() {
                 let stroke = GerberPrimitive::Stroke {
                     start: signex_gerber::Point { x: 2.0, y: 4.0 },
                     end: signex_gerber::Point { x: 6.0, y: 8.0 },
@@ -43,8 +40,7 @@ macro_rules! gerber_d_code_labels_tests
             }
 
             #[test]
-            fn labels_are_absent_when_disabled_or_zoomed_too_far_out()
-            {
+            fn labels_are_absent_when_disabled_or_zoomed_too_far_out() {
                 assert!(!d_code_labels_visible(false, 4.0));
                 assert!(!d_code_labels_visible(true, 0.5));
                 assert!(d_code_labels_visible(true, 0.75));
@@ -61,8 +57,7 @@ macro_rules! gerber_d_code_labels_tests
             }
 
             #[test]
-            fn toggle_updates_visibility_and_redraw_generation()
-            {
+            fn toggle_updates_visibility_and_redraw_generation() {
                 let mut state = GerberViewerState::default();
                 let generation = state.redraw_generation;
 
@@ -70,10 +65,7 @@ macro_rules! gerber_d_code_labels_tests
 
                 assert!(state.show_d_code_labels);
                 assert_eq!(state.redraw_generation, generation + 1);
-                assert_eq!(
-                    state.d_code_color,
-                    Color::from_rgb8(250, 250, 250)
-                );
+                assert_eq!(state.d_code_color, Color::from_rgb8(250, 250, 250));
             }
         }
     };

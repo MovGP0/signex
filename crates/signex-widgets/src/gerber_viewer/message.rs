@@ -1,8 +1,7 @@
-﻿use super::*;
+use super::*;
 
 #[derive(Debug, Clone)]
-pub enum GerberViewerMessage
-{
+pub enum GerberViewerMessage {
     NoOp,
     DockEvent(iced_dock::DockEvent<GerberDockPanel>),
     NewDocument,
@@ -92,17 +91,11 @@ pub enum GerberViewerMessage
     ClearHighlight,
     SetSelectedItem(Option<GerberItemSelection>),
     SetRegionSelection(Vec<GerberItemSelection>),
-    ZoomToSelection
-    {
-        bounds: Bounds,
-        viewport: Rectangle,
-    },
+    ZoomToSelection { bounds: Bounds, viewport: Rectangle },
 }
 
-impl GerberViewerMessage
-{
-    pub fn document_closed(document_id: GerberDocumentId) -> Self
-    {
+impl GerberViewerMessage {
+    pub fn document_closed(document_id: GerberDocumentId) -> Self {
         Self::DockEvent(iced_dock::DockEvent::TabClosed {
             panel: GerberDockPanel::Document(document_id),
         })

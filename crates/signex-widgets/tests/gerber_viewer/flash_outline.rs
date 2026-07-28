@@ -1,17 +1,14 @@
 // Shared private unit-test definitions for flashed-item outline mode.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_flash_outline_tests
-{
+macro_rules! gerber_flash_outline_tests {
     () => {
         #[cfg(test)]
-        mod flash_outline_tests
-        {
+        mod flash_outline_tests {
             use super::*;
 
             #[test]
-            fn toggle_switches_only_flashed_item_render_mode()
-            {
+            fn toggle_switches_only_flashed_item_render_mode() {
                 let mut state = GerberViewerState::default();
                 let generation = state.redraw_generation;
 

@@ -5,17 +5,13 @@ use std::path::{Path, PathBuf};
 
 use zip::ZipArchive;
 
-use crate::{
-    GerberLoadBatch, GerberLoadFailure, load_autodetected_reader,
-};
+use crate::{GerberLoadBatch, GerberLoadFailure, load_autodetected_reader};
 
 const MAX_ARCHIVE_MEMBER_BYTES: u64 = 16 * 1024 * 1024;
 
-pub fn load_zip_archive(path: impl AsRef<Path>) -> GerberLoadBatch
-{
+pub fn load_zip_archive(path: impl AsRef<Path>) -> GerberLoadBatch {
     let path = path.as_ref();
-    let file = match File::open(path)
-    {
+    let file = match File::open(path) {
         Ok(file) => file,
         Err(error) => {
             return GerberLoadBatch {
@@ -40,8 +36,7 @@ pub fn load_zip_reader<R>(archive_name: &str, reader: R) -> GerberLoadBatch
 where
     R: Read + Seek,
 {
-    let mut archive = match ZipArchive::new(reader)
-    {
+    let mut archive = match ZipArchive::new(reader) {
         Ok(archive) => archive,
         Err(error) => {
             return GerberLoadBatch {
@@ -56,10 +51,8 @@ where
     let mut batch = GerberLoadBatch::default();
     let mut duplicate_counts = HashMap::<String, usize>::new();
 
-    for index in 0..archive.len()
-    {
-        let mut member = match archive.by_index(index)
-        {
+    for index in 0..archive.len() {
+        let mut member = match archive.by_index(index) {
             Ok(member) => member,
             Err(error) => {
                 batch.failures.push(GerberLoadFailure {
@@ -69,26 +62,22 @@ where
                 continue;
             }
         };
-        if member.is_dir()
-        {
+        if member.is_dir() {
             continue;
         }
         let raw_name = member.name().to_owned();
         let member_path = PathBuf::from(format!("{archive_name}::{raw_name}"));
-        if member.enclosed_name().is_none()
-        {
+        if member.enclosed_name().is_none() {
             batch.failures.push(GerberLoadFailure {
                 path: member_path,
                 message: "unsafe archive member path was rejected".to_owned(),
             });
             continue;
         }
-        if !is_fabrication_member(&raw_name)
-        {
+        if !is_fabrication_member(&raw_name) {
             continue;
         }
-        if member.size() > MAX_ARCHIVE_MEMBER_BYTES
-        {
+        if member.size() > MAX_ARCHIVE_MEMBER_BYTES {
             batch.failures.push(GerberLoadFailure {
                 path: member_path,
                 message: format!(
@@ -100,32 +89,25 @@ where
         }
 
         let mut source = Vec::with_capacity(member.size() as usize);
-        if let Err(error) = member.read_to_end(&mut source)
-        {
+        if let Err(error) = member.read_to_end(&mut source) {
             batch.failures.push(GerberLoadFailure {
                 path: member_path,
                 message: format!("could not read archive member: {error}"),
             });
             continue;
         }
-        match load_autodetected_reader(&raw_name, source.as_slice())
-        {
+        match load_autodetected_reader(&raw_name, source.as_slice()) {
             Ok(mut layer) => {
                 let display_name = Path::new(&raw_name)
                     .file_name()
                     .and_then(|value| value.to_str())
                     .unwrap_or(&raw_name)
                     .to_owned();
-                let count = duplicate_counts
-                    .entry(display_name.clone())
-                    .or_default();
+                let count = duplicate_counts.entry(display_name.clone()).or_default();
                 *count += 1;
-                layer.name = if *count > 1
-                {
+                layer.name = if *count > 1 {
                     format!("{display_name} ({count})")
-                }
-                else
-                {
+                } else {
                     display_name
                 };
                 batch.layers.push(layer);
@@ -139,8 +121,7 @@ where
     batch
 }
 
-fn is_fabrication_member(name: &str) -> bool
-{
+fn is_fabrication_member(name: &str) -> bool {
     let extension = Path::new(name)
         .extension()
         .and_then(|value| value.to_str())
@@ -169,26 +150,25 @@ fn is_fabrication_member(name: &str) -> bool
             | "drl"
             | "drd"
     ) || (extension.starts_with("gl")
-        && extension[2..].chars().all(|character| character.is_ascii_digit()))
+        && extension[2..]
+            .chars()
+            .all(|character| character.is_ascii_digit()))
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use std::io::{Cursor, Write};
 
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     use super::*;
 
     #[test]
-    fn archive_loads_supported_members_ignores_irrelevant_and_names_duplicates()
-    {
+    fn archive_loads_supported_members_ignores_irrelevant_and_names_duplicates() {
         let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default();
-        let gerber =
-            b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n";
+        let gerber = b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n";
         archive.start_file("top/board.gtl", options).unwrap();
         archive.write_all(gerber).unwrap();
         archive.start_file("backup/board.gtl", options).unwrap();
@@ -211,16 +191,13 @@ mod tests
     }
 
     #[test]
-    fn archive_rejects_unsafe_member_paths_without_extraction()
-    {
+    fn archive_rejects_unsafe_member_paths_without_extraction() {
         let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
         archive
             .start_file("../outside.gbr", SimpleFileOptions::default())
             .unwrap();
         archive
-            .write_all(
-                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n",
-            )
+            .write_all(b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.5*%\nD10*\nX0Y0D03*\nM02*\n")
             .unwrap();
         let archive = archive.finish().unwrap();
 

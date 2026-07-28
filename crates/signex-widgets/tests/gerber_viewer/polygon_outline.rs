@@ -1,17 +1,14 @@
 // Shared private unit-test definitions for polygon-item outline mode.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_polygon_outline_tests
-{
+macro_rules! gerber_polygon_outline_tests {
     () => {
         #[cfg(test)]
-        mod polygon_outline_tests
-        {
+        mod polygon_outline_tests {
             use super::*;
 
             #[test]
-            fn toggle_switches_polygon_render_mode_and_requests_redraw()
-            {
+            fn toggle_switches_polygon_render_mode_and_requests_redraw() {
                 let mut state = GerberViewerState::default();
                 let generation = state.redraw_generation;
 

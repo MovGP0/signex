@@ -11,14 +11,10 @@ const CLEAR_HIGHLIGHT_ICON: &[u8] =
 pub(super) fn clear_button(
     enabled: bool,
     tokens: &ThemeTokens,
-) -> Element<'static, GerberViewerMessage>
-{
-    let icon_color = if enabled
-    {
+) -> Element<'static, GerberViewerMessage> {
+    let icon_color = if enabled {
         styles::ti(tokens.text_secondary)
-    }
-    else
-    {
+    } else {
         let muted = styles::ti(tokens.text_secondary);
         Color {
             a: muted.a * 0.45,

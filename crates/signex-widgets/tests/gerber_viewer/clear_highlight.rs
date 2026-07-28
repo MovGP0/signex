@@ -1,24 +1,19 @@
 // Shared private unit-test definitions for clearing Gerber highlights.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_clear_highlight_tests
-{
+macro_rules! gerber_clear_highlight_tests {
     () => {
         #[cfg(test)]
-        mod clear_highlight_tests
-        {
+        mod clear_highlight_tests {
             use std::io::Cursor;
 
             use super::*;
 
             #[test]
-            fn clear_highlight_resets_every_selector_and_preserves_layer_state()
-            {
+            fn clear_highlight_resets_every_selector_and_preserves_layer_state() {
                 let layer = signex_gerber::load_gerber_reader(
                     "layer.gbr",
-                    Cursor::new(
-                        b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
-                    ),
+                    Cursor::new(b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n"),
                 )
                 .expect("test Gerber must parse");
                 let mut state = GerberViewerState::default();
@@ -55,8 +50,7 @@ macro_rules! gerber_clear_highlight_tests
             }
 
             #[test]
-            fn clearing_without_a_highlight_is_a_no_op()
-            {
+            fn clearing_without_a_highlight_is_a_no_op() {
                 let mut state = GerberViewerState::default();
                 let status = state.status.clone();
                 let generation = state.redraw_generation;
@@ -68,12 +62,9 @@ macro_rules! gerber_clear_highlight_tests
             }
 
             #[test]
-            fn clear_highlight_icon_is_a_black_path_on_a_transparent_background()
-            {
-                let source = std::str::from_utf8(
-                    highlight_controls::CLEAR_HIGHLIGHT_ICON_ASSET,
-                )
-                .expect("clear-highlight SVG must be UTF-8");
+            fn clear_highlight_icon_is_a_black_path_on_a_transparent_background() {
+                let source = std::str::from_utf8(highlight_controls::CLEAR_HIGHLIGHT_ICON_ASSET)
+                    .expect("clear-highlight SVG must be UTF-8");
 
                 assert!(source.starts_with("<svg "));
                 assert!(source.contains("<path "));

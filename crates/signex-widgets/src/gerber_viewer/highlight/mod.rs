@@ -1,10 +1,6 @@
 use super::*;
 
-const HIGHLIGHT_COLOR: Color = Color::from_rgb(
-    1.0,
-    193.0 / 255.0,
-    7.0 / 255.0,
-);
+const HIGHLIGHT_COLOR: Color = Color::from_rgb(1.0, 193.0 / 255.0, 7.0 / 255.0);
 const NON_MATCHING_ALPHA: f32 = 0.18;
 
 mod attribute;

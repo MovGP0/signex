@@ -2,8 +2,7 @@ use super::*;
 use crate::gerber_viewer::GerberViewerState;
 
 #[test]
-fn cancel_outcome_leaves_the_viewer_unchanged()
-{
+fn cancel_outcome_leaves_the_viewer_unchanged() {
     let viewer = GerberViewerState::default();
     let original_catalog = viewer.grid_catalog.clone();
     let original_index = viewer.active_grid_index;
@@ -19,8 +18,7 @@ fn cancel_outcome_leaves_the_viewer_unchanged()
 }
 
 #[test]
-fn applying_is_an_explicit_editor_outcome()
-{
+fn applying_is_an_explicit_editor_outcome() {
     let viewer = GerberViewerState::default();
     let mut editor = GerberGridEditorState::from_viewer(&viewer);
 

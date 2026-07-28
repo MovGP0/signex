@@ -1,8 +1,7 @@
 use super::*;
 
 #[test]
-fn file_menu_contains_requested_commands_in_order()
-{
+fn file_menu_contains_requested_commands_in_order() {
     assert_eq!(
         menu::FILE_MENU_LABELS,
         [
@@ -19,8 +18,7 @@ fn file_menu_contains_requested_commands_in_order()
 }
 
 #[test]
-fn view_menu_contains_requested_commands_in_order()
-{
+fn view_menu_contains_requested_commands_in_order() {
     assert_eq!(
         menu::VIEW_MENU_LABELS,
         [
@@ -48,8 +46,7 @@ fn view_menu_contains_requested_commands_in_order()
 }
 
 #[test]
-fn tools_menu_contains_requested_commands_in_order()
-{
+fn tools_menu_contains_requested_commands_in_order() {
     assert_eq!(
         menu::TOOLS_MENU_LABELS,
         [

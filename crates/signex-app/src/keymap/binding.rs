@@ -118,15 +118,11 @@ impl KeyStroke {
         };
 
         let mut modifiers = Modifiers::from_iced(modifiers);
-        if matches!(&key, KeyToken::Character(value) if value == "+")
-        {
+        if matches!(&key, KeyToken::Character(value) if value == "+") {
             modifiers.shift = false;
         }
 
-        Some(Self {
-            modifiers,
-            key,
-        })
+        Some(Self { modifiers, key })
     }
 }
 
@@ -217,8 +213,7 @@ impl FromStr for KeyStroke {
         if source.is_empty() {
             return Err(KeyParseError::Empty);
         }
-        if source == "+"
-        {
+        if source == "+" {
             return Ok(Self {
                 modifiers: Modifiers::default(),
                 key: KeyToken::Character("+".to_owned()),

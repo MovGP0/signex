@@ -1,12 +1,10 @@
 // Shared private unit-test definitions for lossy native PCB export.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_pcb_export_tests
-{
+macro_rules! gerber_pcb_export_tests {
     () => {
         #[cfg(test)]
-        mod pcb_export_tests
-        {
+        mod pcb_export_tests {
             use std::io::Cursor;
 
             use super::*;
@@ -15,13 +13,10 @@ macro_rules! gerber_pcb_export_tests
                 name: &str,
                 layer_type: signex_gerber::LayerType,
                 primitives: Vec<GerberPrimitive>,
-            ) -> LoadedLayer
-            {
+            ) -> LoadedLayer {
                 let mut layer = signex_gerber::load_gerber_reader(
                     name,
-                    Cursor::new(
-                        b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nM02*\n",
-                    ),
+                    Cursor::new(b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nM02*\n"),
                 )
                 .expect("test Gerber must parse");
                 layer.name = name.to_owned();
@@ -31,8 +26,7 @@ macro_rules! gerber_pcb_export_tests
             }
 
             #[test]
-            fn converts_supported_dark_copper_lines_and_flashes()
-            {
+            fn converts_supported_dark_copper_lines_and_flashes() {
                 let top = loaded_layer(
                     "top.gtl",
                     signex_gerber::LayerType::Top,
@@ -66,22 +60,21 @@ macro_rules! gerber_pcb_export_tests
                 assert_eq!(export.report.skipped_count(), 0);
                 assert_eq!(export.board.segments[0].layer, "F.Cu");
                 assert_eq!(export.board.segments[0].width, 0.25);
-                assert_eq!(export.board.footprints[0].pads[0].shape, signex_types::pcb::PadShape::Circle);
                 assert_eq!(
-                    export.board.footprints[0].pads[0].layers,
-                    vec!["F.Cu"],
+                    export.board.footprints[0].pads[0].shape,
+                    signex_types::pcb::PadShape::Circle
                 );
+                assert_eq!(export.board.footprints[0].pads[0].layers, vec!["F.Cu"],);
                 let source = export.write_string().expect("native PCB serialization");
-                let round_trip = signex_types::format::SnxPcb::parse(&source)
-                    .expect("native PCB round trip");
+                let round_trip =
+                    signex_types::format::SnxPcb::parse(&source).expect("native PCB round trip");
                 assert_eq!(round_trip.board.segments.len(), 1);
                 assert_eq!(round_trip.board.footprints[0].pads.len(), 1);
                 assert!(round_trip.board.generator.contains("lossy"));
             }
 
             #[test]
-            fn maps_supported_non_copper_lines_to_board_graphics()
-            {
+            fn maps_supported_non_copper_lines_to_board_graphics() {
                 let silk = loaded_layer(
                     "top.gto",
                     signex_gerber::LayerType::SilkScreenTop,
@@ -107,8 +100,7 @@ macro_rules! gerber_pcb_export_tests
             }
 
             #[test]
-            fn reports_unsupported_constructs_instead_of_converting_them()
-            {
+            fn reports_unsupported_constructs_instead_of_converting_them() {
                 let top = loaded_layer(
                     "top.gtl",
                     signex_gerber::LayerType::Top,
@@ -161,22 +153,34 @@ macro_rules! gerber_pcb_export_tests
 
                 assert_eq!(export.report.converted_count(), 0);
                 assert_eq!(export.report.skipped_count(), 4);
-                assert!(export.report.skipped.iter().any(|item|
-                {
-                    item.reason.contains("clear-polarity")
-                }));
-                assert!(export.report.skipped.iter().any(|item|
-                {
-                    item.reason.contains("filled region")
-                }));
-                assert!(export.report.skipped.iter().any(|item|
-                {
-                    item.reason.contains("polygon or macro")
-                }));
-                assert!(export.report.skipped.iter().any(|item|
-                {
-                    item.reason.contains("unsupported layer role")
-                }));
+                assert!(
+                    export
+                        .report
+                        .skipped
+                        .iter()
+                        .any(|item| { item.reason.contains("clear-polarity") })
+                );
+                assert!(
+                    export
+                        .report
+                        .skipped
+                        .iter()
+                        .any(|item| { item.reason.contains("filled region") })
+                );
+                assert!(
+                    export
+                        .report
+                        .skipped
+                        .iter()
+                        .any(|item| { item.reason.contains("polygon or macro") })
+                );
+                assert!(
+                    export
+                        .report
+                        .skipped
+                        .iter()
+                        .any(|item| { item.reason.contains("unsupported layer role") })
+                );
             }
         }
     };

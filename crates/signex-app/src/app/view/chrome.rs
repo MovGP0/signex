@@ -269,9 +269,7 @@ impl Signex {
         );
         let drag_zone = mouse_area(
             row![
-                text(title)
-                    .size(12)
-                    .color(crate::styles::ti(tokens.text)),
+                text(title).size(12).color(crate::styles::ti(tokens.text)),
                 Space::new().width(Length::Fill),
             ]
             .padding(iced::Padding {
@@ -304,9 +302,7 @@ impl Signex {
             .into()
     }
 
-    fn secondary_resize_edges_overlay<'a>(
-        window_id: iced::window::Id,
-    ) -> Element<'a, Message> {
+    fn secondary_resize_edges_overlay<'a>(window_id: iced::window::Id) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
         use iced::window::Direction;

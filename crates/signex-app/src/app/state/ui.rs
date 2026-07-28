@@ -297,14 +297,11 @@ pub struct UiState {
     pub passive_calculator_open: bool,
     /// Documents and docking layout hosted by the dedicated Gerber
     /// viewer tool window.
-    pub gerber_workspace:
-        signex_widgets::gerber_viewer::GerberWorkspaceState,
+    pub gerber_workspace: signex_widgets::gerber_viewer::GerberWorkspaceState,
     /// Draft state rendered by the dedicated Gerber grid editor window.
-    pub gerber_grid_editor:
-        Option<signex_widgets::grid_editor::GerberGridEditorState>,
+    pub gerber_grid_editor: Option<signex_widgets::grid_editor::GerberGridEditorState>,
     /// Gerber workspace document that opened `gerber_grid_editor`.
-    pub gerber_grid_editor_document:
-        Option<signex_widgets::gerber_viewer::GerberDocumentId>,
+    pub gerber_grid_editor_document: Option<signex_widgets::gerber_viewer::GerberDocumentId>,
     /// Command palette state — query / dropdown open flag / selected
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.

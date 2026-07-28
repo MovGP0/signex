@@ -6,16 +6,14 @@ use lib_gerber_edit::layer::LayerData;
 use crate::{Bounds, LoadedLayer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LayerDefinition
-{
+pub struct LayerDefinition {
     pub code: String,
     pub description: String,
     pub usage_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LayerDefinitionGroup
-{
+pub struct LayerDefinitionGroup {
     pub layer_name: String,
     pub definition_label: &'static str,
     pub definitions: Vec<LayerDefinition>,
@@ -23,8 +21,7 @@ pub struct LayerDefinitionGroup
 
 /// Display-ready summary of the parsed data available for one fabrication layer.
 #[derive(Debug, Clone, PartialEq)]
-pub struct LayerMetadata
-{
+pub struct LayerMetadata {
     pub file_name: String,
     pub source: String,
     pub format: &'static str,
@@ -39,12 +36,9 @@ pub struct LayerMetadata
     pub warnings: Vec<String>,
 }
 
-impl LoadedLayer
-{
-    pub fn definition_group(&self) -> LayerDefinitionGroup
-    {
-        match &self.data
-        {
+impl LoadedLayer {
+    pub fn definition_group(&self) -> LayerDefinitionGroup {
+        match &self.data {
             LayerData::Gerber(layer) => {
                 let mut definitions = layer
                     .apertures
@@ -90,10 +84,7 @@ impl LoadedLayer
                     .iter()
                     .map(|(tool, diameter)| LayerDefinition {
                         code: format!("T{tool}"),
-                        description: format!(
-                            "⌀{diameter:.4} {}",
-                            unit_suffix(layer.unit.unit),
-                        ),
+                        description: format!("⌀{diameter:.4} {}", unit_suffix(layer.unit.unit),),
                         usage_count: self
                             .geometry
                             .primitives
@@ -134,8 +125,7 @@ impl LoadedLayer
         }
     }
 
-    pub fn metadata(&self) -> LayerMetadata
-    {
+    pub fn metadata(&self) -> LayerMetadata {
         let source = self
             .source_path
             .as_ref()
@@ -143,17 +133,14 @@ impl LoadedLayer
             .unwrap_or_else(|| "In-memory source".to_owned());
         let layer_role = self.layer_type.to_string().trim().to_owned();
 
-        let mut metadata = match &self.data
-        {
+        let mut metadata = match &self.data {
             LayerData::Gerber(layer) => {
                 let format = &layer.coordinate_format;
                 let definitions = self
                     .definition_group()
                     .definitions
                     .into_iter()
-                    .map(|definition| {
-                        format!("{}: {}", definition.code, definition.description)
-                    })
+                    .map(|definition| format!("{}: {}", definition.code, definition.description))
                     .collect();
                 let attributes = layer
                     .header
@@ -228,26 +215,21 @@ impl LoadedLayer
             },
         };
 
-        if let Some(context) = &self.job_context
-        {
-            metadata.attributes.push(format!(
-                "Job file: {}",
-                context.job_path.display(),
-            ));
-            if let Some(function) = &context.file_attributes.file_function
-            {
+        if let Some(context) = &self.job_context {
+            metadata
+                .attributes
+                .push(format!("Job file: {}", context.job_path.display(),));
+            if let Some(function) = &context.file_attributes.file_function {
                 metadata
                     .attributes
                     .push(format!("Job file function: {function}"));
             }
-            if let Some(polarity) = &context.file_attributes.file_polarity
-            {
+            if let Some(polarity) = &context.file_attributes.file_polarity {
                 metadata
                     .attributes
                     .push(format!("Job file polarity: {polarity}"));
             }
-            if let Some(format) = &context.file_attributes.file_format
-            {
+            if let Some(format) = &context.file_attributes.file_format {
                 metadata
                     .attributes
                     .push(format!("Job file format: {format}"));
@@ -258,10 +240,8 @@ impl LoadedLayer
     }
 }
 
-fn describe_aperture(aperture: &Aperture) -> String
-{
-    match aperture
-    {
+fn describe_aperture(aperture: &Aperture) -> String {
+    match aperture {
         Aperture::Circle(circle) => format!("circle, ⌀{:.4} mm", circle.diameter),
         Aperture::Rectangle(rectangle) => {
             format!("rectangle, {:.4} ⨯ {:.4} mm", rectangle.x, rectangle.y)
@@ -279,10 +259,8 @@ fn describe_aperture(aperture: &Aperture) -> String
     }
 }
 
-fn attribute_description(command: &Command) -> Option<String>
-{
-    match command
-    {
+fn attribute_description(command: &Command) -> Option<String> {
+    match command {
         Command::ExtendedCode(ExtendedCode::FileAttribute(attribute)) => {
             Some(format!("File: {attribute:?}"))
         }
@@ -292,45 +270,39 @@ fn attribute_description(command: &Command) -> Option<String>
         Command::ExtendedCode(ExtendedCode::ObjectAttribute(attribute)) => {
             Some(format!("Object: {attribute:?}"))
         }
-        Command::FunctionCode(FunctionCode::GCode(GCode::Comment(
-            CommentContent::Standard(StandardComment::FileAttribute(attribute)),
-        ))) => Some(format!("File: {attribute:?}")),
-        Command::FunctionCode(FunctionCode::GCode(GCode::Comment(
-            CommentContent::Standard(StandardComment::ApertureAttribute(attribute)),
-        ))) => Some(format!("Aperture: {attribute:?}")),
-        Command::FunctionCode(FunctionCode::GCode(GCode::Comment(
-            CommentContent::Standard(StandardComment::ObjectAttribute(attribute)),
-        ))) => Some(format!("Object: {attribute:?}")),
+        Command::FunctionCode(FunctionCode::GCode(GCode::Comment(CommentContent::Standard(
+            StandardComment::FileAttribute(attribute),
+        )))) => Some(format!("File: {attribute:?}")),
+        Command::FunctionCode(FunctionCode::GCode(GCode::Comment(CommentContent::Standard(
+            StandardComment::ApertureAttribute(attribute),
+        )))) => Some(format!("Aperture: {attribute:?}")),
+        Command::FunctionCode(FunctionCode::GCode(GCode::Comment(CommentContent::Standard(
+            StandardComment::ObjectAttribute(attribute),
+        )))) => Some(format!("Object: {attribute:?}")),
         _ => None,
     }
 }
 
-fn unit_name(unit: Unit) -> &'static str
-{
-    match unit
-    {
+fn unit_name(unit: Unit) -> &'static str {
+    match unit {
         Unit::Inches => "Inches",
         Unit::Millimeters => "Millimetres",
     }
 }
 
-fn unit_suffix(unit: Unit) -> &'static str
-{
-    match unit
-    {
+fn unit_suffix(unit: Unit) -> &'static str {
+    match unit {
         Unit::Inches => "in",
         Unit::Millimeters => "mm",
     }
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn gerber_metadata_reports_normalized_format_apertures_and_attributes()
-    {
+    fn gerber_metadata_reports_normalized_format_apertures_and_attributes() {
         let layer = crate::load_gerber_reader(
             "copper.gtl",
             Cursor::new(
@@ -360,13 +332,10 @@ mod tests
     }
 
     #[test]
-    fn excellon_metadata_reports_declared_unit_and_sorted_tools()
-    {
+    fn excellon_metadata_reports_declared_unit_and_sorted_tools() {
         let layer = crate::load_excellon_reader(
             "holes.drl",
-            Cursor::new(
-                b"M48\nMETRIC\nT02C1.2\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nM30\n",
-            ),
+            Cursor::new(b"M48\nMETRIC\nT02C1.2\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nM30\n"),
         )
         .expect("test Excellon must parse");
 
@@ -375,17 +344,13 @@ mod tests
         assert_eq!(metadata.format, "Excellon drill");
         assert_eq!(metadata.units, "Millimetres");
         assert_eq!(metadata.definition_label, "Tools");
-        assert_eq!(
-            metadata.definitions,
-            vec!["T1: 0.8000 mm", "T2: 1.2000 mm"],
-        );
+        assert_eq!(metadata.definitions, vec!["T1: 0.8000 mm", "T2: 1.2000 mm"],);
         assert_eq!(metadata.primitive_count, 1);
         assert!(metadata.attributes.is_empty());
     }
 
     #[test]
-    fn definition_groups_report_sorted_codes_and_rendered_usage()
-    {
+    fn definition_groups_report_sorted_codes_and_rendered_usage() {
         let gerber = crate::load_gerber_reader(
             "copper.gtl",
             Cursor::new(
@@ -395,9 +360,7 @@ mod tests
         .expect("test Gerber must parse");
         let drill = crate::load_excellon_reader(
             "holes.drl",
-            Cursor::new(
-                b"M48\nMETRIC\nT02C1.2\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nX2.0Y2.0\nM30\n",
-            ),
+            Cursor::new(b"M48\nMETRIC\nT02C1.2\nT01C0.8\n%\nG05\nT01\nX1.0Y1.0\nX2.0Y2.0\nM30\n"),
         )
         .expect("test Excellon must parse");
 
@@ -408,10 +371,7 @@ mod tests
             gerber_group
                 .definitions
                 .iter()
-                .map(|definition| (
-                    definition.code.as_str(),
-                    definition.usage_count,
-                ))
+                .map(|definition| (definition.code.as_str(), definition.usage_count,))
                 .collect::<Vec<_>>(),
             vec![("D10", 1), ("D11", 1)],
         );
@@ -422,10 +382,7 @@ mod tests
             drill_group
                 .definitions
                 .iter()
-                .map(|definition| (
-                    definition.code.as_str(),
-                    definition.usage_count,
-                ))
+                .map(|definition| (definition.code.as_str(), definition.usage_count,))
                 .collect::<Vec<_>>(),
             vec![("T1", 2), ("T2", 0)],
         );

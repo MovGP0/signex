@@ -1,22 +1,19 @@
-﻿use std::{fmt, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
 use iced::mouse;
-use iced::widget::{
-    Space, button, canvas, checkbox, container, pick_list, row, scrollable, text,
-};
+use iced::widget::{Space, button, canvas, checkbox, container, pick_list, row, scrollable, text};
 use iced::{
-    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme,
-    keyboard,
+    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Theme, keyboard,
 };
 use serde::Deserialize;
 use signex_gerber::{
-    ApertureShape, Bounds, GerberAttributeValue, GerberLoadBatch, GerberPrimitive,
-    LoadedLayer, PrimitivePolarity,
+    ApertureShape, Bounds, GerberAttributeValue, GerberLoadBatch, GerberPrimitive, LoadedLayer,
+    PrimitivePolarity,
 };
 use signex_types::theme::ThemeTokens;
 
-mod display;
 mod color_dropdown;
+mod display;
 mod dock;
 mod gerber_viewer_state;
 mod grid;
@@ -26,8 +23,8 @@ mod item_colors;
 mod layer_color;
 mod layer_controls;
 mod layer_order;
-mod menu;
 mod measurement;
+mod menu;
 mod message;
 mod pcb_export;
 pub(crate) mod print;
@@ -41,57 +38,48 @@ mod workspace;
 #[path = "canvas.rs"]
 mod viewport;
 
-pub use display::{
-    GerberCrosshairMode, GerberDisplayUnit, GerberPageSize, GerberPrintLayout,
-};
+pub use display::{GerberCrosshairMode, GerberDisplayUnit, GerberPageSize, GerberPrintLayout};
 pub use dock::GerberDockPanel;
-pub use grid::GridUnit;
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
+pub use grid::GridUnit;
 pub use layer_color::GerberColorTarget;
 pub use measurement::GerberMeasurement;
 pub use message::GerberViewerMessage;
-pub use pcb_export::{
-    GerberPcbExport, GerberPcbExportReport, GerberPcbSkippedItem,
-};
+pub use pcb_export::{GerberPcbExport, GerberPcbExportReport, GerberPcbSkippedItem};
 pub use selection::GerberItemSelection;
 pub use shortcuts::GerberShortcutResolver;
 pub use view::view;
-pub use workspace::{
-    GerberDocumentId, GerberDocumentState, GerberWorkspaceState,
-};
+pub use workspace::{GerberDocumentId, GerberDocumentState, GerberWorkspaceState};
 
-use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index};
 use layer_color::GerberMaterialColor;
+use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index};
 
 use viewport::{
-    material_color_palette, material_compare_palette, material_d_code_color,
-    material_layer_palette, material_grid_color, material_negative_ghost_color,
-    page_bounds, visible_bounds, zoom_transform_for_selection,
+    material_color_palette, material_compare_palette, material_d_code_color, material_grid_color,
+    material_layer_palette, material_negative_ghost_color, page_bounds, visible_bounds,
+    zoom_transform_for_selection,
 };
 
 #[cfg(test)]
 use viewport::*;
 
+use color_dropdown::color_dropdown;
 pub(crate) use grid::{
-    DEFAULT_GRID_INDEX, GridSizeChoice, GridSizePreset,
-    create_grid_definition, default_grid_catalog,
-    format_distance_input, grid_size_choices, persist_grid_catalog,
+    DEFAULT_GRID_INDEX, GridSizeChoice, GridSizePreset, create_grid_definition,
+    default_grid_catalog, format_distance_input, grid_size_choices, persist_grid_catalog,
 };
 use grid::{
-    default_forced_opacity, default_inactive_layer_opacity,
-    load_grid_catalog, load_grid_style, load_page_size, persist_page_size,
-    system_decimal_separator, GerberGridStyle,
+    GerberGridStyle, default_forced_opacity, default_inactive_layer_opacity, load_grid_catalog,
+    load_grid_style, load_page_size, persist_page_size, system_decimal_separator,
 };
 use highlight::{
     attribute_highlight_color, component_highlight_color, d_code_highlight_color,
     net_highlight_color,
 };
-use color_dropdown::color_dropdown;
 use layer_color::GerberLayerColorChoice;
 use measurement::draw_measurement;
 use selection::{
-    hit_test_visible_item, hit_test_visible_items_in_bounds,
-    selected_primitive_color,
+    hit_test_visible_item, hit_test_visible_items_in_bounds, selected_primitive_color,
 };
 
 const MAX_VIEWER_LAYERS: usize = 32;
@@ -219,7 +207,6 @@ gerber_ghost_negatives_test_definitions::gerber_ghost_negatives_tests!();
 
 #[cfg(test)]
 gerber_d_code_labels_test_definitions::gerber_d_code_labels_tests!();
-
 
 #[cfg(test)]
 gerber_compare_mode_test_definitions::gerber_compare_mode_tests!();

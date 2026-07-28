@@ -15,8 +15,7 @@ pub(super) fn color_dropdown<'a>(
     trigger_width: Length,
     on_select: impl Fn(usize) -> GerberViewerMessage + Copy + 'a,
     tokens: &ThemeTokens,
-) -> Element<'a, GerberViewerMessage>
-{
+) -> Element<'a, GerberViewerMessage> {
     let panel_background = styles::ti(tokens.panel_bg);
     let trigger_background = styles::ti(tokens.toolbar_bg);
     let border_color = styles::ti(tokens.border);
@@ -26,8 +25,7 @@ pub(super) fn color_dropdown<'a>(
     let selected_color = selected
         .as_ref()
         .map_or(Color::TRANSPARENT, |choice| choice.color);
-    let selected_palette_index =
-        selected.as_ref().map(|choice| choice.palette_index);
+    let selected_palette_index = selected.as_ref().map(|choice| choice.palette_index);
 
     let selected_swatch = container(Space::new())
         .width(Length::Fill)
@@ -50,12 +48,9 @@ pub(super) fn color_dropdown<'a>(
     .padding([5, 6])
     .on_press(GerberViewerMessage::ToggleColorPicker(target))
     .style(move |_: &Theme, status: button::Status| {
-        let background = if status == button::Status::Hovered
-        {
+        let background = if status == button::Status::Hovered {
             hover_color
-        }
-        else
-        {
+        } else {
             trigger_background
         };
         button::Style {
@@ -70,15 +65,11 @@ pub(super) fn color_dropdown<'a>(
         }
     });
 
-    let overlay: Element<'a, GerberViewerMessage> = if expanded
-    {
+    let overlay: Element<'a, GerberViewerMessage> = if expanded {
         let mut palette = Column::new().spacing(2);
-        for choices_row in
-            choices.chunk_by(|left, right| left.family_index == right.family_index)
-        {
+        for choices_row in choices.chunk_by(|left, right| left.family_index == right.family_index) {
             let mut swatch_row = Row::new().spacing(2);
-            for choice in choices_row
-            {
+            for choice in choices_row {
                 let color = choice.color;
                 let palette_index = choice.palette_index;
                 let selected = selected_palette_index == Some(palette_index);
@@ -90,27 +81,18 @@ pub(super) fn color_dropdown<'a>(
                         border: Border {
                             width: if selected { 2.0 } else { 1.0 },
                             radius: 1.0.into(),
-                            color: if selected
-                            {
-                                accent_color
-                            }
-                            else
-                            {
-                                border_color
-                            },
+                            color: if selected { accent_color } else { border_color },
                         },
                         ..container::Style::default()
                     });
                 let option = button(swatch)
                     .padding(1)
                     .on_press(on_select(palette_index))
-                    .style(move |_: &Theme, status: button::Status| {
-                        button::Style {
-                            background: (status == button::Status::Hovered)
-                                .then_some(Background::Color(hover_color)),
-                            border: Border::default(),
-                            ..button::Style::default()
-                        }
+                    .style(move |_: &Theme, status: button::Status| button::Style {
+                        background: (status == button::Status::Hovered)
+                            .then_some(Background::Color(hover_color)),
+                        border: Border::default(),
+                        ..button::Style::default()
                     });
                 swatch_row = swatch_row.push(tooltip(
                     option,
@@ -138,9 +120,7 @@ pub(super) fn color_dropdown<'a>(
                 ..container::Style::default()
             })
             .into()
-    }
-    else
-    {
+    } else {
         Space::new().into()
     };
 

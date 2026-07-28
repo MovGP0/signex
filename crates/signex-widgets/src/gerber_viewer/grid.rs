@@ -1,4 +1,4 @@
-﻿use std::fmt;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -14,8 +14,7 @@ pub(crate) const DEFAULT_GRID_INDEX: usize = 1;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum GerberGridStyle
-{
+pub(crate) enum GerberGridStyle {
     #[default]
     Dots,
     Lines,
@@ -24,24 +23,19 @@ pub(crate) enum GerberGridStyle
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum GridUnit
-{
+pub enum GridUnit {
     Mil,
     Mm,
     Inch,
 }
 
-impl GridUnit
-{
+impl GridUnit {
     pub const ALL: [Self; 3] = [Self::Mm, Self::Mil, Self::Inch];
 }
 
-impl fmt::Display for GridUnit
-{
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-    {
-        formatter.write_str(match self
-        {
+impl fmt::Display for GridUnit {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
             Self::Mil => "mil",
             Self::Mm => "mm",
             Self::Inch => "inch",
@@ -50,60 +44,48 @@ impl fmt::Display for GridUnit
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub(crate) struct GridSizePreset
-{
+pub(crate) struct GridSizePreset {
     pub name: Option<String>,
     pub x: f64,
     pub y: f64,
     pub unit: GridUnit,
 }
 
-impl GridSizePreset
-{
-    pub fn x_millimetres(&self) -> f64
-    {
-        match self.unit
-        {
+impl GridSizePreset {
+    pub fn x_millimetres(&self) -> f64 {
+        match self.unit {
             GridUnit::Mil => self.x * MILLIMETRES_PER_MIL,
             GridUnit::Mm => self.x,
             GridUnit::Inch => self.x * MILLIMETRES_PER_INCH,
         }
     }
 
-    pub fn y_millimetres(&self) -> f64
-    {
-        match self.unit
-        {
+    pub fn y_millimetres(&self) -> f64 {
+        match self.unit {
             GridUnit::Mil => self.y * MILLIMETRES_PER_MIL,
             GridUnit::Mm => self.y,
             GridUnit::Inch => self.y * MILLIMETRES_PER_INCH,
         }
     }
 
-    fn x_mils(&self) -> f64
-    {
-        match self.unit
-        {
+    fn x_mils(&self) -> f64 {
+        match self.unit {
             GridUnit::Mil => self.x,
             GridUnit::Mm => self.x / MILLIMETRES_PER_MIL,
             GridUnit::Inch => self.x * 1_000.0,
         }
     }
 
-    fn y_mils(&self) -> f64
-    {
-        match self.unit
-        {
+    fn y_mils(&self) -> f64 {
+        match self.unit {
             GridUnit::Mil => self.y,
             GridUnit::Mm => self.y / MILLIMETRES_PER_MIL,
             GridUnit::Inch => self.y * 1_000.0,
         }
     }
 
-    pub fn converted_to(&self, unit: GridUnit) -> Self
-    {
-        let (x, y) = match unit
-        {
+    pub fn converted_to(&self, unit: GridUnit) -> Self {
+        let (x, y) = match unit {
             GridUnit::Mil => (self.x_mils(), self.y_mils()),
             GridUnit::Mm => (self.x_millimetres(), self.y_millimetres()),
             GridUnit::Inch => (
@@ -119,15 +101,8 @@ impl GridSizePreset
         }
     }
 
-    pub fn display_label(&self, decimal_separator: &str) -> String
-    {
-        let mils = format_dimensions(
-            self.x_mils(),
-            self.y_mils(),
-            2,
-            "mils",
-            decimal_separator,
-        );
+    pub fn display_label(&self, decimal_separator: &str) -> String {
+        let mils = format_dimensions(self.x_mils(), self.y_mils(), 2, "mils", decimal_separator);
         let millimetres = format_dimensions(
             self.x_millimetres(),
             self.y_millimetres(),
@@ -142,15 +117,13 @@ impl GridSizePreset
             "inch",
             decimal_separator,
         );
-        let dimensions = match self.unit
-        {
+        let dimensions = match self.unit {
             GridUnit::Mil => format!("{mils} ({millimetres})"),
             GridUnit::Mm => format!("{millimetres} ({mils})"),
             GridUnit::Inch => format!("{inches} ({millimetres})"),
         };
 
-        match self.name.as_deref()
-        {
+        match self.name.as_deref() {
             Some(name) if !name.trim().is_empty() => format!("{name}: {dimensions}"),
             _ => dimensions,
         }
@@ -158,8 +131,7 @@ impl GridSizePreset
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct GerberViewerSettings
-{
+struct GerberViewerSettings {
     grid_sizes: Vec<GridSizePreset>,
     #[serde(default)]
     grid_display: GridDisplaySettings,
@@ -168,34 +140,28 @@ struct GerberViewerSettings
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-struct GridDisplaySettings
-{
+struct GridDisplaySettings {
     style: GerberGridStyle,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-struct PageSizeSettings
-{
+struct PageSizeSettings {
     size: GerberPageSize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GridSizeChoice
-{
+pub(crate) struct GridSizeChoice {
     pub index: usize,
     label: String,
 }
 
-impl fmt::Display for GridSizeChoice
-{
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-    {
+impl fmt::Display for GridSizeChoice {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.label)
     }
 }
 
-pub(crate) fn default_grid_catalog() -> Vec<GridSizePreset>
-{
+pub(crate) fn default_grid_catalog() -> Vec<GridSizePreset> {
     let settings: GerberViewerSettings = toml::from_str(include_str!(
         "../../../../assets/gerber-viewer/default-settings.toml"
     ))
@@ -204,20 +170,17 @@ pub(crate) fn default_grid_catalog() -> Vec<GridSizePreset>
 }
 
 #[derive(Debug, Deserialize)]
-struct BundledDisplaySettings
-{
+struct BundledDisplaySettings {
     drawing_mode: BundledDrawingModeSettings,
 }
 
 #[derive(Debug, Deserialize)]
-struct BundledDrawingModeSettings
-{
+struct BundledDrawingModeSettings {
     forced_opacity: f32,
     inactive_layer_opacity: f32,
 }
 
-pub(super) fn default_forced_opacity() -> f32
-{
+pub(super) fn default_forced_opacity() -> f32 {
     let settings: BundledDisplaySettings = toml::from_str(include_str!(
         "../../../../assets/gerber-viewer/default-settings.toml"
     ))
@@ -225,8 +188,7 @@ pub(super) fn default_forced_opacity() -> f32
     settings.drawing_mode.forced_opacity.clamp(0.0, 1.0)
 }
 
-pub(super) fn default_inactive_layer_opacity() -> f32
-{
+pub(super) fn default_inactive_layer_opacity() -> f32 {
     let settings: BundledDisplaySettings = toml::from_str(include_str!(
         "../../../../assets/gerber-viewer/default-settings.toml"
     ))
@@ -234,16 +196,14 @@ pub(super) fn default_inactive_layer_opacity() -> f32
     settings.drawing_mode.inactive_layer_opacity.clamp(0.0, 1.0)
 }
 
-pub(super) fn load_grid_catalog() -> Vec<GridSizePreset>
-{
+pub(super) fn load_grid_catalog() -> Vec<GridSizePreset> {
     grid_settings_path()
         .and_then(|path| load_grid_catalog_from(&path).ok())
         .filter(|catalog| !catalog.is_empty())
         .unwrap_or_else(default_grid_catalog)
 }
 
-pub(super) fn load_page_size() -> GerberPageSize
-{
+pub(super) fn load_page_size() -> GerberPageSize {
     grid_settings_path()
         .and_then(|path| load_settings_from(&path).ok())
         .unwrap_or_else(default_settings)
@@ -251,8 +211,7 @@ pub(super) fn load_page_size() -> GerberPageSize
         .size
 }
 
-pub(super) fn load_grid_style() -> GerberGridStyle
-{
+pub(super) fn load_grid_style() -> GerberGridStyle {
     grid_settings_path()
         .and_then(|path| load_settings_from(&path).ok())
         .unwrap_or_else(default_settings)
@@ -260,8 +219,7 @@ pub(super) fn load_grid_style() -> GerberGridStyle
         .style
 }
 
-pub(crate) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String>
-{
+pub(crate) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), String> {
     let path = grid_settings_path()
         .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
     let page_size = load_page_size();
@@ -271,8 +229,7 @@ pub(crate) fn persist_grid_catalog(catalog: &[GridSizePreset]) -> Result<(), Str
 pub(super) fn persist_page_size(
     page_size: GerberPageSize,
     catalog: &[GridSizePreset],
-) -> Result<(), String>
-{
+) -> Result<(), String> {
     let path = grid_settings_path()
         .ok_or_else(|| "No operating-system configuration directory is available.".to_owned())?;
     persist_settings_to(&path, catalog, page_size, load_grid_style())
@@ -284,19 +241,16 @@ pub(crate) fn create_grid_definition(
     y: &str,
     unit: GridUnit,
     decimal_separator: &str,
-) -> Result<GridSizePreset, String>
-{
+) -> Result<GridSizePreset, String> {
     let x = parse_distance(x, decimal_separator)
         .ok_or_else(|| "X must be a finite number greater than zero.".to_owned())?;
-    if x <= 0.0
-    {
+    if x <= 0.0 {
         return Err("X must be a finite number greater than zero.".to_owned());
     }
 
     let y = parse_distance(y, decimal_separator)
         .ok_or_else(|| "Y must be a finite non-negative number.".to_owned())?;
-    if y < 0.0
-    {
+    if y < 0.0 {
         return Err("Y must be a finite non-negative number.".to_owned());
     }
 
@@ -312,8 +266,7 @@ pub(crate) fn create_grid_definition(
 pub(crate) fn grid_size_choices(
     catalog: &[GridSizePreset],
     decimal_separator: &str,
-) -> Vec<GridSizeChoice>
-{
+) -> Vec<GridSizeChoice> {
     catalog
         .iter()
         .enumerate()
@@ -324,18 +277,13 @@ pub(crate) fn grid_size_choices(
         .collect()
 }
 
-pub(super) fn system_decimal_separator() -> String
-{
-    platform_decimal_separator()
-        .unwrap_or_else(|| DEFAULT_DECIMAL_SEPARATOR.to_owned())
+pub(super) fn system_decimal_separator() -> String {
+    platform_decimal_separator().unwrap_or_else(|| DEFAULT_DECIMAL_SEPARATOR.to_owned())
 }
 
 #[cfg(windows)]
-fn platform_decimal_separator() -> Option<String>
-{
-    use windows_sys::Win32::Globalization::{
-        GetLocaleInfoEx, LOCALE_SDECIMAL,
-    };
+fn platform_decimal_separator() -> Option<String> {
+    use windows_sys::Win32::Globalization::{GetLocaleInfoEx, LOCALE_SDECIMAL};
 
     let mut buffer = [0_u16; 8];
     let length = unsafe {
@@ -346,8 +294,7 @@ fn platform_decimal_separator() -> Option<String>
             buffer.len() as i32,
         )
     };
-    if length <= 1
-    {
+    if length <= 1 {
         return None;
     }
 
@@ -357,14 +304,12 @@ fn platform_decimal_separator() -> Option<String>
 }
 
 #[cfg(unix)]
-fn platform_decimal_separator() -> Option<String>
-{
+fn platform_decimal_separator() -> Option<String> {
     let output = std::process::Command::new("locale")
         .arg("decimal_point")
         .output()
         .ok()?;
-    if !output.status.success()
-    {
+    if !output.status.success() {
         return None;
     }
 
@@ -372,8 +317,7 @@ fn platform_decimal_separator() -> Option<String>
 }
 
 #[cfg(any(unix, test))]
-fn parse_posix_decimal_separator(output: &[u8]) -> Option<String>
-{
+fn parse_posix_decimal_separator(output: &[u8]) -> Option<String> {
     let output = std::str::from_utf8(output).ok()?.trim();
     let value = output
         .split_once('=')
@@ -385,8 +329,7 @@ fn parse_posix_decimal_separator(output: &[u8]) -> Option<String>
 }
 
 #[cfg(not(any(unix, windows)))]
-fn platform_decimal_separator() -> Option<String>
-{
+fn platform_decimal_separator() -> Option<String> {
     None
 }
 
@@ -396,17 +339,10 @@ fn format_dimensions(
     decimals: usize,
     unit: &str,
     decimal_separator: &str,
-) -> String
-{
-    if x == y
-    {
-        format!(
-            "{} {unit}",
-            format_decimal(x, decimals, decimal_separator),
-        )
-    }
-    else
-    {
+) -> String {
+    if x == y {
+        format!("{} {unit}", format_decimal(x, decimals, decimal_separator),)
+    } else {
         format!(
             "{} {unit} ⨯ {} {unit}",
             format_decimal(x, decimals, decimal_separator),
@@ -415,25 +351,19 @@ fn format_dimensions(
     }
 }
 
-fn format_decimal(value: f64, decimals: usize, decimal_separator: &str) -> String
-{
+fn format_decimal(value: f64, decimals: usize, decimal_separator: &str) -> String {
     format!("{value:.decimals$}").replace('.', decimal_separator)
 }
 
-pub(crate) fn format_distance_input(value: f64, decimal_separator: &str) -> String
-{
+pub(crate) fn format_distance_input(value: f64, decimal_separator: &str) -> String {
     value.to_string().replace('.', decimal_separator)
 }
 
-fn parse_distance(value: &str, decimal_separator: &str) -> Option<f64>
-{
+fn parse_distance(value: &str, decimal_separator: &str) -> Option<f64> {
     let value = value.trim();
-    let normalized = if decimal_separator == DEFAULT_DECIMAL_SEPARATOR
-    {
+    let normalized = if decimal_separator == DEFAULT_DECIMAL_SEPARATOR {
         value.to_owned()
-    }
-    else
-    {
+    } else {
         value.replace(decimal_separator, DEFAULT_DECIMAL_SEPARATOR)
     };
     normalized
@@ -442,31 +372,21 @@ fn parse_distance(value: &str, decimal_separator: &str) -> Option<f64>
         .filter(|value| value.is_finite())
 }
 
-fn grid_settings_path() -> Option<PathBuf>
-{
-    let root = if cfg!(test)
-    {
-        std::env::temp_dir().join(format!(
-            "signex-widget-test-prefs-{}",
-            std::process::id(),
-        ))
-    }
-    else
-    {
+fn grid_settings_path() -> Option<PathBuf> {
+    let root = if cfg!(test) {
+        std::env::temp_dir().join(format!("signex-widget-test-prefs-{}", std::process::id(),))
+    } else {
         dirs::config_dir()?.join("signex")
     };
     Some(root.join(SETTINGS_FILE_NAME))
 }
 
-fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>
-{
+fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String> {
     let settings = load_settings_from(path)?;
-    if settings.grid_sizes.iter().any(|grid| {
-        !grid.x.is_finite()
-            || grid.x <= 0.0
-            || !grid.y.is_finite()
-            || grid.y < 0.0
-    })
+    if settings
+        .grid_sizes
+        .iter()
+        .any(|grid| !grid.x.is_finite() || grid.x <= 0.0 || !grid.y.is_finite() || grid.y < 0.0)
     {
         return Err("The persisted grid catalog contains invalid distances.".to_owned());
     }
@@ -474,8 +394,7 @@ fn load_grid_catalog_from(path: &Path) -> Result<Vec<GridSizePreset>, String>
 }
 
 #[cfg(test)]
-fn persist_grid_catalog_to(path: &Path, catalog: &[GridSizePreset]) -> Result<(), String>
-{
+fn persist_grid_catalog_to(path: &Path, catalog: &[GridSizePreset]) -> Result<(), String> {
     persist_settings_to(
         path,
         catalog,
@@ -484,20 +403,17 @@ fn persist_grid_catalog_to(path: &Path, catalog: &[GridSizePreset]) -> Result<()
     )
 }
 
-fn default_settings() -> GerberViewerSettings
-{
+fn default_settings() -> GerberViewerSettings {
     toml::from_str(include_str!(
         "../../../../assets/gerber-viewer/default-settings.toml"
     ))
     .expect("bundled Gerber viewer settings must parse")
 }
 
-fn load_settings_from(path: &Path) -> Result<GerberViewerSettings, String>
-{
+fn load_settings_from(path: &Path) -> Result<GerberViewerSettings, String> {
     let source = std::fs::read_to_string(path)
         .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
-    toml::from_str(&source)
-        .map_err(|error| format!("Could not parse {}: {error}", path.display()))
+    toml::from_str(&source).map_err(|error| format!("Could not parse {}: {error}", path.display()))
 }
 
 fn persist_settings_to(
@@ -505,8 +421,7 @@ fn persist_settings_to(
     catalog: &[GridSizePreset],
     page_size: GerberPageSize,
     grid_style: GerberGridStyle,
-) -> Result<(), String>
-{
+) -> Result<(), String> {
     let settings = GerberViewerSettings {
         grid_sizes: catalog.to_vec(),
         grid_display: GridDisplaySettings { style: grid_style },

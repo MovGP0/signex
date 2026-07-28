@@ -3,8 +3,7 @@ use super::*;
 pub(super) fn view(
     state: &GerberViewerState,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     let recent_files = recent_files_menu("Open Recent File", colors);
 
     Item::with_menu(

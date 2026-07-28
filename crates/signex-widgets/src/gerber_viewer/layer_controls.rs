@@ -5,20 +5,16 @@ use iced::widget::{button, column, container, row, svg, text, tooltip};
 const ICON_SIZE: f32 = 18.0;
 const BUTTON_SIZE: f32 = 28.0;
 
-const PREVIOUS_LAYER_ICON: &[u8] =
-    include_bytes!("../../assets/gerber-viewer/previous_layer.svg");
-const NEXT_LAYER_ICON: &[u8] =
-    include_bytes!("../../assets/gerber-viewer/next_layer.svg");
-const MOVE_LAYER_UP_ICON: &[u8] =
-    include_bytes!("../../assets/gerber-viewer/move_layer_up.svg");
+const PREVIOUS_LAYER_ICON: &[u8] = include_bytes!("../../assets/gerber-viewer/previous_layer.svg");
+const NEXT_LAYER_ICON: &[u8] = include_bytes!("../../assets/gerber-viewer/next_layer.svg");
+const MOVE_LAYER_UP_ICON: &[u8] = include_bytes!("../../assets/gerber-viewer/move_layer_up.svg");
 const MOVE_LAYER_DOWN_ICON: &[u8] =
     include_bytes!("../../assets/gerber-viewer/move_layer_down.svg");
 
 pub(super) fn view<'a>(
     state: &GerberViewerState,
     tokens: &ThemeTokens,
-) -> Element<'a, GerberViewerMessage>
-{
+) -> Element<'a, GerberViewerMessage> {
     let previous = previous_layer_index(state.active_layer, state.layers.len())
         .map(|_| GerberViewerMessage::PreviousLayer);
     let next = next_layer_index(state.active_layer, state.layers.len())
@@ -43,18 +39,8 @@ pub(super) fn view<'a>(
                 previous,
                 tokens,
             ),
-            layer_control_button(
-                NEXT_LAYER_ICON,
-                "Next Layer (PgDn)",
-                next,
-                tokens,
-            ),
-            layer_control_button(
-                MOVE_LAYER_UP_ICON,
-                "Move Layer Up (+)",
-                move_up,
-                tokens,
-            ),
+            layer_control_button(NEXT_LAYER_ICON, "Next Layer (PgDn)", next, tokens,),
+            layer_control_button(MOVE_LAYER_UP_ICON, "Move Layer Up (+)", move_up, tokens,),
             layer_control_button(
                 MOVE_LAYER_DOWN_ICON,
                 "Move Layer Down (-)",
@@ -73,15 +59,11 @@ fn layer_control_button<'a>(
     hint: &'static str,
     on_press: Option<GerberViewerMessage>,
     tokens: &ThemeTokens,
-) -> Element<'a, GerberViewerMessage>
-{
+) -> Element<'a, GerberViewerMessage> {
     let enabled = on_press.is_some();
-    let icon_color = if enabled
-    {
+    let icon_color = if enabled {
         styles::ti(tokens.text_secondary)
-    }
-    else
-    {
+    } else {
         let muted = styles::ti(tokens.text_secondary);
         Color {
             a: muted.a * 0.45,

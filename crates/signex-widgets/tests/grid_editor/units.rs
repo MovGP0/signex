@@ -1,8 +1,7 @@
 use crate::gerber_viewer::{GridUnit, create_grid_definition};
 
 #[test]
-fn grid_settings_offer_mm_mil_and_inch_units()
-{
+fn grid_settings_offer_mm_mil_and_inch_units() {
     assert_eq!(
         GridUnit::ALL.map(|unit| unit.to_string()),
         ["mm", "mil", "inch"],
@@ -10,8 +9,7 @@ fn grid_settings_offer_mm_mil_and_inch_units()
 }
 
 #[test]
-fn inch_grid_distances_convert_to_physical_millimetres()
-{
+fn inch_grid_distances_convert_to_physical_millimetres() {
     let grid = create_grid_definition("Inch grid", "0.1", "0.05", GridUnit::Inch, ".")
         .expect("inch grid should parse");
 
@@ -24,8 +22,7 @@ fn inch_grid_distances_convert_to_physical_millimetres()
 }
 
 #[test]
-fn changing_editor_unit_preserves_physical_spacing()
-{
+fn changing_editor_unit_preserves_physical_spacing() {
     let viewer = crate::gerber_viewer::GerberViewerState::default();
     let mut editor = super::GerberGridEditorState::from_viewer(&viewer);
     editor.decimal_separator = ".".to_owned();

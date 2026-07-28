@@ -3,8 +3,7 @@ use super::*;
 pub(super) fn view(
     state: &GerberViewerState,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     Item::with_menu(
         root_button("Tools", colors),
         dropdown(vec![

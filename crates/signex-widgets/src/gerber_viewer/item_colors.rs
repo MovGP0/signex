@@ -1,20 +1,16 @@
 use super::*;
 
-impl GerberViewerState
-{
-    pub fn set_grid_color(&mut self, palette_index: usize)
-    {
+impl GerberViewerState {
+    pub fn set_grid_color(&mut self, palette_index: usize) {
         self.close_color_picker();
         let Some(color) = self
             .palette
             .get(palette_index)
             .map(|material_color| material_color.color)
-        else
-        {
+        else {
             return;
         };
-        if self.grid_color == color
-        {
+        if self.grid_color == color {
             return;
         }
 
@@ -23,19 +19,16 @@ impl GerberViewerState
         self.status = "Updated Gerber grid color.".to_owned();
     }
 
-    pub fn set_d_code_color(&mut self, palette_index: usize)
-    {
+    pub fn set_d_code_color(&mut self, palette_index: usize) {
         self.close_color_picker();
         let Some(color) = self
             .palette
             .get(palette_index)
             .map(|material_color| material_color.color)
-        else
-        {
+        else {
             return;
         };
-        if self.d_code_color == color
-        {
+        if self.d_code_color == color {
             return;
         }
 
@@ -44,19 +37,16 @@ impl GerberViewerState
         self.status = "Updated Gerber D-code color.".to_owned();
     }
 
-    pub fn set_negative_object_color(&mut self, palette_index: usize)
-    {
+    pub fn set_negative_object_color(&mut self, palette_index: usize) {
         self.close_color_picker();
         let Some(color) = self
             .palette
             .get(palette_index)
             .map(|material_color| material_color.color)
-        else
-        {
+        else {
             return;
         };
-        if self.negative_ghost_color == color
-        {
+        if self.negative_ghost_color == color {
             return;
         }
 

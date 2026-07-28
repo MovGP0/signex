@@ -3,8 +3,7 @@ use super::*;
 pub(super) fn view(
     state: &GerberViewerState,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     let units_menu = Item::with_menu(
         submenu_button("Units", colors),
         dropdown(vec![
@@ -32,36 +31,21 @@ pub(super) fn view(
     Item::with_menu(
         root_button("View", colors),
         dropdown(vec![
-            leaf(
-                "Zoom In",
-                None,
-                GerberViewerMessage::ZoomBy(1.2),
-                colors,
-            ),
+            leaf("Zoom In", None, GerberViewerMessage::ZoomBy(1.2), colors),
             leaf(
                 "Zoom Out",
                 None,
                 GerberViewerMessage::ZoomBy(1.0 / 1.2),
                 colors,
             ),
-            leaf(
-                "Zoom to Fit",
-                None,
-                GerberViewerMessage::FitPage,
-                colors,
-            ),
+            leaf("Zoom to Fit", None, GerberViewerMessage::FitPage, colors),
             leaf(
                 "Zoom to Selection Area",
                 None,
                 GerberViewerMessage::ToggleZoomSelection,
                 colors,
             ),
-            leaf(
-                "Refresh",
-                None,
-                GerberViewerMessage::RedrawViewport,
-                colors,
-            ),
+            leaf("Refresh", None, GerberViewerMessage::RedrawViewport, colors),
             separator(colors),
             checked_leaf(
                 "Show Grid",

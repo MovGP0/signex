@@ -3,10 +3,8 @@ mod gerber_grid_editor_state;
 mod message;
 mod view;
 
+pub use gerber_grid_editor_state::{GerberGridEditorOutcome, GerberGridEditorState};
 pub use message::GerberGridEditorMessage;
-pub use gerber_grid_editor_state::{
-    GerberGridEditorOutcome, GerberGridEditorState,
-};
 pub use view::view;
 
 #[cfg(test)]

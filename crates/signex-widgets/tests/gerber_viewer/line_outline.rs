@@ -1,24 +1,18 @@
 // Shared private unit-test definitions for line-item outline mode.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_line_outline_tests
-{
+macro_rules! gerber_line_outline_tests {
     () => {
         #[cfg(test)]
-        mod line_outline_tests
-        {
+        mod line_outline_tests {
             use super::*;
 
             #[test]
-            fn toggle_switches_line_render_mode_and_requests_redraw()
-            {
+            fn toggle_switches_line_render_mode_and_requests_redraw() {
                 let mut state = GerberViewerState::default();
                 let generation = state.redraw_generation;
 
-                assert_eq!(
-                    line_render_mode(state.sketch_lines),
-                    LineRenderMode::Filled
-                );
+                assert_eq!(line_render_mode(state.sketch_lines), LineRenderMode::Filled);
 
                 state.toggle_sketch_lines();
 
@@ -31,8 +25,7 @@ macro_rules! gerber_line_outline_tests
             }
 
             #[test]
-            fn outline_preserves_aperture_width_and_hollows_its_interior()
-            {
+            fn outline_preserves_aperture_width_and_hollows_its_interior() {
                 assert_eq!(
                     line_stroke_widths(12.0, LineRenderMode::Outline),
                     (12.0, Some(10.0))

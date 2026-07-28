@@ -3,14 +3,11 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::{
-    GerberLoadBatch, GerberLoadFailure, load_autodetected_file,
-};
+use crate::{GerberLoadBatch, GerberLoadFailure, load_autodetected_file};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct JobFileAttributes
-{
+pub struct JobFileAttributes {
     pub path: String,
     pub file_function: Option<String>,
     pub file_polarity: Option<String>,
@@ -18,8 +15,7 @@ pub struct JobFileAttributes
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GerberJobContext
-{
+pub struct GerberJobContext {
     pub job_path: PathBuf,
     pub document: Arc<serde_json::Value>,
     pub file_attributes: JobFileAttributes,
@@ -27,51 +23,34 @@ pub struct GerberJobContext
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct GerberJobDocument
-{
+struct GerberJobDocument {
     files_attributes: Vec<JobFileAttributes>,
 }
 
-pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch
-{
+pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch {
     let path = path.as_ref();
-    let source = match std::fs::read_to_string(path)
-    {
+    let source = match std::fs::read_to_string(path) {
         Ok(source) => source,
         Err(error) => {
-            return single_failure(
-                path,
-                format!("could not read Gerber job file: {error}"),
-            );
+            return single_failure(path, format!("could not read Gerber job file: {error}"));
         }
     };
-    let value = match serde_json::from_str::<serde_json::Value>(&source)
-    {
+    let value = match serde_json::from_str::<serde_json::Value>(&source) {
         Ok(value) => value,
         Err(error) => {
-            return single_failure(
-                path,
-                format!("invalid Gerber job JSON: {error}"),
-            );
+            return single_failure(path, format!("invalid Gerber job JSON: {error}"));
         }
     };
-    let document = match serde_json::from_value::<GerberJobDocument>(value.clone())
-    {
+    let document = match serde_json::from_value::<GerberJobDocument>(value.clone()) {
         Ok(document) => document,
         Err(error) => {
-            return single_failure(
-                path,
-                format!("invalid Gerber job structure: {error}"),
-            );
+            return single_failure(path, format!("invalid Gerber job structure: {error}"));
         }
     };
-    let Some(base) = path.parent()
-    else
-    {
+    let Some(base) = path.parent() else {
         return single_failure(path, "Gerber job has no parent directory".to_owned());
     };
-    let canonical_base = match base.canonicalize()
-    {
+    let canonical_base = match base.canonicalize() {
         Ok(base) => base,
         Err(error) => {
             return single_failure(
@@ -83,11 +62,9 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch
     let document_value = Arc::new(value);
     let mut batch = GerberLoadBatch::default();
 
-    for attributes in document.files_attributes
-    {
+    for attributes in document.files_attributes {
         let relative = Path::new(&attributes.path);
-        if !is_safe_relative_path(relative)
-        {
+        if !is_safe_relative_path(relative) {
             batch.failures.push(GerberLoadFailure {
                 path: PathBuf::from(&attributes.path),
                 message: "unsafe Gerber job member path was rejected".to_owned(),
@@ -95,8 +72,7 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch
             continue;
         }
         let target = base.join(relative);
-        let canonical_target = match target.canonicalize()
-        {
+        let canonical_target = match target.canonicalize() {
             Ok(target) => target,
             Err(error) => {
                 batch.failures.push(GerberLoadFailure {
@@ -106,8 +82,7 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch
                 continue;
             }
         };
-        if !canonical_target.starts_with(&canonical_base)
-        {
+        if !canonical_target.starts_with(&canonical_base) {
             batch.failures.push(GerberLoadFailure {
                 path: target,
                 message: "Gerber job member resolves outside the job directory".to_owned(),
@@ -115,8 +90,7 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch
             continue;
         }
 
-        match load_autodetected_file(&canonical_target)
-        {
+        match load_autodetected_file(&canonical_target) {
             Ok(mut layer) => {
                 layer.job_context = Some(GerberJobContext {
                     job_path: path.to_path_buf(),
@@ -131,16 +105,14 @@ pub fn load_gerber_job_file(path: impl AsRef<Path>) -> GerberLoadBatch
     batch
 }
 
-fn is_safe_relative_path(path: &Path) -> bool
-{
+fn is_safe_relative_path(path: &Path) -> bool {
     !path.as_os_str().is_empty()
-        && path.components().all(|component| {
-            matches!(component, Component::Normal(_) | Component::CurDir)
-        })
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
 }
 
-fn single_failure(path: &Path, message: String) -> GerberLoadBatch
-{
+fn single_failure(path: &Path, message: String) -> GerberLoadBatch {
     GerberLoadBatch {
         layers: Vec::new(),
         failures: vec![GerberLoadFailure {
@@ -151,13 +123,11 @@ fn single_failure(path: &Path, message: String) -> GerberLoadBatch
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use super::*;
 
     #[test]
-    fn job_loads_relative_files_and_preserves_complete_metadata()
-    {
+    fn job_loads_relative_files_and_preserves_complete_metadata() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let gerber_path = directory.path().join("board.gtl");
         std::fs::write(
@@ -188,10 +158,7 @@ mod tests
 
         assert_eq!(batch.layers.len(), 1);
         assert_eq!(batch.failures.len(), 1);
-        let context = batch.layers[0]
-            .job_context
-            .as_ref()
-            .expect("job context");
+        let context = batch.layers[0].job_context.as_ref().expect("job context");
         assert_eq!(context.job_path, job_path);
         assert_eq!(
             context.file_attributes.file_function.as_deref(),
@@ -203,19 +170,22 @@ mod tests
         );
         assert_eq!(context.document["GeneralSpecs"]["Owner"], "Signex");
         let metadata = batch.layers[0].metadata();
-        assert!(metadata
-            .attributes
-            .iter()
-            .any(|attribute| attribute == "Job file function: Copper,L1,Top"));
-        assert!(metadata
-            .attributes
-            .iter()
-            .any(|attribute| attribute == "Job file polarity: Positive"));
+        assert!(
+            metadata
+                .attributes
+                .iter()
+                .any(|attribute| attribute == "Job file function: Copper,L1,Top")
+        );
+        assert!(
+            metadata
+                .attributes
+                .iter()
+                .any(|attribute| attribute == "Job file polarity: Positive")
+        );
     }
 
     #[test]
-    fn job_rejects_parent_and_absolute_member_paths()
-    {
+    fn job_rejects_parent_and_absolute_member_paths() {
         assert!(!is_safe_relative_path(Path::new("../outside.gbr")));
         assert!(!is_safe_relative_path(Path::new("C:\\outside.gbr")));
         assert!(!is_safe_relative_path(Path::new("/outside.gbr")));

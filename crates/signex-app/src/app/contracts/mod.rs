@@ -28,11 +28,8 @@ pub enum Message {
         signex_widgets::gerber_viewer::GerberViewerMessage,
     ),
     GerberViewerOpened(iced::window::Id),
-    GerberGridEditor(
-        signex_widgets::grid_editor::GerberGridEditorMessage,
-    ),
-    GerberGridEditorOpened
-    {
+    GerberGridEditor(signex_widgets::grid_editor::GerberGridEditorMessage),
+    GerberGridEditorOpened {
         document_id: signex_widgets::gerber_viewer::GerberDocumentId,
         window_id: iced::window::Id,
     },

@@ -1,8 +1,7 @@
 use crate::gerber_viewer::GridUnit;
 
 #[derive(Debug, Clone)]
-pub enum GerberGridEditorMessage
-{
+pub enum GerberGridEditorMessage {
     SelectGrid(usize),
     AddGrid,
     SettingsNameChanged(String),

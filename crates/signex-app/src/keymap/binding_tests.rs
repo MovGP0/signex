@@ -67,8 +67,7 @@ fn preserves_pointer_gestures_as_non_keyboard_triggers() {
 }
 
 #[test]
-fn parses_bare_plus_key()
-{
+fn parses_bare_plus_key() {
     let stroke = KeyStroke::from_str("+").expect("bare plus key");
 
     assert_eq!(stroke.key, KeyToken::Character("+".to_owned()));
@@ -77,8 +76,7 @@ fn parses_bare_plus_key()
 }
 
 #[test]
-fn normalizes_shifted_plus_character()
-{
+fn normalizes_shifted_plus_character() {
     let stroke = KeyStroke::from_iced(
         &iced::keyboard::Key::Character("+".into()),
         iced::keyboard::Modifiers::SHIFT,
@@ -90,8 +88,7 @@ fn normalizes_shifted_plus_character()
 }
 
 #[test]
-fn keeps_control_and_command_modifiers_distinct()
-{
+fn keeps_control_and_command_modifiers_distinct() {
     let control = KeyStroke::from_iced(
         &iced::keyboard::Key::Character("p".into()),
         iced::keyboard::Modifiers::CTRL,

@@ -16,8 +16,7 @@ M02*
 "#;
 
 #[test]
-fn extracts_strokes_and_standard_flashes()
-{
+fn extracts_strokes_and_standard_flashes() {
     let layer = load_gerber_reader("simple.gbr", Cursor::new(SIMPLE_LAYER))
         .expect("simple Gerber must parse");
 
@@ -39,8 +38,7 @@ fn extracts_strokes_and_standard_flashes()
 }
 
 #[test]
-fn associates_x2_components_with_emitted_primitives_and_honors_deletion()
-{
+fn associates_x2_components_with_emitted_primitives_and_honors_deletion() {
     let source = r#"%FSLAX46Y46*%
 %MOMM*%
 %ADD10C,1.000*%
@@ -76,8 +74,7 @@ M02*
 }
 
 #[test]
-fn associates_x2_nets_with_primitives_and_honors_deletion()
-{
+fn associates_x2_nets_with_primitives_and_honors_deletion() {
     let source = r#"%FSLAX46Y46*%
 %MOMM*%
 %ADD10C,1.000*%
@@ -91,8 +88,8 @@ X0200000Y0000000D03*
 M02*
 "#;
 
-    let layer = load_gerber_reader("nets.gbr", Cursor::new(source))
-        .expect("X2 net Gerber must parse");
+    let layer =
+        load_gerber_reader("nets.gbr", Cursor::new(source)).expect("X2 net Gerber must parse");
     let nets = layer
         .geometry
         .primitive_attributes
@@ -111,8 +108,7 @@ M02*
 }
 
 #[test]
-fn preserves_replaces_and_deletes_all_x2_object_attributes()
-{
+fn preserves_replaces_and_deletes_all_x2_object_attributes() {
     let source = r#"%FSLAX46Y46*%
 %MOMM*%
 %ADD10C,1.000*%

@@ -1,44 +1,35 @@
 // Shared private unit-test definitions for Gerber item colors.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_item_color_tests
-{
+macro_rules! gerber_item_color_tests {
     () => {
         #[cfg(test)]
-        mod item_color_tests
-        {
+        mod item_color_tests {
             use super::*;
 
             #[test]
-            fn bundled_item_colors_are_theme_independent_material_colors()
-            {
+            fn bundled_item_colors_are_theme_independent_material_colors() {
                 let state = GerberViewerState::default();
 
                 assert_eq!(state.grid_color, Color::from_rgb8(117, 117, 117));
-                assert_eq!(
-                    state.negative_ghost_color,
-                    Color::from_rgb8(117, 117, 117),
-                );
-                assert_eq!(
-                    state.d_code_color,
-                    Color::from_rgb8(250, 250, 250),
-                );
+                assert_eq!(state.negative_ghost_color, Color::from_rgb8(117, 117, 117),);
+                assert_eq!(state.d_code_color, Color::from_rgb8(250, 250, 250),);
                 assert!(state.selected_color_choice(state.grid_color).is_some());
-                assert!(state
-                    .selected_color_choice(state.negative_ghost_color)
-                    .is_some());
+                assert!(
+                    state
+                        .selected_color_choice(state.negative_ghost_color)
+                        .is_some()
+                );
                 assert!(state.selected_color_choice(state.d_code_color).is_some());
             }
 
             #[test]
-            fn item_color_controls_update_their_render_inputs_immediately()
-            {
+            fn item_color_controls_update_their_render_inputs_immediately() {
                 let mut state = GerberViewerState::default();
                 let alternate_index = state
                     .palette
                     .iter()
-                    .position(|material_color|
-                    {
+                    .position(|material_color| {
                         material_color.color != state.grid_color
                             && material_color.color != state.d_code_color
                     })
@@ -57,25 +48,18 @@ macro_rules! gerber_item_color_tests
             }
 
             #[test]
-            fn invalid_and_unchanged_item_colors_are_no_ops()
-            {
+            fn invalid_and_unchanged_item_colors_are_no_ops() {
                 let mut state = GerberViewerState::default();
                 let generation = state.redraw_generation;
                 let grid_index = state
                     .palette
                     .iter()
-                    .position(|material_color|
-                    {
-                        material_color.color == state.grid_color
-                    })
+                    .position(|material_color| material_color.color == state.grid_color)
                     .expect("grid color in Material palette");
                 let d_code_index = state
                     .palette
                     .iter()
-                    .position(|material_color|
-                    {
-                        material_color.color == state.d_code_color
-                    })
+                    .position(|material_color| material_color.color == state.d_code_color)
                     .expect("D-code color in Material palette");
 
                 state.set_grid_color(grid_index);

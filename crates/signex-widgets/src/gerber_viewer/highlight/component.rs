@@ -2,14 +2,9 @@ use std::collections::BTreeSet;
 
 use super::*;
 
-impl GerberViewerState
-{
-    pub fn component_choices(&self) -> Vec<String>
-    {
-        let Some(viewer_layer) =
-            self.active_layer.and_then(|index| self.layers.get(index))
-        else
-        {
+impl GerberViewerState {
+    pub fn component_choices(&self) -> Vec<String> {
+        let Some(viewer_layer) = self.active_layer.and_then(|index| self.layers.get(index)) else {
             return Vec::new();
         };
 
@@ -24,13 +19,11 @@ impl GerberViewerState
             .collect()
     }
 
-    pub fn highlighted_component(&self) -> Option<&str>
-    {
+    pub fn highlighted_component(&self) -> Option<&str> {
         self.highlighted_component.as_deref()
     }
 
-    pub fn set_highlighted_component(&mut self, component: String)
-    {
+    pub fn set_highlighted_component(&mut self, component: String) {
         if self
             .component_choices()
             .iter()
@@ -45,19 +38,15 @@ impl GerberViewerState
         }
     }
 
-    pub fn clear_component_highlight(&mut self)
-    {
-        if self.highlighted_component.take().is_some()
-        {
+    pub fn clear_component_highlight(&mut self) {
+        if self.highlighted_component.take().is_some() {
             self.status = "Component highlight cleared.".into();
             self.redraw_generation = self.redraw_generation.wrapping_add(1);
         }
     }
 
-    pub(in crate::gerber_viewer) fn retain_available_component_highlight(&mut self)
-    {
-        let Some(component) = self.highlighted_component.as_deref() else
-        {
+    pub(in crate::gerber_viewer) fn retain_available_component_highlight(&mut self) {
+        let Some(component) = self.highlighted_component.as_deref() else {
             return;
         };
         if !self
@@ -74,20 +63,15 @@ pub(in crate::gerber_viewer) fn component_highlight_color(
     layer_color: Color,
     attributes: Option<&signex_gerber::GerberObjectAttributes>,
     highlighted_component: Option<&str>,
-) -> Color
-{
-    let Some(highlighted_component) = highlighted_component else
-    {
+) -> Color {
+    let Some(highlighted_component) = highlighted_component else {
         return layer_color;
     };
-    if attributes
-        .and_then(|attributes| attributes.component.as_deref())
+    if attributes.and_then(|attributes| attributes.component.as_deref())
         == Some(highlighted_component)
     {
         HIGHLIGHT_COLOR
-    }
-    else
-    {
+    } else {
         Color {
             a: NON_MATCHING_ALPHA,
             ..layer_color

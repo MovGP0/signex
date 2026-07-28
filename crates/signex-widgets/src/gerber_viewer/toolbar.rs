@@ -26,10 +26,8 @@ const LAYERS_MANAGER_ICON: &[u8] = include_bytes!("../../assets/gerber-viewer/la
 pub(super) fn view<'a>(
     state: &GerberViewerState,
     tokens: &ThemeTokens,
-) -> Element<'a, GerberViewerMessage>
-{
-    let units_icon = match state.display_unit
-    {
+) -> Element<'a, GerberViewerMessage> {
+    let units_icon = match state.display_unit {
         GerberDisplayUnit::Millimetres => UNITS_MM_ICON,
         GerberDisplayUnit::Mils => UNITS_MIL_ICON,
         GerberDisplayUnit::Inches => UNITS_IN_ICON,
@@ -58,12 +56,9 @@ pub(super) fn view<'a>(
         .push(separator(tokens))
         .push(icon_button(
             GRID_ICON,
-            if state.grid_visible
-            {
+            if state.grid_visible {
                 "Show Grid — grid is visible"
-            }
-            else
-            {
+            } else {
                 "Show Grid — grid is hidden"
             }
             .into(),
@@ -177,14 +172,10 @@ fn icon_button<'a>(
     on_press: GerberViewerMessage,
     selected: bool,
     tokens: &ThemeTokens,
-) -> Element<'a, GerberViewerMessage>
-{
-    let text_color = if selected
-    {
+) -> Element<'a, GerberViewerMessage> {
+    let text_color = if selected {
         styles::ti(tokens.text)
-    }
-    else
-    {
+    } else {
         styles::ti(tokens.text_secondary)
     };
     let hover = styles::ti(tokens.hover);
@@ -204,16 +195,11 @@ fn icon_button<'a>(
     .padding(0)
     .on_press(on_press)
     .style(move |_: &Theme, status: button::Status| {
-        let background = if selected
-        {
+        let background = if selected {
             Some(Background::Color(hover))
-        }
-        else if status == button::Status::Hovered
-        {
+        } else if status == button::Status::Hovered {
             Some(Background::Color(Color::from_rgba8(255, 255, 255, 0.06)))
-        }
-        else
-        {
+        } else {
             None
         };
         button::Style {
@@ -247,8 +233,7 @@ fn icon_button<'a>(
     .into()
 }
 
-fn separator<'a>(tokens: &ThemeTokens) -> Element<'a, GerberViewerMessage>
-{
+fn separator<'a>(tokens: &ThemeTokens) -> Element<'a, GerberViewerMessage> {
     container(Space::new())
         .width(Length::Fill)
         .height(1)

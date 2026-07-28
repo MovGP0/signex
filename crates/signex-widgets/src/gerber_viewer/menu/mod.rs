@@ -10,9 +10,7 @@ mod view_menu;
 mod inventory;
 
 #[cfg(test)]
-pub(super) use inventory::{
-    FILE_MENU_LABELS, TOOLS_MENU_LABELS, VIEW_MENU_LABELS,
-};
+pub(super) use inventory::{FILE_MENU_LABELS, TOOLS_MENU_LABELS, VIEW_MENU_LABELS};
 
 const DROPDOWN_WIDTH: f32 = 300.0;
 const MENU_LABEL_SIZE: f32 = 12.0;
@@ -20,8 +18,7 @@ const MENU_SHORTCUT_SIZE: f32 = 11.0;
 const MENU_CHEVRON_SIZE: f32 = 18.0;
 
 #[derive(Clone, Copy)]
-struct MenuColors
-{
+struct MenuColors {
     text: Color,
     text_muted: Color,
     text_disabled: Color,
@@ -31,10 +28,8 @@ struct MenuColors
     hover: Color,
 }
 
-impl MenuColors
-{
-    fn from_tokens(tokens: &ThemeTokens) -> Self
-    {
+impl MenuColors {
+    fn from_tokens(tokens: &ThemeTokens) -> Self {
         let text_muted = styles::ti(tokens.text_secondary);
         Self {
             text: styles::ti(tokens.text),
@@ -54,8 +49,7 @@ impl MenuColors
 pub(super) fn view(
     state: &GerberViewerState,
     tokens: &ThemeTokens,
-) -> Element<'static, GerberViewerMessage>
-{
+) -> Element<'static, GerberViewerMessage> {
     let colors = MenuColors::from_tokens(tokens);
     let file_menu = file::view(state, colors);
     let view_menu = view_menu::view(state, colors);
@@ -100,8 +94,7 @@ pub(super) fn view(
 fn recent_files_menu(
     label: &str,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     Item::with_menu(
         submenu_button(label, colors),
         dropdown(vec![leaf_stub("(No recent files)", None, colors)]),
@@ -110,8 +103,7 @@ fn recent_files_menu(
 
 fn dropdown(
     items: Vec<Item<'static, GerberViewerMessage, Theme, Renderer>>,
-) -> Menu<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Menu<'static, GerberViewerMessage, Theme, Renderer> {
     Menu::new(items)
         .max_width(DROPDOWN_WIDTH)
         .offset(2.0)
@@ -124,32 +116,18 @@ fn dropdown(
         })
 }
 
-fn root_button(
-    label: &str,
-    colors: MenuColors,
-) -> Element<'static, GerberViewerMessage>
-{
+fn root_button(label: &str, colors: MenuColors) -> Element<'static, GerberViewerMessage> {
     let label = label.to_owned();
     button(text(label).size(MENU_LABEL_SIZE).color(colors.text))
         .padding([7, 6])
         .on_press(GerberViewerMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| {
-            let active = matches!(
-                status,
-                button::Status::Hovered | button::Status::Pressed,
-            );
+            let active = matches!(status, button::Status::Hovered | button::Status::Pressed,);
             button::Style {
                 background: active.then_some(Background::Color(colors.hover)),
                 text_color: colors.text,
                 border: Border {
-                    width: if active
-                    {
-                        1.0
-                    }
-                    else
-                    {
-                        0.0
-                    },
+                    width: if active { 1.0 } else { 0.0 },
                     radius: 2.0.into(),
                     color: colors.border,
                 },
@@ -159,19 +137,13 @@ fn root_button(
         .into()
 }
 
-fn submenu_button(
-    label: &str,
-    colors: MenuColors,
-) -> Element<'static, GerberViewerMessage>
-{
+fn submenu_button(label: &str, colors: MenuColors) -> Element<'static, GerberViewerMessage> {
     let content = row![
         text(label.to_owned())
             .size(MENU_LABEL_SIZE)
             .color(colors.text),
         Space::new().width(Length::Fill),
-        text("›")
-            .size(MENU_CHEVRON_SIZE)
-            .color(colors.text_muted),
+        text("›").size(MENU_CHEVRON_SIZE).color(colors.text_muted),
     ]
     .spacing(8)
     .align_y(iced::Alignment::Center);
@@ -181,11 +153,8 @@ fn submenu_button(
         .width(Length::Fill)
         .on_press(GerberViewerMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| {
-            let background = matches!(
-                status,
-                button::Status::Hovered | button::Status::Pressed,
-            )
-            .then_some(Background::Color(colors.hover));
+            let background = matches!(status, button::Status::Hovered | button::Status::Pressed,)
+                .then_some(Background::Color(colors.hover));
             button::Style {
                 background,
                 text_color: colors.text,
@@ -201,8 +170,7 @@ fn leaf(
     shortcut: Option<&str>,
     message: GerberViewerMessage,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     Item::new(menu_item_button(
         label,
         shortcut,
@@ -217,8 +185,7 @@ fn checked_leaf(
     checked: bool,
     message: GerberViewerMessage,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     Item::new(menu_item_button(
         label,
         None,
@@ -234,14 +201,10 @@ fn leaf_if(
     message: GerberViewerMessage,
     enabled: bool,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
-    if enabled
-    {
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
+    if enabled {
         leaf(label, shortcut, message, colors)
-    }
-    else
-    {
+    } else {
         leaf_stub(label, shortcut, colors)
     }
 }
@@ -250,15 +213,11 @@ fn leaf_stub(
     label: &str,
     shortcut: Option<&str>,
     colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     Item::new(menu_item_button(label, shortcut, None, None, colors))
 }
 
-fn separator(
-    colors: MenuColors,
-) -> Item<'static, GerberViewerMessage, Theme, Renderer>
-{
+fn separator(colors: MenuColors) -> Item<'static, GerberViewerMessage, Theme, Renderer> {
     Item::new(
         container(Space::new())
             .height(1)
@@ -277,32 +236,20 @@ fn menu_item_button(
     message: Option<GerberViewerMessage>,
     checked: Option<bool>,
     colors: MenuColors,
-) -> Element<'static, GerberViewerMessage>
-{
+) -> Element<'static, GerberViewerMessage> {
     let enabled = message.is_some();
-    let text_color = if enabled
-    {
+    let text_color = if enabled {
         colors.text
-    }
-    else
-    {
+    } else {
         colors.text_disabled
     };
     let mut content = row![].spacing(8).align_y(iced::Alignment::Center);
-    if let Some(checked) = checked
-    {
+    if let Some(checked) = checked {
         content = content.push(
             container(
-                text(if checked
-                {
-                    "✓"
-                }
-                else
-                {
-                    ""
-                })
-                .size(MENU_LABEL_SIZE)
-                .color(text_color),
+                text(if checked { "✓" } else { "" })
+                    .size(MENU_LABEL_SIZE)
+                    .color(text_color),
             )
             .width(14),
         );
@@ -313,32 +260,23 @@ fn menu_item_button(
             .color(text_color)
             .wrapping(iced::widget::text::Wrapping::None),
     );
-    if let Some(shortcut) = shortcut
-    {
-        content = content
-            .push(Space::new().width(Length::Fill))
-            .push(
-                text(shortcut.to_owned())
-                    .size(MENU_SHORTCUT_SIZE)
-                    .color(colors.text_muted)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            );
+    if let Some(shortcut) = shortcut {
+        content = content.push(Space::new().width(Length::Fill)).push(
+            text(shortcut.to_owned())
+                .size(MENU_SHORTCUT_SIZE)
+                .color(colors.text_muted)
+                .wrapping(iced::widget::text::Wrapping::None),
+        );
     }
 
     let widget = button(content.width(Length::Fill))
         .padding([4, 12])
         .width(Length::Fill)
         .style(move |_: &Theme, status: button::Status| {
-            let background = if enabled
-            {
-                matches!(
-                    status,
-                    button::Status::Hovered | button::Status::Pressed,
-                )
-                .then_some(Background::Color(colors.hover))
-            }
-            else
-            {
+            let background = if enabled {
+                matches!(status, button::Status::Hovered | button::Status::Pressed,)
+                    .then_some(Background::Color(colors.hover))
+            } else {
                 None
             };
             button::Style {
@@ -352,8 +290,7 @@ fn menu_item_button(
             }
         });
 
-    match message
-    {
+    match message {
         Some(message) => widget.on_press(message).into(),
         None => widget.into(),
     }

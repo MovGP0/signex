@@ -1,17 +1,14 @@
 // Shared private unit-test definitions for negative-object ghost rendering.
 #![allow(unused_imports, unused_macros)]
 
-macro_rules! gerber_ghost_negatives_tests
-{
+macro_rules! gerber_ghost_negatives_tests {
     () => {
         #[cfg(test)]
-        mod ghost_negatives_tests
-        {
+        mod ghost_negatives_tests {
             use super::*;
 
             #[test]
-            fn disabled_mode_preserves_normal_polarity_compositing()
-            {
+            fn disabled_mode_preserves_normal_polarity_compositing() {
                 let dark = Color::from_rgb8(211, 47, 47);
                 let background = Color::from_rgb8(20, 20, 20);
                 let ghost = Color::from_rgb8(117, 117, 117);
@@ -39,8 +36,7 @@ macro_rules! gerber_ghost_negatives_tests
             }
 
             #[test]
-            fn enabled_mode_uses_configured_material_ghost_color()
-            {
+            fn enabled_mode_uses_configured_material_ghost_color() {
                 let mut state = GerberViewerState::default();
                 let generation = state.redraw_generation;
 

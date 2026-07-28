@@ -82,8 +82,7 @@ impl KeymapRecorderState {
 #[derive(Debug, Clone)]
 pub enum WindowKind {
     GerberViewer,
-    GerberGridEditor
-    {
+    GerberGridEditor {
         document_id: signex_widgets::gerber_viewer::GerberDocumentId,
     },
     DetachedModal(ModalId),
