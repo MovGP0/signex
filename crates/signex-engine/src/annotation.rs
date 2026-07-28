@@ -9,6 +9,10 @@ impl Engine {
     /// (and updates) an externally-owned per-prefix counter, so every
     /// sheet in a project can share one global numbering pass. Returns
     /// whether anything changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error when the annotation command cannot be applied.
     pub fn annotate_with_seed(
         &mut self,
         mode: AnnotateMode,
@@ -21,6 +25,10 @@ impl Engine {
     /// appears in `locked`. Used by the Annotate dialog's per-row lock
     /// checkboxes so the user can exclude individual designators from
     /// reannotation (Altium's "Lock" column behaviour).
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error when the annotation command cannot be applied.
     pub fn annotate_with_seed_and_locks(
         &mut self,
         mode: AnnotateMode,

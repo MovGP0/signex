@@ -159,13 +159,23 @@ impl Engine {
                     .wires
                     .iter()
                     .find(|w| w.uuid == item.uuid)
-                    .map(|w| (f64::midpoint(w.start.x, w.end.x), f64::midpoint(w.start.y, w.end.y))),
+                    .map(|w| {
+                        (
+                            f64::midpoint(w.start.x, w.end.x),
+                            f64::midpoint(w.start.y, w.end.y),
+                        )
+                    }),
                 SelectedKind::Bus => self
                     .document
                     .buses
                     .iter()
                     .find(|b| b.uuid == item.uuid)
-                    .map(|b| (f64::midpoint(b.start.x, b.end.x), f64::midpoint(b.start.y, b.end.y))),
+                    .map(|b| {
+                        (
+                            f64::midpoint(b.start.x, b.end.x),
+                            f64::midpoint(b.start.y, b.end.y),
+                        )
+                    }),
                 _ => None,
             };
 
@@ -183,6 +193,11 @@ impl Engine {
     }
 
     #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::too_many_lines,
+        reason = "selection details project bounded UI values across every selectable kind"
+    )]
     pub fn describe_single_selection(&self, items: &[SelectedItem]) -> Option<SelectionDetails> {
         let [item] = items else {
             return None;
@@ -626,7 +641,9 @@ const fn clipboard_can_carry(kind: SelectedKind) -> bool {
 }
 
 /// Splits a selection into the subset Cut can safely copy-then-delete and
-/// the remainder it must leave untouched. Cut is copy + delete; a kind
+/// the remainder it must leave untouched.
+///
+/// Cut is copy + delete; a kind
 /// `collect_selection_clipboard` can't carry (`ChildSheet`, `SheetPin`,
 /// `Drawing`, `BusEntry`, …) would otherwise get deleted with nothing in
 /// the clipboard to restore it — a silent destroy, not a no-op (#341:

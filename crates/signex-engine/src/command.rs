@@ -256,8 +256,9 @@ impl Command {
             Self::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Self::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Self::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
-            Self::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
-            Self::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
+            Self::UpdateSymbolFields { .. } | Self::SetSymbolField { .. } => {
+                CommandKind::UpdateSymbolFields
+            }
             Self::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Self::PlaceBus { .. } => CommandKind::PlaceBus,
             Self::PlaceLabel { .. } => CommandKind::PlaceLabel,

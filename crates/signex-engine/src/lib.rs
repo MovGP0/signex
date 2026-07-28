@@ -33,10 +33,20 @@ pub struct Engine {
 }
 
 impl Engine {
+    /// Creates an engine for an in-memory document.
+    ///
+    /// # Errors
+    ///
+    /// Reserved for document initialization failures.
     pub const fn new(document: SchematicSheet) -> Result<Self, EngineError> {
         Self::new_with_path(document, None)
     }
 
+    /// Creates an engine for a document with an optional backing path.
+    ///
+    /// # Errors
+    ///
+    /// Reserved for document initialization failures.
     pub const fn new_with_path(
         document: SchematicSheet,
         path: Option<PathBuf>,
@@ -55,6 +65,10 @@ impl Engine {
     /// readable here; an optional GPL-3.0 import companion handles
     /// conversion to `.snxsch` and is shipped separately from this
     /// Apache-2.0 crate.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::OpenFailed`] when the file cannot be read or parsed.
     pub fn open(path: &Path) -> Result<Self, EngineError> {
         let text = std::fs::read_to_string(path)
             .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;
@@ -69,6 +83,11 @@ impl Engine {
         })
     }
 
+    /// Saves the document to its current path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::MissingPath`] or a write failure.
     pub fn save(&mut self) -> Result<(), EngineError> {
         let Some(path) = self.path.clone() else {
             return Err(EngineError::MissingPath);
@@ -77,6 +96,11 @@ impl Engine {
         self.save_as(&path)
     }
 
+    /// Saves the document atomically to `path`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a serialization or filesystem write error.
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
         let snx = signex_types::format::SnxSchematic::new(self.document.clone());
         let content = snx
@@ -91,6 +115,11 @@ impl Engine {
         Ok(())
     }
 
+    /// Executes a document command and records its history patch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error when the command cannot be applied.
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
         let before = self.document.clone();
 
@@ -148,6 +177,11 @@ impl Engine {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::float_cmp,
+        reason = "tests assert exact persisted and grid-snapped geometry"
+    )]
+
     use super::*;
     use signex_types::schematic::{
         BusEntry, ChildSheet, FillType, GRID_MM, Label, LabelType, Point, SelectedItem,

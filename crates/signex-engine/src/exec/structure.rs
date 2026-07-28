@@ -1,8 +1,17 @@
 //! `Engine::exec_structure` — see `exec/mod.rs`.
 
-use crate::{Engine, SchematicSheet, Command, CommandResult, EngineError, PatchPair, SemanticPatch, DocumentPatch, sheet};
+use crate::{
+    Command, CommandResult, DocumentPatch, Engine, EngineError, PatchPair, SchematicSheet,
+    SemanticPatch, sheet,
+};
 
 impl Engine {
+    #[expect(
+        clippy::items_after_statements,
+        clippy::too_many_lines,
+        clippy::useless_let_if_seq,
+        reason = "structural command dispatch keeps variant-specific helpers close to their use"
+    )]
     pub(crate) fn exec_structure(
         &mut self,
         before: SchematicSheet,

@@ -24,6 +24,11 @@ impl Engine {
         !self.redo_stack.is_empty()
     }
 
+    /// Restores the preceding document snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error if history restoration fails.
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         let Some(entry) = self.history.pop() else {
             return Ok(None);
@@ -38,6 +43,11 @@ impl Engine {
         Ok(Some(patch_pair))
     }
 
+    /// Restores the next document snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error if history restoration fails.
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         let Some(entry) = self.redo_stack.pop() else {
             return Ok(None);

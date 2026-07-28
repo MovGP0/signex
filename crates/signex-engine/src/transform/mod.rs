@@ -202,6 +202,10 @@ impl Engine {
         true
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "movement dispatch explicitly covers every selectable schematic kind"
+    )]
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {
         match item.kind {
             SelectedKind::Symbol => self
@@ -364,13 +368,8 @@ impl Engine {
                 .find(|d| drawing_uuid(d) == item.uuid)
                 .is_some_and(|d| {
                     match d {
-                        SchDrawing::Line { start, end, .. } => {
-                            start.x += dx;
-                            start.y += dy;
-                            end.x += dx;
-                            end.y += dy;
-                        }
-                        SchDrawing::Rect { start, end, .. } => {
+                        SchDrawing::Line { start, end, .. }
+                        | SchDrawing::Rect { start, end, .. } => {
                             start.x += dx;
                             start.y += dy;
                             end.x += dx;

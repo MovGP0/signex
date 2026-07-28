@@ -51,6 +51,14 @@ const ANCHOR_PENALTY: u32 = 1;
 
 /// Pick a free side for `symbol`'s reference / value fields and write
 /// new positions / justifies / rotation into the field `TextProp`s.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    clippy::similar_names,
+    clippy::too_many_lines,
+    reason = "field placement is a bounded geometry pipeline using conventional coordinate names"
+)]
 pub(super) fn autoplace_fields(
     symbol: &mut signex_types::schematic::Symbol,
     lib: &signex_types::schematic::LibSymbol,
@@ -111,7 +119,10 @@ pub(super) fn autoplace_fields(
         }
         let rad = p.pin.rotation.to_radians();
         let (sx, sy) = (p.pin.position.x, p.pin.position.y);
-        let (ex, ey) = (p.pin.length.mul_add(rad.cos(), sx), p.pin.length.mul_add(rad.sin(), sy));
+        let (ex, ey) = (
+            p.pin.length.mul_add(rad.cos(), sx),
+            p.pin.length.mul_add(rad.sin(), sy),
+        );
         for (lx, ly) in [(sx, sy), (ex, ey)] {
             let (wx, wy) = transform_local_point(symbol, lx, ly);
             extend(&mut outer_bbox, wx, wy);

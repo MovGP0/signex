@@ -1,6 +1,9 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
-use crate::{Engine, DocumentPatch, SchematicSheet, Command, CommandResult, EngineError, PatchPair, SemanticPatch};
+use crate::{
+    Command, CommandResult, DocumentPatch, Engine, EngineError, PatchPair, SchematicSheet,
+    SemanticPatch,
+};
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 impl Engine {
@@ -18,6 +21,10 @@ impl Engine {
         patch
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "placement dispatch keeps geometry reconciliation beside each command"
+    )]
     pub(crate) fn exec_place(
         &mut self,
         before: SchematicSheet,

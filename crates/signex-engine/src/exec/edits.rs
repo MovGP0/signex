@@ -1,8 +1,16 @@
 //! `Engine::exec_edits` — see `exec/mod.rs`.
 
-use crate::{command, Engine, SchematicSheet, Command, CommandResult, EngineError, PatchPair, SemanticPatch, DocumentPatch, TextTarget};
+use crate::{
+    Command, CommandResult, DocumentPatch, Engine, EngineError, PatchPair, SchematicSheet,
+    SemanticPatch, TextTarget, command,
+};
 
 impl Engine {
+    #[expect(
+        clippy::too_many_lines,
+        clippy::useless_let_if_seq,
+        reason = "command dispatch keeps edit variants and their patch recording together"
+    )]
     pub(crate) fn exec_edits(
         &mut self,
         before: SchematicSheet,

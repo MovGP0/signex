@@ -56,13 +56,16 @@ pub fn normalize_sheet_pin_direction(direction_or_shape: &str) -> &'static str {
     match normalized.as_str() {
         "input" => "input",
         "output" => "output",
-        "bidirectional" => "bidirectional",
         "tri_state" => "tri_state",
         "passive" => "passive",
         _ => "bidirectional",
     }
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "sheet pin slots are small UI counts represented in millimetres"
+)]
 fn pin_anchor_for_direction(child: &ChildSheet, direction: &str, slot: usize) -> (f64, f64, f64) {
     let y_min = child.position.y + GRID_MM;
     let y_max = (child.position.y + child.size.1 - GRID_MM).max(y_min);
@@ -102,12 +105,11 @@ pub fn lock_sheet_pin_to_child_edge(
     let dist_bottom = (target_y - bottom_y).abs();
 
     // Pick the nearest edge.
-    let mut best = dist_left;
-    let mut edge = 0u8; // 0=left 1=right 2=top 3=bottom
-    if dist_right < best {
-        best = dist_right;
-        edge = 1;
-    }
+    let (mut best, mut edge) = if dist_right < dist_left {
+        (dist_right, 1u8)
+    } else {
+        (dist_left, 0u8)
+    }; // 0=left 1=right 2=top 3=bottom
     if dist_top < best {
         best = dist_top;
         edge = 2;
@@ -165,7 +167,7 @@ pub fn reconcile_child_sheet_pins(child: &mut ChildSheet, ports: &[SheetPort]) -
 
         if let Some(idx) = existing_idx {
             let mut pin = existing.swap_remove(idx);
-            pin.direction = direction.clone();
+            pin.direction.clone_from(&direction);
             pin.auto_generated = true;
             if !pin.user_moved {
                 let slot = if direction == "output" {
