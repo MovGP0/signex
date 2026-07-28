@@ -5,6 +5,11 @@ use crate::vrml::parser::VrmlMesh;
 /// Output:
 ///   - `json_bytes`: UTF-8 encoded glTF JSON
 ///   - `bin_bytes`:  interleaved float32 position data
+#[must_use]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the function emits one tightly ordered glTF JSON and binary document"
+)]
 pub fn meshes_to_gltf(
     meshes: &[VrmlMesh],
     source_format: &str,
@@ -77,7 +82,7 @@ pub fn meshes_to_gltf(
 
         // ── index buffer view ─────────────────────────────────────────────────
         // Align to 4-byte boundary before writing u32 indices
-        while bin.len() % 4 != 0 {
+        while !bin.len().is_multiple_of(4) {
             bin.push(0u8);
         }
         let idx_bv_index = buffer_views.len();

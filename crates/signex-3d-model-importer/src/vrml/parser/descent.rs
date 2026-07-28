@@ -1,6 +1,6 @@
 //! Recursive-descent VRML token-stream parser.
 
-use super::*;
+use super::{Node, ParseError};
 use crate::vrml::lexer::Token;
 
 pub(super) struct Parser<'a> {
@@ -10,7 +10,7 @@ pub(super) struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub(super) fn new(tokens: &'a [Token], lines: &'a [usize]) -> Self {
+    pub(super) const fn new(tokens: &'a [Token], lines: &'a [usize]) -> Self {
         Self {
             tokens,
             lines,
@@ -43,7 +43,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse zero or more top-level or child nodes until we hit RBrace / EOF.
+    /// Parse zero or more top-level or child nodes until we hit `RBrace` / EOF.
     pub(super) fn parse_node_list(&mut self) -> Result<Vec<Node>, ParseError> {
         let mut nodes = Vec::new();
         loop {
@@ -63,7 +63,6 @@ impl<'a> Parser<'a> {
     fn parse_node(&mut self) -> Result<Option<Node>, ParseError> {
         let keyword = match self.next() {
             Some(Token::Word(w)) => w.clone(),
-            Some(Token::RBrace | Token::RBracket | Token::Comma) => return Ok(None),
             _ => return Ok(None),
         };
 
@@ -85,7 +84,7 @@ impl<'a> Parser<'a> {
             "Shape" => self.parse_shape().map(Some),
             _ => {
                 // Unknown node type: consume its body if it has one.
-                if let Some(Token::LBrace) = self.peek() {
+                if matches!(self.peek(), Some(Token::LBrace)) {
                     self.consume_block()?;
                 }
                 Ok(None)
@@ -198,7 +197,7 @@ impl<'a> Parser<'a> {
                     let geom_type = self.expect_word()?;
                     if geom_type == "IndexedFaceSet" {
                         (positions, indices) = self.parse_indexed_face_set()?;
-                    } else if let Some(Token::LBrace) = self.peek() {
+                    } else if matches!(self.peek(), Some(Token::LBrace)) {
                         self.consume_block()?;
                     }
                 }
@@ -219,7 +218,7 @@ impl<'a> Parser<'a> {
         // We skip all appearance fields except diffuseColor.
         let node_type = self.expect_word()?;
         if node_type != "Appearance" {
-            if let Some(Token::LBrace) = self.peek() {
+            if matches!(self.peek(), Some(Token::LBrace)) {
                 self.consume_block()?;
             }
             return Ok([0.7, 0.7, 0.7, 1.0]);
@@ -244,7 +243,7 @@ impl<'a> Parser<'a> {
                     let mat_type = self.expect_word()?;
                     if mat_type == "Material" {
                         color = self.parse_material_color()?;
-                    } else if let Some(Token::LBrace) = self.peek() {
+                    } else if matches!(self.peek(), Some(Token::LBrace)) {
                         self.consume_block()?;
                     }
                 }
@@ -313,7 +312,7 @@ impl<'a> Parser<'a> {
                     let coord_type = self.expect_word()?;
                     if coord_type == "Coordinate" {
                         positions = self.parse_coordinate_point()?;
-                    } else if let Some(Token::LBrace) = self.peek() {
+                    } else if matches!(self.peek(), Some(Token::LBrace)) {
                         self.consume_block()?;
                     }
                 }
@@ -346,9 +345,6 @@ impl<'a> Parser<'a> {
                                 self.next();
                                 break;
                             }
-                            Some(Token::Comma) => {
-                                self.next();
-                            }
                             Some(Token::Word(_)) => {
                                 let x = self.parse_f32()?;
                                 let y = self.parse_f32()?;
@@ -377,9 +373,6 @@ impl<'a> Parser<'a> {
                 None | Some(Token::RBracket) => {
                     self.next();
                     break;
-                }
-                Some(Token::Comma) => {
-                    self.next();
                 }
                 Some(Token::Word(w)) => {
                     let s = w.clone();

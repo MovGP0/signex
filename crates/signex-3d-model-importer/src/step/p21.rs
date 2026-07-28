@@ -32,6 +32,11 @@ struct Entity {
 /// Supported paths:
 /// - `ADVANCED_FACE` + `FACE_OUTER_BOUND` + `POLY_LOOP` + `VERTEX_POINT`
 /// - `ADVANCED_FACE` + `FACE_BOUND` + `EDGE_LOOP` + `ORIENTED_EDGE` + `EDGE_CURVE`
+///
+/// # Errors
+///
+/// Returns [`ParseError`] when the DATA section or an entity is malformed,
+/// or no supported geometry can be tessellated.
 pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
     let data = extract_data_section(source).ok_or(ParseError::DataSectionMissing)?;
     let entities = parse_entities(data)?;
@@ -102,19 +107,20 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
                 continue;
             };
 
-            let loop_points = if let Some(vertex_refs) = poly_loops.get(&loop_id) {
-                resolve_poly_loop_points(vertex_refs, &vertex_to_point, &points)
-            } else if let Some(edge_refs) = edge_loops.get(&loop_id) {
-                resolve_edge_loop_points(
-                    edge_refs,
-                    &oriented_edges,
-                    &edge_curves,
-                    &vertex_to_point,
-                    &points,
-                )
-            } else {
-                Vec::new()
-            };
+            let loop_points = poly_loops.get(&loop_id).map_or_else(
+                || {
+                    edge_loops.get(&loop_id).map_or_else(Vec::new, |edge_refs| {
+                        resolve_edge_loop_points(
+                            edge_refs,
+                            &oriented_edges,
+                            &edge_curves,
+                            &vertex_to_point,
+                            &points,
+                        )
+                    })
+                },
+                |vertex_refs| resolve_poly_loop_points(vertex_refs, &vertex_to_point, &points),
+            );
 
             if loop_points.len() >= 3 {
                 let mesh = triangulate_polygon(&loop_points);
@@ -166,10 +172,12 @@ fn parse_entities(data: &str) -> Result<HashMap<u32, Entity>, ParseError> {
 fn parse_entity_statement(statement: &str, line: usize) -> Result<(u32, Entity), ParseError> {
     let content = statement.trim_end_matches(';').trim();
 
-    let (id_part, rhs) = content.split_once('=').ok_or(ParseError::MalformedEntity {
-        line,
-        reason: "missing '='".to_owned(),
-    })?;
+    let (id_part, rhs) = content
+        .split_once('=')
+        .ok_or_else(|| ParseError::MalformedEntity {
+            line,
+            reason: "missing '='".to_owned(),
+        })?;
 
     let id = id_part
         .trim()
@@ -181,11 +189,11 @@ fn parse_entity_statement(statement: &str, line: usize) -> Result<(u32, Entity),
         })?;
 
     let rhs = rhs.trim();
-    let open = rhs.find('(').ok_or(ParseError::MalformedEntity {
+    let open = rhs.find('(').ok_or_else(|| ParseError::MalformedEntity {
         line,
         reason: "missing '('".to_owned(),
     })?;
-    let close = rhs.rfind(')').ok_or(ParseError::MalformedEntity {
+    let close = rhs.rfind(')').ok_or_else(|| ParseError::MalformedEntity {
         line,
         reason: "missing ')'".to_owned(),
     })?;
@@ -262,10 +270,10 @@ fn parse_refs(params: &str) -> Vec<u32> {
             while i < bytes.len() && bytes[i].is_ascii_digit() {
                 i += 1;
             }
-            if start < i {
-                if let Ok(id) = params[start..i].parse::<u32>() {
-                    refs.push(id);
-                }
+            if start < i
+                && let Ok(id) = params[start..i].parse::<u32>()
+            {
+                refs.push(id);
             }
         } else {
             i += 1;
@@ -347,6 +355,10 @@ fn resolve_edge_loop_points(
     out
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "generated mesh vertex counts are bounded by the in-memory STEP source"
+)]
 fn triangulate_polygon(points: &[[f32; 3]]) -> VrmlMesh {
     let mut positions = Vec::<f32>::new();
     let mut indices = Vec::<u32>::new();
@@ -381,7 +393,7 @@ mod tests {
 
     #[test]
     fn parse_minimal_poly_loop_face() {
-        let src = r#"
+        let src = r"
 ISO-10303-21;
 HEADER;
 ENDSEC;
@@ -397,7 +409,7 @@ DATA;
 #30 = ADVANCED_FACE('',(#21),#999,.T.);
 ENDSEC;
 END-ISO-10303-21;
-"#;
+";
 
         let result = parse_to_meshes(src).expect("parse");
         assert_eq!(result.meshes.len(), 1);

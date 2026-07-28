@@ -5,11 +5,16 @@ use crate::error::ModelImportError;
 ///
 /// GLB layout:
 ///   12-byte header | JSON chunk (padded to 4 bytes) | BIN chunk (optional, padded)
+///
+/// # Errors
+///
+/// Returns [`ModelImportError::GlbWriteFailed`] when the GLB exceeds the
+/// format's 32-bit chunk or total-length limits.
 pub fn write_glb(json_bytes: &[u8], bin_bytes: &[u8]) -> Result<Vec<u8>, ModelImportError> {
-    const GLB_MAGIC: u32 = 0x46546C67;
+    const GLB_MAGIC: u32 = 0x4654_6C67;
     const GLB_VERSION: u32 = 2;
-    const CHUNK_JSON: u32 = 0x4E4F534A;
-    const CHUNK_BIN: u32 = 0x004E4942;
+    const CHUNK_JSON: u32 = 0x4E4F_534A;
+    const CHUNK_BIN: u32 = 0x004E_4942;
 
     let json_padded = pad4(json_bytes, b' ');
     let bin_padded = pad4(bin_bytes, 0u8);
@@ -21,22 +26,37 @@ pub fn write_glb(json_bytes: &[u8], bin_bytes: &[u8]) -> Result<Vec<u8>, ModelIm
         8 + bin_padded.len()
     };
     let total_len = 12 + json_chunk_len + bin_chunk_len;
+    let total_len = u32::try_from(total_len).map_err(|_| ModelImportError::GlbWriteFailed {
+        reason: "GLB total length exceeds u32".to_owned(),
+    })?;
+    let json_len =
+        u32::try_from(json_padded.len()).map_err(|_| ModelImportError::GlbWriteFailed {
+            reason: "GLB JSON chunk exceeds u32".to_owned(),
+        })?;
+    let bin_len =
+        u32::try_from(bin_padded.len()).map_err(|_| ModelImportError::GlbWriteFailed {
+            reason: "GLB BIN chunk exceeds u32".to_owned(),
+        })?;
 
-    let mut out = Vec::with_capacity(total_len);
+    let mut out = Vec::with_capacity(usize::try_from(total_len).map_err(|_| {
+        ModelImportError::GlbWriteFailed {
+            reason: "GLB total length exceeds usize".to_owned(),
+        }
+    })?);
 
     // Header
     out.extend_from_slice(&GLB_MAGIC.to_le_bytes());
     out.extend_from_slice(&GLB_VERSION.to_le_bytes());
-    out.extend_from_slice(&(total_len as u32).to_le_bytes());
+    out.extend_from_slice(&total_len.to_le_bytes());
 
     // JSON chunk
-    out.extend_from_slice(&(json_padded.len() as u32).to_le_bytes());
+    out.extend_from_slice(&json_len.to_le_bytes());
     out.extend_from_slice(&CHUNK_JSON.to_le_bytes());
     out.extend_from_slice(&json_padded);
 
     // BIN chunk (only if non-empty)
     if !bin_bytes.is_empty() {
-        out.extend_from_slice(&(bin_padded.len() as u32).to_le_bytes());
+        out.extend_from_slice(&bin_len.to_le_bytes());
         out.extend_from_slice(&CHUNK_BIN.to_le_bytes());
         out.extend_from_slice(&bin_padded);
     }
@@ -79,7 +99,7 @@ mod tests {
         let json = br#"{"asset":{"version":"2.0"}}"#;
         let glb = write_glb(json, &[]).expect("write failed");
         let chunk_type = u32::from_le_bytes(glb[16..20].try_into().unwrap());
-        assert_eq!(chunk_type, 0x4E4F534A); // JSON
+        assert_eq!(chunk_type, 0x4E4F_534A); // JSON
     }
 
     #[test]
@@ -97,7 +117,7 @@ mod tests {
                 .try_into()
                 .unwrap(),
         );
-        assert_eq!(bin_chunk_type, 0x004E4942); // BIN
+        assert_eq!(bin_chunk_type, 0x004E_4942); // BIN
     }
 
     #[test]

@@ -58,6 +58,16 @@ pub struct ImportMetadata {
 /// Synchronous entry point: convert `request.source_path` → cached GLB.
 ///
 /// On cache hit the existing GLB is returned without re-converting.
+///
+/// # Errors
+///
+/// Returns a [`ModelImportError`] when the source cannot be read, its format is
+/// unsupported, conversion fails, or the cache cannot be read or written.
+#[expect(
+    clippy::needless_pass_by_value,
+    clippy::too_many_lines,
+    reason = "the request is consumed by the ordered import and cache pipeline"
+)]
 pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, ModelImportError> {
     let source_path = &request.source_path;
 
@@ -86,7 +96,9 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
 
     // Cache hit
     if cache::is_cache_valid(&glb_path) {
-        let byte_len = glb_path.metadata().map(|m| m.len() as usize).unwrap_or(0);
+        let byte_len = glb_path.metadata().map_or(0, |metadata| {
+            usize::try_from(metadata.len()).unwrap_or(usize::MAX)
+        });
         return Ok(ModelImportResult {
             glb_path,
             cache_hit: true,
@@ -185,7 +197,7 @@ fn detect_format(path: &Path) -> Result<SourceFormat, ModelImportError> {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .unwrap_or_default();
 
     match ext.as_str() {

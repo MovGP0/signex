@@ -1,5 +1,5 @@
 /// VRML97 (ISO/IEC 14772-1:1997) source format tokens.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Word(String),
     LBrace,
@@ -10,8 +10,9 @@ pub enum Token {
 }
 
 /// Tokenize a VRML97 file into a flat token stream.
-/// Comments (`# ... \n`) are stripped. Returns (tokens, line_offsets)
+/// Comments (`# ... \n`) are stripped. Returns (tokens, `line_offsets`)
 /// where `line_offsets[i]` is the 1-based source line for token `i`.
+#[must_use]
 pub fn tokenize(source: &str) -> (Vec<Token>, Vec<usize>) {
     let mut tokens = Vec::new();
     let mut lines = Vec::new();

@@ -18,14 +18,19 @@ pub struct GltfWrapResult {
 /// This function keeps geometry indices/accessors intact while collapsing
 /// multiple external buffers into a single BIN chunk and rewriting
 /// `bufferViews[*].buffer`/`byteOffset` accordingly.
+///
+/// # Errors
+///
+/// Returns [`ModelImportError`] when JSON parsing, buffer loading, view
+/// rewriting, or JSON serialization fails.
 pub fn wrap_gltf(
     source: &str,
-    source_path: &PathBuf,
+    source_path: &Path,
     converter_version: &str,
 ) -> Result<GltfWrapResult, ModelImportError> {
     let mut root: Value =
         serde_json::from_str(source).map_err(|err| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("JSON parse failed: {err}"),
         })?;
 
@@ -33,8 +38,7 @@ pub fn wrap_gltf(
 
     let base_dir = source_path
         .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
 
     let mut warnings = Vec::new();
 
@@ -64,28 +68,25 @@ pub fn wrap_gltf(
     let mesh_count = root
         .get("meshes")
         .and_then(Value::as_array)
-        .map(|arr| arr.len())
-        .unwrap_or(0);
+        .map_or(0, std::vec::Vec::len);
 
     let primitive_count = root
         .get("meshes")
         .and_then(Value::as_array)
-        .map(|meshes| {
+        .map_or(0, |meshes| {
             meshes
                 .iter()
                 .map(|mesh| {
                     mesh.get("primitives")
                         .and_then(Value::as_array)
-                        .map(|p| p.len())
-                        .unwrap_or(0)
+                        .map_or(0, std::vec::Vec::len)
                 })
                 .sum()
-        })
-        .unwrap_or(0);
+        });
 
     let json_bytes =
         serde_json::to_vec(&root).map_err(|err| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("JSON serialization failed: {err}"),
         })?;
 
@@ -98,19 +99,19 @@ pub fn wrap_gltf(
     })
 }
 
-fn validate_asset_version(root: &Value, source_path: &PathBuf) -> Result<(), ModelImportError> {
+fn validate_asset_version(root: &Value, source_path: &Path) -> Result<(), ModelImportError> {
     let version = root
         .get("asset")
         .and_then(|asset| asset.get("version"))
         .and_then(Value::as_str)
         .ok_or_else(|| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: "missing asset.version".to_owned(),
         })?;
 
     if !version.starts_with('2') {
         return Err(ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("unsupported asset.version {version}; expected 2.x"),
         });
     }
@@ -119,7 +120,7 @@ fn validate_asset_version(root: &Value, source_path: &PathBuf) -> Result<(), Mod
 }
 
 fn read_buffer_payload(
-    source_path: &PathBuf,
+    source_path: &Path,
     base_dir: &Path,
     index: usize,
     buffer: &Value,
@@ -135,17 +136,17 @@ fn read_buffer_payload(
 
     if uri.starts_with("data:") {
         return decode_data_uri(uri).ok_or_else(|| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("buffers[{index}] has invalid data URI"),
         });
     }
 
     let buffer_path = base_dir.join(uri);
     std::fs::read(&buffer_path).map_err(|err| ModelImportError::GltfParseFailed {
-        path: source_path.clone(),
+        path: source_path.to_path_buf(),
         reason: format!(
-            "buffers[{index}] missing external resource {:?}: {err}",
-            buffer_path
+            "buffers[{index}] missing external resource {}: {err}",
+            buffer_path.display()
         ),
     })
 }
@@ -153,7 +154,7 @@ fn read_buffer_payload(
 fn rewrite_buffer_views(
     root: &mut Value,
     buffer_offsets: &[usize],
-    source_path: &PathBuf,
+    source_path: &Path,
 ) -> Result<(), ModelImportError> {
     let Some(buffer_views) = root.get_mut("bufferViews").and_then(Value::as_array_mut) else {
         return Ok(());
@@ -170,7 +171,7 @@ fn rewrite_buffer_views(
             .get(old_buffer_index)
             .copied()
             .ok_or_else(|| ModelImportError::GltfParseFailed {
-                path: source_path.clone(),
+                path: source_path.to_path_buf(),
                 reason: format!(
                     "bufferViews[{index}] references missing buffer index {old_buffer_index}"
                 ),
@@ -258,18 +259,18 @@ fn guess_mime_type(path: &Path) -> &'static str {
     match path
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .as_deref()
     {
         Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("jpg" | "jpeg") => "image/jpeg",
         Some("webp") => "image/webp",
         _ => "application/octet-stream",
     }
 }
 
 fn align4(bytes: &mut Vec<u8>, fill: u8) {
-    while bytes.len() % 4 != 0 {
+    while !bytes.len().is_multiple_of(4) {
         bytes.push(fill);
     }
 }

@@ -7,7 +7,12 @@ use crate::error::ModelImportError;
 
 /// Compute the SHA-256-based cache path for a source file.
 ///
-/// Cache key = sha256(absolute_path_str + "|" + mtime_unix_sec_str + "|" + converter_version)
+/// Cache key = `sha256(absolute_path_str` + "|" + `mtime_unix_sec_str` + "|" + `converter_version`)
+///
+/// # Errors
+///
+/// Returns [`ModelImportError`] when the source modification time predates
+/// the Unix epoch.
 pub fn cache_path(
     cache_dir: &Path,
     source_path: &Path,
@@ -36,8 +41,9 @@ pub fn cache_path(
 }
 
 /// Returns `true` if a valid cached GLB already exists for this source file.
+#[must_use]
 pub fn is_cache_valid(glb_path: &Path) -> bool {
-    glb_path.exists() && glb_path.metadata().map(|m| m.len() > 0).unwrap_or(false)
+    glb_path.exists() && glb_path.metadata().is_ok_and(|m| m.len() > 0)
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-/// A flat triangle mesh produced from a VRML IndexedFaceSet.
+/// A flat triangle mesh produced from a VRML `IndexedFaceSet`.
 #[derive(Debug, Default, Clone)]
 pub struct VrmlMesh {
     /// Interleaved XYZ positions (each group of 3 floats = one vertex).
@@ -15,7 +15,7 @@ enum Node {
     Transform {
         translation: [f32; 3],
         scale: [f32; 3],
-        children: Vec<Node>,
+        children: Vec<Self>,
     },
     Shape {
         color: [f32; 4],
@@ -23,7 +23,7 @@ enum Node {
         indices: Vec<i32>, // VRML uses -1 as face separator
     },
     Group {
-        children: Vec<Node>,
+        children: Vec<Self>,
     },
 }
 
@@ -66,7 +66,7 @@ struct Transform {
 }
 
 impl Transform {
-    fn identity() -> Self {
+    const fn identity() -> Self {
         Self {
             m: [
                 [1.0, 0.0, 0.0, 0.0],
@@ -77,33 +77,33 @@ impl Transform {
         }
     }
 
+    #[expect(
+        clippy::many_single_char_names,
+        reason = "matrix and vector calculations use conventional coordinate names"
+    )]
     fn apply_point(&self, p: [f32; 3]) -> [f32; 3] {
         let m = &self.m;
-        let x = m[0][0] * p[0] + m[0][1] * p[1] + m[0][2] * p[2] + m[0][3];
-        let y = m[1][0] * p[0] + m[1][1] * p[1] + m[1][2] * p[2] + m[1][3];
-        let z = m[2][0] * p[0] + m[2][1] * p[1] + m[2][2] * p[2] + m[2][3];
+        let x = m[0][2].mul_add(p[2], m[0][1].mul_add(p[1], m[0][0] * p[0])) + m[0][3];
+        let y = m[1][2].mul_add(p[2], m[1][1].mul_add(p[1], m[1][0] * p[0])) + m[1][3];
+        let z = m[2][2].mul_add(p[2], m[2][1].mul_add(p[1], m[2][0] * p[0])) + m[2][3];
         [x, y, z]
     }
 
-    fn compose_translation(
-        parent: &Transform,
-        translation: [f32; 3],
-        scale: [f32; 3],
-    ) -> Transform {
+    fn compose_translation(parent: &Self, translation: [f32; 3], scale: [f32; 3]) -> Self {
         // Build a simple TRS matrix (no rotation for Milestone D E1 - WRL
         // root transforms are axis-aligned for most components).
         // T * S applied on top of parent.
         let mut m = parent.m;
         // Apply scale then translate (column-major multiply simplified for TRS only)
-        for row in 0..3 {
-            m[row][0] *= scale[0];
-            m[row][1] *= scale[1];
-            m[row][2] *= scale[2];
+        for row in m.iter_mut().take(3) {
+            row[0] *= scale[0];
+            row[1] *= scale[1];
+            row[2] *= scale[2];
         }
         m[0][3] += translation[0];
         m[1][3] += translation[1];
         m[2][3] += translation[2];
-        Transform { m }
+        Self { m }
     }
 }
 
@@ -140,7 +140,12 @@ fn collect_meshes(node: &Node, parent_transform: &Transform, out: &mut Vec<VrmlM
     }
 }
 
-/// Convert an IndexedFaceSet (positions + face-separated indices) to a triangle mesh.
+/// Convert an `IndexedFaceSet` (positions + face-separated indices) to a triangle mesh.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "negative separators are filtered and in-memory mesh indices fit u32"
+)]
 fn build_mesh(
     positions: &[[f32; 3]],
     face_indices: &[i32],
@@ -216,7 +221,7 @@ mod tests {
 
     #[test]
     fn parse_single_triangle() {
-        let src = r#"
+        let src = r"
         Shape {
           geometry IndexedFaceSet {
             coord Coordinate {
@@ -225,7 +230,7 @@ mod tests {
             coordIndex [ 0 1 2 -1 ]
           }
         }
-        "#;
+        ";
         let meshes = parse_src(src);
         assert_eq!(meshes.len(), 1);
         assert_eq!(meshes[0].indices.len(), 3);
@@ -233,7 +238,7 @@ mod tests {
 
     #[test]
     fn parse_transform_applies_translation() {
-        let src = r#"
+        let src = r"
         Transform {
           translation 1.0 2.0 3.0
           children [
@@ -247,7 +252,7 @@ mod tests {
             }
           ]
         }
-        "#;
+        ";
         let meshes = parse_src(src);
         assert_eq!(meshes.len(), 1);
         // first vertex should be translated by (1, 2, 3)
@@ -259,7 +264,7 @@ mod tests {
 
     #[test]
     fn parse_diffuse_color() {
-        let src = r#"
+        let src = r"
         Shape {
           appearance Appearance {
             material Material {
@@ -273,7 +278,7 @@ mod tests {
             coordIndex [ 0 1 2 -1 ]
           }
         }
-        "#;
+        ";
         let meshes = parse_src(src);
         assert_eq!(meshes.len(), 1);
         let c = meshes[0].color;

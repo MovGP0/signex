@@ -1,3 +1,8 @@
+#![expect(
+    clippy::expect_used,
+    reason = "integration-test fixtures use explicit failure messages"
+)]
+
 use signex_3d_model_importer::{ModelImportRequest, SourceFormat, import_model};
 
 fn write_tier0_wrl(path: &std::path::Path) {
@@ -90,7 +95,7 @@ fn write_tier0_gltf(path: &std::path::Path, bin_path: &std::path::Path) {
 }
 
 fn write_tier0_step(path: &std::path::Path) {
-    let step = r#"ISO-10303-21;
+    let step = r"ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('simple triangle'),'2;1');
 ENDSEC;
@@ -106,7 +111,7 @@ DATA;
 #30 = ADVANCED_FACE('',(#21),#999,.T.);
 ENDSEC;
 END-ISO-10303-21;
-"#;
+";
     std::fs::write(path, step).expect("write step fixture");
 }
 
@@ -119,8 +124,8 @@ fn import_tier0_vrml_produces_glb() {
 
     let result = import_model(ModelImportRequest {
         model_id: "tier0".into(),
-        source_path: src.clone(),
-        cache_dir: cache.clone(),
+        source_path: src,
+        cache_dir: cache,
         converter_version: "0.1.0",
     })
     .expect("import failed");
