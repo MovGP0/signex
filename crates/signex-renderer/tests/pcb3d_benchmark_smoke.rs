@@ -32,7 +32,7 @@ fn request(model_id: &str, json: &str) -> RuntimeGlbIngestRequest {
 
 fn make_glb_bytes(json: &str) -> Vec<u8> {
     let mut json_chunk = json.as_bytes().to_vec();
-    while json_chunk.len() % 4 != 0 {
+    while !json_chunk.len().is_multiple_of(4) {
         json_chunk.push(b' ');
     }
     let total_len = 12 + 8 + json_chunk.len();
@@ -50,7 +50,7 @@ fn make_glb_bytes(json: &str) -> Vec<u8> {
 // Tier S fixture  —  1 scene, 1 node, 1 mesh, 3 primitives
 // ---------------------------------------------------------------------------
 
-fn tier_s_json() -> &'static str {
+const fn tier_s_json() -> &'static str {
     r#"{
       "asset": { "version": "2.0" },
       "scenes": [{ "nodes": [0] }],
@@ -144,7 +144,7 @@ fn benchmark_smoke_tier_s_full_pipeline_pass_separation_holds() {
 //   node 3 → (no mesh)
 // Total staged primitives: 2 + 3 + 2 = 7
 
-fn tier_m_json() -> &'static str {
+const fn tier_m_json() -> &'static str {
     r#"{
       "asset": { "version": "2.0" },
       "scenes": [

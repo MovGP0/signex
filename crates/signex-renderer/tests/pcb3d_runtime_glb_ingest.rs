@@ -22,7 +22,7 @@ fn request(model_id: &str, glb_source: GlbSource) -> RuntimeGlbIngestRequest {
 
 fn make_glb_with_json(json: &str) -> Vec<u8> {
     let mut json_chunk = json.as_bytes().to_vec();
-    while json_chunk.len() % 4 != 0 {
+    while !json_chunk.len().is_multiple_of(4) {
         json_chunk.push(b' ');
     }
 
@@ -39,7 +39,7 @@ fn make_glb_with_json(json: &str) -> Vec<u8> {
     bytes
 }
 
-fn valid_minimal_json() -> &'static str {
+const fn valid_minimal_json() -> &'static str {
     r#"{
       "asset": { "version": "2.0" },
       "scenes": [{ "nodes": [0] }],

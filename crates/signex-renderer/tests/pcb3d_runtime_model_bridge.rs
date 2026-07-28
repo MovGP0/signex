@@ -24,7 +24,7 @@ fn bridge_request(
 
 fn make_glb_with_json(json: &str) -> Vec<u8> {
     let mut json_chunk = json.as_bytes().to_vec();
-    while json_chunk.len() % 4 != 0 {
+    while !json_chunk.len().is_multiple_of(4) {
         json_chunk.push(b' ');
     }
 
@@ -41,7 +41,7 @@ fn make_glb_with_json(json: &str) -> Vec<u8> {
     bytes
 }
 
-fn valid_minimal_json() -> &'static str {
+const fn valid_minimal_json() -> &'static str {
     r#"{
       "asset": { "version": "2.0" },
       "scenes": [{ "nodes": [0] }],
@@ -67,7 +67,7 @@ Shape {\n\
 }
 
 fn write_tier0_step(path: &Path) {
-    let step = r#"ISO-10303-21;
+    let step = r"ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('simple triangle'),'2;1');
 ENDSEC;
@@ -83,7 +83,7 @@ DATA;
 #30 = ADVANCED_FACE('',(#21),#999,.T.);
 ENDSEC;
 END-ISO-10303-21;
-"#;
+";
     fs::write(path, step).expect("write step fixture");
 }
 
