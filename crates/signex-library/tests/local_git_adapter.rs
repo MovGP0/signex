@@ -22,8 +22,8 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, Workflo
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
-    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+    Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinDirection, Polygon,
+    PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
 };
 use uuid::Uuid;
 

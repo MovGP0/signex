@@ -3,20 +3,18 @@
 //! depopulation (a mask predicate and/or an explicit suppressed-cell
 //! list).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
+use crate::pad::bake_one_pad;
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
-
-use crate::pad::bake_one_pad;
 
 use super::numbering::derive_pad_number_2d;
 use super::numbering::strip_eq_prefix;

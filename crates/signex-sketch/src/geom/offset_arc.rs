@@ -42,21 +42,6 @@ pub enum PolyElement {
 }
 
 impl PolyElement {
-    fn start(&self) -> Point2 {
-        match *self {
-            PolyElement::Line { a, .. } => a,
-            PolyElement::Arc {
-                centre,
-                radius,
-                start_rad,
-                ..
-            } => Point2::new(
-                centre.x + radius * start_rad.cos(),
-                centre.y + radius * start_rad.sin(),
-            ),
-        }
-    }
-
     fn end(&self) -> Point2 {
         match *self {
             PolyElement::Line { b, .. } => b,
