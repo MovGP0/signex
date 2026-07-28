@@ -88,7 +88,9 @@ impl fmt::Display for GerberDisplayUnit {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum GerberPageSize {
+    #[default]
     FullSize,
     A4,
     A3,
@@ -119,12 +121,6 @@ impl GerberPageSize {
             Self::B => Some((431.8, 279.4)),
             Self::C => Some((558.8, 431.8)),
         }
-    }
-}
-
-impl Default for GerberPageSize {
-    fn default() -> Self {
-        Self::FullSize
     }
 }
 

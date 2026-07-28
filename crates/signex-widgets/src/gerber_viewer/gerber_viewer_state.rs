@@ -314,7 +314,7 @@ impl GerberViewerState {
 
     pub fn pan_by(&mut self, delta: iced::Vector) {
         if delta.x.is_finite() && delta.y.is_finite() {
-            self.pan = self.pan + delta;
+            self.pan += delta;
         }
     }
 

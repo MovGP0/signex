@@ -74,13 +74,11 @@ impl GerberViewerState {
                 selection.primitive_index < layer.layer.geometry.primitives.len()
             })
         });
-        if self.selected_item.is_some_and(|selection| {
+        if self.selected_item.is_none_or(|selection| {
             self.layers.get(selection.layer_index).is_none_or(|layer| {
                 selection.primitive_index >= layer.layer.geometry.primitives.len()
             })
         }) {
-            self.selected_item = self.region_selection.first().copied();
-        } else if self.selected_item.is_none() {
             self.selected_item = self.region_selection.first().copied();
         }
     }

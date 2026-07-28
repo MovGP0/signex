@@ -304,10 +304,10 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_> {
                 align_y: iced::alignment::Vertical::Center,
                 ..canvas::Text::default()
             });
-            if self.crosshair_mode != GerberCrosshairMode::None {
-                if let Some(position) = cursor.position_in(bounds) {
-                    draw_crosshair(&mut frame, bounds, position, self.grid, self.crosshair_mode);
-                }
+            if self.crosshair_mode != GerberCrosshairMode::None
+                && let Some(position) = cursor.position_in(bounds)
+            {
+                draw_crosshair(&mut frame, bounds, position, self.grid, self.crosshair_mode);
             }
             return vec![frame.into_geometry()];
         };
@@ -345,39 +345,41 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_> {
             };
             draw_layer(
                 &mut frame,
-                viewer_layer,
-                forced_opacity_color(
-                    compare_layer_color(
-                        viewer_layer.color,
-                        visible_ordinal,
-                        visible_layer_count,
-                        self.compare_mode,
-                        self.compare_palette,
+                LayerDrawOptions {
+                    viewer_layer,
+                    layer_color: forced_opacity_color(
+                        compare_layer_color(
+                            viewer_layer.color,
+                            visible_ordinal,
+                            visible_layer_count,
+                            self.compare_mode,
+                            self.compare_palette,
+                        ),
+                        self.forced_opacity_mode,
+                        self.forced_opacity,
                     ),
-                    self.forced_opacity_mode,
-                    self.forced_opacity,
-                ),
-                self.active_layer == Some(layer_index),
-                self.dim_inactive_layers,
-                self.inactive_layer_opacity,
-                scale,
-                &world_to_screen,
-                self.background,
-                self.highlighted_component,
-                self.highlighted_net,
-                self.highlighted_attribute,
-                highlighted_d_code,
-                self.selected_item,
-                self.selected_items,
-                layer_index,
-                self.sketch_flashes,
-                self.sketch_lines,
-                self.sketch_polygons,
-                self.ghost_negative_objects,
-                self.negative_ghost_color,
-                self.show_d_code_labels,
-                self.d_code_color,
-                self.zoom,
+                    active: self.active_layer == Some(layer_index),
+                    dim_inactive_layers: self.dim_inactive_layers,
+                    inactive_layer_opacity: self.inactive_layer_opacity,
+                    scale,
+                    world_to_screen: &world_to_screen,
+                    background: self.background,
+                    highlighted_component: self.highlighted_component,
+                    highlighted_net: self.highlighted_net,
+                    highlighted_attribute: self.highlighted_attribute,
+                    highlighted_d_code,
+                    selected_item: self.selected_item,
+                    selected_items: self.selected_items,
+                    layer_index,
+                    sketch_flashes: self.sketch_flashes,
+                    sketch_lines: self.sketch_lines,
+                    sketch_polygons: self.sketch_polygons,
+                    ghost_negative_objects: self.ghost_negative_objects,
+                    negative_ghost_color: self.negative_ghost_color,
+                    show_d_code_labels: self.show_d_code_labels,
+                    d_code_color: self.d_code_color,
+                    zoom: self.zoom,
+                },
             );
         }
         if let Some(measurement) = self.measurement {
@@ -394,22 +396,22 @@ impl canvas::Program<GerberViewerMessage> for GerberCanvas<'_> {
         } else {
             (state.item_selection_start, state.item_selection_current)
         };
-        if let (Some(start), Some(end)) = rectangular_selection {
-            if let Some(selection) = normalized_screen_rectangle(start, end) {
-                let path =
-                    canvas::Path::rectangle(Point::new(selection.x, selection.y), selection.size());
-                frame.stroke(
-                    &path,
-                    canvas::Stroke::default()
-                        .with_color(self.grid)
-                        .with_width(1.0),
-                );
-            }
+        if let (Some(start), Some(end)) = rectangular_selection
+            && let Some(selection) = normalized_screen_rectangle(start, end)
+        {
+            let path =
+                canvas::Path::rectangle(Point::new(selection.x, selection.y), selection.size());
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_color(self.grid)
+                    .with_width(1.0),
+            );
         }
-        if self.crosshair_mode != GerberCrosshairMode::None {
-            if let Some(position) = cursor.position_in(bounds) {
-                draw_crosshair(&mut frame, bounds, position, self.grid, self.crosshair_mode);
-            }
+        if self.crosshair_mode != GerberCrosshairMode::None
+            && let Some(position) = cursor.position_in(bounds)
+        {
+            draw_crosshair(&mut frame, bounds, position, self.grid, self.crosshair_mode);
         }
         vec![frame.into_geometry()]
     }
@@ -676,22 +678,21 @@ pub(super) fn primitive_polarity_color(
     }
 }
 
-pub(super) fn draw_layer(
-    frame: &mut canvas::Frame,
-    viewer_layer: &ViewerLayer,
+struct LayerDrawOptions<'a> {
+    viewer_layer: &'a ViewerLayer,
     layer_color: Color,
     active: bool,
     dim_inactive_layers: bool,
     inactive_layer_opacity: f32,
     scale: f32,
-    world_to_screen: &impl Fn(signex_gerber::Point) -> Point,
+    world_to_screen: &'a dyn Fn(signex_gerber::Point) -> Point,
     background: Color,
-    highlighted_component: Option<&str>,
-    highlighted_net: Option<&str>,
-    highlighted_attribute: Option<&GerberAttributeValue>,
+    highlighted_component: Option<&'a str>,
+    highlighted_net: Option<&'a str>,
+    highlighted_attribute: Option<&'a GerberAttributeValue>,
     highlighted_d_code: Option<i32>,
     selected_item: Option<GerberItemSelection>,
-    selected_items: &[GerberItemSelection],
+    selected_items: &'a [GerberItemSelection],
     layer_index: usize,
     sketch_flashes: bool,
     sketch_lines: bool,
@@ -701,7 +702,34 @@ pub(super) fn draw_layer(
     show_d_code_labels: bool,
     d_code_color: Color,
     zoom: f32,
-) {
+}
+
+fn draw_layer(frame: &mut canvas::Frame, options: LayerDrawOptions<'_>) {
+    let LayerDrawOptions {
+        viewer_layer,
+        layer_color,
+        active,
+        dim_inactive_layers,
+        inactive_layer_opacity,
+        scale,
+        world_to_screen,
+        background,
+        highlighted_component,
+        highlighted_net,
+        highlighted_attribute,
+        highlighted_d_code,
+        selected_item,
+        selected_items,
+        layer_index,
+        sketch_flashes,
+        sketch_lines,
+        sketch_polygons,
+        ghost_negative_objects,
+        negative_ghost_color,
+        show_d_code_labels,
+        d_code_color,
+        zoom,
+    } = options;
     for (primitive_index, primitive) in viewer_layer.layer.geometry.primitives.iter().enumerate() {
         let attributes = viewer_layer
             .layer
@@ -819,19 +847,19 @@ pub(super) fn draw_layer(
                 );
             }
         }
-        if d_code_labels_visible(show_d_code_labels, zoom) {
-            if let Some(label) = d_code_label(primitive) {
-                let anchor = world_to_screen(label.anchor);
-                frame.fill_text(canvas::Text {
-                    content: label.content,
-                    position: Point::new(anchor.x + 4.0, anchor.y - 4.0),
-                    color: d_code_color,
-                    size: iced::Pixels(11.0),
-                    align_x: iced::alignment::Horizontal::Left.into(),
-                    align_y: iced::alignment::Vertical::Bottom,
-                    ..canvas::Text::default()
-                });
-            }
+        if d_code_labels_visible(show_d_code_labels, zoom)
+            && let Some(label) = d_code_label(primitive)
+        {
+            let anchor = world_to_screen(label.anchor);
+            frame.fill_text(canvas::Text {
+                content: label.content,
+                position: Point::new(anchor.x + 4.0, anchor.y - 4.0),
+                color: d_code_color,
+                size: iced::Pixels(11.0),
+                align_x: iced::alignment::Horizontal::Left.into(),
+                align_y: iced::alignment::Vertical::Bottom,
+                ..canvas::Text::default()
+            });
         }
     }
 }
