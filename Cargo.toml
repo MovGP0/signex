@@ -63,6 +63,7 @@ iced_aw = { version = "0.13", default-features = false, features = [
     "color_picker", "menu", "drop_down", "selection_list",
     "wrap", "spinner", "sidebar", "labeled_frame", "badge",
 ] }
+iced_dock = { git = "https://github.com/Fee0/iced_dock.git", rev = "a8cbcad156cfd247c30fd4778fa5533b2398fba6" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

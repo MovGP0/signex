@@ -4,6 +4,8 @@
 pub enum GerberViewerMessage
 {
     NoOp,
+    DockEvent(iced_dock::DockEvent<GerberDockPanel>),
+    NewDocument,
     CloseRequested,
     OpenGerberFiles,
     GerberFilesChosen(Option<Vec<PathBuf>>),
@@ -104,4 +106,14 @@ pub enum GerberViewerMessage
         bounds: Bounds,
         viewport: Rectangle,
     },
+}
+
+impl GerberViewerMessage
+{
+    pub fn document_closed(document_id: GerberDocumentId) -> Self
+    {
+        Self::DockEvent(iced_dock::DockEvent::TabClosed {
+            panel: GerberDockPanel::Document(document_id),
+        })
+    }
 }

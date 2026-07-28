@@ -2435,6 +2435,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "iced_dock"
+version = "0.1.0"
+source = "git+https://github.com/Fee0/iced_dock.git?rev=a8cbcad156cfd247c30fd4778fa5533b2398fba6#a8cbcad156cfd247c30fd4778fa5533b2398fba6"
+dependencies = [
+ "iced",
+ "slotmap",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "iced_fonts"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5645,6 +5655,7 @@ dependencies = [
  "dirs",
  "iced",
  "iced_aw",
+ "iced_dock",
  "pdf-writer",
  "serde",
  "signex-gerber",

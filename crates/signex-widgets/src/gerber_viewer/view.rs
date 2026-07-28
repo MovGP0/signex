@@ -3,17 +3,22 @@ use super::viewport::*;
 use iced::widget::column;
 
 pub fn view<'a>(
-    state: &'a GerberViewerState,
+    workspace: &'a GerberWorkspaceState,
     shortcut_resolver: &'a dyn GerberShortcutResolver,
-    tokens: &ThemeTokens,
-) -> Element<'a, GerberViewerMessage>
+    tokens: &'a ThemeTokens,
+) -> Element<'a, (GerberDocumentId, GerberViewerMessage)>
 {
-    let text_primary = styles::ti(tokens.text);
+    let Some(state) = workspace.active_viewer() else
+    {
+        return Space::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
+    };
+    let active_document = workspace.active_document_id();
     let text_muted = styles::ti(tokens.text_secondary);
-    let border = styles::ti(tokens.border);
-    let panel_bg = styles::ti(tokens.panel_bg);
-    let canvas_bg = styles::ti(tokens.bg);
-    let menu_bar = menu::view(state, tokens);
+    let menu_bar = menu::view(state, tokens)
+        .map(move |message| (active_document, message));
     let component_choices = state.component_choices();
     let component_picker = pick_list(
         component_choices,
@@ -54,7 +59,7 @@ pub fn view<'a>(
     .placeholder("Highlight D-code")
     .width(220);
 
-    let toolbar = container(
+    let toolbar: Element<'_, GerberViewerMessage> = container(
         row![
             text("Layer").size(11).color(text_muted),
             button(text("Previous Layer (PgUp)")).on_press_maybe(
@@ -97,7 +102,10 @@ pub fn view<'a>(
     )
     .padding([6, 10])
     .width(Length::Fill)
-    .style(styles::toolbar_strip(tokens));
+    .style(styles::toolbar_strip(tokens))
+    .into();
+    let toolbar = toolbar
+        .map(move |message| (active_document, message));
 
     let grid_choices = grid_size_choices(
         &state.grid_catalog,
@@ -143,7 +151,7 @@ pub fn view<'a>(
     let measurement_label = state
         .measurement_summary()
         .unwrap_or_else(|| "Measurement: —".to_owned());
-    let grid_toolbar = container(
+    let grid_toolbar: Element<'_, GerberViewerMessage> = container(
         row![
             text("Grid").size(11).color(text_muted),
             checkbox(state.grid_visible)
@@ -175,15 +183,200 @@ pub fn view<'a>(
     )
     .padding([4, 10])
     .width(Length::Fill)
-    .style(styles::toolbar_strip(tokens));
-    let mut layer_list = column![
-        text("Layers").size(13).color(text_primary),
-        container(Space::new())
+    .style(styles::toolbar_strip(tokens))
+    .into();
+    let grid_toolbar = grid_toolbar
+        .map(move |message| (active_document, message));
+    let dock_tokens = *tokens;
+    let content = iced_dock::dock()
+        .state(workspace.dock.session().state())
+        .on_event(move |event| {
+            (
+                active_document,
+                GerberViewerMessage::DockEvent(event),
+            )
+        })
+        .content(move |panel_kind| {
+            view_dock_panel(
+                panel_kind,
+                workspace,
+                shortcut_resolver,
+                tokens,
+            )
+        })
+        .style(move |theme| gerber_dock_style(theme, &dock_tokens))
+        .min_pane_width(210.0)
+        .min_pane_height(120.0)
+        .tab_bar_height(28.0)
+        .pane_padding(0.0)
+        .splitter_size(5.0)
+        .build();
+
+    let status = container(
+        text(&state.status)
+            .size(10)
+            .color(if state.status.contains("could not")
+            {
+                Color::from_rgb8(239, 83, 80)
+            }
+            else
+            {
+                text_muted
+            }),
+    )
+    .padding([4, 10])
+    .width(Length::Fill)
+    .style(styles::status_bar(tokens));
+
+    column![
+        menu_bar,
+        toolbar,
+        grid_toolbar,
+        row![
+            toolbar::view(state, tokens)
+                .map(move |message| (active_document, message)),
+            content,
+        ]
             .width(Length::Fill)
-            .height(1)
-            .style(styles::chrome_separator(tokens)),
+            .height(Length::Fill),
+        status,
     ]
-    .spacing(6);
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+fn view_dock_panel<'a>(
+    panel_kind: GerberDockPanel,
+    workspace: &'a GerberWorkspaceState,
+    shortcut_resolver: &'a dyn GerberShortcutResolver,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, (GerberDocumentId, GerberViewerMessage)>
+{
+    match panel_kind
+    {
+        GerberDockPanel::Document(document_id) =>
+        {
+            workspace
+                .viewer(document_id)
+                .map(|state| {
+                    view_canvas(state, shortcut_resolver, tokens)
+                        .map(move |message| (document_id, message))
+                })
+                .unwrap_or_else(|| Space::new().into())
+        }
+        GerberDockPanel::Layers => workspace
+            .active_viewer()
+            .map(|state| {
+                view_layers(state, tokens)
+                    .map(move |message| {
+                        (workspace.active_document_id(), message)
+                    })
+            })
+            .unwrap_or_else(|| Space::new().into()),
+        GerberDockPanel::LayerInformation =>
+        {
+            workspace
+                .active_viewer()
+                .map(|state| {
+                    view_layer_information(state, tokens)
+                        .map(move |message| {
+                            (workspace.active_document_id(), message)
+                        })
+                })
+                .unwrap_or_else(|| Space::new().into())
+        }
+        GerberDockPanel::DCodes => workspace
+            .active_viewer()
+            .map(|state| {
+                view_d_codes(state, tokens)
+                    .map(move |message| {
+                        (workspace.active_document_id(), message)
+                    })
+            })
+            .unwrap_or_else(|| Space::new().into()),
+        GerberDockPanel::Source => workspace
+            .active_viewer()
+            .map(|state| {
+                view_source(state, tokens)
+                    .map(move |message| {
+                        (workspace.active_document_id(), message)
+                    })
+            })
+            .unwrap_or_else(|| Space::new().into()),
+    }
+}
+
+fn view_canvas<'a>(
+    state: &'a GerberViewerState,
+    shortcut_resolver: &'a dyn GerberShortcutResolver,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let canvas_bg = styles::ti(tokens.bg);
+    let canvas_widget: Element<'_, GerberViewerMessage> = canvas(GerberCanvas {
+        layers: &state.layers,
+        background: canvas_bg,
+        grid: state.grid_color,
+        grid_visible: state.grid_visible,
+        grid_style: state.grid_style,
+        crosshair_mode: state.crosshair_mode,
+        page_size: state.page_size,
+        zoom_selection_active: state.zoom_selection_active,
+        selection_active: state.selection_tool_active(),
+        measurement_active: state.measurement_active(),
+        measurement: state.measurement(),
+        measurement_annotation: state.measurement_annotation(),
+        sketch_flashes: state.sketch_flashes,
+        sketch_lines: state.sketch_lines,
+        sketch_polygons: state.sketch_polygons,
+        ghost_negative_objects: state.ghost_negative_objects,
+        negative_ghost_color: state.negative_ghost_color,
+        show_d_code_labels: state.show_d_code_labels,
+        d_code_color: state.d_code_color,
+        compare_mode: state.compare_mode,
+        compare_palette: &state.compare_palette,
+        forced_opacity_mode: state.forced_opacity_mode,
+        forced_opacity: state.forced_opacity,
+        dim_inactive_layers: state.dim_inactive_layers,
+        inactive_layer_opacity: state.inactive_layer_opacity,
+        mirrored: state.mirrored,
+        active_layer: state.active_layer,
+        highlighted_component: state.highlighted_component(),
+        highlighted_net: state.highlighted_net(),
+        highlighted_attribute: state.highlighted_attribute(),
+        highlighted_d_code: state.highlighted_d_code(),
+        selected_item: state.selected_item(),
+        selected_items: state.selected_items(),
+        redraw_generation: state.redraw_generation,
+        zoom: state.zoom,
+        pan: state.pan,
+        grid_size: state.active_grid(),
+        shortcut_resolver,
+    })
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into();
+
+    container(canvas_widget)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(canvas_bg)),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn view_layers<'a>(
+    state: &'a GerberViewerState,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let mut layer_list = column![text("Layers").size(13).color(text_primary)]
+        .spacing(6);
 
     if state.layers.is_empty()
     {
@@ -259,12 +452,7 @@ pub fn view<'a>(
     let negative_color =
         state.selected_color_choice(state.negative_ghost_color);
     layer_list = layer_list
-        .push(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(1)
-                .style(styles::chrome_separator(tokens)),
-        )
+        .push(horizontal_rule(tokens))
         .push(text("Item colors · Material Design").size(12).color(text_primary))
         .push(
             row![
@@ -312,14 +500,17 @@ pub fn view<'a>(
             .align_y(iced::Alignment::Center),
         );
 
-    if state.layer_information_visible
-    {
-        layer_list = layer_list.push(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(1)
-                .style(styles::chrome_separator(tokens)),
-        );
+    panel_container(scrollable(layer_list.padding(8)), tokens)
+}
+
+fn view_layer_information<'a>(
+    state: &'a GerberViewerState,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let content: Element<'_, GerberViewerMessage> =
         if let Some(metadata) = state.active_layer_metadata()
         {
             let bounds = metadata
@@ -335,271 +526,235 @@ pub fn view<'a>(
             let coordinate_format = metadata
                 .coordinate_format
                 .unwrap_or_else(|| "Unavailable".to_owned());
-            let definitions = if metadata.definitions.is_empty()
-            {
-                "None".to_owned()
-            }
-            else
-            {
-                metadata.definitions.join("\n")
-            };
-            let attributes = if metadata.attributes.is_empty()
-            {
-                "None".to_owned()
-            }
-            else
-            {
-                metadata.attributes.join("\n")
-            };
-            let warnings = if metadata.warnings.is_empty()
-            {
-                "None".to_owned()
-            }
-            else
-            {
-                metadata.warnings.join("\n")
-            };
-            layer_list = layer_list.push(
-                column![
-                    text("Active Layer Information")
-                        .size(13)
-                        .color(text_primary),
-                    text(format!("File: {}", metadata.file_name))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Source: {}", metadata.source))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Format: {}", metadata.format))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Role: {}", metadata.layer_role))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Units: {}", metadata.units))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Coordinate format: {coordinate_format}"))
-                        .size(10)
-                        .color(text_muted),
-                    text(bounds).size(10).color(text_muted),
-                    text(format!("Rendered primitives: {}", metadata.primitive_count))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("{}:\n{definitions}", metadata.definition_label))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Attributes:\n{attributes}"))
-                        .size(10)
-                        .color(text_muted),
-                    text(format!("Warnings:\n{warnings}"))
-                        .size(10)
-                        .color(text_muted),
-                ]
-                .spacing(4),
-            );
+            let definitions = list_or_none(&metadata.definitions);
+            let attributes = list_or_none(&metadata.attributes);
+            let warnings = list_or_none(&metadata.warnings);
+            column![
+                text("Active Layer Information")
+                    .size(13)
+                    .color(text_primary),
+                text(format!("File: {}", metadata.file_name))
+                    .size(10)
+                    .color(text_muted),
+                text(format!("Source: {}", metadata.source))
+                    .size(10)
+                    .color(text_muted),
+                text(format!("Format: {}", metadata.format))
+                    .size(10)
+                    .color(text_muted),
+                text(format!("Role: {}", metadata.layer_role))
+                    .size(10)
+                    .color(text_muted),
+                text(format!("Units: {}", metadata.units))
+                    .size(10)
+                    .color(text_muted),
+                text(format!("Coordinate format: {coordinate_format}"))
+                    .size(10)
+                    .color(text_muted),
+                text(bounds).size(10).color(text_muted),
+                text(format!(
+                    "Rendered primitives: {}",
+                    metadata.primitive_count
+                ))
+                .size(10)
+                .color(text_muted),
+                text(format!(
+                    "{}:\n{definitions}",
+                    metadata.definition_label
+                ))
+                .size(10)
+                .color(text_muted),
+                text(format!("Attributes:\n{attributes}"))
+                    .size(10)
+                    .color(text_muted),
+                text(format!("Warnings:\n{warnings}"))
+                    .size(10)
+                    .color(text_muted),
+            ]
+            .spacing(4)
+            .padding(8)
+            .into()
         }
         else
         {
-            layer_list = layer_list.push(
+            container(
                 text("No active layer")
                     .size(10)
                     .color(text_muted),
-            );
-        }
-    }
+            )
+            .center(Length::Fill)
+            .into()
+        };
 
-    if state.d_code_list_visible
+    panel_container(scrollable(content), tokens)
+}
+
+fn view_d_codes<'a>(
+    state: &'a GerberViewerState,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let mut content = column![
+        text("D-Codes and Drill Tools")
+            .size(13)
+            .color(text_primary),
+    ]
+    .spacing(6);
+
+    for group in state.definition_groups()
     {
-        layer_list = layer_list.push(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(1)
-                .style(styles::chrome_separator(tokens)),
-        );
-        layer_list = layer_list.push(
-            text("D-Codes and Drill Tools")
-                .size(13)
-                .color(text_primary),
-        );
-        for group in state.definition_groups()
+        let definitions = if group.definitions.is_empty()
         {
-            let definitions = if group.definitions.is_empty()
-            {
-                format!("No {} defined", group.definition_label.to_lowercase())
-            }
-            else
-            {
-                group
-                    .definitions
-                    .iter()
-                    .map(|definition| {
-                        format!(
-                            "{} — {} — {} use(s)",
-                            definition.code,
-                            definition.description,
-                            definition.usage_count,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            };
-            layer_list = layer_list.push(
-                column![
-                    text(format!("{} · {}", group.layer_name, group.definition_label))
-                        .size(11)
-                        .color(text_primary),
-                    text(definitions).size(10).color(text_muted),
-                ]
-                .spacing(2),
-            );
+            format!("No {} defined", group.definition_label.to_lowercase())
         }
+        else
+        {
+            group
+                .definitions
+                .iter()
+                .map(|definition| {
+                    format!(
+                        "{} — {} — {} use(s)",
+                        definition.code,
+                        definition.description,
+                        definition.usage_count,
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        content = content.push(
+            column![
+                text(format!(
+                    "{} · {}",
+                    group.layer_name,
+                    group.definition_label
+                ))
+                .size(11)
+                .color(text_primary),
+                text(definitions).size(10).color(text_muted),
+            ]
+            .spacing(2),
+        );
     }
 
-    let sidebar = container(scrollable(layer_list.padding(8)))
-        .width(260)
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(panel_bg)),
-            border: Border {
-                width: 1.0,
-                radius: 0.0.into(),
-                color: border,
-            },
-            text_color: Some(text_primary),
-            ..container::Style::default()
-        });
+    panel_container(scrollable(content.padding(8)), tokens)
+}
 
-    let canvas_widget: Element<'_, GerberViewerMessage> = canvas(GerberCanvas {
-        layers: &state.layers,
-        background: canvas_bg,
-        grid: state.grid_color,
-        grid_visible: state.grid_visible,
-        grid_style: state.grid_style,
-        crosshair_mode: state.crosshair_mode,
-        page_size: state.page_size,
-        zoom_selection_active: state.zoom_selection_active,
-        selection_active: state.selection_tool_active(),
-        measurement_active: state.measurement_active(),
-        measurement: state.measurement(),
-        measurement_annotation: state.measurement_annotation(),
-        sketch_flashes: state.sketch_flashes,
-        sketch_lines: state.sketch_lines,
-        sketch_polygons: state.sketch_polygons,
-        ghost_negative_objects: state.ghost_negative_objects,
-        negative_ghost_color: state.negative_ghost_color,
-        show_d_code_labels: state.show_d_code_labels,
-        d_code_color: state.d_code_color,
-        compare_mode: state.compare_mode,
-        compare_palette: &state.compare_palette,
-        forced_opacity_mode: state.forced_opacity_mode,
-        forced_opacity: state.forced_opacity,
-        dim_inactive_layers: state.dim_inactive_layers,
-        inactive_layer_opacity: state.inactive_layer_opacity,
-        mirrored: state.mirrored,
-        active_layer: state.active_layer,
-        highlighted_component: state.highlighted_component(),
-        highlighted_net: state.highlighted_net(),
-        highlighted_attribute: state.highlighted_attribute(),
-        highlighted_d_code: state.highlighted_d_code(),
-        selected_item: state.selected_item(),
-        selected_items: state.selected_items(),
-        redraw_generation: state.redraw_generation,
-        zoom: state.zoom,
-        pan: state.pan,
-        grid_size: state.active_grid(),
-        shortcut_resolver,
-    })
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into();
+fn view_source<'a>(
+    state: &'a GerberViewerState,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let text_primary = styles::ti(tokens.text);
+    let text_muted = styles::ti(tokens.text_secondary);
+    let content: Element<'_, GerberViewerMessage> =
+        match state.active_gerber_source()
+        {
+            Ok((name, source)) => column![
+                text(format!("Original Gerber source — {name}"))
+                    .size(13)
+                    .color(text_primary),
+                scrollable(
+                    container(
+                        text(source)
+                            .size(11)
+                            .font(iced::Font::MONOSPACE)
+                            .color(text_primary),
+                    )
+                    .padding(12)
+                    .width(Length::Fill),
+                )
+                .height(Length::Fill),
+            ]
+            .spacing(8)
+            .padding(8)
+            .into(),
+            Err(message) => container(
+                text(message)
+                    .size(12)
+                    .color(text_muted),
+            )
+            .center(Length::Fill)
+            .into(),
+        };
 
-    let canvas_panel = container(canvas_widget)
+    panel_container(content, tokens)
+}
+
+fn panel_container<'a>(
+    content: impl Into<Element<'a, GerberViewerMessage>>,
+    tokens: &ThemeTokens,
+) -> Element<'a, GerberViewerMessage>
+{
+    let panel_bg = styles::ti(tokens.panel_bg);
+    let text_primary = styles::ti(tokens.text);
+    container(content)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(canvas_bg)),
+            background: Some(Background::Color(panel_bg)),
+            text_color: Some(text_primary),
             ..container::Style::default()
-        });
-    let content: Element<'_, GerberViewerMessage> = if state.source_view_visible
+        })
+        .into()
+}
+
+fn horizontal_rule(
+    tokens: &ThemeTokens,
+) -> Element<'static, GerberViewerMessage>
+{
+    container(Space::new())
+        .width(Length::Fill)
+        .height(1)
+        .style(styles::chrome_separator(tokens))
+        .into()
+}
+
+fn list_or_none(values: &[String]) -> String
+{
+    if values.is_empty()
     {
-        let source_content: Element<'_, GerberViewerMessage> =
-            match state.active_gerber_source()
-            {
-                Ok((name, source)) => column![
-                    text(format!("Original Gerber source — {name}"))
-                        .size(13)
-                        .color(text_primary),
-                    scrollable(
-                        container(
-                            text(source)
-                                .size(11)
-                                .font(iced::Font::MONOSPACE)
-                                .color(text_primary),
-                        )
-                        .padding(12)
-                        .width(Length::Fill),
-                    )
-                    .height(Length::Fill),
-                ]
-                .spacing(8)
-                .padding(10)
-                .into(),
-                Err(message) => container(
-                    text(message)
-                        .size(12)
-                        .color(text_muted),
-                )
-                .center(Length::Fill)
-                .into(),
-            };
-        container(source_content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(canvas_bg)),
-                ..container::Style::default()
-            })
-            .into()
-    }
-    else if state.layer_manager_visible
-    {
-        row![canvas_panel, sidebar]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        "None".to_owned()
     }
     else
     {
-        canvas_panel.into()
+        values.join("\n")
+    }
+}
+
+fn gerber_dock_style(
+    theme: &Theme,
+    tokens: &ThemeTokens,
+) -> iced_dock::DockStyle
+{
+    let mut style = iced_dock::default(theme);
+    style.background.color = styles::ti(tokens.bg);
+    style.window.background = styles::ti(tokens.panel_bg);
+    style.window.border = Border {
+        color: styles::ti(tokens.border),
+        width: 1.0,
+        radius: 0.0.into(),
     };
-
-    let status = container(
-        text(&state.status)
-            .size(10)
-            .color(if state.status.contains("could not")
-            {
-                Color::from_rgb8(239, 83, 80)
-            }
-            else
-            {
-                text_muted
-            }),
-    )
-    .padding([4, 10])
-    .width(Length::Fill)
-    .style(styles::status_bar(tokens));
-
-    column![
-        menu_bar,
-        toolbar,
-        grid_toolbar,
-        row![toolbar::view(state, tokens), content]
-            .width(Length::Fill)
-            .height(Length::Fill),
-        status,
-    ]
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    style.window.focused_border = Some(Border {
+        color: styles::ti(tokens.accent),
+        ..style.window.border
+    });
+    style.tab_bar.background = styles::ti(tokens.toolbar_bg);
+    style.tab_bar.separator = Some(styles::ti(tokens.border));
+    style.tab.inactive_background = styles::ti(tokens.toolbar_bg);
+    style.tab.inactive_text = styles::ti(tokens.text_secondary);
+    style.tab.hovered_background = styles::ti(tokens.hover);
+    style.tab.hovered_text = styles::ti(tokens.text);
+    style.tab.pressed_background = styles::ti(tokens.selection);
+    style.tab.pressed_text = styles::ti(tokens.text);
+    style.tab.active_background = styles::ti(tokens.panel_bg);
+    style.tab.active_text = styles::ti(tokens.text);
+    style.tab.active_accent = styles::ti(tokens.accent);
+    style.splitter.hover_color = styles::ti(tokens.accent);
+    style.splitter.drag_color = styles::ti(tokens.accent);
+    style.drop_overlay.color = styles::ti(tokens.selection);
+    style
 }

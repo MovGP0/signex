@@ -111,11 +111,88 @@ macro_rules! gerber_layer_state_tests
     }
 
     #[test]
+    fn default_dock_contains_document_and_all_tool_tabs()
+    {
+        let workspace = GerberWorkspaceState::default();
+        let document_id = workspace.active_document_id();
+        let panel_ids = workspace.dock.panel_ids();
+
+        for expected in [
+            GerberDockPanel::Document(document_id),
+            GerberDockPanel::Layers,
+            GerberDockPanel::LayerInformation,
+            GerberDockPanel::DCodes,
+            GerberDockPanel::Source,
+        ]
+        {
+            assert!(
+                panel_ids.contains(&expected.id()),
+                "missing dock panel {}",
+                expected.id(),
+            );
+        }
+    }
+
+    #[test]
+    fn closing_a_dock_tab_updates_menu_state_and_allows_reopening()
+    {
+        let mut workspace = GerberWorkspaceState::default();
+        workspace.dock.close_tool(GerberDockPanel::DCodes);
+
+        workspace.handle_dock_event(&iced_dock::DockEvent::TabClosed {
+            panel: GerberDockPanel::DCodes,
+        });
+
+        assert!(!workspace
+            .active_viewer()
+            .expect("active Gerber document")
+            .is_tool_panel_visible(GerberDockPanel::DCodes));
+        workspace.set_tool_visible(GerberDockPanel::DCodes, true);
+        assert!(workspace
+            .active_viewer()
+            .expect("active Gerber document")
+            .is_tool_panel_visible(GerberDockPanel::DCodes));
+        assert!(
+            workspace
+                .dock
+                .panel_ids()
+                .contains(&GerberDockPanel::DCodes.id()),
+        );
+    }
+
+    #[test]
+    fn document_tabs_have_stable_identity_and_keep_one_document_open()
+    {
+        let mut workspace = GerberWorkspaceState::default();
+        let first = workspace.active_document_id();
+        let second = workspace.new_document();
+
+        assert_ne!(first, second);
+        assert_eq!(workspace.documents().len(), 2);
+        assert_eq!(workspace.active_document_id(), second);
+
+        workspace.handle_dock_event(&iced_dock::DockEvent::TabClosed {
+            panel: GerberDockPanel::Document(second),
+        });
+        assert_eq!(workspace.documents().len(), 1);
+        assert_eq!(workspace.active_document_id(), first);
+
+        workspace.handle_dock_event(&iced_dock::DockEvent::TabClosed {
+            panel: GerberDockPanel::Document(first),
+        });
+        assert_eq!(workspace.documents().len(), 1);
+        assert_ne!(workspace.active_document_id(), first);
+    }
+
+    #[test]
     fn layer_information_handles_missing_and_active_layers()
     {
         let mut state = GerberViewerState::default();
 
         assert_eq!(state.active_layer_metadata(), None);
+        assert!(state.layer_information_visible);
+        state.toggle_layer_information();
+        assert!(!state.layer_information_visible);
         state.toggle_layer_information();
         assert!(state.layer_information_visible);
         assert!(state.layer_manager_visible);
@@ -164,10 +241,13 @@ macro_rules! gerber_layer_state_tests
         });
 
         state.toggle_d_code_list();
+        assert!(!state.d_code_list_visible);
+        assert!(state.layer_information_visible);
+        state.toggle_d_code_list();
         let groups = state.definition_groups();
 
         assert!(state.d_code_list_visible);
-        assert!(!state.layer_information_visible);
+        assert!(state.layer_information_visible);
         assert_eq!(groups.len(), 2);
         assert_eq!(groups[0].definition_label, "D-codes");
         assert_eq!(groups[0].definitions[0].code, "D10");
@@ -177,8 +257,8 @@ macro_rules! gerber_layer_state_tests
         assert_eq!(groups[1].definitions[0].usage_count, 1);
 
         state.toggle_layer_information();
-        assert!(state.layer_information_visible);
-        assert!(!state.d_code_list_visible);
+        assert!(!state.layer_information_visible);
+        assert!(state.d_code_list_visible);
     }
 
     #[test]
@@ -202,6 +282,8 @@ macro_rules! gerber_layer_state_tests
         });
         state.select_layer(0);
 
+        state.toggle_source_view();
+        assert!(!state.source_view_visible);
         state.toggle_source_view();
         assert!(state.source_view_visible);
         assert_eq!(state.active_gerber_source(), Ok(("source.gbr", source)));

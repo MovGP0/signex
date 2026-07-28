@@ -43,7 +43,7 @@ impl Signex {
 
         if matches!(
             self.ui_state.windows.get(&id),
-            Some(super::state::WindowKind::GerberGridEditor)
+            Some(super::state::WindowKind::GerberGridEditor { .. })
         ) {
             return "Signex — Grid Editor".to_string();
         }

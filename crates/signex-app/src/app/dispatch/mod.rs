@@ -20,26 +20,62 @@ impl Signex {
 
         match message {
             Message::OpenGerberViewer => self.handle_open_gerber_viewer(),
-            Message::GerberViewer(message) => self.dispatch_gerber_viewer_message(message),
-            Message::GerberViewerOpened(id) => {
+            Message::GerberViewer(document_id, message) =>
+            {
+                self.dispatch_gerber_viewer_message(
+                    document_id,
+                    message,
+                )
+            }
+            Message::GerberViewerOpened(window_id) =>
+            {
                 self.ui_state
                     .windows
-                    .insert(id, super::state::WindowKind::GerberViewer);
+                    .insert(
+                        window_id,
+                        super::state::WindowKind::GerberViewer,
+                    );
                 Task::batch([
-                    crate::chrome::apply_rounded_corners::<Message>(id),
-                    iced::window::gain_focus(id),
+                    crate::chrome::apply_rounded_corners::<Message>(
+                        window_id,
+                    ),
+                    iced::window::gain_focus(window_id),
                 ])
             }
             Message::GerberGridEditor(message) => {
                 self.dispatch_gerber_grid_editor_message(message)
             }
-            Message::GerberGridEditorOpened(id) => {
+            Message::GerberGridEditorOpened {
+                document_id,
+                window_id,
+            } =>
+            {
+                let document_is_open = self
+                    .ui_state
+                    .gerber_workspace
+                    .viewer(document_id)
+                    .is_some();
+                let editor_targets_document = self
+                    .ui_state
+                    .gerber_grid_editor_document
+                    == Some(document_id);
+                if !document_is_open || !editor_targets_document
+                {
+                    return iced::window::close(window_id);
+                }
                 self.ui_state
                     .windows
-                    .insert(id, super::state::WindowKind::GerberGridEditor);
+                    .insert(
+                        window_id,
+                        super::state::WindowKind::GerberGridEditor {
+                            document_id,
+                        },
+                    );
                 Task::batch([
-                    crate::chrome::apply_rounded_corners::<Message>(id),
-                    iced::window::gain_focus(id),
+                    crate::chrome::apply_rounded_corners::<Message>(
+                        window_id,
+                    ),
+                    iced::window::gain_focus(window_id),
                 ])
             }
             Message::PassiveCalculator(message) => {
@@ -373,8 +409,9 @@ impl Signex {
                         // drop above.
                         WindowKind::ComponentEditor { .. } => {}
                         WindowKind::GerberViewer => {}
-                        WindowKind::GerberGridEditor => {
+                        WindowKind::GerberGridEditor { .. } => {
                             self.ui_state.gerber_grid_editor = None;
+                            self.ui_state.gerber_grid_editor_document = None;
                         }
                     }
                 }

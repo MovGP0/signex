@@ -23,12 +23,20 @@ pub enum DragTarget {
 pub enum Message {
     Menu(MenuMessage),
     OpenGerberViewer,
-    GerberViewer(signex_widgets::gerber_viewer::GerberViewerMessage),
+    GerberViewer(
+        signex_widgets::gerber_viewer::GerberDocumentId,
+        signex_widgets::gerber_viewer::GerberViewerMessage,
+    ),
     GerberViewerOpened(iced::window::Id),
     GerberGridEditor(
         signex_widgets::grid_editor::GerberGridEditorMessage,
     ),
-    GerberGridEditorOpened(iced::window::Id),
+    GerberGridEditorOpened
+    {
+        document_id: signex_widgets::gerber_viewer::GerberDocumentId,
+        window_id: iced::window::Id,
+    },
+    OpenPassiveCalculator,
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted

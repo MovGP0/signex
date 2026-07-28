@@ -157,8 +157,10 @@ impl Signex {
                 passive_calculator: signex_widgets::passive_calculator::CalculatorControl::default(
                 ),
                 passive_calculator_open: false,
-                gerber_viewer: signex_widgets::gerber_viewer::GerberViewerState::default(),
+                gerber_workspace:
+                    signex_widgets::gerber_viewer::GerberWorkspaceState::default(),
                 gerber_grid_editor: None,
+                gerber_grid_editor_document: None,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,

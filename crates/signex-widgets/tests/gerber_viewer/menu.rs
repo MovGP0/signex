@@ -6,6 +6,7 @@ fn file_menu_contains_requested_commands_in_order()
     assert_eq!(
         menu::FILE_MENU_LABELS,
         [
+            "New Gerber Document",
             "Open Autodetected File(s) ...",
             "Open Gerber Plot File(s) ...",
             "Open Recent Gerber File",

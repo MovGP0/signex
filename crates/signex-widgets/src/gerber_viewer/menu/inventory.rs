@@ -1,4 +1,5 @@
 pub(crate) const FILE_MENU_LABELS: &[&str] = &[
+    "New Gerber Document",
     "Open Autodetected File(s) ...",
     "Open Gerber Plot File(s) ...",
     "Open Recent Gerber File",

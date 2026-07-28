@@ -16,6 +16,7 @@ use signex_gerber::{
 use signex_types::theme::ThemeTokens;
 
 mod display;
+mod dock;
 mod gerber_viewer_state;
 mod grid;
 mod highlight;
@@ -32,6 +33,7 @@ mod shortcuts;
 pub(crate) mod styles;
 mod toolbar;
 mod view;
+mod workspace;
 
 #[path = "canvas.rs"]
 mod viewport;
@@ -39,6 +41,7 @@ mod viewport;
 pub use display::{
     GerberCrosshairMode, GerberDisplayUnit, GerberPageSize, GerberPrintLayout,
 };
+pub use dock::GerberDockPanel;
 pub use grid::GridUnit;
 pub use gerber_viewer_state::{GerberViewerState, ViewerLayer};
 pub use measurement::GerberMeasurement;
@@ -49,6 +52,9 @@ pub use pcb_export::{
 pub use selection::GerberItemSelection;
 pub use shortcuts::GerberShortcutResolver;
 pub use view::view;
+pub use workspace::{
+    GerberDocumentId, GerberDocumentState, GerberWorkspaceState,
+};
 
 use shortcuts::{gerber_shortcut_message, next_layer_index, previous_layer_index};
 

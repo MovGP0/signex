@@ -13,6 +13,13 @@ pub(super) fn view(
     Item::with_menu(
         root_button("File", colors),
         dropdown(vec![
+            leaf(
+                "New Gerber Document",
+                None,
+                GerberViewerMessage::NewDocument,
+                colors,
+            ),
+            separator(colors),
             leaf_if(
                 "Open Autodetected File(s) ...",
                 None,

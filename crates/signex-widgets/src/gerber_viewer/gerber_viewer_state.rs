@@ -105,9 +105,9 @@ impl Default for GerberViewerState
             zoom: 1.0,
             pan: iced::Vector::default(),
             layer_manager_visible: true,
-            layer_information_visible: false,
-            d_code_list_visible: false,
-            source_view_visible: false,
+            layer_information_visible: true,
+            d_code_list_visible: true,
+            source_view_visible: true,
             grid_catalog,
             active_grid_index,
             grid_visible: true,
@@ -424,26 +424,71 @@ impl GerberViewerState
     pub fn toggle_layer_information(&mut self)
     {
         self.layer_information_visible = !self.layer_information_visible;
-        if self.layer_information_visible
-        {
-            self.layer_manager_visible = true;
-            self.d_code_list_visible = false;
-        }
     }
 
     pub fn toggle_d_code_list(&mut self)
     {
         self.d_code_list_visible = !self.d_code_list_visible;
-        if self.d_code_list_visible
-        {
-            self.layer_manager_visible = true;
-            self.layer_information_visible = false;
-        }
     }
 
     pub fn toggle_source_view(&mut self)
     {
         self.source_view_visible = !self.source_view_visible;
+    }
+
+    pub(super) fn set_tool_panel_visible(
+        &mut self,
+        panel: super::dock::GerberDockPanel,
+        visible: bool,
+    )
+    {
+        match panel
+        {
+            super::dock::GerberDockPanel::Document(_) => {}
+            super::dock::GerberDockPanel::Layers =>
+            {
+                self.layer_manager_visible = visible;
+            }
+            super::dock::GerberDockPanel::LayerInformation =>
+            {
+                self.layer_information_visible = visible;
+            }
+            super::dock::GerberDockPanel::DCodes =>
+            {
+                self.d_code_list_visible = visible;
+            }
+            super::dock::GerberDockPanel::Source =>
+            {
+                self.source_view_visible = visible;
+            }
+        }
+    }
+
+    pub fn is_tool_panel_visible(
+        &self,
+        panel: super::dock::GerberDockPanel,
+    ) -> bool
+    {
+        match panel
+        {
+            super::dock::GerberDockPanel::Document(_) => true,
+            super::dock::GerberDockPanel::Layers =>
+            {
+                self.layer_manager_visible
+            }
+            super::dock::GerberDockPanel::LayerInformation =>
+            {
+                self.layer_information_visible
+            }
+            super::dock::GerberDockPanel::DCodes =>
+            {
+                self.d_code_list_visible
+            }
+            super::dock::GerberDockPanel::Source =>
+            {
+                self.source_view_visible
+            }
+        }
     }
 
     pub(super) fn active_gerber_source(&self) -> Result<(&str, &str), &'static str>

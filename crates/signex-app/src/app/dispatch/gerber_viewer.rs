@@ -1,8 +1,9 @@
-use iced::Task;
+﻿use iced::Task;
 
 use super::super::*;
 use signex_widgets::gerber_viewer::{
-    GerberShortcutResolver, GerberViewerMessage,
+    GerberDockPanel, GerberDocumentId, GerberShortcutResolver,
+    GerberViewerMessage, GerberViewerState,
 };
 use signex_widgets::grid_editor::{
     GerberGridEditorMessage, GerberGridEditorOutcome,
@@ -91,24 +92,45 @@ impl Signex
         self.ui_state.windows.iter().find_map(|(id, kind)| {
             matches!(
                 kind,
-                crate::app::state::WindowKind::GerberGridEditor,
+                crate::app::state::WindowKind::GerberGridEditor { .. },
             )
             .then_some(*id)
         })
     }
 
-    fn handle_open_gerber_grid_editor(&mut self) -> Task<Message>
+    fn gerber_viewer_window_id(&self) -> Option<iced::window::Id>
     {
+        self.ui_state.windows.iter().find_map(|(id, kind)| {
+            matches!(
+                kind,
+                crate::app::state::WindowKind::GerberViewer,
+            )
+            .then_some(*id)
+        })
+    }
+
+    fn handle_open_gerber_grid_editor(
+        &mut self,
+        document_id: GerberDocumentId,
+        gerber_viewer: &GerberViewerState,
+    ) -> Task<Message>
+    {
+        self.ui_state.gerber_grid_editor =
+            Some(GerberGridEditorState::from_viewer(gerber_viewer));
+        self.ui_state.gerber_grid_editor_document =
+            Some(document_id);
+
         if let Some(id) = self.grid_editor_window_id()
         {
+            self.ui_state.windows.insert(
+                id,
+                crate::app::state::WindowKind::GerberGridEditor {
+                    document_id,
+                },
+            );
             return iced::window::gain_focus(id);
         }
 
-        self.ui_state.gerber_grid_editor = Some(
-            GerberGridEditorState::from_viewer(
-                &self.ui_state.gerber_viewer,
-            ),
-        );
         let (_id, open_task) = iced::window::open(
             iced::window::Settings {
                 size: iced::Size::new(860.0, 580.0),
@@ -118,7 +140,10 @@ impl Signex
                 ..Default::default()
             },
         );
-        open_task.map(Message::GerberGridEditorOpened)
+        open_task.map(move |window_id| Message::GerberGridEditorOpened {
+            document_id,
+            window_id,
+        })
     }
 
     pub(super) fn dispatch_gerber_grid_editor_message(
@@ -142,12 +167,28 @@ impl Signex
             }
             GerberGridEditorOutcome::Apply =>
             {
-                let result = self
+                let Some(document_id) = self
+                    .ui_state
+                    .gerber_grid_editor_document
+                else
+                {
+                    return Task::none();
+                };
+                let editor = self
                     .ui_state
                     .gerber_grid_editor
-                    .as_ref()
-                    .expect("grid editor exists while applying")
-                    .apply_to(&mut self.ui_state.gerber_viewer);
+                    .take()
+                    .expect("grid editor exists while applying");
+                let result = self
+                    .ui_state
+                    .gerber_workspace
+                    .viewer_mut(document_id)
+                    .ok_or_else(|| {
+                        "The Gerber document was closed while its grid editor was open."
+                            .to_owned()
+                    })
+                    .and_then(|viewer| editor.apply_to(viewer));
+                self.ui_state.gerber_grid_editor = Some(editor);
                 match result
                 {
                     Ok(()) => self
@@ -169,50 +210,110 @@ impl Signex
 
     pub(super) fn handle_open_gerber_viewer(&mut self) -> Task<Message>
     {
-        if let Some(id) = self.ui_state.windows.iter().find_map(|(id, kind)| {
-            matches!(kind, crate::app::state::WindowKind::GerberViewer).then_some(*id)
-        })
+        if let Some(id) = self.gerber_viewer_window_id()
         {
             return iced::window::gain_focus(id);
         }
 
-        let (_id, open_task) = iced::window::open(iced::window::Settings {
-            size: iced::Size::new(1280.0, 800.0),
-            min_size: Some(iced::Size::new(860.0, 560.0)),
-            icon: crate::app::bootstrap::bundled_window_icon(),
-            decorations: false,
-            ..Default::default()
-        });
+        let (_id, open_task) = iced::window::open(
+            iced::window::Settings {
+                size: iced::Size::new(1280.0, 800.0),
+                min_size: Some(iced::Size::new(860.0, 560.0)),
+                icon: crate::app::bootstrap::bundled_window_icon(),
+                decorations: false,
+                ..Default::default()
+            },
+        );
         open_task.map(Message::GerberViewerOpened)
+    }
+
+    fn apply_gerber_load_batch(
+        &mut self,
+        document_id: GerberDocumentId,
+        gerber_viewer: &mut GerberViewerState,
+        batch: signex_gerber::GerberLoadBatch,
+    )
+    {
+        if gerber_viewer.layers.is_empty()
+        {
+            if let Some(first_layer) = batch.layers.first()
+            {
+                let title = match batch.layers.len()
+                {
+                    1 => first_layer.name.clone(),
+                    count => format!("{} +{}", first_layer.name, count - 1),
+                };
+                self.ui_state
+                    .gerber_workspace
+                    .rename_document(document_id, title);
+            }
+        }
+
+        gerber_viewer.apply_load_batch(batch);
     }
 
     pub(super) fn dispatch_gerber_viewer_message(
         &mut self,
+        document_id: GerberDocumentId,
         message: GerberViewerMessage,
     ) -> Task<Message>
     {
-        match message
+        if matches!(message, GerberViewerMessage::CloseRequested)
+        {
+            return self
+                .gerber_viewer_window_id()
+                .map_or_else(Task::none, iced::window::close);
+        }
+        if matches!(message, GerberViewerMessage::NewDocument)
+        {
+            self.ui_state.gerber_workspace.new_document();
+            return Task::none();
+        }
+        if let GerberViewerMessage::DockEvent(event) = &message
+        {
+            let closed_document = self
+                .ui_state
+                .gerber_workspace
+                .handle_dock_event(event);
+            let grid_editor_to_close = if closed_document.is_some()
+                && self.ui_state.gerber_grid_editor_document
+                    == closed_document
+            {
+                self.ui_state.gerber_grid_editor = None;
+                self.ui_state.gerber_grid_editor_document = None;
+                self.grid_editor_window_id()
+            }
+            else
+            {
+                None
+            };
+            return grid_editor_to_close
+                .map_or_else(Task::none, iced::window::close);
+        }
+
+        let Some(mut gerber_viewer) =
+            self.ui_state
+                .gerber_workspace
+                .take_viewer(document_id)
+        else
+        {
+            return Task::none();
+        };
+        let route = move |message| {
+            Message::GerberViewer(document_id, message)
+        };
+
+        let task = match message
         {
             GerberViewerMessage::NoOp => Task::none(),
-            GerberViewerMessage::CloseRequested =>
+            GerberViewerMessage::DockEvent(_)
+            | GerberViewerMessage::NewDocument
+            | GerberViewerMessage::CloseRequested =>
             {
-                let window_id = self.ui_state.windows.iter().find_map(
-                    |(id, kind)| {
-                        matches!(
-                            kind,
-                            crate::app::state::WindowKind::GerberViewer,
-                        )
-                        .then_some(*id)
-                    },
-                );
-                match window_id
-                {
-                    Some(window_id) => iced::window::close(window_id),
-                    None => Task::none(),
-                }
+                Task::none()
             }
             GerberViewerMessage::OpenAutodetectedFiles => {
-                self.ui_state.gerber_viewer.begin_loading();
+                gerber_viewer.begin_loading();
                 Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
@@ -226,8 +327,8 @@ impl Signex
                                     .collect::<Vec<_>>()
                             })
                     },
-                    |paths| {
-                        Message::GerberViewer(
+                    move |paths| {
+                        route(
                             GerberViewerMessage::AutodetectedFilesChosen(paths),
                         )
                     },
@@ -235,24 +336,28 @@ impl Signex
             }
             GerberViewerMessage::AutodetectedFilesChosen(Some(paths)) => Task::perform(
                 async move { signex_gerber::load_autodetected_files(paths) },
-                |batch| {
-                    Message::GerberViewer(
+                move |batch| {
+                    route(
                         GerberViewerMessage::AutodetectedFilesLoaded(batch),
                     )
                 },
             ),
             GerberViewerMessage::AutodetectedFilesChosen(None) => {
-                self.ui_state.gerber_viewer.loading = false;
-                self.ui_state.gerber_viewer.status =
+                gerber_viewer.loading = false;
+                gerber_viewer.status =
                     "Open fabrication files cancelled.".into();
                 Task::none()
             }
             GerberViewerMessage::AutodetectedFilesLoaded(batch) => {
-                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                self.apply_gerber_load_batch(
+                    document_id,
+                    &mut gerber_viewer,
+                    batch,
+                );
                 Task::none()
             }
             GerberViewerMessage::OpenZipArchive => {
-                self.ui_state.gerber_viewer.begin_loading();
+                gerber_viewer.begin_loading();
                 Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
@@ -262,8 +367,8 @@ impl Signex
                             .await
                             .map(|file| file.path().to_path_buf())
                     },
-                    |path| {
-                        Message::GerberViewer(
+                    move |path| {
+                        route(
                             GerberViewerMessage::ZipArchiveChosen(path),
                         )
                     },
@@ -271,24 +376,28 @@ impl Signex
             }
             GerberViewerMessage::ZipArchiveChosen(Some(path)) => Task::perform(
                 async move { signex_gerber::load_zip_archive(path) },
-                |batch| {
-                    Message::GerberViewer(
+                move |batch| {
+                    route(
                         GerberViewerMessage::ZipArchiveLoaded(batch),
                     )
                 },
             ),
             GerberViewerMessage::ZipArchiveChosen(None) => {
-                self.ui_state.gerber_viewer.loading = false;
-                self.ui_state.gerber_viewer.status =
+                gerber_viewer.loading = false;
+                gerber_viewer.status =
                     "Open ZIP archive cancelled.".into();
                 Task::none()
             }
             GerberViewerMessage::ZipArchiveLoaded(batch) => {
-                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                self.apply_gerber_load_batch(
+                    document_id,
+                    &mut gerber_viewer,
+                    batch,
+                );
                 Task::none()
             }
             GerberViewerMessage::OpenGerberJob => {
-                self.ui_state.gerber_viewer.begin_loading();
+                gerber_viewer.begin_loading();
                 Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
@@ -298,8 +407,8 @@ impl Signex
                             .await
                             .map(|file| file.path().to_path_buf())
                     },
-                    |path| {
-                        Message::GerberViewer(
+                    move |path| {
+                        route(
                             GerberViewerMessage::GerberJobChosen(path),
                         )
                     },
@@ -307,24 +416,28 @@ impl Signex
             }
             GerberViewerMessage::GerberJobChosen(Some(path)) => Task::perform(
                 async move { signex_gerber::load_gerber_job_file(path) },
-                |batch| {
-                    Message::GerberViewer(
+                move |batch| {
+                    route(
                         GerberViewerMessage::GerberJobLoaded(batch),
                     )
                 },
             ),
             GerberViewerMessage::GerberJobChosen(None) => {
-                self.ui_state.gerber_viewer.loading = false;
-                self.ui_state.gerber_viewer.status =
+                gerber_viewer.loading = false;
+                gerber_viewer.status =
                     "Open Gerber job cancelled.".into();
                 Task::none()
             }
             GerberViewerMessage::GerberJobLoaded(batch) => {
-                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                self.apply_gerber_load_batch(
+                    document_id,
+                    &mut gerber_viewer,
+                    batch,
+                );
                 Task::none()
             }
             GerberViewerMessage::OpenGerberFiles => {
-                self.ui_state.gerber_viewer.begin_loading();
+                gerber_viewer.begin_loading();
                 Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
@@ -346,26 +459,32 @@ impl Signex
                                     .collect::<Vec<_>>()
                             })
                     },
-                    |paths| {
-                        Message::GerberViewer(GerberViewerMessage::GerberFilesChosen(paths))
+                    move |paths| {
+                        route(GerberViewerMessage::GerberFilesChosen(paths))
                     },
                 )
             }
             GerberViewerMessage::GerberFilesChosen(Some(paths)) => Task::perform(
                 async move { signex_gerber::load_gerber_files(paths) },
-                |batch| Message::GerberViewer(GerberViewerMessage::GerberFilesLoaded(batch)),
+                move |batch| {
+                    route(GerberViewerMessage::GerberFilesLoaded(batch))
+                },
             ),
             GerberViewerMessage::GerberFilesChosen(None) => {
-                self.ui_state.gerber_viewer.loading = false;
-                self.ui_state.gerber_viewer.status = "Open Gerber files cancelled.".into();
+                gerber_viewer.loading = false;
+                gerber_viewer.status = "Open Gerber files cancelled.".into();
                 Task::none()
             }
             GerberViewerMessage::GerberFilesLoaded(batch) => {
-                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                self.apply_gerber_load_batch(
+                    document_id,
+                    &mut gerber_viewer,
+                    batch,
+                );
                 Task::none()
             }
             GerberViewerMessage::OpenExcellonFiles => {
-                self.ui_state.gerber_viewer.begin_loading();
+                gerber_viewer.begin_loading();
                 Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
@@ -380,376 +499,405 @@ impl Signex
                                     .collect::<Vec<_>>()
                             })
                     },
-                    |paths| {
-                        Message::GerberViewer(GerberViewerMessage::ExcellonFilesChosen(paths))
+                    move |paths| {
+                        route(GerberViewerMessage::ExcellonFilesChosen(paths))
                     },
                 )
             }
             GerberViewerMessage::ExcellonFilesChosen(Some(paths)) => Task::perform(
                 async move { signex_gerber::load_excellon_files(paths) },
-                |batch| Message::GerberViewer(GerberViewerMessage::ExcellonFilesLoaded(batch)),
+                move |batch| {
+                    route(GerberViewerMessage::ExcellonFilesLoaded(batch))
+                },
             ),
             GerberViewerMessage::ExcellonFilesChosen(None) => {
-                self.ui_state.gerber_viewer.loading = false;
-                self.ui_state.gerber_viewer.status = "Open Excellon files cancelled.".into();
+                gerber_viewer.loading = false;
+                gerber_viewer.status = "Open Excellon files cancelled.".into();
                 Task::none()
             }
             GerberViewerMessage::ExcellonFilesLoaded(batch) => {
-                self.ui_state.gerber_viewer.apply_load_batch(batch);
+                self.apply_gerber_load_batch(
+                    document_id,
+                    &mut gerber_viewer,
+                    batch,
+                );
                 Task::none()
             }
             GerberViewerMessage::ReloadAllLayers => {
-                self.ui_state.gerber_viewer.begin_loading();
-                let layers = self
-                    .ui_state
-                    .gerber_viewer
+                gerber_viewer.begin_loading();
+                let layers = gerber_viewer
                     .layers
                     .iter()
                     .map(|layer| layer.layer.clone())
                     .collect::<Vec<_>>();
                 Task::perform(
                     async move { signex_gerber::reload_layers(layers) },
-                    |batch| Message::GerberViewer(GerberViewerMessage::LayersReloaded(batch)),
+                    move |batch| {
+                        route(GerberViewerMessage::LayersReloaded(batch))
+                    },
                 )
             }
             GerberViewerMessage::LayersReloaded(batch) => {
-                self.ui_state.gerber_viewer.apply_reload_batch(batch);
+                gerber_viewer.apply_reload_batch(batch);
                 Task::none()
             }
             GerberViewerMessage::SelectLayer(index) => {
-                self.ui_state.gerber_viewer.select_layer(index);
+                gerber_viewer.select_layer(index);
                 Task::none()
             }
             GerberViewerMessage::NextLayer => {
-                self.ui_state.gerber_viewer.select_next_layer();
+                gerber_viewer.select_next_layer();
                 Task::none()
             }
             GerberViewerMessage::PreviousLayer => {
-                self.ui_state.gerber_viewer.select_previous_layer();
+                gerber_viewer.select_previous_layer();
                 Task::none()
             }
             GerberViewerMessage::MoveLayerUp =>
             {
-                self.ui_state.gerber_viewer.move_active_layer_up();
+                gerber_viewer.move_active_layer_up();
                 Task::none()
             }
             GerberViewerMessage::MoveLayerDown =>
             {
-                self.ui_state.gerber_viewer.move_active_layer_down();
+                gerber_viewer.move_active_layer_down();
                 Task::none()
             }
             GerberViewerMessage::SetLayerVisible(index, visible) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_layer_visible(index, visible);
                 Task::none()
             }
             GerberViewerMessage::SetLayerColor(index, palette_index) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_layer_color(index, palette_index);
                 Task::none()
             }
             GerberViewerMessage::SetGridColor(palette_index) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_grid_color(palette_index);
                 Task::none()
             }
             GerberViewerMessage::SetDCodeColor(palette_index) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_d_code_color(palette_index);
                 Task::none()
             }
             GerberViewerMessage::SetNegativeObjectColor(palette_index) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_negative_object_color(palette_index);
                 Task::none()
             }
             GerberViewerMessage::ClearCurrentLayer => {
-                self.ui_state.gerber_viewer.clear_current_layer();
+                gerber_viewer.clear_current_layer();
                 Task::none()
             }
             GerberViewerMessage::ClearAllLayers => {
-                self.ui_state.gerber_viewer.clear_all_layers();
+                gerber_viewer.clear_all_layers();
                 Task::none()
             }
             GerberViewerMessage::RedrawViewport => {
-                self.ui_state.gerber_viewer.redraw_viewport();
+                gerber_viewer.redraw_viewport();
                 Task::none()
             }
             GerberViewerMessage::ToggleSketchFlashes =>
             {
-                self.ui_state.gerber_viewer.toggle_sketch_flashes();
+                gerber_viewer.toggle_sketch_flashes();
                 Task::none()
             }
             GerberViewerMessage::ToggleSketchLines =>
             {
-                self.ui_state.gerber_viewer.toggle_sketch_lines();
+                gerber_viewer.toggle_sketch_lines();
                 Task::none()
             }
             GerberViewerMessage::ToggleSketchPolygons =>
             {
-                self.ui_state.gerber_viewer.toggle_sketch_polygons();
+                gerber_viewer.toggle_sketch_polygons();
                 Task::none()
             }
             GerberViewerMessage::ToggleGhostNegativeObjects =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .toggle_ghost_negative_objects();
                 Task::none()
             }
             GerberViewerMessage::ToggleDCodeLabels =>
             {
-                self.ui_state.gerber_viewer.toggle_d_code_labels();
+                gerber_viewer.toggle_d_code_labels();
                 Task::none()
             }
             GerberViewerMessage::ToggleCompareMode =>
             {
-                self.ui_state.gerber_viewer.toggle_compare_mode();
+                gerber_viewer.toggle_compare_mode();
                 Task::none()
             }
             GerberViewerMessage::ToggleForcedOpacityMode =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .toggle_forced_opacity_mode();
                 Task::none()
             }
             GerberViewerMessage::ToggleDimInactiveLayers =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .toggle_dim_inactive_layers();
                 Task::none()
             }
             GerberViewerMessage::ToggleMirrored =>
             {
-                self.ui_state.gerber_viewer.toggle_mirrored();
+                gerber_viewer.toggle_mirrored();
                 Task::none()
             }
             GerberViewerMessage::ZoomBy(factor) => {
-                self.ui_state.gerber_viewer.zoom_by(factor);
+                gerber_viewer.zoom_by(factor);
                 Task::none()
             }
             GerberViewerMessage::PanBy(delta) => {
-                self.ui_state.gerber_viewer.pan_by(delta);
+                gerber_viewer.pan_by(delta);
                 Task::none()
             }
             GerberViewerMessage::FitPage => {
-                self.ui_state.gerber_viewer.fit_page();
+                gerber_viewer.fit_page();
                 Task::none()
             }
             GerberViewerMessage::ToggleLayerManager => {
-                self.ui_state.gerber_viewer.toggle_layer_manager();
+                gerber_viewer.toggle_layer_manager();
+                self.ui_state.gerber_workspace.set_tool_visible(
+                    GerberDockPanel::Layers,
+                    gerber_viewer
+                        .is_tool_panel_visible(GerberDockPanel::Layers),
+                );
                 Task::none()
             }
             GerberViewerMessage::ToggleLayerInformation => {
-                self.ui_state.gerber_viewer.toggle_layer_information();
+                gerber_viewer.toggle_layer_information();
+                self.ui_state.gerber_workspace.set_tool_visible(
+                    GerberDockPanel::LayerInformation,
+                    gerber_viewer.is_tool_panel_visible(
+                        GerberDockPanel::LayerInformation,
+                    ),
+                );
                 Task::none()
             }
             GerberViewerMessage::ToggleDCodeList => {
-                self.ui_state.gerber_viewer.toggle_d_code_list();
+                gerber_viewer.toggle_d_code_list();
+                self.ui_state.gerber_workspace.set_tool_visible(
+                    GerberDockPanel::DCodes,
+                    gerber_viewer
+                        .is_tool_panel_visible(GerberDockPanel::DCodes),
+                );
                 Task::none()
             }
             GerberViewerMessage::ToggleSourceView => {
-                self.ui_state.gerber_viewer.toggle_source_view();
+                gerber_viewer.toggle_source_view();
+                self.ui_state.gerber_workspace.set_tool_visible(
+                    GerberDockPanel::Source,
+                    gerber_viewer
+                        .is_tool_panel_visible(GerberDockPanel::Source),
+                );
                 Task::none()
             }
             GerberViewerMessage::SelectGridSize(index) => {
-                self.ui_state.gerber_viewer.select_grid_size(index);
+                gerber_viewer.select_grid_size(index);
                 Task::none()
             }
             GerberViewerMessage::OpenGridEditor => {
-                self.handle_open_gerber_grid_editor()
+                self.handle_open_gerber_grid_editor(
+                    document_id,
+                    &gerber_viewer,
+                )
             }
             GerberViewerMessage::NewGridNameChanged(value) => {
-                self.ui_state.gerber_viewer.set_new_grid_name(value);
+                gerber_viewer.set_new_grid_name(value);
                 Task::none()
             }
             GerberViewerMessage::NewGridXChanged(value) => {
-                self.ui_state.gerber_viewer.set_new_grid_x(value);
+                gerber_viewer.set_new_grid_x(value);
                 Task::none()
             }
             GerberViewerMessage::NewGridYChanged(value) => {
-                self.ui_state.gerber_viewer.set_new_grid_y(value);
+                gerber_viewer.set_new_grid_y(value);
                 Task::none()
             }
             GerberViewerMessage::SetNewGridUnitMillimetres(millimetres) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_new_grid_unit_millimetres(millimetres);
                 Task::none()
             }
             GerberViewerMessage::CreateGridDefinition => {
-                self.ui_state.gerber_viewer.create_grid();
+                gerber_viewer.create_grid();
                 Task::none()
             }
             GerberViewerMessage::DeleteGridDefinition => {
-                self.ui_state.gerber_viewer.delete_grid();
+                gerber_viewer.delete_grid();
                 Task::none()
             }
             GerberViewerMessage::MoveGridUp => {
-                self.ui_state.gerber_viewer.move_grid_up();
+                gerber_viewer.move_grid_up();
                 Task::none()
             }
             GerberViewerMessage::MoveGridDown => {
-                self.ui_state.gerber_viewer.move_grid_down();
+                gerber_viewer.move_grid_down();
                 Task::none()
             }
             GerberViewerMessage::EditGridNameChanged(value) => {
-                self.ui_state.gerber_viewer.set_edit_grid_name(value);
+                gerber_viewer.set_edit_grid_name(value);
                 Task::none()
             }
             GerberViewerMessage::EditGridXChanged(value) => {
-                self.ui_state.gerber_viewer.set_edit_grid_x(value);
+                gerber_viewer.set_edit_grid_x(value);
                 Task::none()
             }
             GerberViewerMessage::EditGridYChanged(value) => {
-                self.ui_state.gerber_viewer.set_edit_grid_y(value);
+                gerber_viewer.set_edit_grid_y(value);
                 Task::none()
             }
             GerberViewerMessage::SetEditGridUnitMillimetres(millimetres) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_edit_grid_unit_millimetres(millimetres);
                 Task::none()
             }
             GerberViewerMessage::UpdateGridDefinition => {
-                self.ui_state.gerber_viewer.update_grid();
+                gerber_viewer.update_grid();
                 Task::none()
             }
             GerberViewerMessage::ToggleGridVisibility(visible) => {
-                self.ui_state.gerber_viewer.set_grid_visible(visible);
+                gerber_viewer.set_grid_visible(visible);
                 Task::none()
             }
             GerberViewerMessage::SetDisplayUnit(unit) => {
-                self.ui_state.gerber_viewer.set_display_unit(unit);
+                gerber_viewer.set_display_unit(unit);
                 Task::none()
             }
             GerberViewerMessage::CycleDisplayUnit =>
             {
-                self.ui_state.gerber_viewer.cycle_display_unit();
+                gerber_viewer.cycle_display_unit();
                 Task::none()
             }
             GerberViewerMessage::CursorWorldPositionChanged(position) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_cursor_world_position(position);
                 Task::none()
             }
             GerberViewerMessage::ActivateSelectionTool =>
             {
-                self.ui_state.gerber_viewer.activate_selection_tool();
+                gerber_viewer.activate_selection_tool();
                 Task::none()
             }
             GerberViewerMessage::ActivateMeasurementTool =>
             {
-                self.ui_state.gerber_viewer.activate_measurement_tool();
+                gerber_viewer.activate_measurement_tool();
                 Task::none()
             }
             GerberViewerMessage::ToggleMeasurement =>
             {
-                self.ui_state.gerber_viewer.toggle_measurement();
+                gerber_viewer.toggle_measurement();
                 Task::none()
             }
             GerberViewerMessage::BeginMeasurement(point) =>
             {
-                self.ui_state.gerber_viewer.begin_measurement(point);
+                gerber_viewer.begin_measurement(point);
                 Task::none()
             }
             GerberViewerMessage::UpdateMeasurement(point) =>
             {
-                self.ui_state.gerber_viewer.update_measurement(point);
+                gerber_viewer.update_measurement(point);
                 Task::none()
             }
             GerberViewerMessage::CompleteMeasurement(point) =>
             {
-                self.ui_state.gerber_viewer.complete_measurement(point);
+                gerber_viewer.complete_measurement(point);
                 Task::none()
             }
             GerberViewerMessage::CaptureMeasurementPoint(point) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .capture_measurement_point(point);
                 Task::none()
             }
             GerberViewerMessage::ResetMeasurement =>
             {
-                self.ui_state.gerber_viewer.reset_measurement();
+                gerber_viewer.reset_measurement();
                 Task::none()
             }
             GerberViewerMessage::TogglePolarCoordinates(polar) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_polar_coordinates(polar);
                 Task::none()
             }
             GerberViewerMessage::ToggleFullWindowCrosshair(full_window) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_full_window_crosshair(full_window);
                 Task::none()
             }
             GerberViewerMessage::CycleCrosshairMode =>
             {
-                self.ui_state.gerber_viewer.cycle_crosshair_mode();
+                gerber_viewer.cycle_crosshair_mode();
                 Task::none()
             }
             GerberViewerMessage::SetPageSize(page_size) => {
-                self.ui_state.gerber_viewer.set_page_size(page_size);
+                gerber_viewer.set_page_size(page_size);
                 Task::none()
             }
-            GerberViewerMessage::PrintVisibleLayers => {
-                let bytes = match self.ui_state.gerber_viewer.print_pdf()
+            GerberViewerMessage::PrintVisibleLayers =>
+            {
+                match gerber_viewer.print_pdf()
                 {
-                    Ok(bytes) => bytes,
-                    Err(error) => {
-                        self.ui_state.gerber_viewer.status = error;
-                        return Task::none();
-                    }
-                };
-                self.ui_state.gerber_viewer.status =
-                    "Choose where to save the Gerber print PDF.".into();
-                Task::perform(
-                    async move {
-                        let Some(file) = rfd::AsyncFileDialog::new()
-                            .set_title("Print Visible Gerber Layers to PDF")
-                            .add_filter("PDF document", &["pdf"])
-                            .set_file_name("gerber-view.pdf")
-                            .save_file()
-                            .await
-                        else
-                        {
-                            return Err("Gerber PDF print cancelled.".to_owned());
-                        };
-                        let mut path = file.path().to_path_buf();
-                        if path.extension().is_none()
-                        {
-                            path.set_extension("pdf");
-                        }
-                        std::fs::write(&path, bytes).map_err(|error| {
-                            format!("Could not write {}: {error}", path.display())
-                        })?;
-                        Ok(path)
-                    },
-                    |result| {
-                        Message::GerberViewer(
-                            GerberViewerMessage::GerberPrintFinished(result),
+                    Ok(bytes) =>
+                    {
+                        gerber_viewer.status =
+                            "Choose where to save the Gerber print PDF.".into();
+                        Task::perform(
+                            async move {
+                                let Some(file) = rfd::AsyncFileDialog::new()
+                                    .set_title(
+                                        "Print Visible Gerber Layers to PDF",
+                                    )
+                                    .add_filter("PDF document", &["pdf"])
+                                    .set_file_name("gerber-view.pdf")
+                                    .save_file()
+                                    .await
+                                else
+                                {
+                                    return Err(
+                                        "Gerber PDF print cancelled.".to_owned(),
+                                    );
+                                };
+                                let mut path = file.path().to_path_buf();
+                                if path.extension().is_none()
+                                {
+                                    path.set_extension("pdf");
+                                }
+                                std::fs::write(&path, bytes).map_err(|error| {
+                                    format!(
+                                        "Could not write {}: {error}",
+                                        path.display(),
+                                    )
+                                })?;
+                                Ok(path)
+                            },
+                            move |result| {
+                                route(
+                                    GerberViewerMessage::GerberPrintFinished(
+                                        result,
+                                    ),
+                                )
+                            },
                         )
-                    },
-                )
+                    }
+                    Err(error) =>
+                    {
+                        gerber_viewer.status = error;
+                        Task::none()
+                    }
+                }
             }
             GerberViewerMessage::GerberPrintFinished(result) => {
-                self.ui_state.gerber_viewer.status = match result
+                gerber_viewer.status = match result
                 {
                     Ok(path) => {
                         format!("Printed visible Gerber layers to {}.", path.display())
@@ -760,7 +908,7 @@ impl Signex
             }
             GerberViewerMessage::ExportNativePcb =>
             {
-                self.ui_state.gerber_viewer.status =
+                gerber_viewer.status =
                     "Choose where to save the lossy native PCB conversion."
                         .into();
                 Task::perform(
@@ -773,8 +921,8 @@ impl Signex
                             .await
                             .map(|file| file.path().to_path_buf())
                     },
-                    |path| {
-                        Message::GerberViewer(
+                    move |path| {
+                        route(
                             GerberViewerMessage::NativePcbPathChosen(path),
                         )
                     },
@@ -786,56 +934,61 @@ impl Signex
                 {
                     path.set_extension("snxpcb");
                 }
-                let export = self.ui_state.gerber_viewer.export_native_pcb();
+                let export = gerber_viewer.export_native_pcb();
                 let summary = export.report.detailed_summary();
                 if export.report.converted_count() == 0
                 {
-                    self.ui_state.gerber_viewer.status = format!(
+                    gerber_viewer.status = format!(
                         "No supported Gerber artwork was exported. {summary}",
                     );
-                    return Task::none();
+                    Task::none()
                 }
-                let source = match export.write_string()
+                else
                 {
-                    Ok(source) => source,
-                    Err(error) =>
+                    match export.write_string()
                     {
-                        self.ui_state.gerber_viewer.status = error;
-                        return Task::none();
-                    }
-                };
-                Task::perform(
-                    async move {
-                        signex_types::atomic_io::atomic_write(
-                            &path,
-                            source.as_bytes(),
-                        )
-                        .map_err(|error| {
-                            format!(
-                                "Could not write {}: {error}",
-                                path.display(),
+                        Ok(source) =>
+                        {
+                            Task::perform(
+                                async move {
+                                    signex_types::atomic_io::atomic_write(
+                                        &path,
+                                        source.as_bytes(),
+                                    )
+                                    .map_err(|error| {
+                                        format!(
+                                            "Could not write {}: {error}",
+                                            path.display(),
+                                        )
+                                    })?;
+                                    Ok((path, summary))
+                                },
+                                move |result| {
+                                    route(
+                                        GerberViewerMessage::NativePcbExportFinished(
+                                            result,
+                                        ),
+                                    )
+                                },
                             )
-                        })?;
-                        Ok((path, summary))
-                    },
-                    |result| {
-                        Message::GerberViewer(
-                            GerberViewerMessage::NativePcbExportFinished(
-                                result,
-                            ),
-                        )
-                    },
-                )
+                        }
+                        Err(error) =>
+                        {
+                            gerber_viewer.status = error;
+                            Task::none()
+                        }
+                    }
+                }
             }
             GerberViewerMessage::NativePcbPathChosen(None) =>
             {
-                self.ui_state.gerber_viewer.status =
+                gerber_viewer.status =
                     "Lossy native PCB export cancelled.".into();
                 Task::none()
             }
             GerberViewerMessage::NativePcbExportFinished(result) =>
             {
-                self.ui_state.gerber_viewer.status = match result
+                gerber_viewer.status = match result
                 {
                     Ok((path, summary)) =>
                     {
@@ -849,90 +1002,224 @@ impl Signex
                 Task::none()
             }
             GerberViewerMessage::ToggleZoomSelection => {
-                self.ui_state.gerber_viewer.toggle_zoom_selection();
+                gerber_viewer.toggle_zoom_selection();
                 Task::none()
             }
             GerberViewerMessage::SetHighlightedComponent(component) => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_highlighted_component(component);
                 Task::none()
             }
             GerberViewerMessage::ClearComponentHighlight => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .clear_component_highlight();
                 Task::none()
             }
             GerberViewerMessage::SetHighlightedNet(net) => {
-                self.ui_state.gerber_viewer.set_highlighted_net(net);
+                gerber_viewer.set_highlighted_net(net);
                 Task::none()
             }
             GerberViewerMessage::ClearNetHighlight => {
-                self.ui_state.gerber_viewer.clear_net_highlight();
+                gerber_viewer.clear_net_highlight();
                 Task::none()
             }
             GerberViewerMessage::SetHighlightedAttribute(attribute) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_highlighted_attribute(attribute);
                 Task::none()
             }
             GerberViewerMessage::ClearAttributeHighlight =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .clear_attribute_highlight();
                 Task::none()
             }
             GerberViewerMessage::SetHighlightedDCode(d_code) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_highlighted_d_code(d_code);
                 Task::none()
             }
             GerberViewerMessage::ClearDCodeHighlight =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .clear_d_code_highlight();
                 Task::none()
             }
             GerberViewerMessage::ClearHighlight =>
             {
-                self.ui_state.gerber_viewer.clear_highlight();
+                gerber_viewer.clear_highlight();
                 Task::none()
             }
             GerberViewerMessage::SetSelectedItem(selection) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_selected_item(selection);
                 Task::none()
             }
             GerberViewerMessage::SetRegionSelection(selections) =>
             {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .set_region_selection(selections);
                 Task::none()
             }
             GerberViewerMessage::ZoomToSelection { bounds, viewport } => {
-                self.ui_state
-                    .gerber_viewer
+                gerber_viewer
                     .zoom_to_selection(bounds, viewport);
                 Task::none()
             }
-        }
+        };
+
+        self.ui_state
+            .gerber_workspace
+            .restore_viewer(document_id, gerber_viewer);
+        task
     }
 }
 
 #[cfg(test)]
 mod tests
 {
+    use std::io::Cursor;
+
     use super::*;
+
+    fn gerber_document_ids(app: &Signex) -> Vec<GerberDocumentId>
+    {
+        app.ui_state
+            .gerber_workspace
+            .documents()
+            .iter()
+            .map(|document| document.id)
+            .collect()
+    }
+
+    fn gerber_document<'a>(
+        app: &'a Signex,
+        document_id: GerberDocumentId,
+    ) -> &'a GerberViewerState
+    {
+        app.ui_state
+            .gerber_workspace
+            .viewer(document_id)
+            .expect("Gerber document state")
+    }
+
+    #[test]
+    fn multiple_gerber_documents_keep_messages_and_state_isolated()
+    {
+        let (mut app, _task) = Signex::new();
+        let _ = app.dispatch_gerber_viewer_message(
+            app.ui_state.gerber_workspace.active_document_id(),
+            GerberViewerMessage::NewDocument,
+        );
+        let document_ids = gerber_document_ids(&app);
+
+        assert_eq!(document_ids.len(), 2);
+        assert_ne!(document_ids[0], document_ids[1]);
+
+        let _ = app.dispatch_gerber_viewer_message(
+            document_ids[0],
+            GerberViewerMessage::ZoomBy(2.0),
+        );
+        let _ = app.dispatch_gerber_viewer_message(
+            document_ids[1],
+            GerberViewerMessage::ZoomBy(0.5),
+        );
+
+        assert_eq!(gerber_document(&app, document_ids[0]).zoom, 2.0);
+        assert_eq!(gerber_document(&app, document_ids[1]).zoom, 0.5);
+
+        let _ = app.dispatch_gerber_viewer_message(
+            document_ids[0],
+            GerberViewerMessage::NativePcbPathChosen(Some(
+                std::path::PathBuf::from(".temp/empty.snxpcb"),
+            )),
+        );
+
+        assert!(gerber_document(&app, document_ids[0])
+            .status
+            .contains("No supported Gerber artwork"));
+        assert_eq!(gerber_document(&app, document_ids[1]).zoom, 0.5);
+    }
+
+    #[test]
+    fn first_successful_load_names_its_own_document_tab()
+    {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.gerber_workspace.new_document();
+        let document_ids = gerber_document_ids(&app);
+        let layer = signex_gerber::load_gerber_reader(
+            "front-copper.gbr",
+            Cursor::new(
+                b"%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000*%\nD10*\nX0Y0D03*\nM02*\n",
+            ),
+        )
+        .expect("test Gerber must parse");
+
+        let _ = app.dispatch_gerber_viewer_message(
+            document_ids[0],
+            GerberViewerMessage::GerberFilesLoaded(
+                signex_gerber::GerberLoadBatch {
+                    layers: vec![layer],
+                    failures: Vec::new(),
+                },
+            ),
+        );
+
+        let titles = app
+            .ui_state
+            .gerber_workspace
+            .documents()
+            .iter()
+            .map(|document| document.title.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(titles, ["front-copper.gbr", "Gerber Viewer 2"]);
+        assert_eq!(
+            gerber_document(&app, document_ids[0]).layers.len(),
+            1,
+        );
+        assert!(gerber_document(&app, document_ids[1]).layers.is_empty());
+    }
+
+    #[test]
+    fn closing_a_gerber_document_clears_its_grid_editor()
+    {
+        let (mut app, _task) = Signex::new();
+        let document_id =
+            app.ui_state.gerber_workspace.active_document_id();
+        let editor =
+            GerberGridEditorState::from_viewer(
+                gerber_document(&app, document_id),
+            );
+        app.ui_state.gerber_grid_editor = Some(editor);
+        app.ui_state.gerber_grid_editor_document = Some(document_id);
+
+        let _ = app.dispatch_gerber_viewer_message(
+            document_id,
+            GerberViewerMessage::document_closed(document_id),
+        );
+
+        assert!(app.ui_state.gerber_grid_editor.is_none());
+        assert!(app.ui_state.gerber_grid_editor_document.is_none());
+    }
+
+    #[test]
+    fn gerber_viewer_registers_as_a_dedicated_window()
+    {
+        let (mut app, _task) = Signex::new();
+        let main_tab_count = app.document_state.tabs.len();
+        let window_id = iced::window::Id::unique();
+
+        let _ = app.dispatch_update(Message::GerberViewerOpened(window_id));
+
+        assert!(matches!(
+            app.ui_state.windows.get(&window_id),
+            Some(crate::app::state::WindowKind::GerberViewer),
+        ));
+        assert_eq!(app.document_state.tabs.len(), main_tab_count);
+    }
 
     #[test]
     fn built_in_profiles_bind_gerber_keys_through_widget_boundary()

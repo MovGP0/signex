@@ -78,14 +78,17 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
-                super::state::WindowKind::GerberViewer => {
+                super::state::WindowKind::GerberViewer =>
+                {
                     let tokens = &self.document_state.panel_ctx.tokens;
                     let body = signex_widgets::gerber_viewer::view(
-                        &self.ui_state.gerber_viewer,
+                        &self.ui_state.gerber_workspace,
                         &self.ui_state.active_keymap,
                         tokens,
                     )
-                    .map(Message::GerberViewer);
+                    .map(move |(document_id, message)| {
+                        Message::GerberViewer(document_id, message)
+                    });
                     self.view_secondary_window_frame(
                         window_id,
                         "Signex — Gerber Viewer",
@@ -93,7 +96,7 @@ impl Signex {
                         tokens,
                     )
                 }
-                super::state::WindowKind::GerberGridEditor => {
+                super::state::WindowKind::GerberGridEditor { .. } => {
                     let tokens = &self.document_state.panel_ctx.tokens;
                     let body = match self.ui_state.gerber_grid_editor.as_ref()
                     {
