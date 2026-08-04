@@ -754,10 +754,7 @@ mod tests {
             .collect()
     }
 
-    fn gerber_document<'a>(
-        app: &'a Signex,
-        document_id: GerberDocumentId,
-    ) -> &'a GerberViewerState {
+    fn gerber_document(app: &Signex, document_id: GerberDocumentId) -> &GerberViewerState {
         app.ui_state
             .gerber_workspace
             .viewer(document_id)
@@ -919,7 +916,7 @@ mod tests {
                 crate::keymap::KeyStroke::from_iced(&p, iced::keyboard::Modifiers::CTRL)
                     .expect("Ctrl+P must be a key stroke");
             let print_lookup = keymap.lookup(
-                &[print_stroke.clone()],
+                std::slice::from_ref(&print_stroke),
                 &[
                     crate::keymap::ShortcutContext::Global,
                     crate::keymap::ShortcutContext::Gerber,

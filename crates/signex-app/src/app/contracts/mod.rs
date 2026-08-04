@@ -33,7 +33,6 @@ pub enum Message {
         document_id: signex_widgets::gerber_viewer::GerberDocumentId,
         window_id: iced::window::Id,
     },
-    OpenPassiveCalculator,
     PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted
