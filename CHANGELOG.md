@@ -18,6 +18,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — schematic engine
+
+- **`PlaceChildSheet` engine command** — adds a hierarchical sheet symbol to the schematic as one undoable step and marks `CHILD_SHEETS` dirty so the project netlist cache invalidates. A blank `filename` is rejected with `EngineError::EmptyChildSheetFilename`; an empty `name` is allowed. Engine only — the Place Sheet canvas tool is separate (#357).
 ### Added — start screen
 
 - **Actionable start screen** — with nothing loaded, the empty centre region now shows the product name and version with **New Project**, **Open Project…** and **Keyboard Shortcuts (F1)** buttons, all dispatching existing menu messages and styled from `ThemeTokens`. A loaded project with no document selected keeps its own quieter hint. Open Sample Project and recent projects are left out until those features land (#331).
