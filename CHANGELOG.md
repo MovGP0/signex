@@ -40,6 +40,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **GPU scene render path** — the PCB editor canvas can render traces, pads, vias, and zones through the `signex_gfx` wgpu pipelines via iced's `shader` widget instead of CPU `canvas::Frame` tessellation. Gated behind `feature_flags::PCB_GPU_RENDER` (default `false`) plus a Preferences toggle; the CPU path stays the default until GPU visual parity is confirmed on hardware.
 - **CPU↔GPU draw-order parity lock** — a shared `signex_gfx::scene::order` module defines the canonical bucket draw order both paths walk, so neither path can drift silently.
 
+### Added — Help menu and File ▸ Open Recent
+
+- **Help menu** — `Help ▸ About Signex` is a real dialog (version from the workspace manifest, licence link, Copy version info) instead of a disabled stub, and `Help ▸ Documentation` / `Help ▸ Report an Issue` open the user guide and the issue tracker in the default browser (#332).
+- **File ▸ Open Recent** — the last 10 projects opened (or created) are remembered in `prefs.json`, de-duplicated by canonical path and listed newest first; choosing one reopens it through File ▸ Open, a project that has been deleted is dropped with a notice, and Clear Recent empties the list (#333).
 ### Added — BOM
 
 - **BOM validation in the export modal** — a new Rules tab lists the four `signex-bom` rules as toggles and the live issues (by severity, naming each designator); the footer shows the error/warning count next to Export. The report re-validates on every grouping / variant / DNP / rule change, and an export with issues still writes the file and reports the summary (#355).
