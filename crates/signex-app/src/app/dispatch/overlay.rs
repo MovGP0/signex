@@ -10,12 +10,12 @@ impl Signex {
                 Task::none()
             }
             OverlayMsg::OpenPanel(kind) => {
+                // The generic panel-list entry point. It used to send
+                // *every* kind to the right column, so picking a panel
+                // whose home is elsewhere — Projects, Signal, ERC —
+                // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
-                self.document_state
-                    .dock
-                    .add_panel(crate::dock::PanelPosition::Right, kind);
-                crate::fonts::write_dock_layout(&self.document_state.dock);
-                Task::none()
+                self.show_panel(kind)
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
@@ -435,12 +435,21 @@ impl Signex {
 
     /// Preferences modal family handler (namespaced, ADR-0001 D3).
     pub(crate) fn dispatch_preferences_message(&mut self, msg: PreferencesMsg) -> Task<Message> {
-        match msg {
+        let task = match msg {
             PreferencesMsg::Open => self.handle_preferences_open_requested(),
             PreferencesMsg::Close => self.handle_preferences_close_requested(),
             PreferencesMsg::Nav(nav) => self.handle_preferences_navigation_requested(nav),
             PreferencesMsg::Inner(msg) => self.handle_preferences_message(msg),
-        }
+        };
+        // Preferences handlers report real failures — a refused write, a
+        // recovery action that could not move the broken file aside — and
+        // this dispatcher does not run `finish_update`, so without this
+        // those records sit in the ring buffer until some unrelated later
+        // message republishes them. A log window that shows a failure
+        // several actions after it happened is worse than useless: it
+        // attaches the message to the wrong action.
+        self.sync_diagnostics_panel_ctx();
+        task
     }
 
     /// Enable Version Control modal family handler (namespaced, ADR-0001 D3).

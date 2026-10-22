@@ -41,11 +41,23 @@ mod prefs;
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
+#[path = "regression/diagnostics_routing.rs"]
+mod diagnostics_routing;
+
 #[path = "regression/preferences_export_status.rs"]
 mod preferences_export_status;
 
+#[path = "regression/preferences_prefs_recovery.rs"]
+mod preferences_prefs_recovery;
+
+#[path = "regression/preferences_symbol_drafts.rs"]
+mod preferences_symbol_drafts;
+
 #[path = "regression/undo_marker_divergence.rs"]
 mod undo_marker_divergence;
+
+#[path = "regression/primitive_dirty_quit.rs"]
+mod primitive_dirty_quit;
 
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
@@ -73,3 +85,15 @@ mod sketch_state;
 
 #[path = "regression/file_open_async.rs"]
 mod file_open_async;
+
+#[path = "regression/history_load_failure.rs"]
+mod history_load_failure;
+
+#[path = "regression/library_browser_cell_commit.rs"]
+mod library_browser_cell_commit;
+
+#[path = "regression/render_config_grid_style.rs"]
+mod render_config_grid_style;
+
+#[path = "regression/rename_save_as_rekey.rs"]
+mod rename_save_as_rekey;

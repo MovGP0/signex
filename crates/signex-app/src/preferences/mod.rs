@@ -144,6 +144,11 @@ pub enum PrefMsg {
     DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
     /// Clear every ERC severity override — reset to defaults.
     ResetErcSeverities,
+    /// Move an unloadable `prefs.json` aside so writes can resume from a
+    /// fresh file, keeping the original on disk beside it (#602). Offered
+    /// only from the banner, and the handler re-checks the file before
+    /// acting: a healthy file is never moved.
+    ResetPrefsFile,
     /// Library → Distributor APIs pane forwarded a settings message.
     /// Folded into `PrefMsg` so the Preferences modal can mount the
     /// live panel as a first-class pane without breaking the
@@ -184,6 +189,14 @@ pub enum PrefMsg {
     KeymapCreateCustomProfile,
     /// Delete the active custom profile draft (built-ins are protected).
     KeymapDeleteActiveProfile,
+    /// Recover the profiles held in `keyboard_shortcuts.toml.bak` (#603).
+    /// Reads the backup through the normal loader — it is not a
+    /// file-level copy back, because the backup is by definition the file
+    /// that failed to load.
+    KeymapRestoreFromBackup,
+    /// Delete `keyboard_shortcuts.toml.bak` (#603). Only ever from this
+    /// explicit action; no save path removes it.
+    KeymapDiscardBackup,
     /// Open a file picker to import a custom profile (`.toml`).
     KeymapImportProfile,
     /// Loaded profile source from the import pick dialog.
@@ -272,6 +285,28 @@ pub struct PrefsView<'a> {
     pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     pub keymap_editor: &'a crate::keymap::KeymapEditorModel,
     pub keymap_status: &'a str,
+    /// Boot-time shortcut-file load failure (#595). `Some` renders a
+    /// persistent banner under the pane header naming the file and the
+    /// error; `None` renders nothing. Distinct from `keymap_status`,
+    /// which is transient per-action feedback cleared on every open.
+    pub keymap_load_error: Option<&'a str>,
+    /// Path of `keyboard_shortcuts.toml.bak` when it exists (#603).
+    /// `Some` renders the recover row with its Restore and Discard
+    /// actions. Independent of `keymap_load_error` — the backup outlives
+    /// the failure that produced it.
+    pub keymap_backup: Option<&'a str>,
+    /// `prefs.json` health failure (#602). `Some` renders a dialog-wide
+    /// banner naming the file and the error; `None` renders nothing.
+    ///
+    /// Dialog-wide and not pane-local, unlike [`Self::keymap_load_error`]:
+    /// `keyboard_shortcuts.toml` backs one pane, but `prefs.json` backs
+    /// every pane in this dialog — theme, dock, ERC severities, filter
+    /// presets, component classes — so a banner tucked inside one pane is
+    /// invisible to a user sitting in another.
+    pub prefs_load_error: Option<&'a str>,
+    /// Result of the prefs-file recovery action. Transient per-action
+    /// feedback shown in the same banner; empty renders nothing.
+    pub prefs_status: &'a str,
     pub keymap_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     pub theme_id: ThemeId,
@@ -332,6 +367,8 @@ fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         dirty,
         theme_id,
+        prefs_load_error,
+        prefs_status,
         ..
     } = v;
 
@@ -400,7 +437,15 @@ fn build_dialog<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .into()
     };
 
-    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider(), body.into()];
+    // The prefs-file banner sits above the nav / content split, so it is
+    // outside every `scrollable` and shows in whichever pane the user is
+    // on. `view()` and `view_body()` both funnel through here, so this one
+    // insertion covers the in-app overlay and the detached OS window.
+    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider()];
+    if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
+        col_items.push(banner);
+    }
+    col_items.push(body.into());
     if let Some(footer) = footer_opt {
         col_items.push(h_divider());
         col_items.push(footer);
@@ -528,6 +573,8 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_component_classes,
         keymap_editor,
         keymap_status,
+        keymap_load_error,
+        keymap_backup,
         keymap_search,
         keymap_recorder,
         ..
@@ -548,9 +595,14 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
-        PrefNav::Keyboard => {
-            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_search, keymap_recorder)
-        }
+        PrefNav::Keyboard => content_keyboard_shortcuts(
+            keymap_editor,
+            keymap_status,
+            keymap_load_error,
+            keymap_backup,
+            keymap_search,
+            keymap_recorder,
+        ),
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
@@ -629,7 +681,7 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         text("● Unsaved changes").size(11).style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
-        Space::new().width(8),
+        Space::new().width(12),
         save_btn(),
     ]
     .align_y(iced::Alignment::Center)
@@ -639,7 +691,22 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         container(footer_row)
             .width(Length::Fill)
             .height(FOOTER_H)
-            .padding([0, 16])
+            // Centre the row in the strip. `container` aligns its content
+            // to the top by default, and the row's own `align_y(Center)`
+            // only centres its children against each other inside the
+            // row's own height — neither moves the row down inside a
+            // fixed-height parent, so without this the buttons sit flush
+            // against the divider above them.
+            //
+            // `align_y` and NOT `center_y`: the latter is
+            // `self.height(height).align_y(Center)`, so it would replace
+            // the fixed `FOOTER_H` above and let the strip swallow every
+            // spare pixel of the dialog.
+            .align_y(iced::alignment::Vertical::Center)
+            // 20 rather than 16 on the sides: at 16 the Save button sat
+            // almost against the card's right border, and the strip reads
+            // as cramped even though the footer's own height is fixed.
+            .padding([0, 20])
             .style(move |theme: &Theme| {
                 let palette = theme.extended_palette();
                 container::Style {
@@ -658,9 +725,118 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
     )
 }
 
+/// Dialog-wide alert strip for a `prefs.json` that could not be loaded,
+/// carrying the result of the recovery action once it has run (#602).
+///
+/// `None` — and therefore a dialog byte-for-byte what it is today — is
+/// the healthy case: nothing to report and nothing to offer. That is the
+/// acceptance criterion "with a healthy `prefs.json`, nothing about the
+/// current behaviour changes".
+///
+/// Same alert-strip shape as [`build_footer`]: a `background.weak` fill
+/// with a `background.strong` hairline, every colour resolved from the
+/// theme rather than hardcoded, so it reads on light and dark palettes.
+/// The button is [`secondary_button_style`] and not `danger_button_style`
+/// on purpose — the action is neutral. Nothing is deleted; the file the
+/// user may still want is renamed, not removed.
+fn build_prefs_file_banner<'a>(
+    load_error: Option<&'a str>,
+    status: &'a str,
+) -> Option<Element<'a, PrefMsg>> {
+    if load_error.is_none() && status.is_empty() {
+        return None;
+    }
+
+    // `Length::Fill`, and no `Space` spacer beside it. `iced`'s flex pass
+    // lays non-`Fill` children out in source order, subtracting each
+    // measured width from what is left, and only serves `Fill` children
+    // from the remainder afterwards. A `Shrink` text column therefore
+    // measures against the dialog's whole inner width first and leaves
+    // the button a ~37px sliver on the 900px detached Preferences window,
+    // with its label wrapped to five lines and the spacer given 0px.
+    // Making the text the fluid child inverts that: the button is the
+    // only `Shrink` child in the first pass, takes its natural width, and
+    // the text wraps into what remains.
+    let mut lines = column![].spacing(4).width(Length::Fill);
+    if let Some(error) = load_error {
+        // Name the real file, resolved through the same accessor the
+        // probe and the recovery use, so the path the user is told to
+        // repair is the path the app actually reads and writes.
+        let path = crate::fonts::prefs_file_path().display().to_string();
+        lines = lines.push(
+            text(format!("Your preferences file at {path} {error}."))
+                .size(11)
+                .style(text_warning),
+        );
+        // Scoped to what `prefs.json` actually backs. The banner spans
+        // the whole dialog, and two of the panes it covers persist
+        // elsewhere: Keyboard Shortcuts through `keyboard_shortcuts.toml`
+        // and Library Distributors through `distributors.toml`. Claiming
+        // "nothing you change is being saved" there is false, and on the
+        // Distributors pane it invites a user to re-enter API keys that
+        // did save.
+        lines = lines.push(
+            text(
+                "Appearance, ERC severities, component classes and panel layout are showing \
+                 their defaults, and changes to them are not being saved. The file itself \
+                 has not been altered — repair it by hand, or start a fresh one and keep \
+                 the old file beside it.",
+            )
+            .size(10)
+            .style(text_muted),
+        );
+    }
+    if !status.is_empty() {
+        lines = lines.push(text(status).size(10).style(text_muted));
+    }
+
+    let mut strip = row![lines].spacing(16).align_y(iced::Alignment::Center);
+    // Offered only while the file is actually broken: once it loads, the
+    // banner is a result line and there is nothing left to reset.
+    if load_error.is_some() {
+        strip = strip.push(
+            button(text("Start a fresh preferences file").size(11))
+                .padding([7, 14])
+                .on_press(PrefMsg::ResetPrefsFile)
+                // NOT `secondary_button_style` — that fills with
+                // `background.weak`, which is exactly this strip's own
+                // fill, so the button was the same colour as the surface
+                // under it and read as a bare outline. Its hover tone,
+                // `background.strong`, is this strip's border colour, so
+                // hovering merged it with its own frame. `primary` is the
+                // one tone that contrasts on `background.weak` — and this
+                // is the single action the whole strip exists to offer.
+                .style(primary_button_style),
+        );
+    }
+
+    Some(
+        container(strip)
+            .width(Length::Fill)
+            // Vertical padding, unlike `build_footer`'s `[0, 16]`: that
+            // strip is one line inside a fixed `FOOTER_H`, this one grows
+            // to two or three wrapped lines and would otherwise sit flush
+            // against the divider above and the nav column below.
+            .padding([12, 16])
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(Background::Color(palette.background.weak.color)),
+                    border: Border {
+                        width: 1.0,
+                        color: palette.background.strong.color,
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                }
+            })
+            .into(),
+    )
+}
+
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
     button(text("Save").size(12))
-        .padding([6, 20])
+        .padding([8, 20])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
         .into()
@@ -668,7 +844,7 @@ fn save_btn<'a>() -> Element<'a, PrefMsg> {
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
     button(text("Discard & Close").size(12))
-        .padding([6, 16])
+        .padding([8, 16])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
         .into()
