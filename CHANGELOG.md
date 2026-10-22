@@ -23,6 +23,9 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **GPU scene render path** — the PCB editor canvas can render traces, pads, vias, and zones through the `signex_gfx` wgpu pipelines via iced's `shader` widget instead of CPU `canvas::Frame` tessellation. Gated behind `feature_flags::PCB_GPU_RENDER` (default `false`) plus a Preferences toggle; the CPU path stays the default until GPU visual parity is confirmed on hardware.
 - **CPU↔GPU draw-order parity lock** — a shared `signex_gfx::scene::order` module defines the canonical bucket draw order both paths walk, so neither path can drift silently.
 
+### Added — PDF export
+
+- **Roboto/Iosevka embedded as Type0 fonts (#352)** — exported PDFs now carry the bundled TTFs as `Identity-H` Type0/CIDFontType2 fonts with a `/W` widths array, a `/FontFile2` stream subset to the glyphs actually used, and a `/ToUnicode` CMap, instead of referencing Helvetica/Courier. `µ`, `°`, `±`, Turkish letters and Greek render in the intended typeface and extract/copy back as the original text; the ASCII-mangling `sanitize_pdf_text` workaround is gone. Characters no bundled face covers (e.g. CJK) draw as `.notdef`.
 ### Added — release workflow
 
 - **Release version guard** — the release workflow now runs `scripts/check_release_version.sh` before any build and fails unless the tag, `[workspace.package] version` in `Cargo.toml`, and a dated (not `unreleased`) `## [X.Y.Z]` CHANGELOG section all agree, printing all three values on a mismatch (#343).
