@@ -30,6 +30,10 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 - **Release version guard** — the release workflow now runs `scripts/check_release_version.sh` before any build and fails unless the tag, `[workspace.package] version` in `Cargo.toml`, and a dated (not `unreleased`) `## [X.Y.Z]` CHANGELOG section all agree, printing all three values on a mismatch (#343).
 
+### Fixed — ERC
+
+- **ERC DSL pin kinds (#676)** — `pin.kind == / !=` accepts the same pin-kind spellings as `has_pin_kind` (`power_in`, `tristate`, `open_collector`, …), so a rule written with one of them now fires. An unknown pin-kind literal in either form is now a validation error instead of a rule that silently never fires; as with other DSL errors, the rule file is refused and the error is logged.
+
 ### Fixed
 
 - **Distributor HTTP timeouts** — the LCSC, JLCPCB, Mouser and DigiKey blocking clients relied on reqwest's implicit 30 s overall timeout and had no connect cap; they now share one client builder (including the DigiKey OAuth client) with an explicit 30 s overall-request timeout and a new 10 s connect timeout, both named constants (#144).
