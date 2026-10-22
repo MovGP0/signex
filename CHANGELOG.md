@@ -60,6 +60,7 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ### Fixed
 
+- **Scope tests pass on Windows (#747)** — the `claimed_by_other_project` tests spelled fixture paths with `/` while `Path::join` adds `\` on Windows, so the verbatim `Preserve` keys never matched; the fixtures now use the host separator. Production behaviour is unchanged.
 - **Project-tree Remove no longer deletes Shared / Global libraries (#139)** — "Delete file" could remove a `.snxlib` package other projects still use. Delete is now refused (and not offered) for any Shared or Global library entry whatever its path, and for any target outside the project folder; the library is only excluded, with a "Delete Refused" notice.
 - **`cargo deny check` is green again** — upgraded the vulnerable dependency paths (quick-xml 0.41, git2 0.21, rust_xlsxwriter 0.101 / zip 9, pdf-extract 0.12 / lopdf 0.42, plus lockfile bumps of anyhow, h2, rustls, rustls-webpki, webpki-roots, webbrowser, crossbeam-epoch); the remaining unmaintained-crate notices (core2, instant, paste, rustybuzz, ttf-parser, zbus_names, zvariant, zvariant_derive) carry narrow, dated `deny.toml` ignores. (#148)
 - **Symbol Locked / DNP toggles (#597)** — the Properties panel "Locked" and "DNP" checkboxes landed in an empty match arm and did nothing. They now go through the engine (`SetSymbolLocked` / `SetSymbolDnp`), mark the sheet dirty, refresh the selection info, persist, and undo as one step each. Locked is stored and undoable but not yet enforced on move/delete.
