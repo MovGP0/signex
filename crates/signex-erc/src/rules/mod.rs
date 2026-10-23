@@ -8,6 +8,8 @@
 
 mod ambiguous_label_anchor;
 pub(crate) use ambiguous_label_anchor::ambiguous_label_anchor;
+mod pins_touch_not_connected;
+pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
 use std::collections::HashMap;
 
@@ -79,8 +81,8 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
         for pin in &symbol.pins {
             // `ErcPin.connected` is already the shared, junction-aware
-            // connectivity gate (`context::point_is_connected`, mirroring
-            // `signex_net`'s) — trust it instead of re-deriving an
+            // connectivity gate (`signex_net::ConnectedPoints`, the
+            // same gate `build_netlist` uses) — trust it instead of re-deriving an
             // endpoint-only, bus-gated approximation here (issue #388, D5.4).
             if pin.connected {
                 continue;
@@ -588,16 +590,19 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         if name.is_empty() {
             continue;
         }
-        // Power-port symbols carry a single connection point at their
-        // position (no separate pin geometry). Look up the net root for that
-        // point — unanchored, like any other pin: a port only taps a wire
-        // interior through an explicit junction (`point_is_connected`'s
-        // rule), never by proximity alone.
-        let port_root = conn.root_of(&symbol.position);
+        // A port connects at its pin tips, not at its origin — the same points
+        // `build_netlist` names the net from (issue #675). Look each tip up
+        // unanchored, like any other pin: a port only taps a wire interior
+        // through an explicit junction, never by proximity alone. A port
+        // projected with no pins falls back to its origin.
+        let tips: Vec<Point> = if symbol.pins.is_empty() {
+            vec![symbol.position]
+        } else {
+            symbol.pins.iter().map(|p| p.world_pos).collect()
+        };
         let same_net_label = label_nets
             .get(name)
-            .map(|nets| nets.contains(&port_root))
-            .unwrap_or(false);
+            .is_some_and(|nets| tips.iter().any(|tip| nets.contains(&conn.root_of(tip))));
         if same_net_label {
             continue;
         }
@@ -618,32 +623,47 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // Rule: PowerPortShort
 // ---------------------------------------------------------------------------
 
+/// A port's pin tips — where it connects — falling back to its origin when
+/// the projection carries no pins.
+fn port_tips(symbol: &crate::context::ErcSymbol) -> Vec<Point> {
+    if symbol.pins.is_empty() {
+        vec![symbol.position]
+    } else {
+        symbol.pins.iter().map(|p| p.world_pos).collect()
+    }
+}
+
 pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let power: Vec<&crate::context::ErcSymbol> = ctx
+    let power: Vec<(&crate::context::ErcSymbol, Vec<Point>)> = ctx
         .symbols
         .iter()
         .filter(|s| s.is_power && !s.value.is_empty())
+        .map(|s| (s, port_tips(s)))
         .collect();
 
-    for (i, a) in power.iter().enumerate() {
-        for b in &power[i + 1..] {
+    for (i, (a, a_tips)) in power.iter().enumerate() {
+        for (b, b_tips) in &power[i + 1..] {
             if a.value == b.value {
                 continue;
             }
-            if same(&a.position, &b.position) {
-                out.push(
-                    Diagnostic::new(
-                        RuleKind::PowerPortShort,
-                        format!(
-                            "Power ports '{}' and '{}' are at the same point",
-                            a.value, b.value,
-                        ),
-                        a.position,
-                    )
-                    .with_primary(sel(a.uuid, SelectedKind::Symbol))
-                    .with_peer(sel(b.uuid, SelectedKind::Symbol)),
-                );
-            }
+            let shared = a_tips
+                .iter()
+                .find(|ta| b_tips.iter().any(|tb| pt_key(ta) == pt_key(tb)));
+            let Some(tip) = shared else {
+                continue;
+            };
+            out.push(
+                Diagnostic::new(
+                    RuleKind::PowerPortShort,
+                    format!(
+                        "Power ports '{}' and '{}' share a pin tip",
+                        a.value, b.value,
+                    ),
+                    *tip,
+                )
+                .with_primary(sel(a.uuid, SelectedKind::Symbol))
+                .with_peer(sel(b.uuid, SelectedKind::Symbol)),
+            );
         }
     }
 }

@@ -75,6 +75,7 @@ mod tests {
                 is_power: false,
                 pins: vec![ErcPin {
                     world_pos: Point::new(10.0, 10.0),
+                    number: "1".into(),
                     electrical_type: PinDirection::Output,
                     required: true,
                     connected: true,
@@ -195,6 +196,7 @@ mod tests {
             .iter()
             .map(|&electrical_type| ErcPin {
                 world_pos: Point::new(10.0, 10.0),
+                number: "1".into(),
                 electrical_type,
                 required: true,
                 connected: false,
