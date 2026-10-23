@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+mod load_repair;
 mod pad;
 mod serde_tsv;
 #[cfg(test)]
@@ -355,6 +356,11 @@ pub struct Footprint {
     /// preserve their literal pad-list authoring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<signex_sketch::SketchData>,
+    /// Arcs whose end point [`Footprint::repair_stored_sketch`] moved onto
+    /// the circle when this footprint was read from storage. Transient: never
+    /// serialised. The editor that opens the footprint reports and clears it.
+    #[serde(skip)]
+    pub load_repairs: Vec<signex_sketch::id::SketchEntityId>,
     /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<FpPour>,
@@ -600,14 +606,20 @@ impl FootprintFile {
     /// Build a new container holding a single footprint — what the
     /// `Add New ▸ Footprint Library` flow seeds.
     pub fn from_footprint(footprint: Footprint) -> Self {
-        let now = Utc::now();
+        Self::with_identity(footprint, Uuid::now_v7(), Utc::now())
+    }
+
+    /// Like [`FootprintFile::from_footprint`] but with caller-supplied
+    /// identity, so a generator can emit byte-identical files on every
+    /// run (the stock-library emitter pins both).
+    pub fn with_identity(footprint: Footprint, file_uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
         Self {
             format: default_footprint_format(),
-            file_uuid: Uuid::now_v7(),
+            file_uuid,
             display_name: footprint.name.clone(),
             footprints: vec![footprint],
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
         }
     }
 
@@ -631,7 +643,7 @@ impl FootprintFile {
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
-            footprints.push(Footprint {
+            let mut footprint = Footprint {
                 uuid: fw.uuid,
                 name: fw.name,
                 anchor: fw.anchor,
@@ -650,6 +662,7 @@ impl FootprintFile {
                 updated: fw.updated,
                 schema_version: fw.schema_version,
                 sketch: fw.sketch,
+                load_repairs: Vec::new(),
                 pours: fw.pours,
                 keepouts: fw.keepouts,
                 cutouts: fw.cutouts,
@@ -661,7 +674,9 @@ impl FootprintFile {
                 default_designator: fw.default_designator,
                 component_type: fw.component_type,
                 height_mm: fw.height_mm,
-            });
+            };
+            footprint.repair_stored_sketch();
+            footprints.push(footprint);
         }
         Ok(FootprintFile {
             format: wire.format,
@@ -743,9 +758,14 @@ impl FootprintFile {
 impl Footprint {
     /// Empty footprint with no pads — what the New Component flow seeds.
     pub fn empty(name: impl Into<String>) -> Self {
-        let now = Utc::now();
+        Self::with_identity(name, Uuid::now_v7(), Utc::now())
+    }
+
+    /// Empty footprint with a caller-supplied `uuid` and
+    /// `created`/`updated` timestamp instead of freshly minted ones.
+    pub fn with_identity(name: impl Into<String>, uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
         Self {
-            uuid: Uuid::now_v7(),
+            uuid,
             name: name.into(),
             anchor: [0.0, 0.0],
             pads: Vec::new(),
@@ -759,10 +779,11 @@ impl Footprint {
             pcb_params: ParamMap::new(),
             version: default_footprint_version(),
             released: false,
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
             schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
+            load_repairs: Vec::new(),
             pours: Vec::new(),
             keepouts: Vec::new(),
             cutouts: Vec::new(),

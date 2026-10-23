@@ -39,18 +39,24 @@ pub struct HistoryPanelState {
     /// path has no history yet.
     pub entries: Vec<signex_widgets::HistoryEntry>,
     /// Render mode for the active load. Distinguishes "not in a git
-    /// repo" (NoRepo) from "no commits yet" (entries.is_empty()).
+    /// repo" (NoRepo) and "the walk failed" (Error) from "no commits
+    /// yet" (Ready with `entries.is_empty()`).
     pub mode: HistoryRenderMode,
     /// True when the active path has uncommitted edits in the
     /// working tree (the engine reports it via `dirty_paths`).
     /// Drives the "Working tree (uncommitted changes)" pseudo-card.
     pub dirty: bool,
+    /// SHA of a Restore click waiting for confirmation. Set when the
+    /// active file has unsaved edits (restoring replaces the in-memory
+    /// document and its undo stack, so they would be lost); the matching
+    /// row then asks "Discard unsaved edits and restore?" (#110).
+    pub pending_restore: Option<String>,
 }
 
 /// What the panel should render when `entries` is non-empty
 /// doesn't unambiguously cover the case (e.g. the file isn't even
 /// version-controlled).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HistoryRenderMode {
     /// No active file at all (no tabs, ComponentEditor tab, etc.).
     #[default]
@@ -63,6 +69,16 @@ pub enum HistoryRenderMode {
     /// Load resolved successfully — render `entries` (possibly
     /// empty for fresh repos) plus the optional working-tree card.
     Ready,
+    /// The git walk itself failed (corrupt object, unreadable
+    /// `.git/`, a `spawn_blocking` join failure). Carries the
+    /// stringified error.
+    ///
+    /// Separate from `Ready` with no entries for the same reason
+    /// `NoRepo` is: "the history could not be read" and "this file
+    /// has no commits yet" call for different actions from the user,
+    /// and rendering the first as the second also makes "Restore
+    /// this version" disappear without saying why (#599).
+    Error(String),
 }
 
 /// Render the History panel. Delegates row rendering to
@@ -77,7 +93,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let state = &ctx.history;
 
-    let inner: Element<'a, PanelMsg> = match state.mode {
+    let inner: Element<'a, PanelMsg> = match &state.mode {
         HistoryRenderMode::NoActiveFile => message_card(
             "Open a schematic, PCB, library, or primitive to see its history.",
             muted,
@@ -92,6 +108,12 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             panel_bg,
         ),
         HistoryRenderMode::Loading => message_card("Loading history…", muted, border, panel_bg),
+        HistoryRenderMode::Error(error) => message_card(
+            format!("History could not be read: {error}"),
+            muted,
+            border,
+            panel_bg,
+        ),
         HistoryRenderMode::Ready => {
             let mut col: Column<'a, PanelMsg> = column![].spacing(6);
 
@@ -114,7 +136,15 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             } else {
                 let now = Utc::now();
                 for entry in &state.entries {
-                    col = col.push(commit_card(entry, now, primary, muted, border, panel_bg));
+                    col = col.push(commit_card(
+                        entry,
+                        now,
+                        state.pending_restore.as_deref() == Some(entry.sha.as_str()),
+                        primary,
+                        muted,
+                        border,
+                        panel_bg,
+                    ));
                 }
             }
 
@@ -129,14 +159,17 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .into()
 }
 
-/// Single muted card used by the empty/no-repo/loading states.
+/// Single muted card used by the empty/no-repo/loading/error states.
+///
+/// Takes an owned message rather than `&'a str` so the error state can
+/// pass a formatted string; the static callers are unchanged.
 fn message_card<'a, M: 'a>(
-    msg: &'a str,
+    msg: impl Into<String>,
     muted: iced::Color,
     border_c: iced::Color,
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
-    container(text(msg).size(12).color(muted))
+    container(text(msg.into()).size(12).color(muted))
         .padding([6, 8])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {
@@ -162,6 +195,7 @@ fn message_card<'a, M: 'a>(
 fn commit_card<'a>(
     entry: &'a signex_widgets::HistoryEntry,
     now: chrono::DateTime<Utc>,
+    confirming: bool,
     primary: Color,
     muted: Color,
     border_c: Color,
@@ -176,7 +210,12 @@ fn commit_card<'a>(
     ]
     .spacing(8);
 
-    let restore_btn = button(text("Restore this version").size(10).color(muted))
+    let restore_label = if confirming {
+        "Discard unsaved edits and restore"
+    } else {
+        "Restore this version"
+    };
+    let restore_btn = button(text(restore_label).size(10).color(muted))
         .padding([2, 6])
         .on_press(PanelMsg::HistoryRestoreClicked {
             sha: entry.sha.clone(),
@@ -192,13 +231,30 @@ fn commit_card<'a>(
             ..iced::widget::button::Style::default()
         });
 
-    let footer = iced::widget::row![
+    let mut footer = iced::widget::row![
         text(short_sha(&entry.sha)).size(11).color(muted),
         iced::widget::Space::new().width(Length::Fill),
-        restore_btn,
     ]
     .align_y(iced::Alignment::Center)
     .spacing(8);
+    if confirming {
+        footer = footer.push(
+            button(text("Cancel").size(10).color(muted))
+                .padding([2, 6])
+                .on_press(PanelMsg::HistoryRestoreCancelled)
+                .style(move |_t: &Theme, _| iced::widget::button::Style {
+                    background: None,
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: border_c,
+                    },
+                    text_color: muted,
+                    ..iced::widget::button::Style::default()
+                }),
+        );
+    }
+    let footer = footer.push(restore_btn);
 
     let card_inner = column![
         header,

@@ -8,6 +8,7 @@
 //! eventual standalone Body 3D / STEP attach editor side-pane.
 
 pub mod active_bar_dropdowns;
+pub mod align_modal;
 pub mod body3d;
 pub mod body3d_mint;
 pub mod canvas;
@@ -18,6 +19,9 @@ pub mod move_by_modal;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
+mod sketch_conflict;
+#[cfg(test)]
+mod sketch_conflict_tests;
 pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;
@@ -25,6 +29,8 @@ pub mod sketch_mode;
 pub mod snap;
 pub mod state;
 pub mod step_attach;
+#[cfg(test)]
+mod swallowed_input_tests;
 pub mod text_frame;
 pub mod unified_active_bar;
 pub(crate) mod updates;

@@ -3,6 +3,7 @@ name = "signex-output"
 description = "Output generation for Signex EDA — PDF, BOM, netlist, sheet templates, print preview"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
@@ -22,3 +23,7 @@ uuid = { workspace = true }
 [[example]]
 name = "qa_harness"
 path = "examples/qa_harness.rs"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

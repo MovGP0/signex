@@ -1,6 +1,5 @@
 //! Context actions + modal/dialog state structs.
 
-
 /// R / G / B channel selector for the custom net-colour picker inputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
@@ -10,7 +9,6 @@ pub enum Channel {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ContextAction {
     Copy,
     Cut,
@@ -124,19 +122,28 @@ pub struct ProjectTreeContextMenuState {
 /// user can see what they're about to lose.
 #[derive(Debug, Clone)]
 pub struct ProjectCloseConfirmState {
-    /// Project root tree path the close was requested for. Stored so
-    /// the modal's confirm action can dispatch back to
-    /// `close_project_at_tree_path` without re-resolving from the
-    /// project list (which may shift if the user closes another
-    /// project while this modal is up — Altium's modal is dismiss-
-    /// only, so this is defence-in-depth).
-    pub tree_path: Vec<usize>,
+    /// The project the close was requested for. Held by id, not list
+    /// index: the list may shift while the modal is up, so the confirm step
+    /// looks it up again and aborts when it is gone.
+    pub project_id: crate::app::ProjectId,
     /// Project display name shown in the modal header.
     pub project_name: String,
     /// Absolute paths of dirty files inside the project's directory.
     /// The view layer renders the file basenames; the handler uses
     /// the absolute paths to locate the engines for save / discard.
     pub dirty_paths: Vec<std::path::PathBuf>,
+    /// Component Preview rows with unsaved edits whose library lives
+    /// inside the project's directory. They are keyed by row address,
+    /// not by file, so `dirty_paths` cannot carry them.
+    pub dirty_rows: Vec<crate::library::state::EditorAddress>,
+    /// Dirty documents of this project that another open project claims.
+    /// They are not saved or discarded: closing leaves them open, and the
+    /// modal names them so nothing is dropped unannounced.
+    pub kept_paths: Vec<std::path::PathBuf>,
+    /// The child-sheet references the dirty list was attributed with. The
+    /// Save All / Discard All paths reuse them for the engine sweep instead
+    /// of reading the disk again.
+    pub sheet_refs: crate::app::state::sheet_refs::SheetRefs,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
@@ -150,6 +157,10 @@ pub struct AppQuitConfirmState {
     /// Absolute paths of every dirty file in the workspace, sorted
     /// for a stable display order. The view renders the basenames.
     pub dirty_paths: Vec<std::path::PathBuf>,
+    /// Every Component Preview row with unsaved edits, sorted. Rows are
+    /// keyed by `(library, table, row)` rather than a file path, so they
+    /// are listed and saved alongside `dirty_paths`, not inside it.
+    pub dirty_rows: Vec<crate::library::state::EditorAddress>,
 }
 
 /// User choice from the project-close confirmation modal.
@@ -379,6 +390,9 @@ pub struct RemoveDialogState {
     pub target_path: std::path::PathBuf,
     pub tree_path: Vec<usize>,
     pub display_name: String,
+    /// Does the target live outside the project folder (a Shared / Global
+    /// library)? Such a target is never offered for deletion (#139).
+    pub is_outside_project: bool,
 }
 
 /// User choice from the Remove-from-Project modal.

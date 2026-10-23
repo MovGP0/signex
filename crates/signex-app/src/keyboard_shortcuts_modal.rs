@@ -8,10 +8,10 @@ use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
-use crate::app::{Message, OverlayMsg};
 use crate::app::view::dialogs::{
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
 };
+use crate::app::{Message, OverlayMsg};
 use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
 use crate::styles::{self, MODAL_CORNER_RADIUS};
 
@@ -192,5 +192,4 @@ fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {
 // `styles::modal_card`. The const re-export keeps the reference
 // available for any future direct use (custom footer, etc.) without
 // forcing a re-import.
-#[allow(dead_code)]
 const _MODAL_CORNER_RADIUS_REEXPORT: f32 = MODAL_CORNER_RADIUS;

@@ -1,8 +1,23 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
 use crate::*;
+use signex_types::schematic::{SelectedItem, SelectedKind};
 
 impl Engine {
+    /// Reconcile junction dots after a command mutated wire geometry (move /
+    /// rotate / mirror), removed wires (delete), or added one (place), and
+    /// return the document patch including `JUNCTIONS` if any dot was
+    /// minted or removed. Shared by all five arms so none of them can drift
+    /// back into leaving a junction-less T (issue #402) or a stale,
+    /// silently net-merging dot (issue #422) behind.
+    fn reconciled_patch(&mut self, items: &[SelectedItem]) -> DocumentPatch {
+        let mut patch = DocumentPatch::from_selected_items(items);
+        if self.reconcile_wire_junctions(items) {
+            patch |= DocumentPatch::JUNCTIONS;
+        }
+        patch
+    }
+
     pub(crate) fn exec_place(
         &mut self,
         before: SchematicSheet,
@@ -22,7 +37,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionDeleted,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -42,7 +57,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMoved,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -65,7 +80,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionRotated,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -85,7 +100,7 @@ impl Engine {
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::SelectionMirrored,
-                    document: DocumentPatch::from_selected_items(&items),
+                    document: self.reconciled_patch(&items),
                 };
 
                 self.record_history(before, patch_pair);
@@ -128,20 +143,43 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::PlaceWireSegment { wire } => {
-                self.document.wires.push(wire.clone());
-
-                for point in [wire.start, wire.end] {
-                    if let Some(junction) =
-                        transform::needed_junction(point, &self.document, JUNCTION_TOLERANCE_MM)
-                    {
-                        self.document.junctions.push(junction);
-                    }
+            Command::PlaceChildSheet { child_sheet } => {
+                // A sheet with no target file cannot be stitched or
+                // navigated, so a blank filename is rejected up front,
+                // before any mutation or history entry.
+                //
+                // An empty `name` IS allowed: the sheet is still addressable
+                // by uuid and filename, parsed files may carry one, and the
+                // placing tool is expected to default it (e.g. to the file
+                // stem). The netlist then qualifies child nets with an empty
+                // segment (a leading `/`), which is cosmetic only.
+                if child_sheet.filename.trim().is_empty() {
+                    return Err(EngineError::EmptyChildSheetFilename);
                 }
+                self.document.child_sheets.push(child_sheet);
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::WIRES | DocumentPatch::JUNCTIONS,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+
+                self.record_history(before, patch_pair);
+
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::PlaceWireSegment { wire } => {
+                let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+                self.document.wires.push(wire);
+
+                // Reconcile through the same shared path move / rotate /
+                // mirror / delete use: mints the new wire's T both ways (its
+                // own endpoints landing on something, and something else's
+                // endpoint landing on its interior) and drops any stale
+                // minted dot the new wire's own placement would otherwise
+                // silently re-justify into merging two nets (issue #422).
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::ObjectPlaced,
+                    document: self.reconciled_patch(&[wire_item]),
                 };
 
                 self.record_history(before, patch_pair);

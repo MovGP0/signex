@@ -11,7 +11,6 @@ pub struct PanelContext {
     pub wire_count: usize,
     pub label_count: usize,
     pub junction_count: usize,
-    pub child_sheets: Vec<String>,
     pub has_schematic: bool,
     pub has_pcb: bool,
     pub paper_size: String,
@@ -30,6 +29,13 @@ pub struct PanelContext {
     pub snap_enabled: bool,
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,
+    /// Glyph the Symbol Editor's visible grid draws. Effective value,
+    /// not the saved one: while Preferences is open this carries the
+    /// live-preview draft, and Discard pushes the committed
+    /// `ui_state.symbol_grid_style` back. `SymbolCanvas` borrows it at
+    /// construction — #630 replaced a process global the symbol `draw`
+    /// path used to read directly.
+    pub symbol_grid_style: crate::render_config::GridStyle,
     pub snap_hotspots: bool,
     /// UI font family name (shown in settings; applies on restart).
     pub ui_font_name: String,
@@ -68,6 +74,8 @@ pub struct PanelContext {
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
     pub project_tree_selected: Option<Vec<usize>>,
+    /// Navigator panel: the whole project sheet hierarchy plus its click state.
+    pub navigator: NavigatorModel,
     /// F15 — detail for the row currently selected in the active
     /// Library Browser tab. `Some` when (a) the active tab is a
     /// `LibraryBrowser(path)` AND (b) `library_browsers[path]
@@ -178,4 +186,3 @@ pub struct PanelContext {
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
 }
-

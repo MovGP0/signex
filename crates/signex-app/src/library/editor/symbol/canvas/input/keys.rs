@@ -16,6 +16,19 @@ impl SymbolCanvas<'_> {
     ) -> Option<canvas::Action<CanvasAction>> {
         match key {
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
+                // Esc drops the in-flight Polygon stash — no commit,
+                // regardless of vertex count. The stash lives on the
+                // editor model, so this needs its own publish (unlike
+                // the other multi-click tools below, whose in-progress
+                // state is purely local to `CanvasState`).
+                if self.tool == SymbolTool::PlacePolygon && !self.polygon_vertices.is_empty() {
+                    state.polygon_cursor = None;
+                    state.polygon_last_click_time = None;
+                    state.polygon_last_click_pos = None;
+                    return Some(
+                        canvas::Action::publish(CanvasAction::PolygonCancel).and_capture(),
+                    );
+                }
                 let cancelled = match self.tool {
                     SymbolTool::PlaceRectangle if state.rect_from.is_some() => {
                         state.rect_from = None;
@@ -43,10 +56,30 @@ impl SymbolCanvas<'_> {
                     }
                     _ => false,
                 };
-                if cancelled {
+                // An armed AddPin press is a gesture in flight too: drop
+                // it so a later release cannot place a pin.
+                let pin_cancelled = std::mem::take(&mut state.pin_armed);
+                state.pin_cursor = None;
+                if cancelled || pin_cancelled {
                     return Some(canvas::Action::capture());
                 }
+                // Nothing in flight: leave the key unclaimed so the app's
+                // Esc ladder (modals, context menu, then "leave the tool")
+                // decides — see `escape_editor_or_tool_reset`.
                 None
+            }
+            // Enter commits the in-flight Polygon stash. The
+            // dispatcher decides commit vs. discard from the vertex
+            // count (see `SymbolEditorMsg::PolygonCommit`); the guard
+            // here just avoids publishing a no-op when nothing has
+            // been placed yet.
+            iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
+                if self.tool == SymbolTool::PlacePolygon && self.polygon_vertices.len() >= 3 =>
+            {
+                state.polygon_cursor = None;
+                state.polygon_last_click_time = None;
+                state.polygon_last_click_pos = None;
+                Some(canvas::Action::publish(CanvasAction::PolygonCommit).and_capture())
             }
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
             | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {

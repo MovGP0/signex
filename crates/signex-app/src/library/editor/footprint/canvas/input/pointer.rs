@@ -15,7 +15,9 @@ use crate::library::editor::footprint::snap;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
 use super::super::hit_test::sketch_snap;
-use super::super::{silk_f_hit_at, DragState, FootprintCanvas, FootprintCanvasState, DRAG_THRESHOLD_PX};
+use super::super::{
+    DRAG_THRESHOLD_PX, DragState, FootprintCanvas, FootprintCanvasState, silk_f_hit_at,
+};
 
 impl FootprintCanvas<'_> {
     // ---- Button pressed ---------------------------------------------
@@ -50,7 +52,9 @@ impl FootprintCanvas<'_> {
         // v0.15 — schematic-parity tool cancel. Right-click while a
         // non-Select tool is active cancels the tool back to Select
         // instead of starting a pan. Middle-click always pans.
-        use crate::library::editor::footprint::state::{EditorMode, PadsTool, SketchTool, ToolPending};
+        use crate::library::editor::footprint::state::{
+            EditorMode, PadsTool, SketchTool, ToolPending,
+        };
         if *button == mouse::Button::Right {
             // v0.27 — Lasso Select right-click commits the polygon.
             if self.state.lasso_mode_active {
@@ -140,6 +144,12 @@ impl FootprintCanvas<'_> {
         if let Some(a) = self.try_round_handle_grab(cstate, cursor_pos, world) {
             return Some(a);
         }
+        // #361 — the armed "Drag Track End" tool wins the click before
+        // the generic Point / Line grabs so it can bias to the segment's
+        // nearer endpoint (see `try_drag_track_end_grab`).
+        if let Some(a) = self.try_drag_track_end_grab(cstate, cursor_pos, world) {
+            return Some(a);
+        }
         if let Some(a) = self.try_sketch_point_grab(cstate, cursor_pos, raw_world, world) {
             return Some(a);
         }
@@ -168,8 +178,18 @@ impl FootprintCanvas<'_> {
         raw_world: (f64, f64),
     ) -> (f64, f64) {
         use crate::library::editor::footprint::state::{EditorMode, PadsTool, SketchTool};
+        // #361 — DragTrackEnd is a grab gesture, not a placement tool:
+        // at press time it must hit-test the RAW cursor (so the line
+        // under the cursor is found, not a snapped position) and leave
+        // the snap badge clear, exactly like Select. Vertex snapping is
+        // re-enabled once the endpoint drag is in flight — see
+        // `pointer_move_world`, whose drag-active branch already keeps
+        // snapping alive for a `sketch_point` drag.
         let select_mode = (matches!(self.state.mode, EditorMode::Sketch)
-            && self.state.active_tool == SketchTool::Select)
+            && matches!(
+                self.state.active_tool,
+                SketchTool::Select | SketchTool::DragTrackEnd
+            ))
             || (matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::Select);
         if select_mode {
@@ -336,9 +356,7 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        let Some(cursor_pos) = cursor.position_in(bounds) else {
-            return None;
-        };
+        let cursor_pos = cursor.position_in(bounds)?;
         if let Some(action) = self.pan_on_cursor_moved(cstate, cursor_pos) {
             return Some(action);
         }
@@ -375,7 +393,27 @@ impl FootprintCanvas<'_> {
             cstate.last_snap = None;
             raw_world
         } else {
-            let point_hit = sketch_snap(self.sketch, cstate, raw_world);
+            // A whole-pad drag must NOT snap the cursor to sketch
+            // Points. A sketch-profile pad carries its outline as
+            // sketch geometry that moves WITH the pad, so those Points
+            // sit right under the cursor mid-drag; snapping to them
+            // makes the cursor lock onto the pad's own outline for a
+            // tick and jump — a visible flicker. Grid / pad snapping
+            // via `snap_cursor` still applies. Sketch-point and
+            // sketch-line drags keep vertex snapping (that's the whole
+            // point of dragging a vertex).
+            let pad_drag = cstate
+                .drag
+                .as_ref()
+                .map(|d| {
+                    d.pad_idx != usize::MAX && d.sketch_point.is_none() && d.sketch_line.is_none()
+                })
+                .unwrap_or(false);
+            let point_hit = if pad_drag {
+                None
+            } else {
+                sketch_snap(self.sketch, cstate, raw_world)
+            };
             let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
             cstate.last_snap = Some(result);
             result.pos
@@ -574,7 +612,10 @@ impl FootprintCanvas<'_> {
         let in_sketch_with_anchor = matches!(self.state.mode, EditorMode::Sketch)
             && !matches!(self.state.tool_pending, ToolPending::Idle);
         let in_pads_place = matches!(self.state.mode, EditorMode::Normal)
-            && matches!(self.state.pads_tool, PadsTool::PlacePad | PadsTool::PlaceVia);
+            && matches!(
+                self.state.pads_tool,
+                PadsTool::PlacePad | PadsTool::PlaceVia
+            );
         // v0.14 — Place Text Frame redraws on every cursor tick while
         // armed so the drag-rect ghost tracks the live cursor.
         let in_text_frame_place = matches!(self.state.mode, EditorMode::Normal)

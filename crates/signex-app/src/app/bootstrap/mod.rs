@@ -18,20 +18,8 @@ fn bundled_window_icon() -> Option<iced::window::Icon> {
     }
 }
 
-fn selection_slot_from_key(key: &str) -> Option<usize> {
-    match key {
-        "1" => Some(0),
-        "2" => Some(1),
-        "3" => Some(2),
-        "4" => Some(3),
-        "5" => Some(4),
-        "6" => Some(5),
-        "7" => Some(6),
-        "8" => Some(7),
-        _ => None,
-    }
-}
-
+// `selection_slot_from_key` moved to `app/dispatch/input.rs` with its
+// only consumer when the keyboard branches left the subscription (#557).
 
 mod new;
 mod subscription;
@@ -45,14 +33,7 @@ impl Signex {
     pub(super) const PDF_MODAL_W: f32 = 1180.0;
     pub(super) const PDF_MODAL_H: f32 = 760.0;
 
-    pub fn title(&self, id: iced::window::Id) -> String {
-        if matches!(
-            self.ui_state.windows.get(&id),
-            Some(super::state::WindowKind::PcbTraceCalculator)
-        ) {
-            return "PCB Trace Calculator - Signex".to_string();
-        }
-
+    pub fn title(&self, _id: iced::window::Id) -> String {
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_paths.len();
         if dirty_count == 0 {
@@ -148,31 +129,6 @@ impl Signex {
             ),
             ThemeId::SolarizedLight => Theme::Light,
             ThemeId::Nord => Theme::Nord,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::selection_slot_from_key;
-
-    #[test]
-    fn selection_slot_only_matches_digits_one_through_eight() {
-        // Digits 1-8 map to selection-memory slots 0-7.
-        for (i, key) in ["1", "2", "3", "4", "5", "6", "7", "8"].iter().enumerate() {
-            assert_eq!(selection_slot_from_key(key), Some(i));
-        }
-        // Regression guard for issue #103: the Ctrl+1-8 / Alt+1-8
-        // catch-all arms are gated on `selection_slot_from_key(c).is_some()`.
-        // These letters returning None is exactly what lets the
-        // Ctrl+C/X/V/D and Shift+Ctrl+V/G arms below fire instead of
-        // being shadowed into a no-op.
-        for key in ["c", "x", "v", "d", "g", "s", "a", "z", "0", "9"] {
-            assert_eq!(
-                selection_slot_from_key(key),
-                None,
-                "{key} must not resolve to a selection slot"
-            );
         }
     }
 }

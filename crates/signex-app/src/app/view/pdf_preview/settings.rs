@@ -5,7 +5,6 @@
 use super::super::*;
 
 impl Signex {
-
     /// Settings tab — stitches the three section helpers below into a
     /// single scrollable column. Each helper owns its own widgets and
     /// reads/writes through `preview.pdf_options.*` directly so the
@@ -17,6 +16,8 @@ impl Signex {
         use iced::widget::{Space, column, scrollable};
         let body = column![
             self.view_pdf_files_section(preview),
+            Space::new().height(10),
+            self.view_pdf_page_setup_section(preview),
             Space::new().height(10),
             self.view_pdf_structure_section(preview),
             Space::new().height(10),
@@ -32,7 +33,10 @@ impl Signex {
 
     /// Section header strip — accent panel-bg with a 1 px border.
     /// Reused by every Settings-tab section.
-    fn pdf_section_title(&self, label: &'static str) -> Element<'_, Message> {
+    pub(in crate::app::view) fn pdf_section_title(
+        &self,
+        label: &'static str,
+    ) -> Element<'_, Message> {
         use iced::widget::{container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -65,29 +69,21 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let panel_bg = crate::styles::ti(tokens.panel_bg);
 
-        let project_sheets: Vec<(std::path::PathBuf, String)> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                let dir = std::path::PathBuf::from(&p.data.dir);
-                p.data
-                    .sheets
-                    .iter()
-                    .map(|s| (dir.join(&s.filename), s.name.clone()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Snapshot of the export context's sheet set, captured when the
+        // modal opened — always the exact page set the exporter will
+        // emit, project-scoped or loose.
+        let sheet_files = &preview.sheet_files;
 
         let mut file_list: iced::widget::Column<'_, Message> =
             column![].spacing(2).padding([8, 12]);
-        if project_sheets.is_empty() {
+        if sheet_files.is_empty() {
             file_list = file_list.push(
-                text("No project loaded — load a .standard_pro to pick files.")
+                text("No sheets to export — open a schematic first.")
                     .size(11)
                     .color(text_muted),
             );
         } else {
-            for (path, name) in &project_sheets {
+            for (path, name) in sheet_files {
                 let is_selected = preview.selected_files.contains(path);
                 let path_str = path.display().to_string();
                 let row_el = row![

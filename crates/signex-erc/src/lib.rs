@@ -22,11 +22,15 @@ use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind}
 pub mod context;
 pub mod diagnostic;
 pub mod engine;
+#[cfg(test)]
+mod fixtures;
+mod overrides;
 pub mod rule;
 mod rules;
 
 pub use context::ErcContext;
-pub use diagnostic::Diagnostic;
+pub use diagnostic::{Diagnostic, LocationSpace};
+pub use overrides::apply_overrides;
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
 /// What kind of violation this is. Stable identifier that maps to a severity
@@ -56,6 +60,11 @@ pub enum RuleKind {
     PowerPortShort,
     /// A symbol or wire sits outside the active sheet's page boundary.
     SymbolOutsideSheet,
+    /// A label sits where two or more wires cross with no junction. The
+    /// netlist anchors it to exactly one of them by a deterministic tiebreak
+    /// (issue #402) — a defensible runtime answer, but not one the user can
+    /// predict from the geometry, so it is surfaced rather than assumed.
+    AmbiguousLabelAnchor,
 }
 
 impl RuleKind {
@@ -73,11 +82,31 @@ impl RuleKind {
             RuleKind::MissingPowerFlag => "Missing power flag",
             RuleKind::PowerPortShort => "Power port short",
             RuleKind::SymbolOutsideSheet => "Symbol outside sheet boundary",
+            RuleKind::AmbiguousLabelAnchor => "Ambiguous label anchor",
         }
     }
 
-    /// Default severity. Users can override per-rule in the Preferences
-    /// panel via `ui_state.erc_severity_override`.
+    /// Every built-in rule, in the order the ERC dialog lists them.
+    pub const ALL: [RuleKind; 12] = [
+        RuleKind::UnusedPin,
+        RuleKind::DuplicateRefDesignator,
+        RuleKind::HierPortDisconnected,
+        RuleKind::DanglingWire,
+        RuleKind::NetLabelConflict,
+        RuleKind::OrphanLabel,
+        RuleKind::BusBitWidthMismatch,
+        RuleKind::BadHierSheetPin,
+        RuleKind::MissingPowerFlag,
+        RuleKind::PowerPortShort,
+        RuleKind::SymbolOutsideSheet,
+        RuleKind::AmbiguousLabelAnchor,
+    ];
+
+    /// The one source of truth for a rule's severity: [`Diagnostic::new`]
+    /// stamps it on every diagnostic and the ERC dialog highlights it.
+    /// `BadHierSheetPin` is the sole rule that grades individual findings
+    /// below this level. Users override per rule via
+    /// `ui_state.erc_severity_override`; see [`apply_overrides`].
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
@@ -89,8 +118,8 @@ impl RuleKind {
             | RuleKind::DanglingWire
             | RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
-            | RuleKind::MissingPowerFlag => Severity::Warning,
-            RuleKind::SymbolOutsideSheet => Severity::Info,
+            | RuleKind::AmbiguousLabelAnchor => Severity::Warning,
+            RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
         }
     }
 }
@@ -109,6 +138,13 @@ pub enum Severity {
 /// mm; the app uses it to centre the canvas when the user clicks the message.
 #[derive(Debug, Clone)]
 pub struct Violation {
+    /// Which rule fired. Authoritative for identity: built-ins are
+    /// `builtin::<slug>`, DSL rules `user::<name>`.
+    pub rule_id: RuleId,
+    /// Built-in kind this violation is filed under. For a DSL violation it is
+    /// only the compiler's placeholder (see `fallback_kind` in
+    /// `signex-erc-dsl`) — nothing may read it to decide labels, overrides or
+    /// quick fixes; use [`Violation::builtin_kind`] instead.
     pub rule: RuleKind,
     pub severity: Severity,
     pub message: String,
@@ -117,6 +153,43 @@ pub struct Violation {
     pub primary: Option<SelectedItem>,
     /// Optional peer — the "other" object in two-object rules.
     pub peer: Option<SelectedItem>,
+}
+
+impl Violation {
+    /// A violation with no `primary` / `peer` object attached. For a `user::`
+    /// rule `rule` is only a placeholder; `rule_id` carries identity.
+    pub fn new(
+        rule_id: RuleId,
+        rule: RuleKind,
+        severity: Severity,
+        message: impl Into<String>,
+        location: Point,
+    ) -> Self {
+        Self {
+            rule_id,
+            rule,
+            severity,
+            message: message.into(),
+            location,
+            primary: None,
+            peer: None,
+        }
+    }
+
+    /// The built-in rule that produced this violation, or `None` for a DSL
+    /// (`user::`) rule.
+    pub fn builtin_kind(&self) -> Option<RuleKind> {
+        self.rule_id.builtin_kind()
+    }
+
+    /// Name for the Messages panel: the built-in's label, or a DSL rule's own
+    /// id.
+    pub fn display_name(&self) -> String {
+        match self.builtin_kind() {
+            Some(kind) => kind.label().to_string(),
+            None => self.rule_id.to_string(),
+        }
+    }
 }
 
 /// Run every enabled rule against the snapshot. Returns a flat list of
@@ -139,13 +212,21 @@ pub fn run_with_dsl(snapshot: &SchematicSheet, dsl_rules: &[engine::EvalFn]) -> 
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `children` keyed by the child's filename as it appears
-/// on the parent's sheet symbol. Pass an empty map for top-only runs.
+/// rules consult `resolved` — THIS sheet's own `ChildSheet.filename ->
+/// SheetKey` submap — resolved through the shared `sheets` table. Pass an
+/// empty `resolved` map for top-only runs.
+///
+/// `resolved` must be the caller's per-parent submap for `snapshot`, not a
+/// single project-wide map: keying it that way is what stops two parents in
+/// different directories that reference a child by the same filename string
+/// from resolving to the wrong file (#466), and is what keeps this in step
+/// with `signex_net::build_project_netlist`, which takes the same shape.
 pub fn run_with_project(
     snapshot: &SchematicSheet,
-    children: &std::collections::HashMap<String, SchematicSheet>,
+    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
     engine::run_all(&ctx)
         .into_iter()
         .map(Violation::from)
@@ -153,12 +234,14 @@ pub fn run_with_project(
 }
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
+/// See [`run_with_project`] for what `resolved` / `sheets` must be.
 pub fn run_with_project_and_dsl(
     snapshot: &SchematicSheet,
-    children: &std::collections::HashMap<String, SchematicSheet>,
+    resolved: &std::collections::HashMap<String, signex_net::SheetKey>,
+    sheets: &std::collections::HashMap<signex_net::SheetKey, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
 ) -> Vec<Violation> {
-    let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
+    let ctx = ErcContext::from_snapshot_with_children(snapshot, resolved, sheets);
     engine::run_all_with_dsl(&ctx, dsl_rules)
         .into_iter()
         .map(Violation::from)

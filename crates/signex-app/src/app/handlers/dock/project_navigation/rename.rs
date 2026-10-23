@@ -71,6 +71,26 @@ impl Signex {
             self.set_rename_error("Name cannot contain path separators.");
             return iced::Task::none();
         }
+        // A native file keeps its extension: dropping or changing it
+        // would orphan the file from every editor and project reference.
+        let old_ext = state.target_path.extension().and_then(|e| e.to_str());
+        let new_ext = std::path::Path::new(new_name)
+            .extension()
+            .and_then(|e| e.to_str());
+        if old_ext != new_ext {
+            let msg = match old_ext {
+                Some(ext) => format!("The file extension must stay \".{ext}\"."),
+                None => "This file has no extension; the new name cannot add one.".to_string(),
+            };
+            self.set_rename_error(&msg);
+            return iced::Task::none();
+        }
+        if self.is_project_library_path(&state) {
+            self.set_rename_error(
+                "Libraries are referenced by path and cannot be renamed from the project tree.",
+            );
+            return iced::Task::none();
+        }
         let parent = match state.target_path.parent() {
             Some(p) => p,
             None => {
@@ -89,18 +109,27 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // Find every parent sheet that references this file BEFORE it
+        // moves, while the hierarchy walk can still reach it.
+        // Only a schematic sheet can be a child-sheet target; any other
+        // file skips the walk so a malformed sheet cannot raise a notice.
+        let is_sheet = state.target_path.extension().and_then(|e| e.to_str()) == Some("snxsch");
+        let plan = state
+            .tree_path
+            .first()
+            .filter(|_| is_sheet)
+            .map(|&idx| self.plan_reference_rewrites(idx, &state.target_path, new_name))
+            .unwrap_or_default();
+
         if let Err(e) = std::fs::rename(&state.target_path, &new_path) {
             self.set_rename_error(&format!("Rename failed: {e}"));
             return iced::Task::none();
         }
 
-        // Update in-memory project data. NOTE: this does not rewrite
-        // parent sheets that reference this child sheet — if the
-        // renamed file is referenced from a parent `sheet` S-expr,
-        // the parent still points to the old name. Recorded as a
-        // known limitation; proper rewrite lands with project-write
-        // support (v0.9). For now, sheets at the root level (no
-        // parent reference) rename cleanly.
+        // Update in-memory project data (page list + schematic root);
+        // parent-sheet references are re-pointed through the engine
+        // below. Nothing besides the rename itself is written to disk:
+        // the touched documents are marked dirty for the user to save.
         let old_filename = state
             .target_path
             .file_name()
@@ -114,38 +143,140 @@ impl Signex {
         if let (Some(old), Some(idx)) = (old_filename.as_ref(), owner_idx)
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
+            let mut changed = false;
             for entry in loaded.data.sheets.iter_mut() {
                 if &entry.filename == old {
                     entry.filename = new_name.to_string();
+                    changed = true;
                 }
+            }
+            if loaded.data.pcb_file.as_deref() == Some(old.as_str()) {
+                loaded.data.pcb_file = Some(new_name.to_string());
+                changed = true;
             }
             if loaded.data.schematic_root.as_deref() == Some(old.as_str()) {
                 loaded.data.schematic_root = Some(new_name.to_string());
+                changed = true;
+            }
+            // The sheet list changed in memory; without the dirty bit
+            // `save_active_project_if_dirty` never writes the .snxprj and
+            // a reopened project points at a file that no longer exists.
+            // A rename that touched neither (a footprint, say) leaves the
+            // project file as it was and must not dirty it.
+            if changed {
+                self.document_state.dirty_paths.insert(loaded.path.clone());
             }
         }
 
         // Update any open tabs + engine-map keys that pointed at the
         // old path. Do this before `refresh_panel_ctx` so the tree
         // rebuild sees the new filenames.
-        let old_path = state.target_path.clone();
-        for tab in self.document_state.tabs.iter_mut() {
-            if tab.path == old_path {
-                tab.path = new_path.clone();
-                if let Some(stem) = new_path.file_stem().and_then(|s| s.to_str()) {
-                    tab.title = stem.to_string();
-                }
-            }
-        }
-        if let Some(engine) = self.document_state.engines.remove(&old_path) {
-            self.document_state.engines.insert(new_path.clone(), engine);
-        }
-        if self.document_state.active_path.as_ref() == Some(&old_path) {
-            self.document_state.active_path = Some(new_path.clone());
+        self.rekey_open_document(&state.target_path, &new_path);
+
+        let outcome = self.apply_reference_rewrites(&plan);
+        if !outcome.is_clean() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
+                super::sheet_references::rename_incomplete_detail(
+                    &outcome.failed,
+                    &outcome.unchecked,
+                ),
+            ));
         }
 
         self.ui_state.rename_dialog = None;
         self.refresh_panel_ctx();
         iced::Task::none()
+    }
+
+    /// True when the dialog target is one of its owning project's
+    /// `libraries` entries (matched relative to the project dir or absolute).
+    fn is_project_library_path(&self, state: &crate::app::RenameDialogState) -> bool {
+        let Some(loaded) = state
+            .tree_path
+            .first()
+            .and_then(|&idx| self.document_state.projects.get(idx))
+        else {
+            return false;
+        };
+        let dir = std::path::Path::new(&loaded.data.dir);
+        loaded
+            .data
+            .libraries
+            .iter()
+            .any(|e| dir.join(&e.path) == state.target_path || e.path == state.target_path)
+    }
+
+    /// Move every path-keyed record of an open document from `old_path`
+    /// to `new_path` after its file was renamed on disk: tab, engine map
+    /// and the engine's own save target, active path, dirty marker, the
+    /// symbol/footprint editor maps and any undocked window. Missing one
+    /// leaves a key no engine backs, so closing the tab drops unsaved
+    /// edits and Save All fails on the stale path.
+    fn rekey_open_document(&mut self, old_path: &std::path::Path, new_path: &std::path::Path) {
+        let new_title = new_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string);
+        for tab in self.document_state.tabs.iter_mut() {
+            if tab.path != old_path {
+                continue;
+            }
+            tab.path = new_path.to_path_buf();
+            if let Some(title) = &new_title {
+                tab.title = title.clone();
+            }
+            match &mut tab.kind {
+                crate::app::TabKind::SymbolEditor(p) | crate::app::TabKind::FootprintEditor(p) => {
+                    *p = new_path.to_path_buf();
+                }
+                _ => {}
+            }
+        }
+        if let Some(mut engine) = self.document_state.engines.remove(old_path) {
+            // `Engine::save` writes to its own path; leaving the old one
+            // would write the renamed sheet back under its old filename.
+            engine.set_path(Some(new_path.to_path_buf()));
+            self.document_state
+                .engines
+                .insert(new_path.to_path_buf(), engine);
+        }
+        if let Some(mut editor) = self.document_state.symbol_editors.remove(old_path) {
+            editor.path = new_path.to_path_buf();
+            self.document_state
+                .symbol_editors
+                .insert(new_path.to_path_buf(), editor);
+        }
+        if let Some(mut editor) = self.document_state.footprint_editors.remove(old_path) {
+            editor.path = new_path.to_path_buf();
+            self.document_state
+                .footprint_editors
+                .insert(new_path.to_path_buf(), editor);
+        }
+        if self.document_state.active_path.as_deref() == Some(old_path) {
+            self.document_state.active_path = Some(new_path.to_path_buf());
+        }
+        if self.document_state.dirty_paths.remove(old_path) {
+            self.document_state
+                .dirty_paths
+                .insert(new_path.to_path_buf());
+        }
+        self.rekey_undocked_windows(old_path, new_path);
+    }
+
+    /// Point undocked-tab windows at the renamed path so the window keeps
+    /// rendering its sheet instead of going blank.
+    pub(crate) fn rekey_undocked_windows(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+    ) {
+        for kind in self.ui_state.windows.values_mut() {
+            if let crate::app::state::WindowKind::UndockedTab { path, .. } = kind
+                && path == old_path
+            {
+                *path = new_path.to_path_buf();
+            }
+        }
     }
 
     fn set_rename_error(&mut self, msg: &str) {

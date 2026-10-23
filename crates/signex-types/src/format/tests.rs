@@ -10,37 +10,27 @@ use crate::pcb::{
     Zone,
 };
 use crate::schematic::{
-    HAlign, Junction, Label, LabelType as LType, Point as SchPoint, SchematicSheet, Symbol, VAlign,
-    Wire,
+    HAlign, Junction, Label, LabelType as LType, LibSymbol, Point as SchPoint, SchematicSheet,
+    Symbol, VAlign, Wire,
 };
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
-fn empty_sheet() -> SchematicSheet {
+fn assert_btree_map<K, V>(_: &BTreeMap<K, V>) {}
+
+pub(super) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
         generator_version: "0.9".into(),
         paper_size: "A4".into(),
-        root_sheet_page: "1".into(),
-        symbols: vec![],
-        wires: vec![],
-        junctions: vec![],
-        labels: vec![],
-        child_sheets: vec![],
-        no_connects: vec![],
-        text_notes: vec![],
-        buses: vec![],
-        bus_entries: vec![],
-        drawings: vec![],
-        no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
+        ..Default::default()
     }
 }
 
-fn empty_board() -> PcbBoard {
+pub(super) fn empty_board() -> PcbBoard {
     PcbBoard {
+        unknown: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -104,6 +94,7 @@ fn escape_tsv_body_for_toml_never_leaves_a_triple_quote_run() {
 
 fn label_with_text(text: &str) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: SchPoint { x: 0.0, y: 0.0 },
@@ -126,6 +117,26 @@ fn snxsch_survives_backslash_and_quote_in_label_text() {
     let back = SnxSchematic::parse(&s).expect("dangerous label text must not corrupt the file");
     assert_eq!(back.sheet.labels.len(), 1);
     assert_eq!(back.sheet.labels[0].text, "NET_C:\\x \"1/4\"");
+}
+
+#[test]
+fn snxsch_survives_c0_control_bytes_in_label_text() {
+    // A C0 control byte other than tab/newline/CR (BEL, VT, FF here)
+    // used to pass through `escape_tsv_body_for_toml` raw, producing
+    // a `.snxsch` that saved fine but `toml::from_str` rejected on
+    // reopen — total document loss (#386).
+    let text = "BEL\u{0007}VT\u{000B}FF\u{000C}end";
+    let mut sheet = empty_sheet();
+    sheet.labels.push(label_with_text(text));
+    let s = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Must be valid TOML on its own terms, not just parseable by our
+    // own (possibly too-lenient) reader.
+    toml::from_str::<toml::Value>(&s).expect("emitted file must be valid TOML");
+
+    let back = SnxSchematic::parse(&s).expect("C0 control bytes must not corrupt the file");
+    assert_eq!(back.sheet.labels.len(), 1);
+    assert_eq!(back.sheet.labels[0].text, text);
 }
 
 #[test]
@@ -156,6 +167,27 @@ fn snxpcb_round_trip_empty() {
     assert!(s.contains("format = \"snxpcb/1\""));
     let back = SnxPcb::parse(&s).expect("round-trip");
     assert_eq!(back.format, SNXPCB_FORMAT_V1);
+}
+
+#[test]
+fn snxpcb_keeps_setup_when_stackup_has_no_layers() {
+    let mut board = empty_board();
+    board.setup = Some(crate::pcb::PcbSetup {
+        grid_size: 0.5,
+        clearance: 0.25,
+        trace_width: 0.2,
+        via_diameter: 0.6,
+        via_drill: 0.3,
+        track_min_width: 0.1,
+        via_min_diameter: 0.4,
+        via_min_drill: 0.2,
+    });
+    let s = SnxPcb::new(board).write_string().expect("serialise");
+    let back = SnxPcb::parse(&s).expect("round-trip");
+    assert!(back.board.layers.is_empty());
+    let setup = back.board.setup.expect("setup survives");
+    assert_eq!(setup.grid_size, 0.5);
+    assert_eq!(setup.clearance, 0.25);
 }
 
 #[test]
@@ -199,36 +231,15 @@ fn snxpcb_includes_tsv_blocks_substring() {
     assert!(s.contains("[vias]\ncontent = \"\"\""));
 }
 
-fn sample_symbol() -> Symbol {
+pub(super) fn sample_symbol() -> Symbol {
     Symbol {
         uuid: Uuid::parse_str("0192a8c0-0001-7000-8000-000000000001").unwrap(),
         lib_id: "lm2596.snxsym".to_string(),
         reference: "U1".to_string(),
         value: "LM2596".to_string(),
         footprint: "TO-263.snxfpt".to_string(),
-        datasheet: String::new(),
         position: SchPoint { x: 50.8, y: 25.4 },
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: Default::default(),
-        custom_properties: Vec::new(),
-        pin_uuids: Default::default(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
-        instances: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -237,7 +248,7 @@ fn sample_wire(sx: f64, sy: f64, ex: f64, ey: f64) -> Wire {
         uuid: Uuid::new_v4(),
         start: SchPoint { x: sx, y: sy },
         end: SchPoint { x: ex, y: ey },
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
@@ -260,6 +271,8 @@ fn show_serialised_pcb_for_inspection() {
         },
     ];
     board.footprints.push(Footprint {
+        unknown_columns: Default::default(),
+        unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
         reference: "U1".into(),
         value: "STM32F407".into(),
@@ -286,8 +299,11 @@ fn snxsch_round_trip_with_data() {
         uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000001").unwrap(),
         position: SchPoint { x: 30.0, y: 20.0 },
         diameter: 0.5,
+        minted: true,
+        ..Default::default()
     });
     sheet.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0003-7000-8000-000000000001").unwrap(),
         text: "VIN".to_string(),
         position: SchPoint { x: 10.0, y: 20.0 },
@@ -317,10 +333,62 @@ fn snxsch_round_trip_with_data() {
 
     assert_eq!(back.sheet.junctions.len(), 1);
     assert_eq!(back.sheet.junctions[0].diameter, 0.5);
+    assert!(
+        back.sheet.junctions[0].minted,
+        "minted provenance must survive the extras round-trip"
+    );
 
     assert_eq!(back.sheet.labels.len(), 1);
     assert_eq!(back.sheet.labels[0].text, "VIN");
     assert_eq!(back.sheet.labels[0].label_type, LType::Net);
+
+    // encode -> decode -> encode must be stable (issue #422 added a new
+    // persisted field; a re-serialise of the round-tripped sheet must not
+    // drift byte-for-byte from the original).
+    let re_serialised = SnxSchematic::new(back.sheet)
+        .write_string()
+        .expect("re-serialise");
+    assert_eq!(
+        serialised, re_serialised,
+        "encode -> decode -> encode must be stable"
+    );
+}
+
+/// A `.snxsch` written before issue #422 added `Junction::minted` never
+/// emitted `[extras.junctions.<uuid>]`. Loading one must not error and
+/// must treat every junction it names as user-placed (never auto-removed),
+/// not as an unminted/undefined provenance.
+#[test]
+fn snxsch_without_junction_extras_defaults_to_user_placed() {
+    let mut sheet = empty_sheet();
+    sheet.junctions.push(Junction {
+        uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000002").unwrap(),
+        position: SchPoint { x: 5.0, y: 0.0 },
+        minted: true,
+        ..Default::default()
+    });
+
+    let full = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Simulate the pre-#422 writer: strip the `[extras...]` tail this
+    // writer added for the minted dot, leaving only what an older Signex
+    // would have written for the same sheet.
+    let legacy = full
+        .split("\n[extras")
+        .next()
+        .expect("split always yields the head")
+        .to_string();
+    assert!(
+        !legacy.contains("[extras"),
+        "test fixture must actually drop the extras tail"
+    );
+
+    let back = SnxSchematic::parse(&legacy).expect("legacy file still loads");
+    assert_eq!(back.sheet.junctions.len(), 1);
+    assert!(
+        !back.sheet.junctions[0].minted,
+        "a junction with no extras entry must default to user-placed, never minted"
+    );
 }
 
 #[test]
@@ -328,6 +396,8 @@ fn snxpcb_round_trip_with_data() {
     let mut board = empty_board();
 
     let pad1 = Pad {
+        unknown_columns: Default::default(),
+        unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0011-7000-8000-000000000001").unwrap(),
         number: "1".into(),
         pad_type: PadType::Smd,
@@ -343,6 +413,8 @@ fn snxpcb_round_trip_with_data() {
         roundrect_ratio: 0.25,
     };
     let pad2 = Pad {
+        unknown_columns: Default::default(),
+        unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0011-7000-8000-000000000002").unwrap(),
         number: "2".into(),
         pad_type: PadType::Smd,
@@ -359,6 +431,8 @@ fn snxpcb_round_trip_with_data() {
     };
 
     let footprint = Footprint {
+        unknown_columns: Default::default(),
+        unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
         reference: "U1".into(),
         value: "STM32F407".into(),
@@ -397,6 +471,7 @@ fn snxpcb_round_trip_with_data() {
         ),
     ] {
         board.segments.push(Segment {
+            unknown_columns: Default::default(),
             uuid: Uuid::parse_str(uuid).unwrap(),
             start: PcbPoint { x: sx, y: sy },
             end: PcbPoint { x: ex, y: ey },
@@ -407,6 +482,7 @@ fn snxpcb_round_trip_with_data() {
     }
 
     board.vias.push(Via {
+        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0030-7000-8000-000000000001").unwrap(),
         position: PcbPoint { x: 100.0, y: 200.0 },
         diameter: 0.6,
@@ -466,19 +542,21 @@ fn snxpcb_round_trip_with_data() {
 fn tsv_writer_pads_columns_for_legibility() {
     let rows = vec![
         SchJunctionRow {
+            unknown_columns: Default::default(),
             uuid: Uuid::nil(),
             pos_x: 100,
             pos_y: 200,
             diameter: 0.5,
         },
         SchJunctionRow {
+            unknown_columns: Default::default(),
             uuid: Uuid::nil(),
             pos_x: 30000000,
             pos_y: 40000000,
             diameter: 0.5,
         },
     ];
-    let body = write_tsv_block(&rows);
+    let body = write_tsv_block("t", &rows).unwrap();
     let lines: Vec<&str> = body.lines().collect();
     assert_eq!(lines[0].split_whitespace().next().unwrap(), "uuid");
     // header columns "pos_x" "pos_y" "diameter" preserved
@@ -529,14 +607,175 @@ fn extras_preserve_symbol_fields() {
         .insert("MPN".to_string(), "LM2596S-5.0".to_string());
     sym.fields.insert("Tolerance".to_string(), "1%".to_string());
     sym.dnp = true;
+    sym.locked = true;
     sheet.symbols.push(sym);
 
     let s = SnxSchematic::new(sheet).write_string().unwrap();
     let back = SnxSchematic::parse(&s).unwrap();
     let recovered = &back.sheet.symbols[0];
+    assert!(recovered.locked);
     // MPN flows through TSV column.
     assert_eq!(recovered.fields.get("MPN").unwrap(), "LM2596S-5.0");
     // Tolerance survived through extras.
     assert_eq!(recovered.fields.get("Tolerance").unwrap(), "1%");
     assert!(recovered.dnp);
+}
+
+#[test]
+fn schematic_extras_are_byte_identical_after_parse() {
+    let mut sheet = empty_sheet();
+    for (key, value) in [
+        ("title", "Deterministic extras"),
+        ("company", "Alp Lab"),
+        ("date", "2026-07-18"),
+        ("revision", "A"),
+    ] {
+        sheet.title_block.insert(key.into(), value.into());
+    }
+
+    for id in ["zeta", "alpha", "middle"] {
+        sheet.lib_symbols.insert(
+            id.into(),
+            LibSymbol {
+                id: id.into(),
+                reference: "U".into(),
+                value: id.into(),
+                footprint: String::new(),
+                datasheet: String::new(),
+                description: format!("{id} library symbol"),
+                keywords: String::new(),
+                fp_filters: String::new(),
+                in_bom: true,
+                on_board: true,
+                in_pos_files: true,
+                duplicate_pin_numbers_are_jumpers: false,
+                graphics: Vec::new(),
+                pins: Vec::new(),
+                show_pin_numbers: true,
+                show_pin_names: true,
+                pin_name_offset: 0.0,
+            },
+        );
+    }
+
+    let mut symbol = sample_symbol();
+    for (key, value) in [
+        ("Tolerance", "1%"),
+        ("MPN", "LM2596S-5.0"),
+        ("Manufacturer", "Example Semi"),
+        ("Rating", "5V"),
+    ] {
+        symbol.fields.insert(key.into(), value.into());
+    }
+    for (pin, uuid) in [
+        ("VIN", "0192a8c0-0001-7000-8000-000000000010"),
+        ("GND", "0192a8c0-0001-7000-8000-000000000011"),
+        ("VOUT", "0192a8c0-0001-7000-8000-000000000012"),
+    ] {
+        symbol
+            .pin_uuids
+            .insert(pin.into(), Uuid::parse_str(uuid).unwrap());
+    }
+
+    let symbol_extras = SymbolExtras::from_symbol(&symbol);
+    assert_btree_map(&symbol_extras.fields);
+    assert_btree_map(&symbol_extras.pin_uuids);
+    sheet.symbols.push(symbol);
+
+    let sheet_extras = SheetExtras::from_sheet(&sheet);
+    assert_btree_map(&sheet_extras.title_block);
+    assert_btree_map(&sheet_extras.lib_symbols);
+
+    let first = SnxSchematic::new(sheet).write_string().unwrap();
+    let parsed = SnxSchematic::parse(&first).unwrap();
+    let second = parsed.write_string().unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(parsed.sheet.title_block["revision"], "A");
+    assert_eq!(parsed.sheet.lib_symbols["alpha"].value, "alpha");
+    assert_eq!(
+        parsed.sheet.symbols[0].fields["Manufacturer"],
+        "Example Semi"
+    );
+    assert_eq!(
+        parsed.sheet.symbols[0].pin_uuids["VOUT"],
+        Uuid::parse_str("0192a8c0-0001-7000-8000-000000000012").unwrap()
+    );
+}
+
+/// A symbol with no footprint, datasheet, fields or flags (#789).
+fn bare_symbol() -> Symbol {
+    Symbol {
+        footprint: String::new(),
+        ..sample_symbol()
+    }
+}
+
+/// A bare symbol has all-default extras, so the writer omits its table.
+/// Reloading must still give unit 1 and the BOM / board flags, and the
+/// next save must be byte-identical (#789).
+#[test]
+fn snxsch_bare_symbol_round_trips_byte_identically() {
+    let mut sheet = empty_sheet();
+    sheet.symbols.push(bare_symbol());
+
+    let first = SnxSchematic::new(sheet).write_string().expect("serialise");
+    assert!(
+        !first.contains("[extras"),
+        "a bare symbol must not emit an extras table"
+    );
+
+    let back = SnxSchematic::parse(&first).expect("parse");
+    let s = &back.sheet.symbols[0];
+    assert_eq!(s.unit, 1);
+    assert!(s.in_bom, "bare symbol must stay in the BOM");
+    assert!(s.on_board, "bare symbol must stay on the board");
+
+    let second = back.write_string().expect("re-serialise");
+    assert_eq!(first, second, "save -> load -> save must be byte-identical");
+}
+
+/// A file saved by the buggy writer has no extras table for a bare
+/// symbol; it must load with the serde defaults, not the derived zeroes.
+#[test]
+fn snxsch_without_symbol_extras_loads_with_serde_defaults() {
+    let mut sheet = empty_sheet();
+    sheet.symbols.push(sample_symbol());
+    let full = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Drop the whole extras tail, leaving what the old writer emitted
+    // for a symbol with no footprint.
+    let legacy = full
+        .split(
+            "
+[extras",
+        )
+        .next()
+        .expect("split always yields the head")
+        .to_string();
+    assert!(!legacy.contains("[extras"));
+
+    let back = SnxSchematic::parse(&legacy).expect("legacy file loads");
+    let s = &back.sheet.symbols[0];
+    assert_eq!(s.unit, 1);
+    assert!(s.in_bom);
+    assert!(s.on_board);
+}
+
+/// `Default` must agree with serde's empty-table fill for every extras
+/// struct whose writer omits default tables, so omitted == default.
+#[test]
+fn extras_default_matches_an_empty_serde_table() {
+    let sym: SymbolExtras = toml::from_str("").expect("empty symbol table");
+    assert!(sym.is_default());
+    assert_eq!(
+        toml::to_string(&sym).unwrap(),
+        toml::to_string(&SymbolExtras::default()).unwrap()
+    );
+    let junction: JunctionExtras = toml::from_str("").expect("empty junction table");
+    assert!(junction.is_default() && JunctionExtras::default().is_default());
+    let fp: FootprintExtras = toml::from_str("").expect("empty footprint table");
+    assert!(fp.is_default() && FootprintExtras::default().is_default());
+    let pad: PadExtras = toml::from_str("").expect("empty pad table");
+    assert!(pad.is_default() && PadExtras::default().is_default());
 }

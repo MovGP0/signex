@@ -37,9 +37,9 @@
 //! the view-side overlay flow renders it from
 //! `app/view/mod.rs::collect_overlays`. The overlay predicate in the
 //! same file gates whether `collect_overlays` runs at all (see the
-//! `[needs_overlay predicate gates modal rendering]` invariant in
-//! `.claude/CLAUDE.md`'s memory notes — without that flag the modal
-//! just doesn't paint and clicks vanish).
+//! `[needs_overlay predicate gates modal rendering]` invariant —
+//! without that flag the modal just doesn't paint and clicks
+//! vanish).
 
 use std::path::PathBuf;
 
@@ -56,7 +56,6 @@ const MODAL_W: f32 = 520.0;
 
 /// One of the three recovery flows. At most one is open at a time.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum RecoveryDialog {
     /// `.snxlib` file is gone — manifest can't be loaded.
     LibraryMissing { path: PathBuf },
@@ -68,6 +67,9 @@ pub enum RecoveryDialog {
         /// 13+ wires it through. The "Restore from remote" button
         /// stays disabled while this is `None`.
         remote: Option<String>,
+        /// Why the last *Re-init* attempt was refused (e.g. no git
+        /// identity configured); shown in the dialog, which stays open.
+        error: Option<String>,
     },
     /// A row's `symbol_uuid` / `footprint_uuid` binds to a primitive
     /// UUID that has no matching on-disk file.
@@ -82,7 +84,6 @@ pub enum RecoveryDialog {
 
 /// User choice from the *Library missing* dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum LibraryMissingChoice {
     Locate,
     RemoveFromProject,
@@ -91,7 +92,6 @@ pub enum LibraryMissingChoice {
 
 /// User choice from the *Git missing* dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum GitMissingChoice {
     ReInit,
     Skip,
@@ -101,7 +101,6 @@ pub enum GitMissingChoice {
 
 /// User choice from the *Broken primitive binding* dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum BrokenBindingChoice {
     Rebind,
     RemoveRow,
@@ -115,9 +114,11 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     match dialog {
         RecoveryDialog::LibraryMissing { path } => library_missing_view(path, tokens),
-        RecoveryDialog::GitMissing { path, remote } => {
-            git_missing_view(path, remote.as_deref(), tokens)
-        }
+        RecoveryDialog::GitMissing {
+            path,
+            remote,
+            error,
+        } => git_missing_view(path, remote.as_deref(), error.as_deref(), tokens),
         RecoveryDialog::BrokenPrimitiveBinding {
             library_path,
             table,
@@ -202,6 +203,7 @@ fn library_missing_view<'a>(
 fn git_missing_view<'a>(
     path: &'a std::path::Path,
     remote: Option<&'a str>,
+    error: Option<&'a str>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -240,6 +242,15 @@ fn git_missing_view<'a>(
     if let Some(url) = remote {
         summary_lines = summary_lines.push(Space::new().height(4));
         summary_lines = summary_lines.push(text(format!("Remote: {}", url)).size(11).color(muted));
+    }
+
+    if let Some(reason) = error {
+        summary_lines = summary_lines.push(Space::new().height(8));
+        summary_lines = summary_lines.push(
+            text(format!("Re-init failed: {reason}"))
+                .size(11)
+                .color(iced::Color::from_rgb(0.86, 0.40, 0.36)),
+        );
     }
 
     summary_lines = summary_lines.push(Space::new().height(10));
@@ -533,6 +544,7 @@ mod tests {
         let d = RecoveryDialog::GitMissing {
             path: PathBuf::from("/tmp/foo.snxlib"),
             remote: None,
+            error: None,
         };
         match d {
             RecoveryDialog::GitMissing { remote, .. } => assert!(remote.is_none()),

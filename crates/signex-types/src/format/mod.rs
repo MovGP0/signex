@@ -10,8 +10,13 @@
 //! polygons, the stackup, custom properties) lives in regular TOML
 //! sub-tables alongside the TSV blocks.
 //!
-//! `.snxprj` (project) is unchanged and uses its own pre-existing
-//! format. Stays as-is.
+//! `.snxprj` (project) is the one native format that is not TOML+TSV: it
+//! is pretty-printed JSON (`crate::project`). The v0.9 cutover scoped
+//! itself to document formats and left the project file alone; JSON
+//! persistence for it landed afterwards (0222a07c) with no recorded reason
+//! to prefer JSON. It is a small flat pointer record with no bulk rows, so
+//! the TSV blocks would add nothing, but it also has no format token and
+//! drops unknown keys on save. See `docs/architecture/snxprj-format.md`.
 //!
 //! These types are the canonical Signex schema. Standard I/O — when it
 //! returns via the `signex-standard-import` companion repo (GPL-3.0) —
@@ -32,20 +37,28 @@ mod pcb_rows;
 mod sch_rows;
 mod tsv;
 mod units;
+mod unknown;
+mod unknown_columns;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unknown_columns_tests;
+#[cfg(test)]
+mod unknown_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
+pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
+pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};
 
 // Subtree-internal helpers used by the container types below.
 use extras::{
-    BoardExtras, FootprintExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw, SheetExtras,
-    SymbolExtras,
+    BoardExtras, FootprintExtras, JunctionExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw,
+    SheetExtras, SymbolExtras,
 };
 use pcb_rows::{
     footprint_to_row, pad_to_row, row_to_footprint, row_to_pad, row_to_track, row_to_via,
@@ -90,11 +103,42 @@ pub enum FormatError {
         expected: usize,
         columns: Vec<String>,
     },
-    #[error("TSV block {block:?}: header columns {got:?} do not match expected {expected:?}")]
+    #[error("TSV block {block:?}: header columns {got:?} lack a known column of {expected:?}")]
     TsvHeaderMismatch {
         block: String,
         got: Vec<String>,
         expected: Vec<String>,
+    },
+    #[error("TSV block {block:?}: header repeats column {column:?}")]
+    TsvDuplicateColumn { block: String, column: String },
+    #[error(
+        "TSV block {block:?}: {count} foreign columns exceeds the limit of {max}; \
+         the first column over the limit is {first_over:?}... \
+         (refusing rather than drop columns)"
+    )]
+    TsvTooManyForeignColumns {
+        block: String,
+        count: usize,
+        max: usize,
+        /// First characters of the first foreign column past the cap, so
+        /// the user can tell which rows to remove.
+        first_over: String,
+    },
+    #[error(
+        "TSV block {block:?}: foreign column {column:?} has the name of a known column \
+         (refusing to write a header the loader would reject)"
+    )]
+    TsvForeignColumnShadowsKnown { block: String, column: String },
+    #[error(
+        "TSV block {block:?}: foreign column name {prefix:?}... is {len} bytes, \
+         over the limit of {max} (refusing to load rather than truncate it)"
+    )]
+    TsvForeignColumnNameTooLong {
+        block: String,
+        /// First characters of the name, for identification only.
+        prefix: String,
+        len: usize,
+        max: usize,
     },
     #[error("TSV block {block:?}: row {row} field {field:?} parse error: {message}")]
     TsvFieldParse {
@@ -125,9 +169,15 @@ pub trait SnxTable: Sized {
     /// [`SnxTable::columns`]. Empty cells use `""`.
     fn to_row(&self) -> Vec<String>;
 
-    /// Parse a row of cell strings (length matches [`SnxTable::columns`]).
+    /// Parse a row of the known cells, already ordered as [`SnxTable::columns`].
     /// Implementations report parse failures via [`FormatError::TsvFieldParse`].
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError>;
+
+    /// Foreign cells this row carried (see [`UnknownColumns`]).
+    fn unknown_columns(&self) -> &UnknownColumns;
+
+    /// Attach the foreign cells captured by `parse_tsv_block`.
+    fn with_unknown_columns(self, columns: UnknownColumns) -> Self;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +224,7 @@ impl SnxSchematic {
             generator_version: self.sheet.generator_version.clone(),
             paper_size: self.sheet.paper_size.clone(),
             root_sheet_page: self.sheet.root_sheet_page.clone(),
+            unknown: self.sheet.unknown.manifest.clone(),
         };
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
@@ -187,10 +238,10 @@ impl SnxSchematic {
             self.sheet.junctions.iter().map(junction_to_row).collect();
         let label_rows: Vec<SchLabelRow> = self.sheet.labels.iter().map(label_to_row).collect();
 
-        write_tsv_section(&mut out, "sheets.components", &component_rows);
-        write_tsv_section(&mut out, "sheets.wires", &wire_rows);
-        write_tsv_section(&mut out, "sheets.junctions", &junction_rows);
-        write_tsv_section(&mut out, "sheets.labels", &label_rows);
+        write_tsv_section(&mut out, "sheets.components", &component_rows)?;
+        write_tsv_section(&mut out, "sheets.wires", &wire_rows)?;
+        write_tsv_section(&mut out, "sheets.junctions", &junction_rows)?;
+        write_tsv_section(&mut out, "sheets.labels", &label_rows)?;
 
         // Extras: auxiliary TOML tables for fields the bulk row
         // doesn't carry. Wrap the whole extras tree in a single
@@ -208,6 +259,14 @@ impl SnxSchematic {
             .filter(|(_, e)| !e.is_default())
             .collect();
 
+        let junctions_extras: BTreeMap<String, JunctionExtras> = self
+            .sheet
+            .junctions
+            .iter()
+            .map(|j| (j.uuid.to_string(), JunctionExtras::from_junction(j)))
+            .filter(|(_, e)| !e.is_default())
+            .collect();
+
         let sheet_extras = SheetExtras::from_sheet(&self.sheet);
         let sheet_extras_opt = if sheet_extras.is_default() {
             None
@@ -215,7 +274,8 @@ impl SnxSchematic {
             Some(sheet_extras)
         };
 
-        if !symbols_extras.is_empty() || sheet_extras_opt.is_some() {
+        if !symbols_extras.is_empty() || !junctions_extras.is_empty() || sheet_extras_opt.is_some()
+        {
             #[derive(Serialize)]
             struct ExtrasWrapper {
                 extras: ExtrasInner,
@@ -224,12 +284,15 @@ impl SnxSchematic {
             struct ExtrasInner {
                 #[serde(skip_serializing_if = "BTreeMap::is_empty")]
                 symbols: BTreeMap<String, SymbolExtras>,
+                #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+                junctions: BTreeMap<String, JunctionExtras>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 sheet: Option<SheetExtras>,
             }
             let body = toml::to_string_pretty(&ExtrasWrapper {
                 extras: ExtrasInner {
                     symbols: symbols_extras,
+                    junctions: junctions_extras,
                     sheet: sheet_extras_opt,
                 },
             })?;
@@ -283,7 +346,14 @@ impl SnxSchematic {
             })
             .collect();
         let wires = wire_rows.into_iter().map(row_to_wire).collect();
-        let junctions = junction_rows.into_iter().map(row_to_junction).collect();
+        let junctions = junction_rows
+            .into_iter()
+            .map(|row| {
+                let key = row.uuid.to_string();
+                let extra = extras.junctions.get(&key).cloned().unwrap_or_default();
+                row_to_junction(row, extra)
+            })
+            .collect();
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
         let sheet = SchematicSheet {
@@ -304,8 +374,12 @@ impl SnxSchematic {
             bus_entries: sheet_extras.bus_entries,
             drawings: sheet_extras.drawings,
             no_erc_directives: sheet_extras.no_erc_directives,
-            title_block: sheet_extras.title_block,
-            lib_symbols: sheet_extras.lib_symbols,
+            title_block: sheet_extras.title_block.into_iter().collect(),
+            lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
+            unknown: SheetUnknown {
+                manifest: raw.unknown,
+                extras: sheet_extras.unknown,
+            },
         };
 
         Ok(SnxSchematic {
@@ -329,6 +403,9 @@ struct SchManifest {
     paper_size: String,
     #[serde(default)]
     root_sheet_page: String,
+    /// Foreign manifest keys, re-emitted verbatim (see [`UnknownFields`]).
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -366,6 +443,10 @@ struct SchRaw {
     sheets: SchSheetsRaw,
     #[serde(default)]
     extras: Option<SchExtrasRaw>,
+    /// Foreign manifest keys; carried onto the sheet so they survive
+    /// the codec wrapper being discarded.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +485,7 @@ impl SnxPcb {
             version: self.board.version,
             generator: self.board.generator.clone(),
             thickness: self.board.thickness,
+            unknown: self.board.unknown.manifest.clone(),
         };
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
@@ -412,7 +494,13 @@ impl SnxPcb {
         // toml's serializer produces the correct `[stackup]`/`[nets]`
         // headers and any inner sub-tables (PcbSetup) attach to the
         // right parent path.
-        if !self.board.layers.is_empty() || !self.board.nets.is_empty() {
+        // A section holding only foreign keys is still emitted, with its
+        // known members empty, so those keys are not lost.
+        let keep_stackup = !self.board.layers.is_empty()
+            || self.board.setup.is_some()
+            || !self.board.unknown.stackup.is_empty();
+        let keep_nets = !self.board.nets.is_empty() || !self.board.unknown.nets.is_empty();
+        if keep_stackup || keep_nets {
             #[derive(Serialize)]
             struct StackupWrapper<'a> {
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -425,26 +513,24 @@ impl SnxPcb {
                 layers: Vec<String>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 setup: Option<&'a crate::pcb::PcbSetup>,
+                #[serde(flatten)]
+                unknown: &'a UnknownFields,
             }
             #[derive(Serialize)]
             struct NetsBlock<'a> {
                 entries: &'a [crate::pcb::NetDef],
+                #[serde(flatten)]
+                unknown: &'a UnknownFields,
             }
-            let stackup = if self.board.layers.is_empty() {
-                None
-            } else {
-                Some(StackBlock {
-                    layers: self.board.layers.iter().map(|l| l.name.clone()).collect(),
-                    setup: self.board.setup.as_ref(),
-                })
-            };
-            let nets = if self.board.nets.is_empty() {
-                None
-            } else {
-                Some(NetsBlock {
-                    entries: &self.board.nets,
-                })
-            };
+            let stackup = keep_stackup.then(|| StackBlock {
+                layers: self.board.layers.iter().map(|l| l.name.clone()).collect(),
+                setup: self.board.setup.as_ref(),
+                unknown: &self.board.unknown.stackup,
+            });
+            let nets = keep_nets.then(|| NetsBlock {
+                entries: &self.board.nets,
+                unknown: &self.board.unknown.nets,
+            });
             out.push('\n');
             out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
         }
@@ -461,10 +547,10 @@ impl SnxPcb {
         let track_rows: Vec<PcbTrackRow> = self.board.segments.iter().map(track_to_row).collect();
         let via_rows: Vec<PcbViaRow> = self.board.vias.iter().map(via_to_row).collect();
 
-        write_tsv_section(&mut out, "footprints", &footprint_rows);
-        write_tsv_section(&mut out, "pads", &pad_rows);
-        write_tsv_section(&mut out, "tracks", &track_rows);
-        write_tsv_section(&mut out, "vias", &via_rows);
+        write_tsv_section(&mut out, "footprints", &footprint_rows)?;
+        write_tsv_section(&mut out, "pads", &pad_rows)?;
+        write_tsv_section(&mut out, "tracks", &track_rows)?;
+        write_tsv_section(&mut out, "vias", &via_rows)?;
 
         // Zones — full struct array (each zone serialises naturally
         // under `[[zones]]` with its own uuid scalar).
@@ -485,16 +571,20 @@ impl SnxPcb {
         let extras = PcbExtras::from_board(&self.board);
         let footprints = extras.footprints;
         let pads = extras.pads;
-        let board_extras =
-            if extras.outline.is_empty() && extras.graphics.is_empty() && extras.texts.is_empty() {
-                None
-            } else {
-                Some(BoardExtras {
-                    outline: extras.outline,
-                    graphics: extras.graphics,
-                    texts: extras.texts,
-                })
-            };
+        let board_extras = if extras.outline.is_empty()
+            && extras.graphics.is_empty()
+            && extras.texts.is_empty()
+            && self.board.unknown.extras.is_empty()
+        {
+            None
+        } else {
+            Some(BoardExtras {
+                outline: extras.outline,
+                graphics: extras.graphics,
+                texts: extras.texts,
+                unknown: self.board.unknown.extras.clone(),
+            })
+        };
         if !footprints.is_empty() || !pads.is_empty() || board_extras.is_some() {
             #[derive(Serialize)]
             struct ExtrasWrapper {
@@ -591,6 +681,11 @@ impl SnxPcb {
                     pads: vec![pad],
                     graphics: Vec::new(),
                     properties: Vec::new(),
+                    // The synthetic footprint is not in the file: it
+                    // carries no foreign keys and must not inherit the
+                    // orphan pad's.
+                    unknown: UnknownFields::default(),
+                    unknown_columns: UnknownColumns::default(),
                 });
             }
         }
@@ -602,7 +697,7 @@ impl SnxPcb {
         let zones = raw.zones.unwrap_or_default();
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
-        let (layers, setup) = match raw.stackup {
+        let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
                 let layers: Vec<crate::pcb::LayerDef> = s
                     .layers
@@ -614,9 +709,14 @@ impl SnxPcb {
                         layer_type: String::new(),
                     })
                     .collect();
-                (layers, s.setup)
+                (layers, s.setup, s.unknown)
             }
-            None => (Vec::new(), None),
+            None => (Vec::new(), None, UnknownFields::default()),
+        };
+
+        let (nets, nets_unknown) = match raw.nets {
+            Some(n) => (n.entries, n.unknown),
+            None => (Vec::new(), UnknownFields::default()),
         };
 
         let board = PcbBoard {
@@ -627,13 +727,19 @@ impl SnxPcb {
             outline: board_extras.outline,
             layers,
             setup,
-            nets: raw.nets.map(|n| n.entries).unwrap_or_default(),
+            nets,
             footprints,
             segments,
             vias,
             zones,
             graphics: board_extras.graphics,
             texts: board_extras.texts,
+            unknown: BoardUnknown {
+                manifest: raw.unknown,
+                stackup: stackup_unknown,
+                nets: nets_unknown,
+                extras: board_extras.unknown,
+            },
         };
 
         Ok(SnxPcb {
@@ -653,6 +759,9 @@ struct PcbManifest {
     generator: String,
     #[serde(default)]
     thickness: f64,
+    /// Foreign manifest keys, re-emitted verbatim (see [`UnknownFields`]).
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -681,6 +790,10 @@ struct PcbRaw {
     zones: Option<Vec<Zone>>,
     #[serde(default)]
     extras: Option<PcbExtrasRaw>,
+    /// Foreign manifest keys; carried onto the board so they survive
+    /// the codec wrapper being discarded.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -689,10 +802,16 @@ struct StackRaw {
     layers: Vec<String>,
     #[serde(default)]
     setup: Option<crate::pcb::PcbSetup>,
+    /// Foreign keys inside `[stackup]`.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 struct NetsRaw {
     #[serde(default)]
     entries: Vec<crate::pcb::NetDef>,
+    /// Foreign keys inside `[nets]`.
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }

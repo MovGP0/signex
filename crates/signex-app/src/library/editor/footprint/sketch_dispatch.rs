@@ -22,6 +22,7 @@ use signex_library::primitive::footprint::Footprint;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::{SketchData, SketchError, parameter};
 
+use super::sketch_conflict::{mutate_solve_or_revert, was_reverted};
 use super::sketch_mode::SketchEdit;
 use super::state::FootprintEditorState;
 use crate::library::messages::RoleTag;
@@ -37,8 +38,20 @@ pub fn apply_sketch_edit(
     footprint: &mut Footprint,
     edit: SketchEdit,
 ) -> Result<(), SketchError> {
-    apply_edit_inner(footprint, edit);
-    solve_and_bake(state, footprint)
+    mutate_solve_or_revert(state, footprint, |fp| apply_edit_inner(fp, edit))
+}
+
+/// Surface a failed edit: Properties-strip warning plus the Messages
+/// panel. A named conflict was reverted and says so; any other failure
+/// (no convergence, an empty conflict) left the edit in place and says that.
+fn report_solve_failure(state: &mut FootprintEditorState, error: &SketchError) {
+    state.solve_warnings.push(format!("{error}"));
+    let message = if was_reverted(error) {
+        format!("Sketch edit rejected: {error}")
+    } else {
+        format!("Sketch solve failed (the edit was kept): {error}")
+    };
+    crate::diagnostics::log_warning(message);
 }
 
 /// Same as [`apply_sketch_edit`] but captures any returned
@@ -52,7 +65,7 @@ pub fn apply_sketch_edit_with_warnings(
     edit: SketchEdit,
 ) {
     if let Err(e) = apply_sketch_edit(state, footprint, edit) {
-        state.solve_warnings.push(format!("{e}"));
+        report_solve_failure(state, &e);
     }
 }
 
@@ -79,8 +92,7 @@ pub fn apply_sketch_role(
     id: SketchEntityId,
     role: RoleTag,
 ) -> Result<(), SketchError> {
-    set_entity_role(footprint, id, role);
-    solve_and_bake(state, footprint)
+    mutate_solve_or_revert(state, footprint, |fp| set_entity_role(fp, id, role))
 }
 
 /// `_with_warnings` companion to [`apply_sketch_role`] — captures the
@@ -92,7 +104,7 @@ pub fn apply_sketch_role_with_warnings(
     role: RoleTag,
 ) {
     if let Err(e) = apply_sketch_role(state, footprint, id, role) {
-        state.solve_warnings.push(format!("{e}"));
+        report_solve_failure(state, &e);
     }
 }
 
@@ -313,7 +325,7 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
 fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
     let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
     match edit {
-        SketchEdit::AddEntity(e) => sketch.entities.push(e),
+        SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
             sketch.entities.retain(|e| e.id != id);
             // Drop dangling constraint refs — coarse rule, drop any
@@ -328,11 +340,11 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {
-                if ent.id == id {
-                    if let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind {
-                        *x += dx;
-                        *y += dy;
-                    }
+                if ent.id == id
+                    && let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind
+                {
+                    *x += dx;
+                    *y += dy;
                 }
             }
         }
@@ -359,7 +371,7 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
 /// sketches stay small (tens-to-low-hundreds of entities); a
 /// timeout indicates a real solver problem worth showing, not a
 /// transient that can be silently swallowed.
-fn solve_and_bake(
+pub(super) fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
 ) -> Result<(), SketchError> {
@@ -374,6 +386,7 @@ fn solve_and_bake(
 
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
+            state.conflict.clear();
             // Phase 7.3 — bake pads + arrays into the footprint, but
             // skip the overwrite on an empty sketch: a fresh
             // SetMode(Sketch) toggle on a footprint with literal pads
@@ -560,7 +573,27 @@ fn solve_and_bake(
 
             state.last_solve = Some(out);
         }
-        Err(e) => return Err(SketchError::SolveFailed(e)),
+        Err(e) => {
+            // #613 — drop the previous solve rather than leaving it to
+            // be painted. Everything downstream reads `last_solve`
+            // through `as_ref()` / `is_none()` and already has an
+            // unsolved rendering (`updates/sketch/pad_bridge.rs`
+            // documents `None` as "no solve has run yet"), so clearing
+            // shows the sketch as unsolved instead of showing the last
+            // good answer as though it were current.
+            //
+            // A conflict makes the solver return `OverConstrained`
+            // (no output), so `entity_colours` never runs; without
+            // this the stale DoF colours stayed on screen.
+            state.last_solve = None;
+            tracing::warn!(
+                target: "signex::sketch",
+                error = %e,
+                "the sketch solve failed; the previous solve's constraint colours and \
+                 dimensions were cleared rather than left on screen"
+            );
+            return Err(SketchError::SolveFailed(e));
+        }
     }
     Ok(())
 }

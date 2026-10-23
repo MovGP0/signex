@@ -16,6 +16,8 @@ use crate::pdf::{PageRange, PdfOptions};
 
 mod rasterize;
 
+pub use rasterize::{MAX_PREVIEW_EDGE_PX, preview_raster_size};
+
 pub struct PreviewRasterizer;
 
 #[derive(Debug, Clone)]
@@ -54,7 +56,7 @@ impl PreviewRasterizer {
     /// If a page fails to rasterise (e.g., dimensions too small), it is skipped.
     pub fn rasterize(&self, ctx: &ExportContext, opts: &PreviewOptions) -> Vec<PreviewPage> {
         let (page_w_mm, page_h_mm) = opts.pdf.page_size.dimensions_mm(opts.pdf.orientation);
-        let expr_tables = build_expression_tables(&ctx.sheets);
+        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
         let sheet_indices = resolve_page_range_preview(&opts.pdf.page_range, ctx.sheets.len());
 
         sheet_indices

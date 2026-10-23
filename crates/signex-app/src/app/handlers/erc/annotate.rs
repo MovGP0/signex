@@ -4,25 +4,84 @@ use iced::Task;
 
 use super::super::super::*;
 
+/// Annotate a sheet that exists only on disk and write it back. Returns
+/// `true` when the file was rewritten; every failure is logged with the path.
+/// Only for sheets with no engine at all — an engine (open or parked) holds the
+/// user's unsaved edits and is annotated in place instead (#669).
+fn annotate_and_save_unopened(
+    sheet: signex_types::schematic::SchematicSheet,
+    path: &std::path::Path,
+    mode: signex_engine::AnnotateMode,
+    next_by_prefix: &mut std::collections::HashMap<String, u32>,
+    locked: &std::collections::HashSet<uuid::Uuid>,
+) -> bool {
+    let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let mut engine = match signex_engine::Engine::new(sheet) {
+        Ok(engine) => engine,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            return false;
+        }
+    };
+    engine.set_path(Some(path.to_path_buf()));
+    match engine.annotate_with_seed_and_locks(mode, next_by_prefix, locked) {
+        Ok(true) => {}
+        Ok(false) => return false,
+        Err(error) => {
+            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
+            return false;
+        }
+    }
+    if let Err(error) = engine.save() {
+        crate::diagnostics::log_error(
+            &format!("Annotate could not save '{}'", path.display()),
+            &anyhow::Error::new(error),
+        );
+        return false;
+    }
+    crate::diagnostics::log_info(format!("Annotate: saved {}", path.display()));
+    true
+}
+
 impl Signex {
+    /// Record that a non-active engine (a cached tab, or a parked engine whose
+    /// tab was closed) now holds unsaved edits. `tab.dirty` alone is not
+    /// enough: `dirty_paths` is what the quit guard, the tab-close engine
+    /// parking, the title-bar count and Save-All read, and a bare
+    /// `tab.dirty = true` never propagates into it (#585). Shared by Annotate
+    /// and Reset Duplicate Designators so the two cannot drift (#669).
+    fn mark_cached_sheet_dirty(&mut self, path: &std::path::Path) {
+        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
+            tab.dirty = true;
+        }
+        self.document_state.dirty_paths.insert(path.to_path_buf());
+    }
+
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
-        use std::path::PathBuf;
         // Share one per-prefix counter across every open sheet so designators
         // don't collide across sheets of the same project.
         let mut next_by_prefix: std::collections::HashMap<String, u32> =
             std::collections::HashMap::new();
         let tab_count = self.document_state.tabs.len();
 
+        // The project, from the one assembler: the declared pages plus
+        // everything reachable down the child-sheet graph. Seeding off
+        // `engines.values()` instead both over-reached (a loose tab from
+        // another project claimed numbers here) and under-reached (a
+        // hierarchical child never added to `data.sheets` was invisible, so
+        // this "project-wide" annotate handed out designators it already
+        // used) — #406.
+        let (_pages, project_set) =
+            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+
         // Pass A: seed the shared counter from every sheet's already-
         // annotated symbols. This happens inside annotate_with_seed's
         // phase 2, but running a separate seed pass first ensures
         // order-independence — without this, sheet B could reuse
         // numbers it considers free that sheet A actually claims.
-        // Every open schematic tab's engine lives in the HashMap, so
-        // one pass over `engines.values()` covers active + background.
         let mut all_existing: Vec<String> = Vec::new();
-        for engine in self.document_state.engines.values() {
-            for sym in &engine.document().symbols {
+        for sheet in project_set.sheets.values() {
+            for sym in &sheet.symbols {
                 if !sym.is_power && !sym.reference.starts_with('#') {
                     all_existing.push(sym.reference.clone());
                 }
@@ -44,118 +103,95 @@ impl Signex {
             }
         }
 
-        // Pass B: apply to cached (non-active) tabs via the shared counter.
+        // Pass B: walk every sheet the counter must cover — cached tabs,
+        // unopened sheets, and the active engine alike — in the ONE order
+        // `ordered_project_sheet_paths` defines. The preview walks the exact
+        // same order over the exact same set, so the number it promises for
+        // a sheet is the number this pass assigns it (#435): the active
+        // engine no longer gets an unconditional last turn regardless of
+        // where its path sorts.
         let locked = self.ui_state.annotate_locked.clone();
+        let active_path = self.document_state.active_path.clone();
+        let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
+            &project_set,
+            active_path.as_deref(),
+        );
+        let mut any_active_changed = false;
         let mut any_cached_changed = false;
-        let active_idx = self.document_state.active_tab;
-        let paths: Vec<(usize, PathBuf)> = self
-            .document_state
-            .tabs
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, tab)| {
-                if idx == active_idx {
-                    None
-                } else {
-                    Some((idx, tab.path.clone()))
-                }
-            })
-            .collect();
-        for (idx, path) in paths {
-            let result = self.document_state.engines.get_mut(&path).map(|engine| {
-                engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
-            });
-            if let Some(Ok(true)) = result {
-                if let Some(tab) = self.document_state.tabs.get_mut(idx) {
-                    tab.dirty = true;
-                }
-                any_cached_changed = true;
-            }
-        }
-
-        // Pass B2: walk every sheet in the project that isn't currently
-        // open as a tab — parse from disk, annotate with the shared
-        // counter, and write back. Altium's Annotate-Across-Project
-        // covers even the sheets the user hasn't opened so designators
-        // stay unique project-wide.
-        let open_paths: std::collections::HashSet<std::path::PathBuf> = self
-            .document_state
-            .tabs
-            .iter()
-            .map(|t| t.path.clone())
-            .collect();
-        let project_root = self
-            .document_state
-            .active_loaded_project()
-            .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
-        let unopened_sheet_paths: Vec<std::path::PathBuf> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                p.data
-                    .sheets
-                    .iter()
-                    .filter_map(|s| {
-                        let path = match project_root.as_ref() {
-                            Some(root) => root.join(&s.filename),
-                            None => std::path::PathBuf::from(&s.filename),
-                        };
-                        if open_paths.contains(&path) {
-                            None
-                        } else {
-                            Some(path)
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
         let mut disk_touched = 0usize;
-        for sheet_path in unopened_sheet_paths {
-            let Ok(text) = std::fs::read_to_string(&sheet_path) else {
-                crate::diagnostics::log_info(format!(
-                    "Annotate: failed to read unopened sheet {}",
-                    sheet_path.display()
-                ));
-                continue;
-            };
-            let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
-            else {
-                crate::diagnostics::log_info(format!(
-                    "Annotate: failed to parse unopened sheet {}",
-                    sheet_path.display()
-                ));
-                continue;
-            };
-            let Ok(mut engine) = signex_engine::Engine::new(sheet) else {
-                continue;
-            };
-            engine.set_path(Some(sheet_path.clone()));
-            let Ok(changed) =
-                engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
-            else {
-                continue;
-            };
-            if !changed {
-                continue;
-            }
-            if engine.save().is_ok() {
-                disk_touched += 1;
-                self.document_state.dirty_paths.remove(&sheet_path);
-                crate::diagnostics::log_info(format!("Annotate: saved {}", sheet_path.display()));
-            }
+        for (path, why) in &project_set.unreadable {
+            crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
-
-        // Pass C: apply to the active engine so the canvas, Properties
-        // panel, and render cache all refresh. Run through the raw engine
-        // method (not Command) so it shares the same counter.
-        if let Some(engine) = self.document_state.active_engine_mut() {
-            let _ = engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked);
+        for path in &ordered_paths {
+            if active_path.as_deref() == Some(path.as_path()) {
+                // The active engine — run through the raw engine method (not
+                // Command) so it shares the same counter. That also means it
+                // cannot go through the mutation gateway, so the dirty flag
+                // is set by hand once the whole pass is done (#585).
+                let outcome = self.document_state.active_engine_mut().map(|engine| {
+                    engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+                });
+                match outcome {
+                    Some(Ok(true)) => any_active_changed = true,
+                    Some(Err(error)) => {
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error(
+                            "Annotate failed on the active sheet",
+                            &error,
+                        );
+                    }
+                    Some(Ok(false)) | None => {}
+                }
+                continue;
+            }
+            if self.document_state.engines.contains_key(path) {
+                // A live engine that is not the active one: a cached tab, or
+                // a dirty sheet whose tab was closed and whose engine is
+                // parked (#669). Either way the engine is the document, so
+                // annotate it in memory and leave it dirty for the user to
+                // save — never write it behind their back.
+                let result = self.document_state.engines.get_mut(path).map(|engine| {
+                    engine.annotate_with_seed_and_locks(mode, &mut next_by_prefix, &locked)
+                });
+                match result {
+                    Some(Ok(true)) => {
+                        self.mark_cached_sheet_dirty(path);
+                        any_cached_changed = true;
+                    }
+                    Some(Err(error)) => {
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error(
+                            &format!("Annotate failed on '{}'", path.display()),
+                            &error,
+                        );
+                    }
+                    Some(Ok(false)) | None => {}
+                }
+                continue;
+            }
+            // A project sheet that isn't currently open as a tab — annotate
+            // the already-parsed copy with the shared counter and write it
+            // back. Altium's Annotate-Across-Project covers even the sheets
+            // the user hasn't opened so designators stay unique project-wide.
+            let Some(sheet) = project_set.sheets.get(path).cloned() else {
+                continue;
+            };
+            if annotate_and_save_unopened(sheet, path, mode, &mut next_by_prefix, &locked) {
+                disk_touched += 1;
+            }
         }
         if disk_touched > 0 {
             crate::diagnostics::log_info(format!(
                 "Annotate: wrote {} unopened sheet file(s) to disk",
                 disk_touched,
             ));
+        }
+        // The active engine was annotated through a non-`Command` method, so
+        // nothing has marked it dirty. Without this the quit guard sees a
+        // clean workspace and the annotation goes out with the process
+        // (#585). Cached tabs already did their own bookkeeping above.
+        if any_active_changed {
+            self.mark_active_document_dirty();
         }
         // Force a render + panel refresh as if a command had fired.
         self.interaction_state
@@ -194,10 +230,11 @@ impl Signex {
     /// Altium's "Reset Duplicate Designators" — find references that
     /// appear on more than one symbol across the WHOLE project, reset
     /// just those to `{prefix}?`. Everything else keeps its current
-    /// value. Walks open tabs (live + cached engines) and every sheet
-    /// in `project_data.sheets` not opened as a tab; unopened sheets
-    /// are re-saved through the native `.snxsch` writer so the fix is
-    /// project-wide.
+    /// value. The project is the one assembler's answer
+    /// ([`crate::app::project_sheets::assemble_project_sheets`]): the
+    /// declared pages plus everything reachable down the child-sheet
+    /// graph. Unopened sheets are re-saved through the native
+    /// `.snxsch` writer so the fix is project-wide.
     pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
         use std::collections::{HashMap, HashSet};
         use std::path::PathBuf;
@@ -217,69 +254,37 @@ impl Signex {
                 *counts.entry(sym.reference.clone()).or_insert(0) += 1;
             }
         };
-        // All open schematic engines live in the HashMap — one loop
-        // covers the active tab plus every background tab.
-        for engine in self.document_state.engines.values() {
-            bump(&mut counts, engine.document());
-        }
-        let open_paths: HashSet<PathBuf> = self
-            .document_state
-            .tabs
-            .iter()
-            .map(|t| t.path.clone())
-            .collect();
-        let project_root = self
-            .document_state
-            .active_loaded_project()
-            .and_then(|p| p.path.parent().map(PathBuf::from));
-        let unopened_paths: Vec<PathBuf> = self
-            .document_state
-            .active_loaded_project()
-            .map(|p| {
-                p.data
-                    .sheets
-                    .iter()
-                    .filter_map(|s| {
-                        let path = match project_root.as_ref() {
-                            Some(root) => root.join(&s.filename),
-                            None => PathBuf::from(&s.filename),
-                        };
-                        if open_paths.contains(&path) {
-                            None
-                        } else {
-                            Some(path)
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        // The project, not "every open engine plus the declared pages".
+        // The old set both over- and under-reached: a loose tab from
+        // another project made its R1 collide with this project's R1,
+        // while a hierarchical child that was never added to
+        // `data.sheets` was invisible — so its duplicate refdes
+        // survived into the netlist and onto the board (#406).
+        let (_pages, project_set) =
+            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
 
-        // Parse each unopened sheet ONCE up-front and keep the
-        // `SchematicSheet` around for phase 2 — saves a second disk
-        // parse and guarantees counting + reset see the same state.
-        let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> =
-            Vec::with_capacity(unopened_paths.len());
-        for path in unopened_paths {
-            let parse_result = std::fs::read_to_string(&path)
-                .map_err(anyhow::Error::from)
-                .and_then(|text| {
-                    signex_types::format::SnxSchematic::parse(&text)
-                        .map(|snx| snx.sheet)
-                        .map_err(anyhow::Error::from)
-                });
-            match parse_result {
-                Ok(sheet) => {
-                    bump(&mut counts, &sheet);
-                    unopened.push((path, sheet));
-                }
-                Err(err) => {
-                    crate::diagnostics::log_info(format!(
-                        "Reset Duplicate Designators: failed to parse unopened sheet {}: {err}",
-                        path.display(),
-                    ));
-                }
+        // Split by "is it open as an engine": open sheets are reset
+        // through their engine so the edit is undoable, the rest are
+        // written straight back to disk. The already-parsed
+        // `SchematicSheet` is kept for phase 2 so counting and reset
+        // see the same state.
+        let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> = Vec::new();
+        let mut project_paths: HashSet<PathBuf> = HashSet::new();
+        for (path, sheet) in project_set.sheets {
+            bump(&mut counts, &sheet);
+            project_paths.insert(path.clone());
+            if !self.document_state.engines.contains_key(&path) {
+                unopened.push((path, sheet));
             }
         }
+        for (path, why) in &project_set.unreadable {
+            crate::diagnostics::log_info(format!(
+                "Reset Duplicate Designators: sheet '{}' {why}",
+                path.display(),
+            ));
+        }
+        // Deterministic write order — `sheets` is a `HashMap`.
+        unopened.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Phase 2: anything seen more than once is a duplicate that
         // needs resetting.
@@ -320,49 +325,63 @@ impl Signex {
         }
 
         let mut resets = 0_usize;
-        let mut any_active_changed = false;
-        // Active engine — goes through ReplaceDocument so undo records
-        // the snapshot.
-        if let Some(engine) = self.document_state.active_engine_mut() {
+        // Active engine — goes through ReplaceDocument so undo records the
+        // snapshot, and through the mutation gateway so the sheet reaches
+        // `dirty_paths` (#585). The clone is taken first and the engine
+        // borrow released, because the gateway needs `&mut self`.
+        let reset_sheet = self.document_state.active_engine().and_then(|engine| {
             let mut sheet = engine.document().clone();
-            if reset_in(&mut sheet, &duplicates) {
-                let _ = engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
-                any_active_changed = true;
-                resets += 1;
-            }
+            reset_in(&mut sheet, &duplicates).then_some(sheet)
+        });
+        if let Some(document) = reset_sheet {
+            self.apply_engine_command(
+                signex_engine::Command::ReplaceDocument { document },
+                true,
+                false,
+            );
+            resets += 1;
         }
-        // Cached tabs — same ReplaceDocument path; each tab's own
-        // history records the reset.
-        let active_idx = self.document_state.active_tab;
-        let cached_paths: Vec<(usize, PathBuf)> = self
+        // Every other live engine of this project — a cached tab, or a dirty
+        // sheet whose tab was closed and whose engine is parked (#669). The
+        // project set counted parked engines (it prefers `engines`), so they
+        // must be reset too, in memory: never written behind the user's back.
+        // Driven by `engines`, not `tabs`; a loose engine from another
+        // project was never counted, so it is not reset either.
+        let active_path = self.document_state.active_path.clone();
+        let mut cached_paths: Vec<PathBuf> = self
             .document_state
-            .tabs
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, tab)| {
-                if idx == active_idx {
-                    None
-                } else {
-                    Some((idx, tab.path.clone()))
-                }
+            .engines
+            .keys()
+            .filter(|path| {
+                project_paths.contains(*path) && active_path.as_deref() != Some(path.as_path())
             })
+            .cloned()
             .collect();
-        for (idx, path) in cached_paths {
+        cached_paths.sort();
+        for path in cached_paths {
             let applied = self.document_state.engines.get_mut(&path).map(|engine| {
                 let mut sheet = engine.document().clone();
-                if reset_in(&mut sheet, &duplicates) {
-                    let _ =
-                        engine.execute(signex_engine::Command::ReplaceDocument { document: sheet });
-                    true
-                } else {
-                    false
+                if !reset_in(&mut sheet, &duplicates) {
+                    return false;
+                }
+                // Not the gateway: this is a cached, non-active engine, so
+                // the dirty bookkeeping is done by hand below. The result is
+                // still read rather than discarded — a failure here means the
+                // sheet was reported as reset when it was not (#585).
+                match engine.execute(signex_engine::Command::ReplaceDocument { document: sheet }) {
+                    Ok(result) => result.changed,
+                    Err(error) => {
+                        let error = anyhow::Error::new(error);
+                        crate::diagnostics::log_error(
+                            &format!("Reset Duplicate Designators failed for {}", path.display()),
+                            &error,
+                        );
+                        false
+                    }
                 }
             });
             if let Some(true) = applied {
-                if let Some(tab) = self.document_state.tabs.get_mut(idx) {
-                    tab.dirty = true;
-                }
-                self.document_state.dirty_paths.insert(path);
+                self.mark_cached_sheet_dirty(&path);
                 resets += 1;
             }
         }
@@ -398,13 +417,12 @@ impl Signex {
             }
         }
 
-        if any_active_changed {
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_content_cache();
-            self.sync_canvas_from_visible_schematic(
-                crate::schematic_runtime::RenderInvalidation::FULL,
-            );
+        // The active sheet's repaint is the gateway's job now. This refresh
+        // is for the *cached* tabs, whose dirty dots would otherwise only
+        // appear after the next unrelated event — the old condition was
+        // `any_active_changed`, so a reset that touched no open-and-active
+        // sheet refreshed nothing at all.
+        if resets > 0 {
             self.refresh_panel_ctx();
         }
         crate::diagnostics::log_info(format!(

@@ -14,12 +14,39 @@ use iced::widget::{column, container, row};
 
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
-    /// export-error, print preview, or the custom net-colour picker.
-    /// Mirrors the inline guard that early-returns from
-    /// `collect_overlays` before any tool/menu overlay is pushed.
+    /// the error notice, the netlist-incomplete prompt, print preview, or
+    /// the custom net-colour picker. Mirrors the inline guard that
+    /// early-returns from `collect_overlays` before any tool/menu overlay
+    /// is pushed.
+    ///
+    /// The print-preview term is detachment-filtered (#547). It was not
+    /// until then, and the omission cost the main window its entire
+    /// overlay stack: once the preview moved into its own OS window
+    /// `print_preview_overlay` stopped painting the in-window card, but
+    /// this predicate still reported the stack blocked, so
+    /// `collect_overlays` took its early return and every one of the five
+    /// pre-blocking builders then returned nothing. Ctrl+G grid
+    /// properties, the quit confirm, Preferences, the library modals —
+    /// all opened their state, none appeared, and nothing on screen
+    /// explained why. Detaching a modal is precisely the gesture that
+    /// stops it covering this window.
+    ///
+    /// Only Print Preview needs the filter: `error_notice` and
+    /// `netlist_incomplete_prompt` have no `ModalId` and so no detached
+    /// form, and the custom net-colour picker
+    /// (`ui_state.net_color_custom`) is a different overlay from the
+    /// detachable F5 palette (`ModalId::NetColorPalette`,
+    /// `ui_state.net_color_palette_open`), which is not one of these four.
+    ///
+    /// `OpenOverlays::has_blocking_modal` (`app/bootstrap/subscription.rs`)
+    /// is the Esc ladder's copy of this predicate, built from a snapshot
+    /// rather than live state. The two must agree term for term or Esc
+    /// resolves against a stack that is not on screen.
     pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
-        self.document_state.export_error.is_some()
-            || self.document_state.preview.is_some()
+        self.document_state.error_notice.is_some()
+            || self.document_state.netlist_incomplete_prompt.is_some()
+            || (self.document_state.preview.is_some()
+                && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
             || self.ui_state.net_color_custom.show
     }
 
@@ -27,13 +54,29 @@ impl Signex {
     /// hits a user-actionable failure (write permission, invalid path,
     /// empty schematic). Dismiss via OK button or clicking outside.
     /// Pushes the dismiss backdrop then the error card.
-    pub(in crate::app::view) fn export_error_overlay(&self) -> Vec<Element<'_, Message>> {
-        if self.document_state.export_error.is_none() {
+    pub(in crate::app::view) fn error_notice_overlay(&self) -> Vec<Element<'_, Message>> {
+        if self.document_state.error_notice.is_none() {
             return Vec::new();
         }
         vec![
-            Self::dismiss_layer(Message::Export(ExportMsg::DismissError)),
-            self.view_export_error(),
+            Self::dismiss_layer(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+            self.view_error_notice(),
+        ]
+    }
+
+    /// #431 — netlist-incomplete "Export anyway?" prompt. Same modal idiom as
+    /// [`Self::error_notice_overlay`], but the card offers TWO actions —
+    /// "Export anyway (incomplete)" and "Cancel". Clicking outside cancels
+    /// (writes nothing). Pushes the dismiss backdrop then the prompt card.
+    pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(
+        &self,
+    ) -> Vec<Element<'_, Message>> {
+        if self.document_state.netlist_incomplete_prompt.is_none() {
+            return Vec::new();
+        }
+        vec![
+            Self::dismiss_layer(Message::Export(ExportMsg::NetlistCancelIncomplete)),
+            self.view_netlist_incomplete_prompt(),
         ]
     }
 
@@ -42,14 +85,7 @@ impl Signex {
     /// so it can be dragged outside the app's client area. Only fall
     /// back to the in-window overlay if the OS window failed to open.
     pub(in crate::app::view) fn print_preview_overlay(&self) -> Option<Element<'_, Message>> {
-        let preview_detached = self.ui_state.windows.values().any(|kind| {
-            matches!(
-                kind,
-                crate::app::state::WindowKind::DetachedModal(
-                    crate::app::state::ModalId::PrintPreview
-                )
-            )
-        });
+        let preview_detached = self.modal_detached(crate::app::state::ModalId::PrintPreview);
         if self.document_state.preview.is_some() && !preview_detached {
             Some(self.view_print_preview())
         } else {
@@ -59,14 +95,7 @@ impl Signex {
 
     /// BOM preview overlay — same detach-first pattern as Print Preview.
     pub(in crate::app::view) fn bom_preview_overlay(&self) -> Option<Element<'_, Message>> {
-        let bom_detached = self.ui_state.windows.values().any(|kind| {
-            matches!(
-                kind,
-                crate::app::state::WindowKind::DetachedModal(
-                    crate::app::state::ModalId::BomPreview
-                )
-            )
-        });
+        let bom_detached = self.modal_detached(crate::app::state::ModalId::BomPreview);
         if self.document_state.bom_preview.is_some() && !bom_detached {
             Some(self.view_bom_preview())
         } else {
@@ -162,15 +191,17 @@ impl Signex {
 
     /// Schematic Active Bar overlay — only painted on the main window,
     /// so the main canvas's selection set is the right gate.
-    pub(in crate::app::view) fn schematic_active_bar_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn schematic_active_bar_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
         if !self.has_active_schematic() {
             return None;
         }
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 =
+            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
         let bar_has_selection = !interaction.canvas.selected.is_empty();
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
@@ -211,8 +242,8 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 =
+            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
         let theme_id = self.ui_state.theme_id;
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -351,10 +382,52 @@ impl Signex {
         ]
     }
 
+    /// #370 — "Align…" dialog for the footprint editor. Mounted at the
+    /// same overlay layer as the Move-By modal (a blocking dialog once
+    /// open): a dismiss backdrop that routes to `AlignCancel`, then the
+    /// centered card.
+    pub(in crate::app::view) fn footprint_align_overlay(&self) -> Vec<Element<'_, Message>> {
+        let document = &self.document_state;
+        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
+            return Vec::new();
+        };
+        let Some(path) = active_tab.kind.as_footprint_editor() else {
+            return Vec::new();
+        };
+        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+            return Vec::new();
+        };
+        let tokens = &document.panel_ctx.tokens;
+        let Some(card) =
+            crate::library::editor::footprint::align_modal::view_align_modal(editor, tokens)
+        else {
+            return Vec::new();
+        };
+        let close_msg = Message::Library(
+            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                path: path.to_path_buf(),
+                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                    crate::library::messages::FootprintEditorMsg::AlignCancel,
+                ),
+            },
+        );
+        vec![
+            Self::dismiss_layer(close_msg),
+            container(card.map(Message::Library))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .into(),
+        ]
+    }
+
     /// v0.13 — symbol library editor active bar (+ its dropdown overlay)
     /// mounted at the SAME app-view layer as the schematic / footprint
     /// bars.
-    pub(in crate::app::view) fn symbol_editor_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn symbol_editor_active_bar_overlay(
+        &self,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
             return Vec::new();
@@ -366,8 +439,8 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 =
+            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
         let theme_id = self.ui_state.theme_id;
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
@@ -393,6 +466,101 @@ impl Signex {
         out
     }
 
+    /// Right-click context menu overlay for the symbol canvas. Mirrors
+    /// [`Self::footprint_context_menu_overlay`] 1:1 in structure — see
+    /// that method for the coordinate / clamping rationale.
+    pub(in crate::app::view) fn symbol_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        let document = &self.document_state;
+        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
+            return Vec::new();
+        };
+        let Some(path) = active_tab.kind.as_symbol_editor() else {
+            return Vec::new();
+        };
+        let Some(editor) = self.document_state.symbol_editors.get(path) else {
+            return Vec::new();
+        };
+        let tokens = &document.panel_ctx.tokens;
+        let Some(menu_state) = editor.context_menu.as_ref() else {
+            return Vec::new();
+        };
+        let Some(card) =
+            crate::library::editor::symbol::context_menu::view_context_menu(editor, tokens, path)
+        else {
+            return Vec::new();
+        };
+        let close_msg = Message::Library(
+            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                path: path.to_path_buf(),
+                msg: crate::library::messages::PrimitiveEdit::Symbol(
+                    crate::library::messages::SymbolEditorMsg::CloseContextMenu,
+                ),
+            },
+        );
+        let card_msg = card.map(Message::Library);
+        let place_open = menu_state.open_submenu
+            == Some(crate::library::editor::symbol::state::SymbolContextSubmenu::Place);
+        let (x, y) = Self::clamp_symbol_menu_position(
+            (menu_state.x, menu_state.y),
+            self.ui_state.window_size,
+            place_open,
+        );
+        vec![
+            Self::dismiss_layer(close_msg),
+            super::super::translate::Translate::new(card_msg, (x, y)).into(),
+        ]
+    }
+
+    /// Clamp the symbol context menu's requested `(x, y)` so a
+    /// conservative estimate of its footprint stays on screen near
+    /// the right / bottom window edges (matches the footprint
+    /// overlay's clamping, sized down for the shorter symbol menu).
+    /// `place_submenu_open` accounts for the extra rows the Place ▸
+    /// submenu adds in place (accordion, not a flyout) when expanded —
+    /// otherwise the estimate under-shoots the expanded card's real
+    /// footprint and it can run off the bottom edge.
+    fn clamp_symbol_menu_position(
+        requested: (f32, f32),
+        window: (f32, f32),
+        place_submenu_open: bool,
+    ) -> (f32, f32) {
+        let (mx, my) = requested;
+        let (ww, wh) = window;
+        let est_menu_w: f32 = crate::library::editor::symbol::context_menu::MENU_WIDTH;
+        // Real card height = row count × one row's box + the panel's own
+        // 4px top/bottom padding (`container(col).padding(4)`). One row is
+        // a 13pt label in [5, 12] button padding, no icon at this level ≈
+        // 28 px — see signex_widgets::active_bar::dropdown::view. The
+        // collapsed menu is the stable 6-row top-level set (Place ▸, Join,
+        // Delete, Select All, Deselect All, Fit — locked by
+        // rows::tests::top_level_ids_are_stable); an expanded Place ▸ adds
+        // its rows in place (accordion, not a flyout). A tight estimate
+        // matters: the bottom-edge flip below lifts the card by exactly
+        // est_menu_h, so an over-estimate leaves a visible gap between the
+        // card's bottom and the cursor.
+        const ROW_HEIGHT_PX: f32 = 28.0;
+        const CARD_V_PADDING_PX: f32 = 8.0;
+        const TOP_LEVEL_ROWS: f32 = 6.0;
+        let expanded_rows = if place_submenu_open {
+            crate::library::editor::symbol::context_menu::PLACE_TOOLS.len() as f32
+        } else {
+            0.0
+        };
+        let est_menu_h: f32 = (TOP_LEVEL_ROWS + expanded_rows) * ROW_HEIGHT_PX + CARD_V_PADDING_PX;
+        let edge_margin: f32 = 4.0;
+        let x = if mx + est_menu_w + edge_margin > ww {
+            (ww - est_menu_w - edge_margin).max(0.0)
+        } else {
+            mx
+        };
+        let y = if my + est_menu_h + edge_margin > wh {
+            (my - est_menu_h).max(0.0)
+        } else {
+            my
+        };
+        (x, y)
+    }
+
     /// In-canvas text-edit input — the floating `text_input` anchored on
     /// top of the label being edited. Converts the object's world
     /// position through the live camera into a window-absolute screen
@@ -409,7 +577,7 @@ impl Signex {
         // Convert object world position → window-absolute screen position.
         // The canvas Program publishes its latest camera into this Cell each
         // frame — that's the only way to read it from outside the Program.
-        let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera.get();
+        let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera();
         let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
         let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
         // Canvas top-left within the window: menu bar + tab bar above,
@@ -430,8 +598,7 @@ impl Signex {
         // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
         let font_px = (cam_scale * 1.8).clamp(10.0, 64.0);
         // Estimate width from text length to keep the input snug.
-        let approx_w =
-            ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
+        let approx_w = ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
         // Offset the input so the baseline sits on top of the label text.
         let abs_x = x_canvas_origin + canvas_local_x - 2.0;
         let abs_y = y_canvas_origin + canvas_local_y - font_px - 2.0;
@@ -512,9 +679,7 @@ impl Signex {
         };
         let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
             .iter()
-            .filter(|&&kind| {
-                (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
-            })
+            .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
             .map(|&kind| {
                 // Altium parity: a leading ✓ column marks open panels
                 // so the user can see at a glance which ones are
@@ -568,5 +733,108 @@ impl Signex {
             Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
             super::super::translate::Translate::new(Element::from(popup), (left, top)).into(),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::state::{ModalId, PreviewState, WindowKind};
+
+    /// A print preview with no pages — enough to set the state flag the
+    /// blocking predicate reads, which is all these tests care about.
+    fn blank_preview() -> PreviewState {
+        PreviewState {
+            pages: Vec::new(),
+            page_handles: Vec::new(),
+            selected: 0,
+            pdf_options: signex_output::PdfOptions::default(),
+            page_setup: crate::app::state::PageSetupInputs::from_options(
+                &signex_output::PdfOptions::default(),
+            ),
+            specific_page_input: "1".to_string(),
+            zoom: 1.0,
+            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            pan: (0.0, 0.0),
+            panning: None,
+            sheet_files: Vec::new(),
+            selected_files: std::collections::HashSet::new(),
+            variants: Vec::new(),
+            quality: crate::app::state::PdfQuality::Draft72,
+        }
+    }
+
+    /// #547 — the painter kept suppressing the whole overlay stack for a
+    /// print preview that had moved into its own OS window, while
+    /// `print_preview_overlay` had already stopped painting the in-window
+    /// card. The main window then painted NOTHING: `collect_overlays`
+    /// early-returns on this predicate, and all five pre-blocking
+    /// builders return empty. Ctrl+G, the quit confirm, Preferences and
+    /// the library modals all opened their state with nothing on screen.
+    #[test]
+    fn a_detached_print_preview_stops_blocking_the_main_windows_overlay_stack() {
+        let (mut app, _boot) = Signex::new();
+        app.document_state.preview = Some(blank_preview());
+        assert!(
+            app.has_blocking_modal(),
+            "an in-window print preview does own the whole stack"
+        );
+
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::PrintPreview),
+        );
+        assert!(
+            !app.has_blocking_modal(),
+            "a preview in its own OS window covers nothing in this one"
+        );
+    }
+
+    /// The filter is one term, not four. `net_color_custom` is the
+    /// bespoke picker, a different overlay from the detachable F5 palette
+    /// (`ModalId::NetColorPalette`) — detaching that palette must not
+    /// unblock the picker.
+    #[test]
+    fn detaching_the_net_colour_palette_does_not_unblock_the_custom_picker() {
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.net_color_custom.show = true;
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::NetColorPalette),
+        );
+        assert!(
+            app.has_blocking_modal(),
+            "the custom picker has no detached form and still owns the stack"
+        );
+    }
+
+    /// The Esc ladder builds its own copy of this predicate from a
+    /// snapshot (`OpenOverlays::has_blocking_modal`,
+    /// `app/bootstrap/subscription.rs`). If the two disagree, Esc
+    /// resolves against a stack that is not on screen — which is exactly
+    /// what #547 was. Pin the agreement on the term that diverged.
+    #[test]
+    fn the_painter_and_the_esc_ladder_agree_about_a_detached_preview() {
+        let (mut app, _boot) = Signex::new();
+        // `Signex::new()` opens the first-run tour, which is a rung of its
+        // own and would answer the Esc before the question below is even
+        // asked.
+        app.ui_state.first_run_tour_open = false;
+        app.document_state.preview = Some(blank_preview());
+        app.ui_state.windows.insert(
+            iced::window::Id::unique(),
+            WindowKind::DetachedModal(ModalId::PrintPreview),
+        );
+        // The ladder's answer, reached through its public entry point: a
+        // detached preview claims no Esc, so it is not blocking there
+        // either.
+        assert!(
+            app.escape_overlay_message().is_none(),
+            "the ladder already treats a detached preview as not blocking"
+        );
+        assert!(
+            !app.has_blocking_modal(),
+            "so the painter must too, or Esc and paint disagree"
+        );
     }
 }

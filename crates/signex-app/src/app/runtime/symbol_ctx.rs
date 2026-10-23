@@ -15,8 +15,8 @@ pub(super) fn build_symbol_editor_panel_ctx(
 ) -> Option<crate::panels::SymbolEditorPanelContext> {
     use crate::library::editor::symbol::state as sym_state;
     use crate::panels::{
-        GraphicKindSummary, GraphicSummary, SymbolDisplayOptions, SymbolEditorPanelContext,
-        SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
+        GraphicSummary, SymbolDisplayOptions, SymbolEditorPanelContext, SymbolEditorSelection,
+        SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
@@ -198,6 +198,9 @@ fn graphic_kind_to_summary(
             position: *position,
             content: content.clone(),
             size: *size,
+        },
+        SymbolGraphicKind::Polygon { vertices } => GraphicKindSummary::Polygon {
+            vertex_count: vertices.len(),
         },
     }
 }

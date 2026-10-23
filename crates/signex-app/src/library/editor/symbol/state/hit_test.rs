@@ -55,33 +55,87 @@ pub fn delete_selected(
 }
 
 /// Hit-test cursor world coordinates against pins, then graphic
-/// bodies. Pins win (small hit target, often inside graphics);
+/// bodies. Pins win inside their grab zone (see [`hit_test_pin`]);
 /// graphics scan in reverse so the most-recently-placed graphic
-/// wins overlap.
-pub fn hit_test(sym: &Symbol, x: f64, y: f64, active_part: u8) -> Option<SymbolSelection> {
-    const PIN_HIT_R_SQ: f64 = 1.5 * 1.5;
+/// wins overlap. Both honour the selection `filter`.
+///
+/// `pin_tol_mm` is the world-space pin grab radius; derive it from
+/// screen pixels so the zone is the same size at every zoom.
+pub fn hit_test(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    pin_tol_mm: f64,
+    active_part: u8,
+    filter: &SymbolSelectionFilter,
+) -> Option<SymbolSelection> {
+    hit_test_pin(sym, x, y, pin_tol_mm, active_part, filter)
+        .map(SymbolSelection::Pin)
+        .or_else(|| hit_test_graphic(sym, x, y, active_part, filter).map(SymbolSelection::Graphic))
+}
+
+/// Half-width (mm) of the grab zone along a pin's tip-to-base line. Kept
+/// well below the 1.27 mm snap pitch and the 2.54 mm pin length so a pin
+/// does not swallow a graphic that touches its base (a clock wedge, a
+/// negation bubble) or a press in the body next to a pinned edge. The
+/// larger screen-space radius applies at the tip only.
+pub const PIN_LINE_GRAB_MM: f64 = 0.4;
+
+/// Nearest pin to `(x, y)`. A pin is grabbed within `tol_mm` of its
+/// tip (the generous, screen-space zone) or within the much narrower
+/// `min(tol_mm, PIN_LINE_GRAB_MM)` of its tip-to-base line, so the
+/// pin's body line is grabbable without outranking nearby graphics.
+/// Picking the nearest - not the first in vector order - keeps adjacent
+/// pins at the 1.27 mm snap pitch from stealing each other's drag. A
+/// distance tie goes to the later pin (the one drawn on top). Honours
+/// `filter.pins`.
+pub fn hit_test_pin(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    tol_mm: f64,
+    active_part: u8,
+    filter: &SymbolSelectionFilter,
+) -> Option<usize> {
+    if !filter.pins {
+        return None;
+    }
+    let mut best: Option<(usize, f64)> = None;
     for (i, pin) in sym.pins.iter().enumerate() {
         if !super::pin_on_part(pin, active_part) {
             continue;
         }
-        let dx = pin.position[0] - x;
-        let dy = pin.position[1] - y;
-        if dx * dx + dy * dy <= PIN_HIT_R_SQ {
-            return Some(SymbolSelection::Pin(i));
+        let (bdx, bdy) = super::rotation::pin_body_delta(pin);
+        let tip = pin.position;
+        let base = [tip[0] + bdx, tip[1] + bdy];
+        let d_sq = point_to_segment_dist_sq([x, y], tip, base);
+        let tip_sq = (x - tip[0]).powi(2) + (y - tip[1]).powi(2);
+        let line_tol = tol_mm.min(PIN_LINE_GRAB_MM);
+        let grabbed = tip_sq <= tol_mm * tol_mm || d_sq <= line_tol * line_tol;
+        if grabbed && best.is_none_or(|(_, b)| d_sq <= b) {
+            best = Some((i, d_sq));
         }
     }
-    for idx in (0..sym.graphics.len()).rev() {
-        let Some(g) = sym.graphics.get(idx) else {
-            continue;
-        };
-        if !super::graphic_on_part(g, active_part) {
-            continue;
-        }
-        if hit_test_graphic_body(sym, idx, x, y) {
-            return Some(SymbolSelection::Graphic(idx));
-        }
-    }
-    None
+    best.map(|(i, _)| i)
+}
+
+/// Topmost graphic whose body contains `(x, y)`, honouring the
+/// selection `filter`. Scans in reverse so the most recently placed
+/// graphic wins an overlap.
+pub fn hit_test_graphic(
+    sym: &Symbol,
+    x: f64,
+    y: f64,
+    active_part: u8,
+    filter: &SymbolSelectionFilter,
+) -> Option<usize> {
+    (0..sym.graphics.len()).rev().find(|&idx| {
+        sym.graphics.get(idx).is_some_and(|g| {
+            super::graphic_on_part(g, active_part)
+                && filter.allows_graphic(&g.kind)
+                && hit_test_graphic_body(sym, idx, x, y)
+        })
+    })
 }
 
 /// Tolerance band around line / arc / circle outlines (mm).
@@ -124,6 +178,19 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             if (d - radius).abs() > GRAPHIC_BODY_TOL {
                 return false;
             }
+            // A full-turn arc (raw span a nonzero whole number of
+            // turns) is a full circle — its entire radius band is
+            // selectable, not just the two endpoint angles a collapsed
+            // sweep would otherwise allow. Shared authority with the
+            // CPU draw path's full-turn belt so draw and hit-test never
+            // disagree (a 0° -> 360° Properties-panel edit renders a
+            // circle the user can also click anywhere on).
+            if signex_gfx::primitive::arc::arc_is_full_turn_rad(
+                (*start_deg as f32).to_radians(),
+                (*end_deg as f32).to_radians(),
+            ) {
+                return true;
+            }
             // Angle of the click point in degrees, normalised to [0, 360).
             let a = dy.atan2(dx).to_degrees().rem_euclid(360.0);
             let s = start_deg.rem_euclid(360.0);
@@ -140,6 +207,19 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             let half_h = size * 0.5;
             (x - position[0]).abs() <= half_w && (y - position[1]).abs() <= half_h
         }
+        SymbolGraphicKind::Polygon { vertices } => {
+            if vertices.len() < 2 {
+                false
+            } else if g.fill.is_some() {
+                // Filled: interior OR the outline band, so an edge
+                // click (or the outer half of the stroke, which
+                // renders outside the fill) still registers.
+                point_in_polygon([x, y], vertices)
+                    || polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
+            } else {
+                polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
+            }
+        }
     }
 }
 
@@ -147,11 +227,31 @@ fn point_to_segment_dist_sq(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     signex_sketch::geom::point_to_segment_distance_sq(p, a, b)
 }
 
+/// Even-odd point-in-polygon test (implicitly-closed vertex ring) — a
+/// thin adapter over `signex_sketch::geom::point_in_polygon`. Mirrors
+/// the footprint canvas's own adapter of the same shared helper.
+fn point_in_polygon(p: [f64; 2], vertices: &[[f64; 2]]) -> bool {
+    let polygon: Vec<signex_sketch::geom::Point2> = vertices.iter().map(|&v| v.into()).collect();
+    signex_sketch::geom::point_in_polygon(p, &polygon)
+}
+
+/// `true` when `(x, y)` lies within `tol` of any closed-polygon edge
+/// (including the implicit last-to-first segment).
+fn polygon_outline_hit(x: f64, y: f64, vertices: &[[f64; 2]], tol: f64) -> bool {
+    let n = vertices.len();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        if point_to_segment_dist_sq([x, y], vertices[i], vertices[j]) <= tol * tol {
+            return true;
+        }
+    }
+    false
+}
+
 /// Compute the world (mm) position of a graphic's resize handle.
 /// Returns `None` if the handle variant doesn't match the graphic
 /// kind — defensive against stale `GraphicHandle` values lingering
 /// across selection swaps.
-#[allow(dead_code)]
 pub fn graphic_handle_position(
     sym: &Symbol,
     idx: usize,
@@ -206,6 +306,9 @@ pub fn graphic_handle_position(
             [center[0] + radius * e.cos(), center[1] + radius * e.sin()]
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => *position,
+        (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
+            *vertices.get(i as usize)?
+        }
         _ => return None,
     })
 }
@@ -265,6 +368,19 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
         SymbolGraphicKind::Text { position, .. } => {
             vec![(GraphicHandle::TextAnchor, *position)]
         }
+        SymbolGraphicKind::Polygon { vertices } => vertices
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                // `u32` covers over 4 billion vertices — no real
+                // symbol will ever get remotely close, but guard the
+                // cast anyway rather than silently truncating/wrapping
+                // (which used to collide distinct vertices onto the
+                // same handle id past a `u16`'s 65535).
+                debug_assert!(i <= u32::MAX as usize, "polygon vertex index overflows u32");
+                (GraphicHandle::PolygonVertex(i as u32), *v)
+            })
+            .collect(),
     }
 }
 
@@ -279,19 +395,30 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// ```text
 /// let tol_mm = (8.0_f32 / camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
 /// ```
+///
+/// Only handles of SELECTED graphics (via
+/// [`super::graphic_is_selected`]) are hit-testable. The draw path
+/// renders handles for selected graphics only, so scanning the rest
+/// grabbed invisible handles: pressing a pin that sits on a body
+/// rectangle's edge resized the rectangle instead of dragging the pin.
 pub fn hit_test_graphic_handle(
     sym: &Symbol,
     x: f64,
     y: f64,
     tol_mm: f64,
     active_part: u8,
+    selected: &Option<SymbolSelection>,
+    filter: &SymbolSelectionFilter,
 ) -> Option<(usize, GraphicHandle)> {
     let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
         let Some(g) = sym.graphics.get(idx) else {
             continue;
         };
-        if !super::graphic_on_part(g, active_part) {
+        if !super::graphic_on_part(g, active_part) || !filter.allows_graphic(&g.kind) {
+            continue;
+        }
+        if !super::graphic_is_selected(selected, idx) {
             continue;
         }
         for (handle, pos) in graphic_handles(sym, idx) {
@@ -369,7 +496,15 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             },
             GraphicHandle::ArcStart,
         ) => {
-            *start_deg = (y - center[1]).atan2(x - center[0]).to_degrees();
+            // rem_euclid into [0, 360): atan2 returns (-180, 180], and a
+            // raw negative endpoint on disk trips `migrate_legacy_arc`
+            // (fires on `end_deg < 0.0`) into swapping the pair to its
+            // complement on reload — the same 270°→90° round-trip loss the
+            // Properties-panel arc edit guards against.
+            *start_deg = (y - center[1])
+                .atan2(x - center[0])
+                .to_degrees()
+                .rem_euclid(360.0);
         }
         (
             SymbolGraphicKind::Arc {
@@ -377,13 +512,21 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             },
             GraphicHandle::ArcEnd,
         ) => {
-            *end_deg = (y - center[1]).atan2(x - center[0]).to_degrees();
+            *end_deg = (y - center[1])
+                .atan2(x - center[0])
+                .to_degrees()
+                .rem_euclid(360.0);
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => {
             position[0] = x;
             position[1] = y;
         }
+        (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
+            if let Some(v) = vertices.get_mut(i as usize) {
+                v[0] = x;
+                v[1] = y;
+            }
+        }
         _ => {}
     }
 }
-

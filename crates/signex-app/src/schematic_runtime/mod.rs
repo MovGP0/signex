@@ -14,7 +14,7 @@ use signex_renderer::schematic::{
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextNote, TextProp, VAlign,
+    SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -234,7 +234,6 @@ pub fn draw_power_port_preview(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn render_schematic(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -360,7 +359,6 @@ fn draw_renderer_snapshot(
         crate::renderer_scene_canvas::SceneDrawOptions {
             scale_px_per_mm: transform.scale,
             min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-            text_mm_per_em: 0.72,
             text_min_px: 6.0,
             text_max_px: 64.0,
         },
@@ -645,9 +643,7 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
         SchDrawing::Arc {
             start, mid, end, ..
         } => {
-            if let Some((cx, cy, r)) =
-                circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-            {
+            if let Some((cx, cy, r)) = circumcircle(*start, *mid, *end) {
                 Aabb::new(cx - r, cy - r, cx + r, cy + r)
             } else {
                 Aabb::new(start.x, start.y, end.x, end.y)
@@ -748,27 +744,14 @@ fn fill_color_for(
     }
 }
 
-fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-12 {
-        return None;
-    }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let radius = ((ax - ux).powi(2) + (ay - uy).powi(2)).sqrt();
-    Some((ux, uy, radius))
-}
-
-fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
+/// Does the CCW span from `a0` to `a1` contain `am`?
+///
+/// The rule that decides which of the two arcs through three clicked points
+/// is the one the user meant. `pub` so the in-progress preview can ask the
+/// same question the commit path asks — a preview that orders its endpoints
+/// by a second copy of this rule can show the complementary arc to the one it
+/// is about to create.
+pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     let two_pi = 2.0 * std::f64::consts::PI;
     let normalize = |a: f64| (a - a0).rem_euclid(two_pi);
     normalize(am) < normalize(a1)

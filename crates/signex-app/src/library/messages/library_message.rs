@@ -13,7 +13,6 @@ use super::{
 
 /// Top-level library message — folded into [`Message::Library`].
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum LibraryMessage {
     /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog`
     /// on the directory level and lands in [`LibraryMessage::OpenLibraryAt`].
@@ -299,6 +298,22 @@ pub enum LibraryMessage {
     /// `TabKind::LibraryBrowser(path)` tab (or activates the existing
     /// one when the path is already open).
     OpenLibraryBrowser(PathBuf),
+    /// A `.snxlib` mount prepared off the UI thread has finished — issue
+    /// #99 part 2c. Produced by
+    /// `library::mount::prepare_mount_off_thread`, handled in
+    /// `app/dispatch/library/mod.rs`.
+    ///
+    /// Carries only the path plus a one-shot cell. What happens next —
+    /// open a Library Browser tab, or stay silent — is deliberately
+    /// *not* in this message: the handler reads the intent from
+    /// `LibraryState::pending_mounts`, because a second request for the
+    /// same path can have upgraded it while this preparation was in
+    /// flight. A cell whose path is no longer pending was cancelled by
+    /// `close_library` and is discarded.
+    MountFinished {
+        path: PathBuf,
+        prepared: crate::library::mount::PreparedMountCell,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {
@@ -415,17 +430,6 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         key: String,
     },
-    /// Right-click on a Library Browser row → "Refresh Pricing".
-    /// Stage 18 stub — real distributor adapter wiring lands later.
-    BrowserRefreshPricing {
-        library_path: PathBuf,
-        table: String,
-        row_id: RowId,
-    },
-    /// Library node right-click → "Refresh All Pricing".
-    /// Stage 18 stub — touches every row in every cached table once
-    /// the per-row stub is fleshed out.
-    LibraryRefreshAllPricing(PathBuf),
     // ── Tools ▸ Document Options modal ──────────────────────────────
     /// Tools menu fired Document Options for the library at
     /// `library_path`. Opens the modal pre-filled with the library's
@@ -498,23 +502,9 @@ pub enum LibraryMessage {
     /// Promote an Installed library to Global — moves the path from
     /// the session-scoped Vec to the persisted TOML file. No-op when
     /// the path isn't currently Installed.
-    #[allow(dead_code)]
     ComponentsPanelPromoteToGlobal(PathBuf),
-    /// "Manage…" button on the Global section header — opens the
-    /// global libraries management dialog. Stage 9 stub: logs and
-    /// no-ops so the wiring path is observable.
-    #[allow(dead_code)]
-    ComponentsPanelManageGlobal,
-    /// "Add to Project" button on a Components Panel row — adds
-    /// the row's library to the active project's
-    /// `Project.libraries` list. Stage 9 stub.
-    #[allow(dead_code)]
-    ComponentsPanelAddToProject {
-        library_path: PathBuf,
-    },
     /// "Place into Schematic" button on a Components Panel row.
     /// Stage 9 stub — full ghost-component drag is polish work.
-    #[allow(dead_code)]
     ComponentsPanelPlace {
         library_path: PathBuf,
         table: String,

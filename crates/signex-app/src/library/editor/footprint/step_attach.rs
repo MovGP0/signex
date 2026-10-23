@@ -126,9 +126,17 @@ fn hash_hex(bytes: &[u8]) -> String {
     hasher.update(bytes);
     let result = hasher.finalize();
     let mut out = String::with_capacity(64);
+    // `write!` here would hand back a `fmt::Result` that cannot be `Err`
+    // — `String`'s `write_str` is infallible — leaving a discarded
+    // `Result` to explain at every read. Indexing a digit table has no
+    // `Result` to discard in the first place, and is what the output
+    // actually is: two lowercase hex chars per byte. The encoding is
+    // load-bearing (it names `step/<hash>.step` on disk), so it must
+    // stay byte-identical; `hash_hex_is_lowercase` pins it.
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     for byte in result.iter() {
-        use std::fmt::Write as _;
-        let _ = write!(&mut out, "{byte:02x}");
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
     }
     out
 }
@@ -152,7 +160,7 @@ pub fn stash_step(lib_root: &Path, bytes: &[u8], filename: &str) -> Option<StepA
     }
     let target = step_dir.join(format!("{hash}.step"));
     if !target.exists()
-        && let Err(e) = std::fs::write(&target, bytes)
+        && let Err(e) = signex_types::atomic_io::atomic_write(&target, bytes)
     {
         tracing::warn!(
             target: "signex::library",

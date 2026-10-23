@@ -26,10 +26,6 @@ pub enum WindowMsg {
     /// corresponding entry in `ui_state.windows` so the app can re-attach
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
-    /// Tools -> PCB Trace Calculator opens the IPC-2221 utility window.
-    OpenPcbTraceCalculator,
-    /// `iced::window::open` resolved for the PCB Trace Calculator.
-    PcbTraceCalculatorOpened(iced::window::Id),
     /// OS-level close request (native close button, Alt+F4, taskbar
     /// close) for a window. In `iced::daemon` mode windows do NOT
     /// auto-close on this event, so the app decides what to do: the
@@ -155,10 +151,35 @@ pub enum OverlayMsg {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Close the Help ▸ About Signex dialog — close chrome ✕ and Esc.
+    CloseAbout,
+    /// About dialog ▸ Copy version info — puts the plain-text version
+    /// block on the clipboard.
+    CopyAboutInfo,
+    /// Open an external page (About dialog's licence link) in the default
+    /// browser.
+    OpenLink(crate::about::ExternalLink),
+    /// The default browser could not be launched for an external link;
+    /// carries the reason for the shared error card.
+    LinkOpenFailed(String),
+    /// Open the Tools > Passive Network Calculator modal — fired by the
+    /// Tools menu entry. Re-invoking while it is already open is a no-op.
+    OpenPassiveCalculator,
+    /// Close the Tools > Passive Network Calculator modal - fired by
+    /// the close chrome X.
+    ClosePassiveCalculator,
     /// Dismiss the first-run tour card and persist the flag so it
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.
     DismissFirstRunTour,
+    /// Dismiss the shared error card (`DocumentState::error_notice`).
+    /// Fired by its OK button, its click-outside backdrop, and Esc.
+    ///
+    /// Lived on `ExportMsg` as `DismissError` until #532. The card was
+    /// never export-only — the project-close path raised it too — and a
+    /// message named for one caller is how it ended up showing "Export
+    /// Failed" over a failed save.
+    DismissErrorNotice,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {
@@ -188,7 +209,6 @@ pub enum OverlayMsg {
 #[derive(Debug, Clone)]
 pub enum UiMsg {
     /// Switch the active colour theme and persist the preference.
-    #[allow(dead_code)]
     ThemeChanged(ThemeId),
     /// Cycle the display unit (mm / mil / inch).
     UnitCycled,
@@ -226,7 +246,17 @@ pub enum UiMsg {
     /// `UiState::keymap_pending_sequence` and resolved here in `update`
     /// (where `&mut self` is available), which keeps the chord buffer
     /// out of a process-global static.
-    KeymapStroke(crate::keymap::KeyStroke),
+    KeymapStroke {
+        /// Which window produced the stroke (#559). Shortcut contexts
+        /// resolve against it rather than against the main window's
+        /// active tab, and a multi-stroke chord is dropped when the
+        /// window changes mid-sequence.
+        ///
+        /// `None` for a synthesised stroke that names no window, which
+        /// resolves as the main window does.
+        window: Option<iced::window::Id>,
+        stroke: crate::keymap::KeyStroke,
+    },
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -249,7 +279,6 @@ pub enum MoveSelectionMsg {
 /// BOM-preview modal message family (ADR-0001 D3). Namespaced under
 /// `Message::BomPreview` and routed to `dispatch_bom_preview_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum BomPreviewMsg {
     /// User changed BOM grouping (Grouped / Ungrouped / Flat).
     SetGrouping(signex_output::BomGrouping),
@@ -295,6 +324,8 @@ pub enum BomPreviewMsg {
     /// User clicked a Properties-sidebar tab (General / Columns) in
     /// the BOM preview modal.
     SetSidebarTab(crate::app::state::BomSidebarTab),
+    /// User toggled one validation rule in the Rules tab.
+    SetRule(signex_output::BomRule, bool),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     Export,
@@ -305,7 +336,6 @@ pub enum BomPreviewMsg {
 /// Print-preview modal message family (ADR-0001 D3). Namespaced under
 /// `Message::PrintPreview` and routed to `dispatch_print_preview_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
@@ -321,8 +351,20 @@ pub enum PrintPreviewMsg {
     SetPageRangeSpecific,
     /// User edited the specific page input in preview.
     SetSpecificPageInput(String),
-    /// User toggled "Fit to Page" in the unified PDF preview modal.
-    SetFitToPage(bool),
+    /// User picked a page size (a named size, or `Custom`).
+    SetPageSize(signex_output::PageSize),
+    /// User picked portrait or landscape.
+    SetOrientation(signex_output::Orientation),
+    /// User edited the Custom page width (mm).
+    SetCustomWidth(String),
+    /// User edited the Custom page height (mm).
+    SetCustomHeight(String),
+    /// User edited one margin (mm).
+    SetMargin(signex_output::MarginEdge, String),
+    /// User picked Fit to Page / 1:1 / Percent.
+    SetScaleMode(signex_output::PdfScaleMode),
+    /// User edited the scale percentage.
+    SetScalePercent(String),
     /// User toggled "Include Title Block" in the unified PDF preview modal.
     SetIncludeTitleBlock(bool),
     /// Mouse wheel scrolled over the preview image. Carries the
@@ -380,7 +422,6 @@ pub enum PrintPreviewMsg {
 /// under `Message::GridProperties` and routed to
 /// `dispatch_grid_properties_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum GridPropertiesMsg {
     /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.

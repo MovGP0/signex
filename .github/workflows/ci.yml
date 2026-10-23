@@ -12,6 +12,7 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -34,7 +35,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -56,8 +57,36 @@ jobs:
       - name: Check
         run: cargo check --workspace
 
+      # No `-W clippy::all`. `clippy::all` is already the default lint set, so
+      # the flag bought nothing — but a *group-level* `-W` sets every lint in
+      # the group to warn, and that group contains the 67 deny-by-default
+      # `correctness` lints. It turned every one of them from a build failure
+      # into an annotation, i.e. it made this step weaker than no flag at all
+      # (#567). `--all-targets` reaches `tests/`, `benches/`, `examples/` and
+      # inline `#[cfg(test)] mod tests` — bare `cargo clippy` compiles the lib
+      # without `cfg(test)`, so those bodies were never even parsed as live
+      # code. `--all-features` reaches signex-library's `local-git`,
+      # `database`, `search-tantivy`, `distributors-community` and `ai-stub`
+      # modules.
+      #
+      # `-- -D warnings` (#539) is what keeps the count at zero. Getting there
+      # took #587 (217 machine-applicable), #588 (111 that needed a decision)
+      # and #589 (16 `dead_code`) off a backlog of 344; without a gate the
+      # next 344 accumulate the same way, one "just a warning" at a time.
+      # It denies warn-level lints in workspace code only — dependencies are
+      # built with `--cap-lints allow`, and cargo's own future-incompat notice
+      # for `block v0.1.6` is not a rustc lint, so neither fails the step.
+      #
+      # The cost: a toolchain bump that introduces a new lint turns this red
+      # on whichever PR happens to bump it. That is deliberate and contained —
+      # `rust-toolchain.toml` pins 1.97.0, so new lints only ever arrive in a
+      # PR that changes that pin, never in an unrelated one.
+      #
+      # Silencing a lint to get green defeats the point. Fix the code; if a
+      # lint genuinely cannot be satisfied, `#[expect(lint, reason = "…")]`
+      # with a real reason is the escape hatch, and it has to survive review.
       - name: Clippy
-        run: cargo clippy --workspace -- -W clippy::all
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     name: test · workspace
@@ -67,7 +96,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -97,13 +126,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
         with:
           components: rustfmt
 
       - name: Check formatting
         run: cargo fmt --all -- --check
-        continue-on-error: true
 
   deny:
     name: deny · licenses + deps
@@ -111,7 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
       - uses: Swatinem/rust-cache@v2
 
@@ -127,10 +155,127 @@ jobs:
 
       # Advisories are informational, not a merge gate: they fire on newly
       # published RUSTSEC entries against the shared Cargo.lock (mostly
-      # transitive GUI-stack crates like quick-xml / ttf-parser pinned deep
+      # transitive GUI-stack crates like ttf-parser / rustybuzz pinned deep
       # in iced/winit) with no code change on our side. Surface them as an
       # annotation; criticals are addressed by a human, not by blocking CI.
       # (deny.toml documents this same intent; `licenses` above stays hard.)
       - name: Check advisories
         run: cargo deny --all-features check advisories
         continue-on-error: true
+
+  no-god-files:
+    name: no god-files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Hard gate (NOT continue-on-error): a PR may not add a new production
+      # god-file or grow a grandfathered one. Ratchet + rationale live in
+      # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
+      - name: God-file ratchet gate
+        run: bash scripts/check_file_size.sh
+
+  no-discarded-tasks:
+    name: no discarded tasks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # This job fails hard (NOT continue-on-error) on a violation, and it is
+      # a REQUIRED status check on trunk, so a violation actually blocks the
+      # merge (GH #548 proposal 2; `no god-files` was already required).
+      #
+      # Scope, corrected (#548): `let _ = self.handle_x(...)` silently drops
+      # an `iced::Task<Message>` and rustc does NOT catch it — binding to `_`
+      # counts as "used" under `unused_must_use`. That shape is this gate's
+      # entire reason to exist. The neighbouring `self.handle_x(...)?;` shape
+      # is the COMPILER's job, not this script's: `unused_must_use` is denied
+      # for signex-app in crates/signex-app/Cargo.toml, so it fails the build.
+      # An earlier version of this comment claimed the compiler was blind to
+      # both. It never was blind to the second one — the warning was simply
+      # buried among ~324 unrelated workspace warnings and nobody read it.
+      #
+      # Rationale + known blind spots live in
+      # scripts/check_discarded_tasks.sh; GH #99 part 1.
+      - name: Discarded-Task ratchet gate
+        run: bash scripts/check_discarded_tasks.sh
+
+      - name: Discarded-Task gate controls
+        run: bash scripts/test_check_discarded_tasks.sh
+
+  lint-lockstep:
+    name: lint lockstep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
+      # mixing inheritance with per-lint overrides, and that crate carries its
+      # own `[lints.clippy] let_underscore_must_use` that the workspace
+      # deliberately does not. So it re-declares the workspace lints by hand,
+      # and until now nothing checked that copy: a lint added to
+      # `[workspace.lints.rust]` silently skipped the largest crate in the
+      # repo, with no error and no warning (GH #570).
+      #
+      # This job fails hard (NOT continue-on-error). Make it a required status
+      # check on trunk alongside `no god-files` and `no discarded tasks`,
+      # otherwise it only annotates and the hole stays open.
+      - name: Lint-lockstep gate
+        run: bash scripts/check_lint_lockstep.sh
+
+  changelog-fragments:
+    name: changelog · fragments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Fragment names/bodies are validated on every event (PR, merge queue,
+      # push). Rule + rationale: changelog.d/README.md (GH #748).
+      - name: Validate fragments
+        run: |
+          bash scripts/changelog_assemble.sh --check
+          bash scripts/test_changelog_assemble.sh
+
+      # PR-only, feature PRs into trunk only (trunk -> main promotion and the
+      # merge queue are exempt). CHANGELOG.md is edited directly only by
+      # same-repo release PRs (head `chore/release-*` or `release/*`, the shape
+      # every release prep PR has used); forks cannot self-exempt.
+      # TRANSITION: warning only while open PRs still edit CHANGELOG.md; flip
+      # the `::warning` to `::error` + `exit 1` once they land (follow-up to #748).
+      # Branch/title go through env, never inline-interpolated into the script.
+      - name: CHANGELOG.md should not be edited directly
+        if: github.event_name == 'pull_request' && github.base_ref == 'trunk'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          IS_SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          if [ "$IS_SAME_REPO" = true ]; then
+            case "$HEAD_REF" in
+              chore/release-* | release/*)
+                echo "release PR ($HEAD_REF): CHANGELOG.md edits allowed"
+                exit 0
+                ;;
+            esac
+          fi
+          git fetch --no-tags origin "$BASE_REF"
+          if git diff --name-only "origin/$BASE_REF...HEAD" | awk '$0 == "CHANGELOG.md" {f=1} END {exit !f}'; then
+            echo "::warning file=CHANGELOG.md::Do not edit CHANGELOG.md in a PR. Add a fragment changelog.d/<number>.<section>.md instead (see changelog.d/README.md)."
+          fi
+
+      # Advisory: a feat/fix PR with no new fragment gets a warning annotation.
+      - name: Warn when a feat/fix PR has no fragment
+        if: github.event_name == 'pull_request' && github.base_ref == 'trunk'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$PR_TITLE" | awk '/^(feat|fix)(\([^)]*\))?!?:/{f=1} END{exit !f}'; then
+            git fetch --no-tags origin "$BASE_REF"
+            if ! git diff --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
+              awk '/^changelog\.d\/[0-9]+\..+\.md$/{f=1} END{exit !f}'; then
+              echo "::warning title=No changelog fragment::feat/fix PR adds no changelog.d/<number>.<section>.md fragment. Add one, or ignore if the change is not user-visible."
+            fi
+          fi

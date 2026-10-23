@@ -91,6 +91,14 @@ pub struct SheetEntry {
 // Project data
 // ---------------------------------------------------------------------------
 
+/// The in-memory form of a `.snxprj` file, persisted as pretty JSON (the
+/// only native format that is not TOML+TSV; rationale and open questions in
+/// `docs/architecture/snxprj-format.md`).
+///
+/// Forward compatibility is one-directional: `#[serde(default)]` lets an old
+/// file load in a new build, but a key written by a newer build is dropped
+/// on load and missing from the next save. There is no unknown-key bag and
+/// no format/version token (tracked in #788).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
     pub name: String,
@@ -163,6 +171,16 @@ mod tests {
 
     // ── Persistence robustness (issue #104) ──────────────────────────
 
+    /// True if `dir` contains a leftover atomic-write temp sibling
+    /// (`*.tmp`). `atomic_write` picks a unique per-writer name (#416),
+    /// so tests must scan for any match instead of a fixed name.
+    fn has_stray_tmp(dir: &Path) -> bool {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+    }
+
     #[test]
     fn write_project_round_trips_atomically_leaving_no_tmp() {
         let dir = tempfile::tempdir().unwrap();
@@ -173,7 +191,7 @@ mod tests {
         .unwrap();
         write_project(&path, &data).unwrap();
         // The atomic writer must not leave its temp file behind.
-        assert!(!dir.path().join("Proj.snxprj.tmp").exists());
+        assert!(!has_stray_tmp(dir.path()));
         let back = parse_project(&path).unwrap();
         assert_eq!(back.schematic_root.as_deref(), Some("Proj.snxsch"));
     }

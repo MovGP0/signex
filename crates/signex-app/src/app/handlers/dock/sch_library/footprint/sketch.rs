@@ -14,7 +14,10 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_pad_in_sketch(&mut self, pad_idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_pad_in_sketch(
+        &mut self,
+        pad_idx: &usize,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let entity_id = editor
                 .state
@@ -54,22 +57,22 @@ impl Signex {
                 .and_then(|pad| pad.shape_params.get(key).cloned())
         });
         if let Some(name) = parameter_name {
-            if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-                if let Some(path) = active_tab.kind.as_footprint_editor() {
-                    let path = path.clone();
-                    follow = self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                crate::library::messages::FootprintEditorMsg::SketchEditParameter {
-                                    name,
-                                    expr: value.to_string(),
-                                },
-                            ),
-                        },
-                    ));
-                    self.refresh_panel_ctx();
-                }
+            if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+                && let Some(path) = active_tab.kind.as_footprint_editor()
+            {
+                let path = path.clone();
+                follow = self.update(Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                        path,
+                        msg: crate::library::messages::PrimitiveEdit::Footprint(
+                            crate::library::messages::FootprintEditorMsg::SketchEditParameter {
+                                name,
+                                expr: value.to_string(),
+                            },
+                        ),
+                    },
+                ));
+                self.refresh_panel_ctx();
             }
         } else {
             tracing::warn!(
@@ -92,21 +95,21 @@ impl Signex {
         // mints the per-corner parameter, and triggers a
         // solve+rebake. Undo snapshot captured at dispatcher
         // level via mutates_footprint_state.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            if let Some(path) = active_tab.kind.as_footprint_editor() {
-                let path = path.clone();
-                follow = self.update(Message::Library(
-                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                        path,
-                        msg: crate::library::messages::PrimitiveEdit::Footprint(
-                            crate::library::messages::FootprintEditorMsg::SketchUnlinkCornerRadius {
-                                arc_entity_id: *arc_entity_id,
-                            },
-                        ),
-                    },
-                ));
-                self.refresh_panel_ctx();
-            }
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                        crate::library::messages::FootprintEditorMsg::SketchUnlinkCornerRadius {
+                            arc_entity_id: *arc_entity_id,
+                        },
+                    ),
+                },
+            ));
+            self.refresh_panel_ctx();
         }
         follow
     }
@@ -159,11 +162,11 @@ impl Signex {
         // single constraint at full red while every other
         // glyph (including other over-constraints) dims.
         // `None` clears back to the default rendering.
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if editor.state.conflicts_row_hovered != *constraint {
-                editor.state.conflicts_row_hovered = *constraint;
-                editor.canvas_cache.clear();
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && editor.state.conflicts_row_hovered != *constraint
+        {
+            editor.state.conflicts_row_hovered = *constraint;
+            editor.canvas_cache.clear();
         }
         true
     }
@@ -177,22 +180,22 @@ impl Signex {
         // v0.16.2 — Properties-panel parameter row edit.
         // Forwards to `FootprintSketchEditParameter` which
         // upserts the parameter and triggers a solve+bake.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            if let Some(path) = active_tab.kind.as_footprint_editor() {
-                let path = path.clone();
-                follow = self.update(Message::Library(
-                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                        path,
-                        msg: crate::library::messages::PrimitiveEdit::Footprint(
-                            crate::library::messages::FootprintEditorMsg::SketchEditParameter {
-                                name: name.to_string(),
-                                expr: expr.to_string(),
-                            },
-                        ),
-                    },
-                ));
-                self.refresh_panel_ctx();
-            }
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                        crate::library::messages::FootprintEditorMsg::SketchEditParameter {
+                            name: name.to_string(),
+                            expr: expr.to_string(),
+                        },
+                    ),
+                },
+            ));
+            self.refresh_panel_ctx();
         }
         follow
     }

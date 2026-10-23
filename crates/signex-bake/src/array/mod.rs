@@ -1,4 +1,4 @@
-//! Sketch-array expansion — v0.13 bakes ArrayKind::Linear only.
+//! Sketch-array expansion — bakes all three `ArrayKind` variants.
 //!
 //! Phase 7 Task 7.2 of the v0.13 sketch-mode plan. Walks every
 //! `Array` in the sketch and produces baked
@@ -9,12 +9,12 @@
 //! machinery. No third-party constraint-solver, footprint-generator,
 //! or numerical-library source consulted.
 //!
-//! # v0.13 scope
+//! # Scope
 //!
 //! - `ArrayKind::Linear { source, count_expr, dx_expr, dy_expr }` —
-//!   bakes natively.
-//! - `ArrayKind::Grid { .. }` — emits a single warning, no bake.
-//! - `ArrayKind::Polar { .. }` — emits a single warning, no bake.
+//!   bakes natively (`array::linear`).
+//! - `ArrayKind::Grid { .. }` — bakes natively (`array::grid`).
+//! - `ArrayKind::Polar { .. }` — bakes natively (`array::polar`).
 //!
 //! Numbering:
 //! - `LinearIncrement { start, step }` — pad number =
@@ -29,29 +29,23 @@ use std::collections::{BTreeMap, HashMap};
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::ArrayKind;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
-use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::unit::Quantity;
-
-use crate::pad::bake_one_pad;
 
 mod grid;
 mod linear;
 mod numbering;
 mod polar;
 
-use grid::bake_grid;
+use grid::{GridSpec, bake_grid};
 use linear::bake_linear;
 use polar::bake_polar;
 
 /// Walk every [`signex_sketch::array::Array`] and append baked pads
-/// to `out`. v0.13 bakes `ArrayKind::Linear` only; Grid + Polar emit
-/// a single warning each and produce no pads.
+/// to `out`. Bakes `ArrayKind::Linear`, `Grid`, and `Polar` natively.
 pub fn bake_arrays(
     sketch: &SketchData,
     solve: &FullSolveOutput,
@@ -93,20 +87,15 @@ pub fn bake_arrays(
                 dy_expr,
                 depopulation,
             } => {
-                bake_grid(
-                    *source,
+                let spec = GridSpec {
                     nx_expr,
                     ny_expr,
                     dx_expr,
                     dy_expr,
-                    depopulation.as_ref(),
-                    &array.numbering,
-                    &params_ast,
-                    sketch,
-                    solve,
-                    out,
-                    warnings,
-                )?;
+                    depopulation: depopulation.as_ref(),
+                    numbering: &array.numbering,
+                };
+                bake_grid(*source, &spec, &params_ast, sketch, solve, out, warnings)?;
             }
             ArrayKind::Polar {
                 source,

@@ -23,7 +23,7 @@ impl Signex {
     /// the dwell timer was running).
     pub(super) fn view_hover_tooltip(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container, text};
-        use iced::{Background, Border, Color};
+        use iced::{Background, Border};
 
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
@@ -250,10 +250,12 @@ impl Signex {
             Space::new().height(0).into()
         };
 
-        // Card width matches the chrome search bar exactly so the
-        // dropdown reads as an extension of the input rather than a
-        // floating popup that happens to be nearby.
-        let card_w = CHROME_SEARCH_BAR_WIDTH;
+        // Card width and x come from the same geometry the chrome strip
+        // lays the input out with, so the dropdown reads as an extension
+        // of the input rather than a floating popup that happens to be
+        // nearby — including after a resize shrinks the bar.
+        let (ww, _wh) = self.ui_state.window_size;
+        let (card_x, card_w) = super::chrome_search_bar_geometry(ww);
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)
@@ -268,17 +270,8 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        let (ww, _wh) = self.ui_state.window_size;
-        // Track the chrome search bar's actual layout position so the
-        // dropdown lines up with the input. The chrome row is
-        // `[menu, drag_fill, search, drag_fill, controls]`; the two
-        // Fill drag zones split the leftover evenly, so the search
-        // bar starts at `menu_w + leftover/2`.
-        let menu_w = crate::menu_bar::approx_menu_bar_width();
-        let leftover = (ww - menu_w - card_w - CHROME_CONTROLS_W).max(0.0);
-        let x = (menu_w + leftover / 2.0).max(8.0);
         let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
-        super::view::translate::Translate::new(card, (x, y)).into()
+        super::view::translate::Translate::new(card, (card_x, y)).into()
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -293,6 +286,12 @@ impl Signex {
         // closes the context menu once the pan actually starts moving
         // (see `canvas/mod.rs`'s `CursorMoved` handler, which fires
         // `ContextMenuMsg::Close` the moment `pan_moved` flips on).
+        //
+        // The wheel is a separate matter, handled one level up:
+        // `collect_overlays` wraps every overlay whose id
+        // `overlay_id::swallows_scroll` marks, so scroll cannot reach the
+        // canvas through an overlay regardless of whether that overlay
+        // built a dismiss layer at all (#562).
         const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
@@ -371,7 +370,7 @@ impl Signex {
         // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
         // lands too close to an edge.
         let (win_w, win_h) = self.ui_state.window_size;
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
         let edge_margin: f32 = 4.0;
         let x = if ctx_menu.x + menu_w + edge_margin > win_w {
@@ -471,7 +470,7 @@ impl Signex {
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;
@@ -514,7 +513,7 @@ impl Signex {
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look
         // consistent.
-        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
         let (win_w, win_h) = ui.window_size;
         let edge_margin: f32 = 4.0;

@@ -7,11 +7,11 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Vector};
 
+use super::super::{DRAG_THRESHOLD_PX, FootprintCanvas, FootprintCanvasState};
 use super::sketch::{
     draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
     draw_sketch_tool_preview,
 };
-use super::super::{FootprintCanvas, FootprintCanvasState, DRAG_THRESHOLD_PX};
 
 impl FootprintCanvas<'_> {
     /// v0.27 — Fusion-style sketch reticle painted at the SNAP target
@@ -211,21 +211,21 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if self.state.touching_line_active {
-            if let Some((sx, sy)) = self.state.touching_line_first {
-                let p0 = cstate.world_to_screen((sx, sy));
-                let p1 = match self.state.cursor_mm {
-                    Some(c) => cstate.world_to_screen(c),
-                    None => p0,
-                };
-                let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
-                frame.stroke(
-                    &Path::line(p0, p1),
-                    Stroke::default().with_width(1.5).with_color(line_col),
-                );
-                frame.fill(&Path::circle(p0, 3.5), line_col);
-                frame.fill(&Path::circle(p1, 3.5), line_col);
-            }
+        if self.state.touching_line_active
+            && let Some((sx, sy)) = self.state.touching_line_first
+        {
+            let p0 = cstate.world_to_screen((sx, sy));
+            let p1 = match self.state.cursor_mm {
+                Some(c) => cstate.world_to_screen(c),
+                None => p0,
+            };
+            let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
+            frame.stroke(
+                &Path::line(p0, p1),
+                Stroke::default().with_width(1.5).with_color(line_col),
+            );
+            frame.fill(&Path::circle(p0, 3.5), line_col);
+            frame.fill(&Path::circle(p1, 3.5), line_col);
         }
     }
 
@@ -303,13 +303,14 @@ impl FootprintCanvas<'_> {
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
+        conflict_colour: iced::Color,
     ) {
         if matches!(
             self.state.mode,
             crate::library::editor::footprint::state::EditorMode::Sketch
         ) && let Some(sketch) = self.sketch
         {
-            draw_sketch_overlay(frame, cstate, sketch, self.state);
+            draw_sketch_overlay(frame, cstate, sketch, self.state, conflict_colour);
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);

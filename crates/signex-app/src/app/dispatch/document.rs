@@ -79,31 +79,58 @@ impl Signex {
 
     /// File / save message handler (namespaced family, ADR-0001 D3).
     /// Covers open / new-project / save / save-as / save-primitive-as
-    /// plus the async `SchematicLoaded` completion.
+    /// plus the async `SchematicOpenFinished` / `PcbOpenFinished`
+    /// completions.
     pub(crate) fn dispatch_file_message(&mut self, msg: FileMsg) -> Task<Message> {
         match msg {
             FileMsg::Opened(path) => {
-                self.handle_document_file_opened(path);
-                self.finish_update()
+                let task = self.handle_document_file_opened(path);
+                Task::batch([task, self.finish_update()])
             }
             FileMsg::NewProject(path) => {
-                self.handle_new_project_file(path);
-                self.finish_update()
+                let task = self.handle_new_project_file(path);
+                Task::batch([task, self.finish_update()])
             }
             FileMsg::Save => {
                 let task = self.handle_active_document_save_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
-            FileMsg::SaveAs(path) => {
-                self.handle_active_document_save_as_requested(path);
+            FileMsg::SaveAs { from_path, to_path } => {
+                self.handle_active_document_save_as_requested(from_path, to_path);
                 self.finish_update()
             }
             FileMsg::SavePrimitiveAs { from_path, to_path } => {
-                self.handle_save_primitive_as(&from_path, &to_path);
+                if let Err(error) = self.handle_save_primitive_as(&from_path, &to_path) {
+                    crate::diagnostics::log_error("Save As failed", &error);
+                }
                 self.finish_update()
             }
-            FileMsg::SchematicLoaded(sheet) => {
-                self.load_schematic_into_active_tab(*sheet);
+            FileMsg::SchematicOpenFinished {
+                path,
+                title,
+                result,
+            } => {
+                // #478 review — clear the in-flight guard before acting
+                // on the result so a duplicate open fired while this one
+                // was in flight is free to spawn again from here on.
+                self.document_state.pending_opens.remove(&path);
+                match result {
+                    Ok(sheet) => self.open_schematic_tab(path, title, *sheet),
+                    Err(message) => self.report_open_failure(message),
+                }
+                self.finish_update()
+            }
+            FileMsg::PcbOpenFinished {
+                path,
+                title,
+                result,
+            } => {
+                // #478 review — same in-flight guard clear as above.
+                self.document_state.pending_opens.remove(&path);
+                match result {
+                    Ok(board) => self.open_pcb_tab(path, title, *board),
+                    Err(message) => self.report_open_failure(message),
+                }
                 self.finish_update()
             }
         }
@@ -127,8 +154,12 @@ impl Signex {
                 let task = self.handle_export_pdf_open_dialog();
                 iced::Task::batch([task, self.finish_update()])
             }
-            ExportMsg::DismissError => {
-                self.handle_dismiss_export_error();
+            ExportMsg::NetlistExportAnyway => {
+                let task = self.handle_netlist_export_anyway();
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::NetlistCancelIncomplete => {
+                self.handle_netlist_cancel_incomplete();
                 self.finish_update()
             }
             ExportMsg::BomRequested => {
@@ -137,6 +168,14 @@ impl Signex {
             }
             ExportMsg::BomFinished(result) => {
                 let task = self.handle_export_bom_finished(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::ErcReportPathChosen(result) => {
+                let task = self.handle_erc_report_path_chosen(result);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::ErcReportWritten(result) => {
+                let task = self.handle_erc_report_written(result);
                 iced::Task::batch([task, self.finish_update()])
             }
         }
@@ -159,6 +198,10 @@ impl Signex {
             }
             BomPreviewMsg::SetIncludeNotFitted(b) => {
                 self.handle_bom_preview_set_include_not_fitted(b);
+                self.finish_update()
+            }
+            BomPreviewMsg::SetRule(rule, enabled) => {
+                self.handle_bom_preview_set_rule(rule, enabled);
                 self.finish_update()
             }
             BomPreviewMsg::ToggleColumn(col) => {
@@ -188,10 +231,10 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::ColumnHoverExit(idx) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
-                    if p.column_hover == Some(idx) {
-                        p.column_hover = None;
-                    }
+                if let Some(p) = self.document_state.bom_preview.as_mut()
+                    && p.column_hover == Some(idx)
+                {
+                    p.column_hover = None;
                 }
                 self.finish_update()
             }
@@ -278,8 +321,32 @@ impl Signex {
                 self.handle_print_preview_set_specific_page_input(value);
                 self.finish_update()
             }
-            PrintPreviewMsg::SetFitToPage(fit) => {
-                self.handle_print_preview_set_fit_to_page(fit);
+            PrintPreviewMsg::SetPageSize(size) => {
+                self.handle_print_preview_set_page_size(size);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetOrientation(orientation) => {
+                self.handle_print_preview_set_orientation(orientation);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetCustomWidth(text) => {
+                self.handle_print_preview_set_custom_dimension(true, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetCustomHeight(text) => {
+                self.handle_print_preview_set_custom_dimension(false, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetMargin(edge, text) => {
+                self.handle_print_preview_set_margin(edge, text);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetScaleMode(mode) => {
+                self.handle_print_preview_set_scale_mode(mode);
+                self.finish_update()
+            }
+            PrintPreviewMsg::SetScalePercent(text) => {
+                self.handle_print_preview_set_scale_percent(text);
                 self.finish_update()
             }
             PrintPreviewMsg::SetIncludeTitleBlock(include) => {

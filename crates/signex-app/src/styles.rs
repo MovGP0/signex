@@ -112,7 +112,6 @@ pub fn modal_footer_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
 }
 
 /// Active Bar strip (centered toolbar above canvas)
-#[allow(dead_code)]
 pub fn active_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.statusbar_bg);
     move |_| container::Style {
@@ -180,7 +179,6 @@ pub fn resize_handle(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
 }
 
 /// Panel content area (inside the dock)
-#[allow(dead_code)]
 pub fn panel_content(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.panel_bg);
     let text = ti(tokens.text);
@@ -307,7 +305,6 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 
 // ─── Button styles ────────────────────────────────────────────
 
-#[allow(dead_code)]
 pub fn dock_tab_container(
     tokens: &ThemeTokens,
     is_active: bool,
@@ -360,6 +357,38 @@ pub fn rail_tab(
                 radius: 3.0.into(),
                 color: border,
             },
+            ..button::Style::default()
+        }
+    }
+}
+
+/// Start-screen action button — bordered, hover-highlighted. The
+/// `primary` action takes the accent colour for its border so the
+/// first thing to do reads as the default.
+pub fn start_action(
+    tokens: &ThemeTokens,
+    primary: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let hover = ti(tokens.hover);
+    let text = ti(tokens.text);
+    let border = ti(if primary {
+        tokens.accent
+    } else {
+        tokens.border
+    });
+    move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => Some(Background::Color(hover)),
+            _ => None,
+        };
+        button::Style {
+            background: bg,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            text_color: text,
             ..button::Style::default()
         }
     }

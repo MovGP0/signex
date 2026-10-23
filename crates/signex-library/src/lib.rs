@@ -16,6 +16,8 @@ pub mod diff;
 pub mod distributor;
 #[cfg(feature = "distributors-community")]
 pub mod distributors;
+#[cfg(feature = "local-git")]
+pub mod git_identity;
 pub mod hash;
 pub mod identity;
 pub mod library_file;
@@ -35,7 +37,7 @@ pub use adapter::{
     ComponentSummary, FieldSet, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
     PrimitiveSummary,
 };
-pub use adapters::library_set::LibrarySet;
+pub use adapters::library_set::{LibrarySet, UnresolvedRefs};
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{
@@ -66,10 +68,12 @@ pub use manifest::{
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use primitive::{
-    Body3D, BodyShape, ComponentType, Drill, Footprint, FootprintFile, FootprintFileError,
-    FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
-    PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol,
-    SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    Body3D, BodyShape, CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
+    ComponentType, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic, FpGraphicKind,
+    LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon,
+    PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile,
+    SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
+    normalize_arc_endpoints_deg,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
@@ -103,6 +107,10 @@ pub fn enable_project_version_control(
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
+    // First statement, before anything touches disk: a refusal must leave a
+    // user's existing .gitignore / .gitattributes exactly as they were.
+    let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
+
     if project_dir.join(".git").exists() {
         return Err(LibraryError::Conflict(format!(
             "{} already has a .git directory",
@@ -120,22 +128,26 @@ pub fn enable_project_version_control(
 *.stp filter=lfs diff=lfs merge=lfs -text\n\
 *.wrl filter=lfs diff=lfs merge=lfs -text\n\
 *.iges filter=lfs diff=lfs merge=lfs -text\n";
-        std::fs::write(project_dir.join(".gitattributes"), attributes)
-            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
+        signex_types::atomic_io::atomic_write(
+            &project_dir.join(".gitattributes"),
+            attributes.as_bytes(),
+        )
+        .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
         wrote_lfs_attributes = true;
     }
 
     let mut wrote_gitignore = false;
     if let Some(body) = gitignore {
-        std::fs::write(project_dir.join(".gitignore"), body).map_err(|e| {
-            // Roll back the `.gitattributes` we just wrote so a
-            // failed init never leaves an orphan LFS-tracking file
-            // behind.
-            if wrote_lfs_attributes {
-                let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
-            }
-            LibraryError::Backend(format!("write .gitignore: {e}"))
-        })?;
+        signex_types::atomic_io::atomic_write(&project_dir.join(".gitignore"), body.as_bytes())
+            .map_err(|e| {
+                // Roll back the `.gitattributes` we just wrote so a
+                // failed init never leaves an orphan LFS-tracking file
+                // behind.
+                if wrote_lfs_attributes {
+                    let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
+                }
+                LibraryError::Backend(format!("write .gitignore: {e}"))
+            })?;
         wrote_gitignore = true;
     }
 
@@ -157,17 +169,6 @@ pub fn enable_project_version_control(
         LibraryError::Backend(format!("git init: {e}"))
     })?;
 
-    // Identity for the commit — same fallback the LocalGitAdapter
-    // uses (env GIT_AUTHOR_NAME / EMAIL → repo config → "signex").
-    let cfg = repo.config().ok();
-    let sig_name = std::env::var("GIT_AUTHOR_NAME")
-        .ok()
-        .or_else(|| cfg.as_ref().and_then(|c| c.get_string("user.name").ok()))
-        .unwrap_or_else(|| "signex".to_string());
-    let sig_email = std::env::var("GIT_AUTHOR_EMAIL")
-        .ok()
-        .or_else(|| cfg.as_ref().and_then(|c| c.get_string("user.email").ok()))
-        .unwrap_or_else(|| "signex@localhost".to_string());
     let sig = git2::Signature::now(&sig_name, &sig_email)
         .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 

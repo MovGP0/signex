@@ -82,7 +82,6 @@ fn wordmark_tier(scale: f32) -> u8 {
 // ─── Messages ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum MenuMessage {
     /// No-op dispatched by passive menu-bar roots ("File", "Edit", …) and
     /// submenu headers ("Export", "Annotation"). iced's `button` widget
@@ -93,15 +92,28 @@ pub enum MenuMessage {
     /// dropdown. The message is swallowed by `handle_menu_message` via
     /// its `Task::none()` fallthrough — no handler needs to match it.
     NoOp,
+    /// Help ▸ About Signex.
+    OpenAbout,
+    /// Help ▸ Documentation — opens the user guide in the browser.
+    OpenDocumentation,
+    /// Help ▸ Report an Issue — opens the issue tracker in the browser.
+    ReportIssue,
     // File
     NewProject,
     OpenProject,
+    /// File ▸ Open Recent ▸ `<project>` — reopens through the same path
+    /// as File ▸ Open. A path that has vanished is dropped from the list
+    /// with a notice instead of being opened.
+    OpenRecentProject(std::path::PathBuf),
+    /// File ▸ Open Recent ▸ Clear Recent.
+    ClearRecentProjects,
     Save,
     SaveAs,
     PrintPreview,
     ExportPdf,
     ExportNetlist,
     ExportBom,
+    ExportErcReport,
     /// File ▸ Exit — closes the main window via the same path as the
     /// chrome ✕ button (`Message::Window(WindowMsg::CloseMainWindow)`). Wired through
     /// `handle_menu_file_command`.
@@ -178,6 +190,12 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
+    /// Tools ▸ Passive Network Calculator — opens the in-app
+    /// resistor/capacitor/inductor calculator modal. Not an OS window
+    /// (see `passive_calculator_modal.rs` for why); re-invoking while it
+    /// is already open is a no-op, and the entered state survives a
+    /// close/reopen. Routed to `OverlayMsg::OpenPassiveCalculator`.
+    OpenPassiveCalculator,
     /// Open the Keyboard Shortcuts reference modal — a single page
     /// listing every binding from `shortcuts.rs`, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.
@@ -196,8 +214,8 @@ pub enum MenuMessage {
     /// Altium's Tools ▸ Document Options entry. No-op when not on
     /// a SchLib tab.
     ToolsDocumentOptions,
-    /// Tools -> PCB Trace Calculator opens the IPC-2221 sizing tool.
-    OpenPcbTraceCalculator,
+    /// Tools -> Up Hierarchy: open the sheet that references the focused one.
+    AscendToParentSheet,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to
@@ -212,7 +230,6 @@ pub struct MenuContext {
     /// navigator, BOM across project) when those land. Currently no
     /// menu entry reads this but the field stays so callers don't
     /// need to update their struct literal when we wire it up.
-    #[allow(dead_code)]
     pub has_project: bool,
     pub has_selection: bool,
     pub can_undo: bool,
@@ -233,6 +250,8 @@ pub struct MenuContext {
     pub scale_factor: f32,
     /// Active committed shortcut profile for menu shortcut labels.
     pub active_keymap: Option<CompiledKeymap>,
+    /// File ▸ Open Recent entries, most recent first.
+    pub recent_projects: Vec<std::path::PathBuf>,
 }
 
 impl Default for MenuContext {
@@ -248,6 +267,7 @@ impl Default for MenuContext {
             has_footprint_editor: false,
             scale_factor: 1.0,
             active_keymap: None,
+            recent_projects: Vec::new(),
         }
     }
 }
@@ -326,7 +346,6 @@ impl MenuColors {
     }
 }
 
-
 mod view;
 
 pub use view::view;
@@ -341,6 +360,15 @@ fn cmd_label(command_id: &str, fallback: &str) -> String {
         .and_then(|command| crate::keymap::metadata_for(&command))
         .map(|meta| meta.menu_label().to_string())
         .unwrap_or_else(|| fallback.to_string())
+}
+
+/// Menu path of the Run ERC command, built from the same command label and
+/// menu the Design menu uses so a message naming it cannot drift.
+pub(crate) fn run_erc_menu_path() -> String {
+    format!(
+        "Design ▸ {}",
+        cmd_label("run_erc", "Electrical Rules Check")
+    )
 }
 
 fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {

@@ -1,7 +1,5 @@
 //! History restore + reload-from-disk handlers. Split from `handlers/document_files.rs`.
 
-
-
 use super::super::super::*;
 
 impl Signex {
@@ -14,6 +12,7 @@ impl Signex {
     /// message; nothing destructive runs (the working tree changes
     /// only on a successful blob read + atomic write).
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
+        self.sync_footprint_dirty_paths();
         let active = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(t) => t,
             None => return,
@@ -23,14 +22,27 @@ impl Signex {
             return;
         }
 
+        // Restoring replaces the in-memory document and its undo stack, so
+        // unsaved edits would be gone for good: ask first (#110). The first
+        // click arms the row's confirmation, the second one restores.
+        if self.primitive_draft_is_dirty(&full_path)
+            && self.document_state.history.pending_restore.as_deref() != Some(sha)
+        {
+            self.document_state.history.pending_restore = Some(sha.to_owned());
+            self.document_state.panel_ctx.history = self.document_state.history.clone();
+            return;
+        }
+        self.document_state.history.pending_restore = None;
+        self.document_state.panel_ctx.history = self.document_state.history.clone();
+
         // Find the owning project by directory prefix.
         let owning = self.document_state.projects.iter().find(|p| {
             let dir = std::path::Path::new(&p.data.dir);
             full_path.starts_with(dir)
         });
         let Some(project) = owning else {
-            crate::diagnostics::log_warning(format!(
-                "[git] restore: no owning project for {}",
+            self.report_restore_failure(format!(
+                "{} does not belong to an open project, so it has no history to restore.",
                 full_path.display()
             ));
             return;
@@ -47,8 +59,8 @@ impl Signex {
             ) {
                 Ok(a) => a,
                 Err(e) => {
-                    crate::diagnostics::log_warning(format!(
-                        "[git] restore: open_or_init({}) failed: {e}",
+                    self.report_restore_failure(format!(
+                        "Could not open the version-control repository at {}: {e}",
                         project_root.display()
                     ));
                     return;
@@ -71,13 +83,19 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             Err(e) => {
-                crate::diagnostics::log_warning(format!(
-                    "[git] restore_at({}, {}) failed: {e}",
-                    rel_path.display(),
-                    sha
+                self.report_restore_failure(format!(
+                    "Could not restore {} to {sha}: {e}",
+                    rel_path.display()
                 ));
             }
         }
+    }
+
+    /// A History restore did not happen: log it and raise the error card
+    /// so the click is not silently ignored (#110).
+    fn report_restore_failure(&mut self, message: String) {
+        crate::diagnostics::log_warning(format!("[git] restore: {message}"));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::restore(message));
     }
 
     /// v0.22 — Re-parse the active tab's on-disk file and replace
@@ -134,7 +152,7 @@ impl Signex {
                 // Replace the engine's schematic without resetting
                 // the camera (don't fit-to-paper — the user's pan/zoom
                 // is preserved across a restore).
-                self.apply_loaded_schematic(Some(parsed), true, false, false, false);
+                self.apply_loaded_schematic(Some(parsed), true, false, false);
             }
             crate::app::TabKind::Pcb => {
                 let text = match std::fs::read_to_string(&path) {
@@ -182,6 +200,13 @@ impl Signex {
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
+                        // The reloaded editor is clean, so the stale
+                        // dirty marker must go or quit asks about a
+                        // file that matches disk.
+                        self.document_state.dirty_paths.remove(&p);
+                        if let Some(tab) = self.document_state.tabs.get_mut(active_idx) {
+                            tab.dirty = false;
+                        }
                         if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }
@@ -284,5 +309,4 @@ impl Signex {
             }
         }
     }
-
 }

@@ -10,8 +10,7 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{
-    close_x_button, detached_header, draggable_header, primary_button, secondary_button,
-    wrap_modal,
+    close_x_button, detached_header, draggable_header, primary_button, secondary_button, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
@@ -52,7 +51,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -60,10 +58,13 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::super::state::ModalId::ErcDialog)
+            detached_header(
+                header_content,
+                super::super::super::state::ModalId::ErcDialog,
+            )
         };
 
-        // Per-rule severity grid. 11 rules × 4 severities.
+        // Per-rule severity grid: one row per built-in rule × 4 severities.
         let mut rule_rows = column![
             row![
                 text("Rule")
@@ -78,7 +79,7 @@ impl Signex {
             .padding([4, 8]),
         ]
         .spacing(0);
-        for rule in ALL_RULES {
+        for rule in &signex_erc::RuleKind::ALL {
             let current = self
                 .ui_state
                 .erc_severity_override
@@ -91,7 +92,7 @@ impl Signex {
                         .size(11)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    severity_segmented(*rule, current, border_c, text_c, text_muted),
+                    severity_segmented(*rule, current, border_c, text_muted),
                 ]
                 .align_y(iced::Alignment::Center)
                 .padding([2, 8]),
@@ -175,7 +176,6 @@ fn severity_segmented(
     rule: signex_erc::RuleKind,
     current: signex_erc::Severity,
     border: Color,
-    text_c: Color,
     text_muted: Color,
 ) -> Element<'static, Message> {
     let seg = |label: &'static str,
@@ -203,7 +203,6 @@ fn severity_segmented(
             })
             .into()
     };
-    let _ = text_c;
     row![
         seg(
             "E",
@@ -229,20 +228,6 @@ fn severity_segmented(
     .spacing(2)
     .into()
 }
-
-const ALL_RULES: &[signex_erc::RuleKind] = &[
-    signex_erc::RuleKind::UnusedPin,
-    signex_erc::RuleKind::DuplicateRefDesignator,
-    signex_erc::RuleKind::HierPortDisconnected,
-    signex_erc::RuleKind::DanglingWire,
-    signex_erc::RuleKind::NetLabelConflict,
-    signex_erc::RuleKind::OrphanLabel,
-    signex_erc::RuleKind::BusBitWidthMismatch,
-    signex_erc::RuleKind::BadHierSheetPin,
-    signex_erc::RuleKind::MissingPowerFlag,
-    signex_erc::RuleKind::PowerPortShort,
-    signex_erc::RuleKind::SymbolOutsideSheet,
-];
 
 /// Pin-connection matrix. Click a cell to cycle Error → Warning →
 /// Info → Off → baseline. Overrides persist via

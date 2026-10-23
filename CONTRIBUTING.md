@@ -56,8 +56,23 @@ the project's design rules) help identify rendering discrepancies.
 
 ### Prerequisites
 
-- **Rust 1.85+** (edition 2024)
+- **Rust 1.97.0** — pinned in `rust-toolchain.toml`, so `rustup` installs
+  exactly this version automatically (no manual setup) and your local
+  `rustfmt`/`clippy` match CI byte-for-byte. This is **also the MSRV**
+  (`rust-version = "1.97"`): we build, test, and support exactly this one
+  toolchain, not older ones. (Edition 2024 needs 1.85 and let-chains need 1.88 —
+  both well below the pin.)
 - A GPU supporting Vulkan, Metal, or DX12 (for wgpu) — CI runs headless via lavapipe
+
+### Toolchain update cadence
+
+The pinned toolchain is bumped to the current stable roughly **once a quarter
+(every ~3 months)** so the pin never drifts far behind and we don't accumulate
+toolchain debt. A bump edits three places in lockstep — `rust-toolchain.toml`
+(`channel`), the `rust-version` in the root `Cargo.toml`, and the four
+`dtolnay/rust-toolchain@<version>` refs in `.github/workflows/ci.yml` (the CI
+action does **not** read `rust-toolchain.toml`) — then `cargo fmt --all` in case
+the new rustfmt reformats anything.
 
 ### Build and Run
 
@@ -73,12 +88,21 @@ cargo run -p signex-app
 ```bash
 cargo test --workspace        # hard gate — must pass
 cargo check --workspace       # hard gate — must compile
-cargo fmt --all               # advisory in CI, but keep it clean
-cargo clippy --workspace      # advisory in CI, but review the warnings
+cargo fmt --all               # hard gate — the tree must be rustfmt-clean
+cargo clippy --workspace --all-targets --all-features   # exactly what CI runs
 ```
 
-`cargo test` and `cargo check` are the CI hard gates. `fmt` and `clippy`
-are surfaced but don't block a merge — see "Merge rules for `trunk`" below.
+`cargo test`, `cargo check`, `cargo fmt --all -- --check` and `clippy` are all
+CI hard gates — see "Merge rules for `trunk`" below. Clippy runs inside the
+required `check` job, so its **deny-by-default lints (the `correctness` group)
+fail the job and block the merge**; warn-level lints are surfaced as
+annotations and don't. Run it with the same `--all-targets --all-features` CI
+uses, or your local run will silently skip `tests/`, `benches/`, `examples/`,
+inline `#[cfg(test)] mod tests`, and every feature-gated module.
+Because the toolchain is pinned (`rust-toolchain.toml`, Rust 1.97.0),
+your local `cargo fmt` output is identical to CI's — run it before you commit
+(or wire it into a local `pre-commit` hook) so the required `fmt · rustfmt`
+check stays green.
 
 ## Git Workflow
 
@@ -100,9 +124,31 @@ main     ← stable releases only (protected, requires PR + approval)
 1. Fork the repo
 2. Create a branch from `trunk`: `git checkout -b feature/my-feature trunk`
 3. Make your changes
-4. Ensure `cargo test` and `cargo clippy` pass
-5. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
-6. Push and open a PR against `trunk`
+4. Ensure `cargo test --workspace` and
+   `cargo clippy --workspace --all-targets --all-features` pass
+5. For a user-visible change, add a changelog fragment (see below)
+6. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
+7. Push and open a PR against `trunk`
+
+### Changelog fragments
+
+Do **not** edit `CHANGELOG.md` in a PR: every merge would make every other open
+PR conflict on it. Add `changelog.d/<number>.<section>.md` instead (`<number>` =
+PR or issue number; `<section>` = `added`, `changed`, `deprecated`, `removed`,
+`fixed` or `security`), holding just the bullet(s) in the existing
+`CHANGELOG.md` style. Use `<number>.<section>.2.md` for a second fragment of the
+same section. Naming rule and examples: [`changelog.d/README.md`](changelog.d/README.md).
+
+Check yours with `bash scripts/changelog_assemble.sh --check`. The CI job
+`changelog · fragments` warns when a PR into `trunk` edits `CHANGELOG.md`
+directly (it becomes an error after a transition window; same-repo release PRs
+— head branch `chore/release-*` or `release/*` — are exempt) and warns when a
+`feat`/`fix` PR has no fragment. At release time the maintainer runs
+`scripts/changelog_assemble.sh --version X.Y.Z --date YYYY-MM-DD`, which folds
+the fragments in and opens the dated section `release.yml` extracts. The
+release PR then still adds by hand the headline, the install block and the
+closing `[Full changelog](…compare/v<prev>...v<this>)` line that the Format
+section of `CHANGELOG.md` requires.
 
 ### Commit Messages
 
@@ -171,9 +217,13 @@ the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
 - **1 Code-Owner approving review** is required; you can't approve your own PR.
   Conversations must be resolved and the branch up to date with `trunk`.
 - CI hard gates must be green before merge: `check · ubuntu-latest`,
-  `test · workspace`, `deny · licenses + deps`, `PR-description self-declaration`,
-  and `No KiCad-shaped names anywhere in crates/`. `fmt · rustfmt`, `clippy`, and
-  the advisory `cargo-deny` steps are informational and don't block.
+  `check · macos-latest`, `check · windows-latest`, `test · workspace`,
+  `deny · licenses + deps`, `PR-description self-declaration`,
+  `No GPL-tool-shaped names anywhere in crates/`, `fmt · rustfmt`,
+  `no god-files`, `no discarded tasks`, and `lint lockstep`. `clippy` runs inside the `check`
+  job — a deny-by-default lint fails that job and therefore blocks; its
+  warn-level output only annotates. The `cargo-deny` sources/advisories steps
+  stay informational and don't block.
 - Merge with a **merge commit** (to preserve a contributor's per-commit history)
   or **squash** (one logical change → one commit).
 
@@ -198,6 +248,15 @@ Examples of good first contributions:
 - Use `?` for error propagation, not `unwrap()` / `expect()` in production code
 - Altium Designer UX is the reference for all user-facing interactions
 - If you're unsure about a design choice, open a draft PR and ask
+- **Keep comments short; put long explanations in `docs/`.** A comment in code
+  says what the next reader needs at that spot: the non-obvious *why*, a
+  constraint, a trap. Background, history ("this used to…, until #N…"),
+  alternatives that were rejected and multi-paragraph design rationale go in a
+  Markdown document under `docs/` (for example `docs/architecture/` or
+  `docs/RENDERING_RULES.md`). The code then points to that section in one line,
+  e.g. `// Flag geometry: see docs/RENDERING_RULES.md, "sch-labels".` As a rule
+  of thumb, a comment block longer than about ten lines belongs in a document.
+  The history of a change belongs in its commit message and PR, not in the code.
 
 ## Contributor License Agreement
 
@@ -211,20 +270,101 @@ with every contributor.
 ## License compliance for contributions
 
 The main signex repo is **Apache-2.0 clean**. Patches must not introduce
-KiCad-derived code or any GPL-licensed dependency. KiCad import / export
-lives in the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+code, data, or dependencies under any licence incompatible with
+Apache-2.0 — which is a wider net than GPL, and the next section defines
+it. KiCad import / export lives in the
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
 GPL-3.0-or-later companion repo — that's where KiCad-related work
-belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the rationale
-behind the two-repo split.
+belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the full statement
+and the rationale behind the two-repo split.
 
-When you open a PR against the main `signex` repo, no declaration block
-is required — opening the PR affirms **no license-gated source files**
-were used (nothing under GPL/copyleft or otherwise Apache-incompatible).
-CI (see `.github/workflows/license-guard.yml` and the
+### What "otherwise Apache-incompatible" means
+
+Opening a PR affirms that **no license-gated source files** were used —
+nothing under GPL/copyleft **or otherwise Apache-incompatible**. We asked
+that for a long time without ever saying what the second half meant, which
+was our omission, not a contributor's problem to guess at.
+
+It cost someone. [PR #304](https://github.com/alplabai/signex/pull/304)
+arrived as a skilled, careful Rust rewrite of a project licensed
+"CC BY 4.0 … You may not resell this tool". That is Apache-incompatible on
+two counts, and it passed all twelve of our licence CI jobs plus
+`cargo deny` green. The declaration was answered honestly — CC BY reads as
+permissive, and the resale restriction is a trailing sentence that isn't
+part of the CC BY licence text at all. Nothing we automated would have
+changed that answer. Only writing the rule down does. So:
+
+**A port is a derivative work.** Rewriting a project's JavaScript in Rust
+does not reset its copyright. Neither does re-typing its C++, renaming the
+identifiers, restructuring the modules, or having an LLM do the
+translation. If you read someone else's source and wrote code that follows
+it, their licence governs your result — however different it looks. This is
+the single point engineers most often don't know, and it is not a close
+call legally.
+
+Implementing a *published algorithm or formula* independently is a
+different thing and is fine. The line is what you had in front of you when
+you wrote it, not how much the output diverges.
+
+**Licence classes that are incompatible with this repo:**
+
+- **GPL / copyleft** — GPL-2.0/3.0, AGPL, and **LGPL**. Reciprocal terms
+  relicense Signex; a binding is a link. Copyleft solvers are reached
+  across a process boundary only — see
+  [docs/EXTERNAL_TOOLS.md §4](docs/EXTERNAL_TOOLS.md#4-the-gpl--lgpl-bridge-boundary),
+  which is the dependency-side counterpart to this section.
+- **Any Creative Commons licence** — CC BY, CC BY-SA, CC BY-NC, all of
+  them. CC is not a software licence; Creative Commons says so itself. CC
+  BY's attribution terms don't compose with Apache-2.0's `NOTICE` model,
+  and BY-SA is copyleft. "But CC BY is permissive" is the exact trap #304
+  fell into. (CC0 is a public-domain dedication, not a CC licence in this
+  sense, and is fine.)
+- **Non-commercial / no-resale / any field-of-use restriction** — CC BY-NC,
+  "you may not resell this tool", "personal use only", "not for commercial
+  use". See below; this class is fatal here specifically.
+- **Source-available / open-core / "fair source"** — BUSL, SSPL, Elastic,
+  Commons Clause, PolyForm. Not open source, whatever the marketing says.
+- **The text, tables, and figures of paywalled standards** — IPC, IEC,
+  JEDEC, ISO. Important distinction: the **formulas and physical facts** in
+  a standard are facts, not copyrightable, and implementing them from your
+  own understanding is fine and welcome. The **document** is copyrighted —
+  do not copy its prose, its tables, its figure geometry, or its worked
+  examples, and don't paste it into an LLM to do it for you.
+
+MIT, BSD, ISC, Zlib, Unlicense, CC0, and Apache-2.0 are fine. Anything on
+neither list: ask.
+
+**Why "no resale" is fatal here in particular.** Signex Community is
+Apache-2.0 and free; **Signex Pro is a paid commercial edition built from
+this same tree**. A field-of-use restriction on any code in `crates/` would
+be violated the day Pro ships, and would break the Apache-2.0 surface we
+promise every downstream redistributor and embedder. Plenty of projects
+could live with a non-commercial clause. We cannot. That's a property of
+our business model, not a judgement about the licence.
+
+### If you're not sure, ask — don't PR
+
+[Open an issue](https://github.com/alplabai/signex/issues/new), name the
+source and its licence, and we'll answer. It costs you one comment. A wrong
+guess discovered at review costs you the weekend you spent on the code, and
+we would rather spend our time saying "yes, go" than "sorry". This is the
+same rule [docs/EXTERNAL_TOOLS.md §1](docs/EXTERNAL_TOOLS.md#1-the-rule)
+applies to stack choices, for the same reason.
+
+### Mechanics
+
+The PR template asks you to confirm the work is original or derived only
+from sources whose licence you checked, and to name the source and licence
+if it is derived. CI (see `.github/workflows/license-guard.yml` and the
 PR-license-declaration workflow) passes unless the description explicitly
-admits one. If your contribution did draw on a license-gated source, add
-a line `License-gated sources: yes` — CI rejects it here with a pointer
-to the companion repo, which is where that work belongs.
+admits a license-gated source. If your contribution did draw on one, add a
+line `License-gated sources: yes` — CI rejects it here with a pointer to
+the companion repo, which is where that work belongs.
+
+A PR that adds a new crate or more than ~2000 lines of Rust also gets an
+automated comment asking the provenance question directly. It's advisory,
+it never blocks, and it fires on plenty of entirely original work — if it
+lands on yours, it means nothing more than "this PR is large".
 
 Why this matters: large-language-model assistants that have been
 trained on KiCad source can inadvertently produce structurally
@@ -237,6 +377,13 @@ introduces KiCad-flavoured identifiers (`kicad`, `KiCad`, `F_CU`,
 `B_CU`, `F_SILKS`, `tri_state`, `Net-(`, …) anywhere under `crates/`.
 This is a structural backstop on top of the PR-description self-
 declaration.
+
+Those gates are shaped around one past incident and they do not detect a
+port of some project they've never heard of. There's also an advisory
+`port-smell` job that greps for residue a port tends to leave — it never
+blocks, and a careful port trips none of it. Treat none of this as a
+clean bill of health: the section above is the actual rule, and reading
+it is the thing that works.
 
 ## Questions?
 

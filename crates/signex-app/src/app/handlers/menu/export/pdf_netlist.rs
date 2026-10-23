@@ -37,16 +37,22 @@ impl Signex {
             }
         };
 
-        let mut ctx = match super::build_export_context(&self.document_state) {
+        let (mut ctx, issues) = match super::build_page_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 self.document_state.pending_pdf_options = None;
                 self.document_state.pending_pdf_files = None;
-                self.document_state.export_error =
-                    Some("Cannot export PDF: no active schematic.".to_string());
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    "Cannot export PDF: no active schematic.".to_string(),
+                ));
                 return Task::none();
             }
         };
+        // Human-consumed deliverable: a partial PDF beats a refusal — the
+        // user may well be printing or reviewing mid-refactor with a child
+        // file genuinely absent from disk. So this degrades rather than
+        // blocks, but it degrades *loudly*, once, from this user action.
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
 
         // Use pending options if they were set by the dialog, otherwise fall back to defaults.
         let options = self
@@ -61,8 +67,9 @@ impl Signex {
         if let Some(files) = self.document_state.pending_pdf_files.take() {
             ctx.sheets.retain(|s| files.contains(&s.path));
             if ctx.sheets.is_empty() {
-                self.document_state.export_error =
-                    Some("Cannot export PDF: no files selected in the Settings tab.".to_string());
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    "Cannot export PDF: no files selected in the Settings tab.".to_string(),
+                ));
                 return Task::none();
             }
         }
@@ -81,7 +88,10 @@ impl Signex {
             }
         }
 
-        match PdfExporter.export(&ctx, &options) {
+        match PdfExporter
+            .export(&ctx, &options)
+            .inspect(|output| super::log_uncovered_chars(&output.uncovered_chars))
+        {
             Ok(output) => match std::fs::write(&save_path, &output.bytes) {
                 Ok(()) => log::info!(
                     "Wrote {} ({} page(s), {} bytes)",
@@ -90,14 +100,17 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write PDF to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write PDF to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("PDF export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("PDF export failed: {e}"),
+                ));
             }
         }
 
@@ -110,12 +123,13 @@ impl Signex {
             return Some(Task::none());
         }
 
+        let format = NetlistOptions::default().format;
         Some(Task::perform(
-            async {
+            async move {
                 rfd::AsyncFileDialog::new()
                     .set_title("Export Netlist")
-                    .add_filter("Standard Netlist", &["net"])
-                    .set_file_name("schematic.net")
+                    .add_filter(format.label(), &[format.extension()])
+                    .set_file_name(format.default_file_name())
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())
@@ -142,13 +156,50 @@ impl Signex {
             }
         };
 
-        let ctx = match super::build_export_context(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 log::warn!("Netlist export: no active schematic");
                 return Task::none();
             }
         };
+        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+
+        // Not a hole the user can accept: the file would be wrong, not partial.
+        if let Some(refusal) = issues.shared_reference_refusal(&ctx) {
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::export(refusal));
+            return Task::none();
+        }
+
+        // Machine-consumed deliverable: this file is imported into a PCB, and
+        // a hole in it becomes missing components on the board plus nets that
+        // stayed split where they should have merged through the missing
+        // sheet's ports. There is no "read the warning and judge" step
+        // downstream, so refuse-by-default and write nothing rather than hand
+        // the layout tool a plausible-looking wrong netlist. (The PDF, which a
+        // human reads, takes the opposite call.)
+        //
+        // #431: instead of a dead-end error, raise a two-choice prompt — the
+        // refusal stays the default (nothing written until the user acts), but
+        // "Export anyway (incomplete)" writes the partial `.net` and reports
+        // the omission to the Messages panel (Protel has no comment syntax, so
+        // the file itself stays clean). See
+        // `handle_netlist_export_anyway`.
+        if issues.netlist_is_incomplete() {
+            // Snapshot the export scope alongside the omitted-page messages, so
+            // "Export anyway" writes from exactly this derivation. The bytes and
+            // the omitted-page warning then always describe the same project
+            // state, even if the document changes while the prompt is up (#431
+            // review).
+            self.document_state.netlist_incomplete_prompt =
+                Some(crate::app::state::NetlistIncompletePrompt {
+                    save_path,
+                    messages: issues.messages(),
+                    ctx,
+                });
+            return Task::none();
+        }
 
         match NetlistExporter.export(&ctx, &NetlistOptions::default()) {
             Ok(output) => match std::fs::write(&save_path, &output.bytes) {
@@ -158,21 +209,80 @@ impl Signex {
                     output.bytes.len(),
                 ),
                 Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write netlist to {}:\n{e}",
-                        save_path.display(),
-                    ));
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write netlist to {}:\n{e}",
+                            save_path.display(),
+                        )));
                 }
             },
             Err(e) => {
-                self.document_state.export_error = Some(format!("Netlist export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("Netlist export failed: {e}"),
+                ));
             }
         }
 
         Task::none()
     }
 
-    pub(crate) fn handle_dismiss_export_error(&mut self) {
-        self.document_state.export_error = None;
+    /// #431 — "Export anyway (incomplete)". The user explicitly chose to ship
+    /// the partial netlist. Re-derives the export scope, writes the
+    /// best-available (root-reachable) netlist to the pending path, then clears
+    /// the prompt. Protel has no comment syntax, so the file is a clean,
+    /// valid netlist; the omission is reported as a warning (the omitted pages,
+    /// one per line) in the Messages panel and the log, so a partial `.net`
+    /// never reaches disk without the user having been told.
+    pub(crate) fn handle_netlist_export_anyway(&mut self) -> Task<Message> {
+        let Some(prompt) = self.document_state.netlist_incomplete_prompt.take() else {
+            return Task::none();
+        };
+        let save_path = prompt.save_path;
+
+        // Write from the scope SNAPSHOTTED when the prompt was raised, never a
+        // fresh re-derivation (#431 review, CRITICAL): the warning names the
+        // pages omitted at prompt time, so the bytes must come from that same
+        // derivation. Re-deriving here would let a mid-modal document edit make
+        // the warning describe a different project state than the file written.
+        match NetlistExporter.export(&prompt.ctx, &NetlistOptions::default()) {
+            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
+                Ok(()) => {
+                    log::info!(
+                        "Wrote INCOMPLETE netlist {} ({} bytes) — user chose Export anyway",
+                        save_path.display(),
+                        output.bytes.len(),
+                    );
+                    // One short line each: the Messages panel truncates long
+                    // entries, which would cut the page name off.
+                    crate::diagnostics::log_warning(
+                        "Export: wrote an INCOMPLETE netlist (Export anyway) — not a wiring \
+                         reference. Omitted:",
+                    );
+                    for message in &prompt.messages {
+                        crate::diagnostics::log_warning(format!("Export: INCOMPLETE — {message}"));
+                    }
+                }
+                Err(e) => {
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(format!(
+                            "Could not write netlist to {}:\n{e}",
+                            save_path.display(),
+                        )));
+                }
+            },
+            Err(e) => {
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("Netlist export failed: {e}"),
+                ));
+            }
+        }
+
+        Task::none()
+    }
+
+    /// #431 — "Cancel" on the netlist-incomplete prompt (or click-outside).
+    /// Writes nothing; just clears the pending prompt.
+    pub(crate) fn handle_netlist_cancel_incomplete(&mut self) {
+        self.document_state.netlist_incomplete_prompt = None;
     }
 }

@@ -12,6 +12,9 @@
 //!   · active_bar · geometry · selection · context_menu · view
 
 mod active_bar;
+mod attempt;
+#[cfg(test)]
+mod attempt_tests;
 mod context_menu;
 mod geometry;
 mod selection;
@@ -172,120 +175,6 @@ fn scale_axis(centres: &mut [(f64, f64)], axis: SpacingAxis, pivot: f64, step: f
     }
 }
 
-#[cfg(test)]
-mod align_geometry_tests {
-    use super::apply_align;
-    use crate::library::editor::footprint::state::AlignOp;
-
-    /// Compare two centre lists with an absolute tolerance.
-    fn approx_eq(a: &[(f64, f64)], b: &[(f64, f64)]) {
-        assert_eq!(a.len(), b.len(), "length mismatch");
-        for (i, (p, q)) in a.iter().zip(b.iter()).enumerate() {
-            assert!(
-                (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9,
-                "centre {i} mismatch: got {p:?}, want {q:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn align_left_moves_all_x_to_min() {
-        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
-        let out = apply_align(&pads, AlignOp::Left, 1.0);
-        // Every centre X → min (-1.0); Y untouched.
-        approx_eq(&out, &[(-1.0, 0.0), (-1.0, 1.0), (-1.0, 3.0)]);
-    }
-
-    #[test]
-    fn align_right_moves_all_x_to_max() {
-        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
-        let out = apply_align(&pads, AlignOp::Right, 1.0);
-        approx_eq(&out, &[(5.0, 0.0), (5.0, 1.0), (5.0, 3.0)]);
-    }
-
-    #[test]
-    fn align_top_bottom_move_y_only() {
-        let pads = vec![(0.0, 2.0), (1.0, 8.0), (2.0, -4.0)];
-        let top = apply_align(&pads, AlignOp::Top, 1.0);
-        approx_eq(&top, &[(0.0, -4.0), (1.0, -4.0), (2.0, -4.0)]);
-        let bottom = apply_align(&pads, AlignOp::Bottom, 1.0);
-        approx_eq(&bottom, &[(0.0, 8.0), (1.0, 8.0), (2.0, 8.0)]);
-    }
-
-    #[test]
-    fn center_h_v_align_to_mean() {
-        let pads = vec![(0.0, 0.0), (4.0, 10.0)];
-        let ch = apply_align(&pads, AlignOp::CenterH, 1.0);
-        // mean X = 2.0
-        approx_eq(&ch, &[(2.0, 0.0), (2.0, 10.0)]);
-        let cv = apply_align(&pads, AlignOp::CenterV, 1.0);
-        // mean Y = 5.0
-        approx_eq(&cv, &[(0.0, 5.0), (4.0, 5.0)]);
-    }
-
-    #[test]
-    fn distribute_h_equalises_gaps_and_keeps_extremes() {
-        // Unevenly spaced: 0, 1, 9 → after distribute: 0, 4.5, 9.
-        let pads = vec![(0.0, 0.0), (1.0, 0.0), (9.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
-        approx_eq(&out, &[(0.0, 0.0), (4.5, 0.0), (9.0, 0.0)]);
-        // Gaps are now equal.
-        let g1 = out[1].0 - out[0].0;
-        let g2 = out[2].0 - out[1].0;
-        assert!((g1 - g2).abs() < 1e-9);
-    }
-
-    #[test]
-    fn distribute_h_preserves_input_order_when_unsorted() {
-        // Input not sorted by X; extremes (0 and 8) stay, middle (idx 0,
-        // X=6) gets re-placed at the equal-gap slot for its rank.
-        let pads = vec![(6.0, 0.0), (0.0, 0.0), (8.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
-        // Ranks by X: idx1(0) → 0, idx0(6) → 4, idx2(8) → 8.
-        approx_eq(&out, &[(4.0, 0.0), (0.0, 0.0), (8.0, 0.0)]);
-    }
-
-    #[test]
-    fn distribute_v_equalises_gaps() {
-        let pads = vec![(0.0, 0.0), (0.0, 2.0), (0.0, 10.0)];
-        let out = apply_align(&pads, AlignOp::DistributeV, 1.0);
-        approx_eq(&out, &[(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)]);
-    }
-
-    #[test]
-    fn increase_h_spacing_grows_span_by_step_times_gaps() {
-        // 3 pads at x = 0, 5, 10; mean = 5; step = 1 → each of 2 gaps
-        // grows by 1 → new span 12, centred on 5 → x = -1, 5, 11.
-        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::IncreaseHSpacing, 1.0);
-        approx_eq(&out, &[(-1.0, 0.0), (5.0, 0.0), (11.0, 0.0)]);
-    }
-
-    #[test]
-    fn decrease_h_spacing_shrinks_span() {
-        // Inverse of the increase case: span 10 → 8, centred on 5.
-        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
-        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 1.0);
-        approx_eq(&out, &[(1.0, 0.0), (5.0, 0.0), (9.0, 0.0)]);
-    }
-
-    #[test]
-    fn decrease_spacing_clamps_at_zero_span() {
-        // Over-contracting must not invert the order or go negative.
-        let pads = vec![(0.0, 0.0), (1.0, 0.0)];
-        // One gap, step huge → new span clamped to 0 → both at mean 0.5.
-        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 100.0);
-        approx_eq(&out, &[(0.5, 0.0), (0.5, 0.0)]);
-    }
-
-    #[test]
-    fn increase_v_spacing_grows_vertical_span() {
-        let pads = vec![(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)];
-        let out = apply_align(&pads, AlignOp::IncreaseVSpacing, 1.0);
-        approx_eq(&out, &[(0.0, -1.0), (0.0, 5.0), (0.0, 11.0)]);
-    }
-}
-
 /// v0.26-E — apply Cut / Copy / Paste against the document-level
 /// `pad_clipboard`. Split-borrowed at the call site so both the
 /// editor and the clipboard slot are mutable.
@@ -367,10 +256,25 @@ pub(crate) fn apply_footprint_clipboard_op(
                 new_pad.position_mm = (px, py);
                 new_pad.number = next_num.clone();
                 // Reset sketch links so the pad mirrors freshly into
-                // the sketch on the next mode switch (avoids two
-                // pads sharing an entity id).
+                // the sketch (avoids two pads sharing an entity id).
+                // `shape_params` is the third ownership field and was
+                // cloned wholesale above: leaving it aliased the
+                // TEMPLATE's parameter names and Arc ids, so editing
+                // the pasted pad's corner radius / width / height in
+                // the Properties panel silently resized the ORIGINAL.
                 new_pad.sketch_entity_id = None;
                 new_pad.corner_entity_ids = None;
+                new_pad.shape_params.clear();
+                // Mint the paste its own geometry NOW when the sketch
+                // is already authored — `auto_mint_for_literal_pads`
+                // early-returns on exactly that condition, so waiting
+                // for it would leave the pasted pad unlinked forever.
+                // When the sketch is NOT authored, auto-mint still
+                // covers this pad along with its siblings, and minting
+                // here would be what breaks it.
+                if pad_to_sketch::sketch_is_authored(primitive) {
+                    pad_to_sketch::mirror_add_pad_to_sketch(&mut new_pad, primitive);
+                }
                 state.pads.push(new_pad);
                 let new_idx = state.pads.len() - 1;
                 state.selected_pad = Some(new_idx);
@@ -425,10 +329,17 @@ pub(crate) fn apply_footprint_primitive_edit(
     // dispatcher is the canonical entry point for footprint
     // mutations, so wrapping here covers every message type
     // uniformly without each arm needing its own push.
-    if mutates_footprint_state(&msg) {
-        editor.push_history();
-    }
+    //
+    // The snapshot is taken now but only recorded once the edit is known to
+    // be kept: a conflicting sketch edit is rejected and reverted, and must
+    // leave no undo step, redo clear or dirty flag behind.
+    let attempt = attempt::EditAttempt::begin(editor, &msg);
+    route_primitive_edit(editor, msg);
+    attempt.settle(editor);
+}
 
+/// Route one footprint-editor message to the slice that owns it.
+fn route_primitive_edit(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
@@ -529,6 +440,11 @@ pub(crate) fn apply_footprint_primitive_edit(
         | FootprintEditorMsg::MoveBySetY(..)
         | FootprintEditorMsg::MoveByConfirm
         | FootprintEditorMsg::MoveByCancel
+        | FootprintEditorMsg::AlignOpen
+        | FootprintEditorMsg::AlignSetHorizontal(..)
+        | FootprintEditorMsg::AlignSetVertical(..)
+        | FootprintEditorMsg::AlignConfirm
+        | FootprintEditorMsg::AlignCancel
         | FootprintEditorMsg::ActiveBarAlignSelectionToGrid
         | FootprintEditorMsg::ActiveBarMoveOriginToGrid
         | FootprintEditorMsg::ActiveBarSelectAll
@@ -547,14 +463,7 @@ fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: 
     use crate::library::editor::footprint::pad_to_sketch;
     use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 
-    let mut indices: Vec<usize> = Vec::new();
-    if let Some(p) = editor.state.selected_pad {
-        indices.push(p);
-    }
-    indices.extend(editor.state.selected_pads_extra.iter().copied());
-    indices.sort_unstable();
-    indices.dedup();
-    indices.retain(|&i| i < editor.state.pads.len());
+    let indices = editor.state.selected_pad_indices();
     if indices.is_empty() {
         return;
     }
@@ -667,6 +576,17 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | MoveBySetY(_)
         | MoveByConfirm
         | MoveByCancel
+        // #370 — Align dialog open/edit/cancel are pure UI state (the
+        // chosen ops live on `align_modal`, not persisted geometry);
+        // Confirm pushes its OWN single snapshot inside the handler,
+        // gated on a large-enough selection and at least one chosen
+        // op — so keep every Align* variant out of the blanket
+        // pre-push to avoid double-stacking / snapshotting a no-op.
+        | AlignOpen
+        | AlignSetHorizontal(_)
+        | AlignSetVertical(_)
+        | AlignConfirm
+        | AlignCancel
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.
@@ -677,10 +597,134 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // message reaches the dispatcher like Track's 2-click
         // gesture does). It pushes its own snapshot inside the
         // handler, so keep it out of the blanket pre-push.
-        | AddTextFrame { .. } => false,
+        | AddTextFrame { .. }
+        // v0.15 (#146) — Rotate / Flip / Align-to-grid / Move-origin-
+        // to-grid each push their own snapshot inside the handler,
+        // gated on an actual mutation (a selected pad, or a non-empty
+        // pad list). The blanket pre-push must NOT fire here, or a
+        // no-op invocation with nothing selected would stack an empty
+        // undo entry and dirty the document.
+        | ActiveBarRotateSelection
+        | ActiveBarFlipSelection
+        | ActiveBarAlignSelectionToGrid
+        | ActiveBarMoveOriginToGrid => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.
         _ => true,
+    }
+}
+
+#[cfg(test)]
+mod align_geometry_tests {
+    use super::apply_align;
+    use crate::library::editor::footprint::state::AlignOp;
+
+    /// Compare two centre lists with an absolute tolerance.
+    fn approx_eq(a: &[(f64, f64)], b: &[(f64, f64)]) {
+        assert_eq!(a.len(), b.len(), "length mismatch");
+        for (i, (p, q)) in a.iter().zip(b.iter()).enumerate() {
+            assert!(
+                (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9,
+                "centre {i} mismatch: got {p:?}, want {q:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn align_left_moves_all_x_to_min() {
+        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
+        let out = apply_align(&pads, AlignOp::Left, 1.0);
+        // Every centre X → min (-1.0); Y untouched.
+        approx_eq(&out, &[(-1.0, 0.0), (-1.0, 1.0), (-1.0, 3.0)]);
+    }
+
+    #[test]
+    fn align_right_moves_all_x_to_max() {
+        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
+        let out = apply_align(&pads, AlignOp::Right, 1.0);
+        approx_eq(&out, &[(5.0, 0.0), (5.0, 1.0), (5.0, 3.0)]);
+    }
+
+    #[test]
+    fn align_top_bottom_move_y_only() {
+        let pads = vec![(0.0, 2.0), (1.0, 8.0), (2.0, -4.0)];
+        let top = apply_align(&pads, AlignOp::Top, 1.0);
+        approx_eq(&top, &[(0.0, -4.0), (1.0, -4.0), (2.0, -4.0)]);
+        let bottom = apply_align(&pads, AlignOp::Bottom, 1.0);
+        approx_eq(&bottom, &[(0.0, 8.0), (1.0, 8.0), (2.0, 8.0)]);
+    }
+
+    #[test]
+    fn center_h_v_align_to_mean() {
+        let pads = vec![(0.0, 0.0), (4.0, 10.0)];
+        let ch = apply_align(&pads, AlignOp::CenterH, 1.0);
+        // mean X = 2.0
+        approx_eq(&ch, &[(2.0, 0.0), (2.0, 10.0)]);
+        let cv = apply_align(&pads, AlignOp::CenterV, 1.0);
+        // mean Y = 5.0
+        approx_eq(&cv, &[(0.0, 5.0), (4.0, 5.0)]);
+    }
+
+    #[test]
+    fn distribute_h_equalises_gaps_and_keeps_extremes() {
+        // Unevenly spaced: 0, 1, 9 → after distribute: 0, 4.5, 9.
+        let pads = vec![(0.0, 0.0), (1.0, 0.0), (9.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
+        approx_eq(&out, &[(0.0, 0.0), (4.5, 0.0), (9.0, 0.0)]);
+        // Gaps are now equal.
+        let g1 = out[1].0 - out[0].0;
+        let g2 = out[2].0 - out[1].0;
+        assert!((g1 - g2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn distribute_h_preserves_input_order_when_unsorted() {
+        // Input not sorted by X; extremes (0 and 8) stay, middle (idx 0,
+        // X=6) gets re-placed at the equal-gap slot for its rank.
+        let pads = vec![(6.0, 0.0), (0.0, 0.0), (8.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
+        // Ranks by X: idx1(0) → 0, idx0(6) → 4, idx2(8) → 8.
+        approx_eq(&out, &[(4.0, 0.0), (0.0, 0.0), (8.0, 0.0)]);
+    }
+
+    #[test]
+    fn distribute_v_equalises_gaps() {
+        let pads = vec![(0.0, 0.0), (0.0, 2.0), (0.0, 10.0)];
+        let out = apply_align(&pads, AlignOp::DistributeV, 1.0);
+        approx_eq(&out, &[(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)]);
+    }
+
+    #[test]
+    fn increase_h_spacing_grows_span_by_step_times_gaps() {
+        // 3 pads at x = 0, 5, 10; mean = 5; step = 1 → each of 2 gaps
+        // grows by 1 → new span 12, centred on 5 → x = -1, 5, 11.
+        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::IncreaseHSpacing, 1.0);
+        approx_eq(&out, &[(-1.0, 0.0), (5.0, 0.0), (11.0, 0.0)]);
+    }
+
+    #[test]
+    fn decrease_h_spacing_shrinks_span() {
+        // Inverse of the increase case: span 10 → 8, centred on 5.
+        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 1.0);
+        approx_eq(&out, &[(1.0, 0.0), (5.0, 0.0), (9.0, 0.0)]);
+    }
+
+    #[test]
+    fn decrease_spacing_clamps_at_zero_span() {
+        // Over-contracting must not invert the order or go negative.
+        let pads = vec![(0.0, 0.0), (1.0, 0.0)];
+        // One gap, step huge → new span clamped to 0 → both at mean 0.5.
+        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 100.0);
+        approx_eq(&out, &[(0.5, 0.0), (0.5, 0.0)]);
+    }
+
+    #[test]
+    fn increase_v_spacing_grows_vertical_span() {
+        let pads = vec![(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)];
+        let out = apply_align(&pads, AlignOp::IncreaseVSpacing, 1.0);
+        approx_eq(&out, &[(0.0, -1.0), (0.0, 5.0), (0.0, 11.0)]);
     }
 }

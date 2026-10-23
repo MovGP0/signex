@@ -7,27 +7,56 @@ use anyhow::{Context, Result};
 use super::super::super::*;
 
 impl Signex {
-    pub(crate) fn handle_document_file_opened(&mut self, path: Option<PathBuf>) {
+    /// An async read+parse of a document came back failed: log it and
+    /// raise the Open Failed notice (a log line alone is invisible to
+    /// someone who double-clicked a file).
+    pub(crate) fn report_open_failure(&mut self, message: String) {
+        crate::diagnostics::log_error(
+            "Failed to open document path",
+            &anyhow::anyhow!(message.clone()),
+        );
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(message));
+    }
+
+    pub(crate) fn handle_document_file_opened(
+        &mut self,
+        path: Option<PathBuf>,
+    ) -> iced::Task<Message> {
         let Some(path) = path else {
-            return;
+            return iced::Task::none();
         };
 
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
-        if let Err(error) = self.open_document_path(path) {
-            crate::diagnostics::log_error("Failed to open document path", &error);
+        match self.open_document_path(path) {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Failed to open document path", &error);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                iced::Task::none()
+            }
         }
     }
 
-    pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) {
-        let Some(path) = path else { return };
+    pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) -> iced::Task<Message> {
+        let Some(path) = path else {
+            return iced::Task::none();
+        };
 
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
-        if let Err(error) = self.create_new_project(&path) {
-            crate::diagnostics::log_error("Failed to create new project", &error);
+        match self.create_new_project(&path) {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Failed to create new project", &error);
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+                    format!("Failed to create new project: {error:#}"),
+                ));
+                iced::Task::none()
+            }
         }
     }
 
@@ -35,7 +64,10 @@ impl Signex {
     /// `<stem>.snxsch` in the same directory, then load the project and
     /// open the schematic as a tab. The `.snxprj` is written empty —
     /// `parse_project` is directory-driven and ignores file content.
-    fn create_new_project(&mut self, project_path: &std::path::Path) -> Result<()> {
+    fn create_new_project(
+        &mut self,
+        project_path: &std::path::Path,
+    ) -> Result<iced::Task<Message>> {
         if project_path
             .extension()
             .and_then(|e| e.to_str())
@@ -85,65 +117,83 @@ impl Signex {
                 .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
         }
 
-        self.open_document_path(project_path.to_path_buf())?;
-        if sch_path.exists() {
+        // The project itself opens synchronously (a directory-driven
+        // `.snxprj` parse, no heavy IO) — only the schematic tab's
+        // read+parse below is async, via `open_document_path`'s
+        // `snxsch` branch.
+        let _project_task = self.open_document_path(project_path.to_path_buf())?;
+        let schematic_task = if sch_path.exists() {
             // Best-effort: surface the schematic tab so the new project
             // lands the user on a drawable canvas. Errors here just
             // leave them on the Welcome view.
-            if let Err(error) = self.open_document_path(sch_path) {
-                crate::diagnostics::log_error("Open new project schematic", &error);
+            match self.open_document_path(sch_path) {
+                Ok(task) => task,
+                Err(error) => {
+                    crate::diagnostics::log_error("Open new project schematic", &error);
+                    iced::Task::none()
+                }
             }
-        }
+        } else {
+            iced::Task::none()
+        };
         self.refresh_panel_ctx();
-        Ok(())
+        Ok(schematic_task)
     }
 
     pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {
         match self.save_active_document() {
             Ok(task) => task,
             Err(error) => {
-                crate::diagnostics::log_error("Failed to save active document", &error);
+                self.report_save_failure("Failed to save active document", &error);
                 iced::Task::none()
             }
         }
     }
 
-    pub(crate) fn handle_active_document_save_as_requested(&mut self, path: PathBuf) {
-        if let Err(error) = self.save_active_document_as(path) {
-            crate::diagnostics::log_error("Failed to save active document as", &error);
+    pub(crate) fn handle_active_document_save_as_requested(
+        &mut self,
+        from_path: PathBuf,
+        to_path: PathBuf,
+    ) {
+        if let Err(error) = self.save_active_document_as(&from_path, to_path) {
+            self.report_save_failure("Failed to save active document as", &error);
         }
     }
 
-    fn open_document_path(&mut self, path: PathBuf) -> Result<()> {
+    fn open_document_path(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())
             .unwrap_or("");
-        match ext {
+        let task = match ext {
+            // Returns the project's cold `.snxlib` mount preparations
+            // (#99 part 2c) — must be propagated, not dropped. Dropping
+            // it leaves every library recorded as pending and never
+            // spawned, so the project opens with no libraries mounted and
+            // nothing logs a failure.
             "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            "snxsym" | "snxfpt" => {
-                let _ = self.handle_open_primitive(path);
-            }
+            "snxsym" | "snxfpt" => self.handle_open_primitive(path),
             // `.snxlib/` is a directory package — open it as a Library
             // Browser tab in the main canvas area. The handler mounts
             // the library if not already mounted and pushes the tab
             // (or activates it if a tab for the same library is
             // already open).
-            "snxlib" => {
-                let _ = self.handle_open_library_browser(path);
-            }
+            "snxlib" => self.handle_open_library_browser(path),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
-        }
+        };
 
-        Ok(())
+        Ok(task)
     }
 
-    fn open_project_file(&mut self, path: PathBuf) -> Result<()> {
-        self.load_or_activate_project(&path)?;
+    fn open_project_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        let (_, mount_task) = self.load_or_activate_project(&path)?;
+        // Success path only: `?` above returns before a project that
+        // failed to load can be recorded.
+        self.record_recent_project(&path);
         self.refresh_panel_ctx();
-        Ok(())
+        Ok(mount_task)
     }
 
     /// Append a `LoadedProject` for `project_path` to the workspace if
@@ -151,11 +201,20 @@ impl Signex {
     /// so re-opening the same project just switches activity. Used by
     /// both `open_project_file` (direct .standard_pro open) and the
     /// companion-project path inside `open_schematic_file` /
-    /// `open_pcb_file`. Returns the resolved `ProjectId`.
+    /// `open_pcb_file`.
+    ///
+    /// Returns the resolved `ProjectId` **plus** a `Task` that prepares
+    /// the project's cold `.snxlib` mounts off the UI thread (#99 part
+    /// 2c). The `ProjectId` still comes back synchronously because every
+    /// caller uses it immediately — `.snxprj` parsing itself stays
+    /// synchronous on purpose: `parse_project` measures 0.018 ms and does
+    /// not scale with library count, so making it async would buy nothing
+    /// and would break that immediate use. The library mounts are the
+    /// part that actually costs frames.
     fn load_or_activate_project(
         &mut self,
         project_path: &std::path::Path,
-    ) -> Result<crate::app::state::ProjectId> {
+    ) -> Result<(crate::app::state::ProjectId, iced::Task<Message>)> {
         if let Some(existing) = self
             .document_state
             .projects
@@ -164,7 +223,7 @@ impl Signex {
         {
             let id = existing.id;
             self.document_state.active_project = Some(id);
-            return Ok(id);
+            return Ok((id, iced::Task::none()));
         }
         let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
@@ -174,16 +233,34 @@ impl Signex {
         // fires. Errors are logged inside `auto_mount_project_libraries`
         // and never bubble: a missing library shouldn't block the
         // project from loading.
-        let mounted =
+        let outcome =
             crate::library::commands::auto_mount_project_libraries(&mut self.library, &data);
-        if mounted > 0 {
+        if outcome.refreshed > 0 || !outcome.pending.is_empty() {
             tracing::info!(
                 target: "signex::library",
                 project = %project_path.display(),
-                mounted,
+                refreshed = outcome.refreshed,
+                pending = outcome.pending.len(),
                 "auto-mounted project libraries"
             );
         }
+        // Fan the cold mounts out — one `spawn_blocking` per `.snxlib`,
+        // all in flight at once. The work is CPU-parse-bound (~40 MB/s on
+        // hardware that does GB/s), so six libraries are embarrassingly
+        // parallel. `request_mount` already recorded each path as pending
+        // inside `auto_mount_project_libraries`, so no path spawns twice.
+        let mount_task = iced::Task::batch(outcome.pending.into_iter().map(|library_path| {
+            let completion_path = library_path.clone();
+            iced::Task::perform(
+                crate::library::mount::prepare_mount_off_thread(library_path),
+                move |prepared| {
+                    Message::Library(crate::library::LibraryMessage::MountFinished {
+                        path: completion_path.clone(),
+                        prepared,
+                    })
+                },
+            )
+        }));
         self.document_state
             .projects
             .push(super::super::super::state::LoadedProject {
@@ -193,24 +270,58 @@ impl Signex {
                 pending_libraries: std::collections::HashMap::new(),
             });
         self.document_state.active_project = Some(id);
-        Ok(id)
+        Ok((id, mount_task))
     }
 
-    fn open_schematic_file(&mut self, path: PathBuf) -> Result<()> {
+    /// #478 review — dedup guard shared by `open_schematic_file` /
+    /// `open_pcb_file`. Mirrors the activate-existing convention in
+    /// `handle_open_primitive`: if `path` already has a tab, activate
+    /// it. If it doesn't, but an async open for it is already in
+    /// flight (spawned by a previous call, not yet completed), do
+    /// nothing and let that completion create the tab — spawning a
+    /// second `Task::perform` for the same path would let both
+    /// completions push a tab aliasing one `document_state.engines`
+    /// entry, and closing one would orphan the other. Returns `true`
+    /// when the caller must stop and not spawn a new open `Task`.
+    fn activate_or_skip_duplicate_open(&mut self, path: &std::path::Path) -> bool {
+        if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
+            if idx != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = idx;
+                self.sync_active_tab();
+            }
+            return true;
+        }
+        self.document_state.pending_opens.contains(path)
+    }
+
+    fn open_schematic_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        if self.activate_or_skip_duplicate_open(&path) {
+            return Ok(iced::Task::none());
+        }
+
         // Try to load the companion project so the schematic tab gets
         // a `project_id` via `project_for_path`. Best-effort: a missing
         // or unparseable `.snxprj` doesn't block opening the loose
         // schematic.
+        let mut companion_mounts = iced::Task::none();
         if let Some(dir) = path.parent() {
             let stem = path
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists()
-                && let Err(error) = self.load_or_activate_project(&companion)
-            {
-                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            if companion.exists() {
+                match self.load_or_activate_project(&companion) {
+                    // The companion project's cold `.snxlib` mounts
+                    // prepare off-thread (#99 part 2c); its task is
+                    // batched with this document's own read below so
+                    // neither waits on the other.
+                    Ok((_, mount_task)) => companion_mounts = mount_task,
+                    Err(error) => {
+                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                    }
+                }
             }
         }
         let title = path
@@ -224,43 +335,128 @@ impl Signex {
             && self.document_state.dirty_paths.contains(&path)
         {
             self.attach_parked_schematic_tab(path, title);
-            return Ok(());
+            return Ok(iced::Task::none());
         }
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read schematic {}", path.display()))?;
-        let sheet = signex_types::format::SnxSchematic::parse(&text)
-            .with_context(|| format!("parse schematic {}", path.display()))?
-            .sheet;
-        self.open_schematic_tab(path, title, sheet);
-        Ok(())
+        // Read + parse off the UI thread — `update()` must never block
+        // on disk IO (MVU rule 3). Mirrors `refresh_history_panel`'s
+        // `Task::perform` + `spawn_blocking` pattern: the completion
+        // message (`FileMsg::SchematicOpenFinished`) carries the
+        // original path/title so the dispatch handler opens the tab
+        // exactly as this function used to do inline.
+        //
+        // Mark the path in flight right before spawning — cleared in
+        // both arms of `FileMsg::SchematicOpenFinished` (#478 review).
+        self.document_state.pending_opens.insert(path.clone());
+        let read_path = path.clone();
+        // Batched, not sequenced: the companion project's library mounts
+        // and this schematic's own read are independent, so neither waits
+        // on the other (#99 part 2c).
+        Ok(iced::Task::batch([
+            companion_mounts,
+            iced::Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || read_and_parse_schematic(&read_path))
+                        .await
+                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                },
+                move |result| {
+                    Message::File(FileMsg::SchematicOpenFinished {
+                        path,
+                        title,
+                        result: result.map(Box::new),
+                    })
+                },
+            ),
+        ]))
     }
 
-    fn open_pcb_file(&mut self, path: PathBuf) -> Result<()> {
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read pcb {}", path.display()))?;
-        let board = signex_types::format::SnxPcb::parse(&text)
-            .with_context(|| format!("parse pcb {}", path.display()))?
-            .board;
+    fn open_pcb_file(&mut self, path: PathBuf) -> Result<iced::Task<Message>> {
+        if self.activate_or_skip_duplicate_open(&path) {
+            return Ok(iced::Task::none());
+        }
+
         // Same companion-project resolution as `open_schematic_file` so
         // the PCB tab can resolve `project_id` for project-scoped
         // handlers.
+        let mut companion_mounts = iced::Task::none();
         if let Some(dir) = path.parent() {
             let stem = path
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
             let companion = dir.join(format!("{stem}.snxprj"));
-            if companion.exists()
-                && let Err(error) = self.load_or_activate_project(&companion)
-            {
-                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            if companion.exists() {
+                match self.load_or_activate_project(&companion) {
+                    // The companion project's cold `.snxlib` mounts
+                    // prepare off-thread (#99 part 2c); its task is
+                    // batched with this document's own read below so
+                    // neither waits on the other.
+                    Ok((_, mount_task)) => companion_mounts = mount_task,
+                    Err(error) => {
+                        crate::diagnostics::log_error("Failed to parse companion project", &error);
+                    }
+                }
             }
         }
         let title = path
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "PCB".to_string());
-        self.open_pcb_tab(path, title, board);
-        Ok(())
+        // Read + parse off the UI thread — same reasoning as
+        // `open_schematic_file` above. Mark the path in flight right
+        // before spawning — cleared in both arms of
+        // `FileMsg::PcbOpenFinished` (#478 review).
+        self.document_state.pending_opens.insert(path.clone());
+        let read_path = path.clone();
+        // Batched, not sequenced — same reasoning as
+        // `open_schematic_file` above (#99 part 2c).
+        Ok(iced::Task::batch([
+            companion_mounts,
+            iced::Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || read_and_parse_pcb(&read_path))
+                        .await
+                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                },
+                move |result| {
+                    Message::File(FileMsg::PcbOpenFinished {
+                        path,
+                        title,
+                        result: result.map(Box::new),
+                    })
+                },
+            ),
+        ]))
     }
+}
+
+/// Read + parse a `.snxsch` off the UI thread (the `spawn_blocking` body
+/// for `open_schematic_file`). Stringifies the full `anyhow` context
+/// chain so the error survives the `Task::perform` boundary (`Message`
+/// is `Clone`; `anyhow::Error` is not) — same shape as `HistoryLoaded`'s
+/// `Result<_, String>`.
+fn read_and_parse_schematic(
+    path: &std::path::Path,
+) -> Result<signex_types::schematic::SchematicSheet, String> {
+    std::fs::read_to_string(path)
+        .with_context(|| format!("read schematic {}", path.display()))
+        .and_then(|text| {
+            signex_types::format::SnxSchematic::parse(&text)
+                .with_context(|| format!("parse schematic {}", path.display()))
+                .map(|schematic| schematic.sheet)
+        })
+        .map_err(|err| format!("{err:#}"))
+}
+
+/// Read + parse a `.snxpcb` off the UI thread — see
+/// `read_and_parse_schematic`.
+fn read_and_parse_pcb(path: &std::path::Path) -> Result<signex_types::pcb::PcbBoard, String> {
+    std::fs::read_to_string(path)
+        .with_context(|| format!("read pcb {}", path.display()))
+        .and_then(|text| {
+            signex_types::format::SnxPcb::parse(&text)
+                .with_context(|| format!("parse pcb {}", path.display()))
+                .map(|pcb| pcb.board)
+        })
+        .map_err(|err| format!("{err:#}"))
 }

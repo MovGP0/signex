@@ -1,9 +1,23 @@
 //! Primitive read/write + git-commit inherent methods on `LocalGitAdapter`.
 
-use super::*;
 use super::helpers::*;
+use super::*;
+use crate::git_identity::identity_for_repo;
 
 impl LocalGitAdapter {
+    /// Refuse before a write when the commit that must follow cannot be made.
+    /// A library without `.git/` never commits, so it never needs an identity.
+    /// Called first in every write-then-commit path so a refusal changes
+    /// nothing on disk or in memory.
+    fn ensure_commit_identity(&self) -> Result<(), LibraryError> {
+        if !self.root_dir.join(".git").exists() {
+            return Ok(());
+        }
+        let repo = git2::Repository::open(&self.root_dir)
+            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        identity_for_repo(&repo).map(|_| ())
+    }
+
     fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
         self.root_dir.join(primitive_subdir(kind))
     }
@@ -90,6 +104,7 @@ impl LocalGitAdapter {
         value: &T,
         message: &str,
     ) -> Result<(), LibraryError> {
+        self.ensure_commit_identity()?;
         let dir = self.primitive_dir(kind);
         fs::create_dir_all(&dir)?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
@@ -196,7 +211,7 @@ impl LocalGitAdapter {
         let _git_guard = self.git_lock.lock().unwrap_or_else(|e| e.into_inner());
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        let (sig_name, sig_email) = identity_for_repo(&repo);
+        let (sig_name, sig_email) = identity_for_repo(&repo)?;
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
@@ -265,11 +280,36 @@ impl LocalGitAdapter {
     where
         F: FnOnce(&mut LibraryFile) -> Result<(), LibraryError>,
     {
+        self.mutate_library_file_if_changed(
+            |lf| {
+                f(lf)?;
+                Ok(true)
+            },
+            message,
+            fallback,
+        )
+    }
+
+    /// Like [`Self::mutate_library_file`], but the closure reports whether it
+    /// changed anything. `Ok(false)` skips both the write and the commit so a
+    /// no-op never lands an empty commit in the library's history.
+    pub(super) fn mutate_library_file_if_changed<F>(
+        &self,
+        f: F,
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<bool, LibraryError>,
+    {
+        self.ensure_commit_identity()?;
         let mut guard = self
             .library_file
             .write()
             .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
-        f(&mut guard)?;
+        if !f(&mut guard)? {
+            return Ok(());
+        }
         self.persist_library_file(&guard)?;
         let rel = self.snxlib_rel_path()?;
         self.commit_path(&rel, message, fallback)
@@ -337,7 +377,12 @@ impl LocalGitAdapter {
         Ok(out)
     }
 
-    pub(super) fn save_symbol_in_container(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
+    pub(super) fn save_symbol_in_container(
+        &self,
+        sym: Symbol,
+        message: &str,
+    ) -> Result<(), LibraryError> {
+        self.ensure_commit_identity()?;
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
 
@@ -419,14 +464,20 @@ impl LocalGitAdapter {
         Ok(dir.join(format!("{}.{SYMBOL_EXT}", file.file_uuid)))
     }
 
-    pub(super) fn list_primitive_summaries<T>(
+    /// One [`PrimitiveSummary`] per `<uuid>.<ext>` file directly under
+    /// `<root>/<subdir>`, sorted by name.
+    ///
+    /// Only the primitive's *name* survives, so the envelope is parsed
+    /// into its concrete type and `.name` lifted straight off it. This
+    /// used to be generic over `T: DeserializeOwned` with a `name_of`
+    /// extractor, which forced a full `serde_json` serialise +
+    /// deserialise **per file** purely to teach the compiler that
+    /// `T == Footprint` / `T == SimModel` — every byte of which was
+    /// discarded on the next line (#99).
+    pub(super) fn list_primitive_summaries(
         &self,
         kind: PrimitiveKind,
-        name_of: impl Fn(&T) -> &str,
-    ) -> Result<Vec<PrimitiveSummary>, LibraryError>
-    where
-        T: DeserializeOwned,
-    {
+    ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let dir = self.primitive_dir(kind);
         if !dir.exists() {
             return Ok(Vec::new());
@@ -454,48 +505,67 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
-            // v0.18.4/v0.18.5 — `.snxfpt` and `.snxsim` migrated to
-            // TOML envelopes. Read the envelope, pull the first
-            // contained primitive, then JSON-round-trip into the
-            // generic T (= Footprint or = SimModel).
-            let value: T = if matches!(kind, PrimitiveKind::Footprint) {
-                let file = crate::primitive::FootprintFile::from_bytes(&bytes)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
-                let fp = file
-                    .footprints
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {name}")))?;
-                let buf = serde_json::to_vec(&fp).map_err(|e| {
-                    LibraryError::Backend(format!("re-serialise .snxfpt {name}: {e}"))
-                })?;
-                serde_json::from_slice(&buf)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
-            } else if matches!(kind, PrimitiveKind::Sim) {
-                let file = SimFile::from_bytes(&bytes)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
-                let model = file
-                    .models
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {name}")))?;
-                let buf = serde_json::to_vec(&model).map_err(|e| {
-                    LibraryError::Backend(format!("re-serialise .snxsim {name}: {e}"))
-                })?;
-                serde_json::from_slice(&buf)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
-            } else {
-                serde_json::from_slice(&bytes)
-                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
-            };
             out.push(PrimitiveSummary {
                 uuid,
-                name: name_of(&value).to_string(),
+                name: primitive_name_in_envelope(kind, &bytes, name)?,
                 kind,
                 used_by_count: 0,
             });
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
+    }
+}
+
+/// Name of the first primitive inside a `.snxfpt` / `.snxsim` envelope.
+///
+/// `file_name` is diagnostic only — it names the offending file in the
+/// error text, which is what the user sees when a container is corrupt.
+/// A well-formed envelope carrying *zero* primitives is corrupt, not
+/// empty, and must fail loudly rather than vanish from the listing.
+///
+/// HI-8: [`PrimitiveKind::Symbol`] cannot arrive here. Symbol
+/// containers are `<slug>.snxsym`, so the uuid-stem parse in
+/// `list_primitive_summaries` would skip them anyway, and
+/// `list_symbols` walks them through `scan_symbol_files` instead. The
+/// match is spelled out per variant with no `_` arm, so a kind added
+/// to [`PrimitiveKind`] later is a compile error here rather than a
+/// listing that silently comes back empty.
+fn primitive_name_in_envelope(
+    kind: PrimitiveKind,
+    bytes: &[u8],
+    file_name: &str,
+) -> Result<String, LibraryError> {
+    match kind {
+        PrimitiveKind::Footprint => {
+            let file = crate::primitive::FootprintFile::from_bytes(bytes)
+                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let fp = file
+                .footprints
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {file_name}")))?;
+            Ok(fp.name)
+        }
+        PrimitiveKind::Sim => {
+            let file = SimFile::from_bytes(bytes)
+                .map_err(|e| LibraryError::Backend(format!("list primitive {file_name}: {e}")))?;
+            let model = file
+                .models
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {file_name}")))?;
+            Ok(model.name)
+        }
+        PrimitiveKind::Symbol => {
+            debug_assert!(
+                false,
+                "list_primitive_summaries(Symbol) must route through scan_symbol_files; \
+                 a .snxsym is a multi-symbol container, not one uuid-named primitive"
+            );
+            Err(LibraryError::Backend(format!(
+                "list primitive {file_name}: symbols are listed via scan_symbol_files"
+            )))
+        }
     }
 }

@@ -3,6 +3,7 @@ name = "chrome-catalog"
 description = "Visual sandbox for Signex chrome — tabs, panels, modals, buttons in every state. Used during UI iteration so we don't have to launch the full app to see whether a tab style is right."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
@@ -13,3 +14,7 @@ signex-widgets = { path = "../signex-widgets" }
 [[bin]]
 name = "chrome-catalog"
 path = "src/main.rs"
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

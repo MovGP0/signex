@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+
     use signex_library::primitive::footprint::Footprint;
     use signex_sketch::SketchData;
     use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
@@ -58,7 +58,7 @@ mod tests {
         let mut state = FootprintEditorState::from_footprint(&fp);
 
         let (entity, _id) = point_with_pad(plane, 0.0, 0.0, "1");
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(entity)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(entity)).unwrap();
 
         assert_eq!(fp.pads.len(), 1);
         assert_eq!(fp.pads[0].number, "1");
@@ -119,6 +119,145 @@ mod tests {
         assert!(
             (dist - 5.0).abs() < 1e-6,
             "expected P2 at distance 5, got {dist}"
+        );
+    }
+
+    /// #613 — a failed solve must not leave the previous solve's answer
+    /// on the canvas. Everything that paints constraint colours,
+    /// dimensions and DOF state reads `state.last_solve`, so a stale
+    /// `Some` is the canvas confidently showing a solution that no
+    /// longer describes the sketch. A conflicting edit is now reverted,
+    /// so the answer on screen is the re-solve of the reverted sketch,
+    /// not the stale one.
+    #[test]
+    fn a_conflicting_edit_leaves_the_reverted_sketchs_solve_not_a_stale_one() {
+        // Arrange — solve once, cleanly, so there is a good answer to
+        // go stale.
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let (e2, p2) = point_with_pad(plane, 1.0, 0.0, "2");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1, e2],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Fixed { point: p1 },
+            }],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(5.0),
+                },
+            }),
+        )
+        .expect("the first solve is satisfiable");
+        assert!(
+            state.last_solve.is_some(),
+            "precondition: there is a good solve to go stale"
+        );
+
+        // Act — the same pair, a second distance it cannot also satisfy.
+        let failed = apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(9.0),
+                },
+            }),
+        );
+
+        // Assert
+        assert!(
+            failed.is_err(),
+            "two conflicting distances on the same pair must not solve"
+        );
+        assert_eq!(
+            fp.sketch.as_ref().expect("sketch").constraints.len(),
+            2,
+            "the conflicting constraint was reverted"
+        );
+        let solve = state
+            .last_solve
+            .as_ref()
+            .expect("reverted sketch re-solved");
+        assert!(
+            solve.over_constraints.is_empty(),
+            "the answer on screen describes the reverted sketch"
+        );
+    }
+
+    /// #613 — the other half of the `last_solve = None` rule: a failure
+    /// that is not a named conflict is not reverted, so there is no
+    /// reverted sketch to re-solve. The previous answer must still go,
+    /// the edit stays, and the message must not claim it was rejected.
+    #[test]
+    fn a_non_conflict_failure_clears_the_solve_and_keeps_the_edit() {
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let (e2, p2) = point_with_pad(plane, 1.0, 0.0, "2");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1, e2],
+            constraints: vec![Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::Fixed { point: p1 },
+            }],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild)
+            .expect("the starting sketch solves");
+        assert!(state.last_solve.is_some(), "precondition: a good solve");
+        // No iterations allowed: the solve cannot converge, and it is not
+        // a conflict.
+        state.sketch_solver.max_iters = 0;
+
+        let failed = apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(5.0),
+                },
+            }),
+        )
+        .expect_err("a solver with no iterations cannot converge");
+
+        assert!(
+            !super::super::sketch_conflict::was_reverted(&failed),
+            "{failed:?} is not a named conflict"
+        );
+        assert!(
+            state.last_solve.is_none(),
+            "the failed solve drops the previous answer"
+        );
+        assert_eq!(
+            fp.sketch.as_ref().expect("sketch").constraints.len(),
+            2,
+            "the edit is kept, not reverted"
         );
     }
 
@@ -193,7 +332,7 @@ mod tests {
         // on LineFirst.
         let p1 = SketchEntityId::new();
         let pt = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pt)).unwrap();
         state.tool_pending = ToolPending::LineFirst { first: p1 };
 
         // Second click — adds endpoint + Line entity. We do this
@@ -201,10 +340,10 @@ mod tests {
         // glue; this test verifies the SketchEdit-level behaviour.
         let p2 = SketchEntityId::new();
         let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 5.0, y: 0.0 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt2)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(pt2)).unwrap();
         let line_id = SketchEntityId::new();
         let line = Entity::new(line_id, plane, EntityKind::Line { start: p1, end: p2 });
-        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(line)).unwrap();
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::add_entity(line)).unwrap();
 
         let sketch = fp.sketch.as_ref().unwrap();
         assert_eq!(sketch.entities.len(), 3);
@@ -552,6 +691,520 @@ mod tests {
         assert!(
             !state.solve_warnings.is_empty(),
             "expected SketchError surfaced in solve_warnings, got nothing"
+        );
+    }
+
+    // ----------------------------------------------------------------
+    // #372 — Break Track. Drives the real router
+    // (`apply_footprint_primitive_edit`) end-to-end so each test also
+    // exercises the one-history-snapshot pre-push that makes a split a
+    // single undo step. The click-resolution machinery shared by all
+    // sketch tools mints one throwaway "click" Point per click BEFORE
+    // the edit arm runs (same as Fillet / Trim); these tests therefore
+    // assert on the split-relevant geometry — the count of `Line`
+    // entities and their endpoints — rather than the raw entity total.
+    // ----------------------------------------------------------------
+
+    /// Build an `app::FootprintEditorState` holding a single sketch
+    /// Line from `p_start` to `p_end`, armed with the Break Track tool.
+    /// Returns the editor plus the start / end Point ids and the Line
+    /// id so tests can assert against the pre-split identities.
+    fn break_track_editor(
+        p_start: (f64, f64),
+        p_end: (f64, f64),
+    ) -> (
+        crate::app::FootprintEditorState,
+        SketchEntityId,
+        SketchEntityId,
+        SketchEntityId,
+    ) {
+        use crate::library::editor::footprint::state::SketchTool;
+        use signex_library::primitive::footprint::FootprintFile;
+        use std::path::PathBuf;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let sid = SketchEntityId::new();
+        let eid = SketchEntityId::new();
+        let lid = SketchEntityId::new();
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![
+                Entity::new(
+                    sid,
+                    plane,
+                    EntityKind::Point {
+                        x: p_start.0,
+                        y: p_start.1,
+                    },
+                ),
+                Entity::new(
+                    eid,
+                    plane,
+                    EntityKind::Point {
+                        x: p_end.0,
+                        y: p_end.1,
+                    },
+                ),
+                Entity::new(
+                    lid,
+                    plane,
+                    EntityKind::Line {
+                        start: sid,
+                        end: eid,
+                    },
+                ),
+            ],
+            ..SketchData::default()
+        });
+        let file = FootprintFile::from_footprint(fp);
+        let mut editor =
+            crate::app::FootprintEditorState::new(PathBuf::from("break-track.snxfpt"), file);
+        editor.state.active_tool = SketchTool::BreakTrack;
+        (editor, sid, eid, lid)
+    }
+
+    /// `(line_id, start_id, end_id)` for every `Line` in the active
+    /// footprint's sketch.
+    fn sketch_lines(
+        editor: &crate::app::FootprintEditorState,
+    ) -> Vec<(SketchEntityId, SketchEntityId, SketchEntityId)> {
+        editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .filter_map(|e| match e.kind {
+                EntityKind::Line { start, end } => Some((e.id, start, end)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Coordinates of the Point `id` in the active footprint's sketch.
+    fn point_xy(editor: &crate::app::FootprintEditorState, id: SketchEntityId) -> (f64, f64) {
+        editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| match e.kind {
+                EntityKind::Point { x, y } => (x, y),
+                _ => panic!("entity {id:?} is not a Point"),
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn break_track_split_at_mid_span_replaces_line_with_two_halves() {
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, eid, lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        assert_eq!(sketch_lines(&editor).len(), 1, "starts with one Line");
+
+        // Click at the midpoint, 0.1 mm off the stroke (< 0.30 mm tol).
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 5.0,
+                y_mm: 0.1,
+                snap_id: None,
+            },
+        );
+
+        // Exactly one undo snapshot captured for the whole click.
+        assert_eq!(
+            editor.history.len(),
+            1,
+            "a split must cost exactly one undo step"
+        );
+
+        let ls = sketch_lines(&editor);
+        assert_eq!(ls.len(), 2, "the Line is replaced by two halves");
+        let ends_a = [ls[0].1, ls[0].2];
+        let ends_b = [ls[1].1, ls[1].2];
+
+        // The two halves share exactly one endpoint — the new mid Point.
+        let shared: Vec<SketchEntityId> = ends_a
+            .iter()
+            .copied()
+            .filter(|p| ends_b.contains(p))
+            .collect();
+        assert_eq!(
+            shared.len(),
+            1,
+            "the halves share exactly the new mid Point"
+        );
+        let mid = shared[0];
+        assert_ne!(mid, sid);
+        assert_ne!(mid, eid);
+
+        // The mid Point sits at the click projected onto the line (5,0).
+        let (mx, my) = point_xy(&editor, mid);
+        assert!(
+            (mx - 5.0).abs() < 1e-6 && (my - 0.0).abs() < 1e-6,
+            "mid at the projected click, got ({mx}, {my})"
+        );
+
+        // The union of the two segments keeps the original endpoints.
+        let outer: Vec<SketchEntityId> = ends_a
+            .iter()
+            .chain(ends_b.iter())
+            .copied()
+            .filter(|p| *p != mid)
+            .collect();
+        assert!(
+            outer.contains(&sid) && outer.contains(&eid),
+            "union of the halves preserves the original endpoints"
+        );
+
+        // One undo reverses the entire split back to the single Line.
+        assert!(editor.undo(), "there is a snapshot to undo");
+        let restored = sketch_lines(&editor);
+        assert_eq!(restored.len(), 1, "undo restores the single original Line");
+        assert_eq!(
+            restored[0],
+            (lid, sid, eid),
+            "restored Line is byte-identical"
+        );
+    }
+
+    #[test]
+    fn break_track_reselects_line_a_not_line_b() {
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, _eid, _lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 4.0,
+                y_mm: 0.05,
+                snap_id: None,
+            },
+        );
+
+        let sel = editor
+            .state
+            .selected_sketch
+            .expect("selection is set to a split half after a successful split");
+        let ls = sketch_lines(&editor);
+        let selected = ls
+            .iter()
+            .find(|(id, _, _)| *id == sel)
+            .expect("selection resolves to one of the two new Lines");
+        // `line_a` is `start -> mid`, so its `start` is the ORIGINAL
+        // start; `line_b` is `mid -> end` (its start is the new mid).
+        assert_eq!(
+            selected.1, sid,
+            "selection is line_a (keeps the original start), never line_b"
+        );
+    }
+
+    #[test]
+    fn break_track_miss_warns_and_leaves_line_intact() {
+        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, eid, lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        // 5 mm off the stroke — far beyond the 0.30 mm tolerance.
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 5.0,
+                y_mm: 5.0,
+                snap_id: None,
+            },
+        );
+
+        let ls = sketch_lines(&editor);
+        assert_eq!(ls.len(), 1, "a miss splits nothing");
+        assert_eq!(ls[0], (lid, sid, eid), "the original Line is untouched");
+        assert!(
+            editor
+                .state
+                .solve_warnings
+                .iter()
+                .any(|w| w.contains("Break Track")),
+            "a miss pushes a user-visible Break Track warning"
+        );
+        assert_eq!(
+            editor.state.active_tool,
+            SketchTool::BreakTrack,
+            "the tool stays armed after a miss"
+        );
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::Idle),
+            "the single-click tool resets to Idle (still armed)"
+        );
+    }
+
+    #[test]
+    fn break_track_click_near_endpoint_warns_no_split() {
+        use crate::library::editor::footprint::state::SketchTool;
+        use crate::library::messages::FootprintEditorMsg;
+
+        let (mut editor, sid, eid, lid) = break_track_editor((0.0, 0.0), (10.0, 0.0));
+        // ~0.05 mm off the stroke and ~0.0005 mm along it from the
+        // start: the click is on the segment (so `t ≈ 5e-5` is a valid
+        // parameter), but the mid Point would land within
+        // MIN_SEGMENT_LEN_MM of the start → SplitError::TooCloseToEndpoint
+        // → no split, just a warning.
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm: 0.0005,
+                y_mm: 0.05,
+                snap_id: None,
+            },
+        );
+
+        let ls = sketch_lines(&editor);
+        assert_eq!(ls.len(), 1, "a near-endpoint click splits nothing");
+        assert_eq!(ls[0], (lid, sid, eid), "the original Line is untouched");
+        assert!(
+            editor
+                .state
+                .solve_warnings
+                .iter()
+                .any(|w| w.contains("Break Track")),
+            "a near-endpoint click pushes a user-visible Break Track warning"
+        );
+        assert_eq!(
+            editor.state.active_tool,
+            SketchTool::BreakTrack,
+            "the tool stays armed after a rejected split"
+        );
+    }
+
+    // ------------------------------------------------------------
+    // #467 — 3-point Edge Arc (start -> end -> point-on-arc).
+    // ------------------------------------------------------------
+
+    /// Build an `app::FootprintEditorState` with an empty sketch,
+    /// armed with the Edge Arc tool.
+    fn edge_arc_editor() -> crate::app::FootprintEditorState {
+        use crate::library::editor::footprint::state::SketchTool;
+        use signex_library::primitive::footprint::FootprintFile;
+        use std::path::PathBuf;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            ..SketchData::default()
+        });
+        let file = FootprintFile::from_footprint(fp);
+        let mut editor =
+            crate::app::FootprintEditorState::new(PathBuf::from("edge-arc.snxfpt"), file);
+        editor.state.active_tool = SketchTool::EdgeArc;
+        editor
+    }
+
+    /// `(arc_id, center_id, start_id, end_id, sweep_ccw)` for every
+    /// `Arc` in the active footprint's sketch.
+    fn sketch_arcs(
+        editor: &crate::app::FootprintEditorState,
+    ) -> Vec<(
+        SketchEntityId,
+        SketchEntityId,
+        SketchEntityId,
+        SketchEntityId,
+        bool,
+    )> {
+        editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .filter_map(|e| match e.kind {
+                EntityKind::Arc {
+                    center,
+                    start,
+                    end,
+                    sweep_ccw,
+                } => Some((e.id, center, start, end, sweep_ccw)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn click(editor: &mut crate::app::FootprintEditorState, x_mm: f64, y_mm: f64) {
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            editor,
+            crate::library::messages::FootprintEditorMsg::SketchToolClick {
+                x_mm,
+                y_mm,
+                snap_id: None,
+            },
+        );
+    }
+
+    #[test]
+    fn edge_arc_three_clicks_commit_the_circumcircle_through_all_three_picks() {
+        use crate::library::editor::footprint::state::ToolPending;
+
+        let mut editor = edge_arc_editor();
+
+        // Click 1 — start.
+        click(&mut editor, 0.0, 0.0);
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::EdgeArcStart { .. }),
+            "after 1 click the gesture awaits the end pick"
+        );
+
+        // Click 2 — end.
+        click(&mut editor, 2.0, 0.0);
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::EdgeArcEnd { .. }),
+            "after 2 clicks the gesture awaits the point-on-arc pick"
+        );
+        assert!(
+            sketch_arcs(&editor).is_empty(),
+            "no Arc exists until the third click"
+        );
+
+        // Click 3 — a point on the arc, bulging toward +Y. The
+        // circumcircle of (0,0), (1,1), (2,0) is centre (1,0), r=1 —
+        // hand-verified, not asserted-into-existence by the code
+        // under test.
+        click(&mut editor, 1.0, 1.0);
+
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::Idle),
+            "the gesture resets to Idle after the third click"
+        );
+        assert!(
+            editor.state.solve_warnings.is_empty(),
+            "a valid 3-point pick must not warn, got {:?}",
+            editor.state.solve_warnings
+        );
+
+        let arcs = sketch_arcs(&editor);
+        assert_eq!(arcs.len(), 1, "exactly one Arc entity committed");
+        let (_, center_id, start_id, end_id, sweep_ccw) = arcs[0];
+
+        let (cx, cy) = point_xy(&editor, center_id);
+        assert!(
+            (cx - 1.0).abs() < 1e-9 && cy.abs() < 1e-9,
+            "circumcircle centre must be (1, 0), got ({cx}, {cy})"
+        );
+        let (sx, sy) = point_xy(&editor, start_id);
+        let (ex, ey) = point_xy(&editor, end_id);
+        assert!((sx - 0.0).abs() < 1e-9 && (sy - 0.0).abs() < 1e-9);
+        assert!((ex - 2.0).abs() < 1e-9 && (ey - 0.0).abs() < 1e-9);
+        let r_start = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+        let r_end = ((ex - cx).powi(2) + (ey - cy).powi(2)).sqrt();
+        assert!(
+            (r_start - 1.0).abs() < 1e-9,
+            "start must sit at r=1, got {r_start}"
+        );
+        assert!(
+            (r_end - 1.0).abs() < 1e-9,
+            "end must sit at r=1, got {r_end}"
+        );
+
+        // The pick was ABOVE the start-end chord, so the committed
+        // sweep must be the one that actually passes through (1, 1):
+        // walking CW from start (180°) down to end (0°) crosses 90°
+        // (where the pick sits); the CCW half instead crosses 270°,
+        // the empty bottom half. A flipped/hardcoded sweep_ccw would
+        // silently render (and export) the wrong half of the circle.
+        assert!(
+            !sweep_ccw,
+            "a pick above the chord must commit the CW-sweep half that contains it"
+        );
+
+        // Three clicks, three undo snapshots — no gesture step is
+        // free, and no step is skipped either.
+        assert_eq!(editor.history.len(), 3, "each click costs one undo step");
+
+        // One undo must reverse only the third click: back to the two
+        // endpoint Points, no centre, no Arc.
+        assert!(editor.undo(), "there is a snapshot to undo");
+        assert!(
+            sketch_arcs(&editor).is_empty(),
+            "undo must remove the committed Arc"
+        );
+        assert_eq!(
+            editor.primitive().sketch.as_ref().unwrap().entities.len(),
+            2,
+            "undo must remove the derived centre Point too, leaving just start + end"
+        );
+    }
+
+    #[test]
+    fn edge_arc_sweep_direction_flips_with_which_side_the_pick_lands_on() {
+        // Mirror image of the test above: the third pick is BELOW the
+        // chord this time (same centre + radius by symmetry), so the
+        // committed sweep must flip to CCW. Guards against a
+        // hardcoded / inverted sweep_ccw branch that would happen to
+        // pass the test above by luck.
+        let mut editor = edge_arc_editor();
+        click(&mut editor, 0.0, 0.0);
+        click(&mut editor, 2.0, 0.0);
+        click(&mut editor, 1.0, -1.0);
+
+        let arcs = sketch_arcs(&editor);
+        assert_eq!(arcs.len(), 1);
+        let (_, center_id, _, _, sweep_ccw) = arcs[0];
+        let (cx, cy) = point_xy(&editor, center_id);
+        assert!((cx - 1.0).abs() < 1e-9 && cy.abs() < 1e-9);
+        assert!(
+            sweep_ccw,
+            "a pick below the chord must commit the CCW-sweep half that contains it"
+        );
+    }
+
+    #[test]
+    fn edge_arc_rejects_a_collinear_third_pick_and_stays_armed() {
+        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+
+        let mut editor = edge_arc_editor();
+        click(&mut editor, 0.0, 0.0);
+        click(&mut editor, 2.0, 0.0);
+        // Third click sits exactly on the start-end line: collinear,
+        // no finite circumcircle.
+        click(&mut editor, 1.0, 0.0);
+
+        assert!(
+            sketch_arcs(&editor).is_empty(),
+            "a collinear pick must not mint a degenerate Arc"
+        );
+        assert_eq!(
+            editor.primitive().sketch.as_ref().unwrap().entities.len(),
+            3,
+            "only the two endpoints + the rejected pick's own Point exist — no centre"
+        );
+        assert!(
+            editor
+                .state
+                .solve_warnings
+                .iter()
+                .any(|w| w.contains("Edge Arc")),
+            "a collinear pick pushes a user-visible Edge Arc warning, got {:?}",
+            editor.state.solve_warnings
+        );
+        assert_eq!(
+            editor.state.active_tool,
+            SketchTool::EdgeArc,
+            "the tool stays armed after a rejected pick"
+        );
+        assert!(
+            matches!(editor.state.tool_pending, ToolPending::Idle),
+            "the rejected gesture resets to Idle (still armed) rather than getting stuck"
         );
     }
 }

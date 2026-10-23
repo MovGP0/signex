@@ -2,6 +2,7 @@
 name = "signex-gfx"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
@@ -12,8 +13,17 @@ bytemuck = { version = "1", features = ["derive"] }
 cryoglyph = "0.1.0"
 rstar = "0.12"
 bitflags = "2"
+log = "0.4"
+# Concave-safe polygon fill: the authoritative ear-clip triangulator (see
+# `polygon.rs::append_fill`) already lives in signex-sketch's geom toolkit —
+# reused here rather than re-derived, per the one-authoritative-contract rule.
+signex-sketch = { workspace = true }
 
 [dev-dependencies]
 pollster = "0.4"
 serde.workspace = true
 serde_json.workspace = true
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

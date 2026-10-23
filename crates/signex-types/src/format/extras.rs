@@ -16,19 +16,49 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::unknown::UnknownFields;
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
-use crate::schematic::{SchematicSheet, Symbol};
+use crate::schematic::{Junction, SchematicSheet, Symbol};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(in crate::format) struct SchExtrasRaw {
     #[serde(default)]
     pub(in crate::format) symbols: BTreeMap<String, SymbolExtras>,
     #[serde(default)]
+    pub(in crate::format) junctions: BTreeMap<String, JunctionExtras>,
+    #[serde(default)]
     pub(in crate::format) sheet: Option<SheetExtras>,
 }
 
-/// Per-symbol auxiliary fields that don't fit into [`SchComponentRow`].
+/// Per-junction auxiliary fields that don't fit into [`SchJunctionRow`] —
+/// today just the minted-vs-user-placed provenance bit (issue #422). Only
+/// emitted for a junction where `minted` differs from the on-disk default
+/// (`false`, i.e. user-placed), so a `.snxsch` predating this field round-
+/// trips unchanged and every dot it names loads as user-placed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(in crate::format) struct JunctionExtras {
+    #[serde(default)]
+    pub(in crate::format) minted: bool,
+}
+
+impl JunctionExtras {
+    pub(in crate::format) fn is_default(&self) -> bool {
+        !self.minted
+    }
+
+    pub(in crate::format) fn from_junction(j: &Junction) -> Self {
+        JunctionExtras { minted: j.minted }
+    }
+}
+
+/// Per-symbol auxiliary fields that don't fit into [`SchComponentRow`].
+///
+/// `Default` is hand-written, not derived: it must equal what serde
+/// fills in for an empty table (`unit = 1`, `in_bom` and `on_board`
+/// true). The writer omits a symbol whose extras are default and the
+/// parser substitutes `Default` for the missing table, so any
+/// disagreement silently rewrites the symbol on reload (#789).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(in crate::format) struct SymbolExtras {
     #[serde(default)]
     pub(in crate::format) footprint: String,
@@ -57,40 +87,74 @@ pub(in crate::format) struct SymbolExtras {
     #[serde(default)]
     pub(in crate::format) locked: bool,
     #[serde(default)]
-    pub(in crate::format) fields: std::collections::HashMap<String, String>,
+    pub(in crate::format) fields: BTreeMap<String, String>,
     #[serde(default)]
     pub(in crate::format) custom_properties: Vec<crate::property::SchematicProperty>,
     #[serde(default)]
-    pub(in crate::format) pin_uuids: std::collections::HashMap<String, Uuid>,
+    pub(in crate::format) pin_uuids: BTreeMap<String, Uuid>,
     #[serde(default)]
     pub(in crate::format) instances: Vec<crate::schematic::SymbolInstance>,
     #[serde(default)]
     pub(in crate::format) ref_text: Option<crate::schematic::TextProp>,
     #[serde(default)]
     pub(in crate::format) val_text: Option<crate::schematic::TextProp>,
+    /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
+}
+
+impl Default for SymbolExtras {
+    fn default() -> Self {
+        SymbolExtras {
+            footprint: String::new(),
+            datasheet: String::new(),
+            mirror_x: false,
+            mirror_y: false,
+            unit: default_unit(),
+            is_power: false,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: default_true(),
+            on_board: default_true(),
+            exclude_from_sim: false,
+            locked: false,
+            fields: BTreeMap::new(),
+            custom_properties: Vec::new(),
+            pin_uuids: BTreeMap::new(),
+            instances: Vec::new(),
+            ref_text: None,
+            val_text: None,
+            unknown: UnknownFields::default(),
+        }
+    }
 }
 
 impl SymbolExtras {
+    /// True when nothing differs from [`SymbolExtras::default`], so the
+    /// writer may omit the table and the parser's fallback restores it.
     pub(in crate::format) fn is_default(&self) -> bool {
-        self.footprint.is_empty()
-            && self.datasheet.is_empty()
-            && !self.mirror_x
-            && !self.mirror_y
-            && self.unit == 1
-            && !self.is_power
-            && !self.fields_autoplaced
-            && !self.fields_user_placed
-            && !self.dnp
-            && self.in_bom
-            && self.on_board
-            && !self.exclude_from_sim
-            && !self.locked
+        let d = Self::default();
+        self.footprint == d.footprint
+            && self.datasheet == d.datasheet
+            && self.mirror_x == d.mirror_x
+            && self.mirror_y == d.mirror_y
+            && self.unit == d.unit
+            && self.is_power == d.is_power
+            && self.fields_autoplaced == d.fields_autoplaced
+            && self.fields_user_placed == d.fields_user_placed
+            && self.dnp == d.dnp
+            && self.in_bom == d.in_bom
+            && self.on_board == d.on_board
+            && self.exclude_from_sim == d.exclude_from_sim
+            && self.locked == d.locked
             && self.fields.is_empty()
             && self.custom_properties.is_empty()
             && self.pin_uuids.is_empty()
             && self.instances.is_empty()
             && self.ref_text.is_none()
             && self.val_text.is_none()
+            && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
@@ -108,12 +172,21 @@ impl SymbolExtras {
             on_board: s.on_board,
             exclude_from_sim: s.exclude_from_sim,
             locked: s.locked,
-            fields: s.fields.clone(),
+            fields: s
+                .fields
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
             custom_properties: s.custom_properties.clone(),
-            pin_uuids: s.pin_uuids.clone(),
+            pin_uuids: s
+                .pin_uuids
+                .iter()
+                .map(|(key, value)| (key.clone(), *value))
+                .collect(),
             instances: s.instances.clone(),
             ref_text: s.ref_text.clone(),
             val_text: s.val_text.clone(),
+            unknown: s.unknown.clone(),
         }
     }
 }
@@ -140,10 +213,12 @@ pub(in crate::format) struct SheetExtras {
     #[serde(default)]
     pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoConnect>,
     #[serde(default)]
-    pub(in crate::format) title_block: std::collections::HashMap<String, String>,
+    pub(in crate::format) title_block: BTreeMap<String, String>,
     #[serde(default)]
-    pub(in crate::format) lib_symbols:
-        std::collections::HashMap<String, crate::schematic::LibSymbol>,
+    pub(in crate::format) lib_symbols: BTreeMap<String, crate::schematic::LibSymbol>,
+    /// Keys this build does not recognise (`[extras.sheet]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl SheetExtras {
@@ -157,6 +232,7 @@ impl SheetExtras {
             && self.no_erc_directives.is_empty()
             && self.title_block.is_empty()
             && self.lib_symbols.is_empty()
+            && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_sheet(s: &SchematicSheet) -> Self {
@@ -168,8 +244,17 @@ impl SheetExtras {
             bus_entries: s.bus_entries.clone(),
             drawings: s.drawings.clone(),
             no_erc_directives: s.no_erc_directives.clone(),
-            title_block: s.title_block.clone(),
-            lib_symbols: s.lib_symbols.clone(),
+            title_block: s
+                .title_block
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            lib_symbols: s
+                .lib_symbols
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            unknown: s.unknown.extras.clone(),
         }
     }
 }
@@ -236,6 +321,9 @@ pub(in crate::format) struct FootprintExtras {
     pub(in crate::format) graphics: Vec<crate::pcb::FpGraphic>,
     #[serde(default)]
     pub(in crate::format) properties: Vec<crate::property::PcbProperty>,
+    /// Keys this build does not recognise (`[extras.footprints.<uuid>]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl FootprintExtras {
@@ -244,6 +332,7 @@ impl FootprintExtras {
             && !self.locked
             && self.graphics.is_empty()
             && self.properties.is_empty()
+            && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_footprint(fp: &Footprint) -> Self {
@@ -252,6 +341,7 @@ impl FootprintExtras {
             locked: fp.locked,
             graphics: fp.graphics.clone(),
             properties: fp.properties.clone(),
+            unknown: fp.unknown.clone(),
         }
     }
 }
@@ -260,11 +350,14 @@ impl FootprintExtras {
 pub(in crate::format) struct PadExtras {
     #[serde(default)]
     pub(in crate::format) drill_shape: String,
+    /// Keys this build does not recognise (`[extras.pads.<uuid>]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl PadExtras {
     pub(in crate::format) fn is_default(&self) -> bool {
-        self.drill_shape.is_empty()
+        self.drill_shape.is_empty() && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_pad(pad: &Pad) -> Self {
@@ -274,6 +367,7 @@ impl PadExtras {
                 .as_ref()
                 .map(|d| d.shape.clone())
                 .unwrap_or_default(),
+            unknown: pad.unknown.clone(),
         }
     }
 }
@@ -286,4 +380,7 @@ pub(in crate::format) struct BoardExtras {
     pub(in crate::format) graphics: Vec<crate::pcb::BoardGraphic>,
     #[serde(default)]
     pub(in crate::format) texts: Vec<crate::pcb::BoardText>,
+    /// Keys this build does not recognise (`[extras.board]`).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }

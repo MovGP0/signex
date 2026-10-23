@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::format::{BoardUnknown, UnknownColumns, UnknownFields};
 use crate::property::PcbProperty;
 
 pub use crate::schematic::Point;
@@ -59,9 +60,6 @@ pub const PCB_TEXT_THICKNESS_MM: f64 = 0.15;
 
 /// Vertical offset for auto-placed Reference / Value fp_text in mm (2.0 mm = ~79 mil).
 pub const PCB_FP_TEXT_OFFSET_MM: f64 = 2.0;
-
-/// Point-coincidence epsilon for outline deduplication (0.01 mm).
-pub const PCB_COINCIDENCE_EPS: f64 = 0.01;
 
 // ---------------------------------------------------------------------------
 // Pad / Via enums
@@ -180,6 +178,14 @@ pub struct Pad {
     pub net: Option<PadNet>,
     #[serde(default)]
     pub roundrect_ratio: f64,
+    /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
+    /// does not recognise, kept so a save re-emits them.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +245,14 @@ pub struct Footprint {
     pub graphics: Vec<FpGraphic>,
     #[serde(default)]
     pub properties: Vec<PcbProperty>,
+    /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
+    /// this build does not recognise, kept so a save re-emits them.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +270,10 @@ pub struct Segment {
     pub layer: String,
     #[serde(default)]
     pub net: u32,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,6 +290,10 @@ pub struct Via {
     pub net: u32,
     #[serde(default = "default_via_type")]
     pub via_type: ViaType,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 fn default_via_type() -> ViaType {
@@ -376,4 +398,10 @@ pub struct PcbBoard {
     pub graphics: Vec<BoardGraphic>,
     #[serde(default)]
     pub texts: Vec<BoardText>,
+    /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
+    /// `[extras.board]` that this build does not recognise, kept per
+    /// section so a save re-emits each where it was found. Empty for
+    /// every file written by this build.
+    #[serde(default, skip_serializing_if = "BoardUnknown::is_empty")]
+    pub unknown: BoardUnknown,
 }

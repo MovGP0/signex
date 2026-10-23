@@ -21,17 +21,17 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-                if let Some(snapshot) = editor.undo_snapshots.pop() {
-                    let current = editor.primitive().clone();
-                    editor.redo_snapshots.push(current);
-                    *editor.primitive_mut() = snapshot;
-                    editor.mid_drag = false;
-                    editor.selected = None;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                    self.refresh_panel_ctx();
-                }
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+                && let Some(snapshot) = editor.undo_snapshots.pop()
+            {
+                let current = editor.primitive().clone();
+                editor.redo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                self.refresh_panel_ctx();
             }
             return;
         }
@@ -41,13 +41,13 @@ impl Signex {
         // editor's per-instance history stack instead of the
         // schematic engine. Schematic + PCB tabs continue to use
         // the engine path below.
-        if let Some(path) = self.active_footprint_editor_path() {
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                if editor.undo() {
-                    self.refresh_panel_ctx();
-                }
-                return;
+        if let Some(path) = self.active_footprint_editor_path()
+            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+        {
+            if editor.undo() {
+                self.refresh_panel_ctx();
             }
+            return;
         }
 
         // Net-colour floods aren't persisted to the Standard document so
@@ -56,9 +56,6 @@ impl Signex {
         // when no net-colour action is pending.
         if let Some(prev) = self.ui_state.net_color_undo.pop() {
             self.ui_state.wire_color_overrides = prev.clone();
-            self.interaction_state
-                .active_canvas_mut()
-                .wire_color_overrides = prev;
             self.interaction_state
                 .active_canvas_mut()
                 .clear_content_cache();
@@ -76,29 +73,29 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-                if let Some(snapshot) = editor.redo_snapshots.pop() {
-                    let current = editor.primitive().clone();
-                    editor.undo_snapshots.push(current);
-                    *editor.primitive_mut() = snapshot;
-                    editor.mid_drag = false;
-                    editor.selected = None;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                    self.refresh_panel_ctx();
-                }
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+                && let Some(snapshot) = editor.redo_snapshots.pop()
+            {
+                let current = editor.primitive().clone();
+                editor.undo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+                self.refresh_panel_ctx();
             }
             return;
         }
 
         // v0.24 Phase 1 (Track B) — same fork as undo.
-        if let Some(path) = self.active_footprint_editor_path() {
-            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                if editor.redo() {
-                    self.refresh_panel_ctx();
-                }
-                return;
+        if let Some(path) = self.active_footprint_editor_path()
+            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+        {
+            if editor.redo() {
+                self.refresh_panel_ctx();
             }
+            return;
         }
         let redone = self.apply_engine_redo(true);
 
@@ -203,7 +200,7 @@ fn apply_drawing_edit(
     edit: crate::app::contracts::DrawingFieldEdit,
 ) -> Option<signex_types::schematic::SchDrawing> {
     use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_types::schematic::{Point, SchDrawing};
+    use signex_types::schematic::{Point, SchDrawing, circumcircle};
     let mut next = current;
     match (&mut next, edit) {
         // Stroke width applies to every variant.
@@ -288,7 +285,7 @@ fn apply_drawing_edit(
             } = &mut next
             {
                 let (cx, cy, r) =
-                    circumcircle_points(*start, *mid, *end).unwrap_or((start.x, start.y, 1.0));
+                    circumcircle(*start, *mid, *end).unwrap_or((start.x, start.y, 1.0));
                 let mut ncx = cx;
                 let mut ncy = cy;
                 let mut nr = r;
@@ -325,27 +322,6 @@ fn apply_drawing_edit(
         _ => return None,
     }
     Some(next)
-}
-
-fn circumcircle_points(
-    a: signex_types::schematic::Point,
-    b: signex_types::schematic::Point,
-    c: signex_types::schematic::Point,
-) -> Option<(f64, f64, f64)> {
-    let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
-    if d.abs() < 1e-9 {
-        return None;
-    }
-    let ux = ((a.x * a.x + a.y * a.y) * (b.y - c.y)
-        + (b.x * b.x + b.y * b.y) * (c.y - a.y)
-        + (c.x * c.x + c.y * c.y) * (a.y - b.y))
-        / d;
-    let uy = ((a.x * a.x + a.y * a.y) * (c.x - b.x)
-        + (b.x * b.x + b.y * b.y) * (a.x - c.x)
-        + (c.x * c.x + c.y * c.y) * (b.x - a.x))
-        / d;
-    let r = ((a.x - ux) * (a.x - ux) + (a.y - uy) * (a.y - uy)).sqrt();
-    Some((ux, uy, r))
 }
 
 fn normalize_rad(a: f64) -> f64 {

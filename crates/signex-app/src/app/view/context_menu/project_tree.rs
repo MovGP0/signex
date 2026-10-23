@@ -61,7 +61,6 @@ impl Signex {
     /// matches what Altium shows in each context. Empty-area clicks are
     /// filtered upstream (no menu shown), so `path` is `Some` whenever
     /// this runs.
-    #[allow(clippy::vec_init_then_push)]
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
@@ -138,9 +137,9 @@ impl Signex {
                     None,
                     "Add Existing to Project...",
                     "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::AddExistingToProject(
-                        path.clone(),
-                    ))),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                        A::AddExistingToProject(path.clone()),
+                    )),
                 ));
                 v.push(save_entry(can_save));
                 v.push(dd_msg(
@@ -157,7 +156,9 @@ impl Signex {
                         None,
                         "Close Project Documents",
                         "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseAllDocuments)),
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                            A::CloseAllDocuments,
+                        )),
                     )
                 } else {
                     dd_disabled(None, "Close Project Documents", None)
@@ -175,9 +176,9 @@ impl Signex {
                         None,
                         "Explore",
                         "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RevealInExplorer(
-                            path.clone(),
-                        ))),
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                            A::RevealInExplorer(path.clone()),
+                        )),
                     )
                 } else {
                     dd_disabled(None, "Explore", None)
@@ -246,20 +247,14 @@ impl Signex {
                     ));
                 }
                 v.push(DropdownEntry::Separator);
-                // Stage 18 distributor refresh stub — resolves the clicked
-                // library's `.snxlib` file via the project tree.
-                if let Some(lib_path) = self.library_node_path_from_tree(path.as_slice()) {
-                    v.push(dd_msg(
-                        None,
-                        "Refresh All Pricing",
-                        "",
-                        Message::Library(crate::library::LibraryMessage::LibraryRefreshAllPricing(
-                            lib_path,
-                        )),
-                    ));
-                } else {
-                    v.push(dd_disabled(None, "Refresh All Pricing", None));
-                }
+                // Distributor pricing refresh has no backing implementation
+                // yet (no row-to-part binding or pricing store), so the row
+                // is shown greyed rather than wired to a no-op.
+                v.push(dd_disabled(
+                    None,
+                    "Refresh All Pricing",
+                    Some("Not yet available"),
+                ));
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.
@@ -327,9 +322,9 @@ impl Signex {
                         None,
                         "Explore",
                         "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RevealInExplorer(
-                            path.clone(),
-                        ))),
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                            A::RevealInExplorer(path.clone()),
+                        )),
                     )
                 } else {
                     dd_disabled(None, "Explore", None)

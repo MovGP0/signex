@@ -180,7 +180,6 @@ impl Signex {
 /// Pure canvas-menu data builder. Rows and their enable state are derived
 /// only from the passed selection flags + shortcut hints, so the menu's
 /// shape is unit-testable without a window.
-#[allow(clippy::vec_init_then_push)]
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
     tokens: &ThemeTokens,
@@ -321,7 +320,11 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(Some(ic::icon_dd_comment(tid)), "Comment...", None));
+    v.push(dd_disabled(
+        Some(ic::icon_dd_comment(tid)),
+        "Comment...",
+        None,
+    ));
     v.push(dd_disabled(
         Some(ic::icon_dd_pin_mapping(tid)),
         "Pin Mapping...",

@@ -16,15 +16,13 @@
 //! identical pattern across schematic / footprint / SchLib /
 //! upcoming PCB editors.
 
-use std::path::PathBuf;
-
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
 use crate::app::SymbolEditorState;
 use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
-use crate::library::editor::symbol::state::{SymActiveBarMenu, SymbolSelectionFilter};
+use crate::library::editor::symbol::state::SymActiveBarMenu;
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
 mod dropdowns;
@@ -126,7 +124,6 @@ fn dropdown_trigger_items(
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active = editor.active_bar_menu;
-    let _ = SymbolSelectionFilter::default; // silences unused-import lint
 
     let dual = |label: &str,
                 icon: ActiveBarIcon,
@@ -169,7 +166,13 @@ fn dropdown_trigger_items(
             "Place / Move (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             SymActiveBarMenu::Place,
-            Some(SymbolEditorMsg::ActiveBarStub("Move")),
+            // #426 — a symbol has no separate move tool: pin/graphic
+            // movement IS drag-under-Select (see `dropdowns.rs`'s
+            // `place_entries` comment). Left-click therefore arms
+            // Select directly instead of routing through
+            // `ActiveBarStub`, mirroring the footprint editor's
+            // identical Move trigger.
+            Some(SymbolEditorMsg::SetTool(SymbolToolMsg::Select)),
         ),
         dual(
             "Select (right-click for selection-mode menu)",
@@ -181,7 +184,9 @@ fn dropdown_trigger_items(
             "Align / Distribute (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_align(tid)),
             SymActiveBarMenu::Align,
-            Some(SymbolEditorMsg::ActiveBarStub("Align To Grid")),
+            // #426 — real implementation: snaps the current selection
+            // onto the symbol canvas's snap grid.
+            Some(SymbolEditorMsg::AlignSelectedToGrid),
         ),
         dual(
             "Pin (left-click places a pin, right-click for variants)",
@@ -202,4 +207,67 @@ fn dropdown_trigger_items(
             None,
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::{Symbol, SymbolFile};
+    use std::path::PathBuf;
+
+    fn new_editor() -> SymbolEditorState {
+        SymbolEditorState::new(
+            PathBuf::from("t.snxsym"),
+            SymbolFile::from_symbol(Symbol::empty("T")),
+        )
+    }
+
+    /// Unwrap a trigger button's left-click message down to the
+    /// `SymbolEditorMsg` it carries — panics on anything but a
+    /// `Button` with a `PrimitiveEditorEvent(Symbol(_))` `on_press`.
+    fn left_click_symbol_msg(item: &ActiveBarItem<LibraryMessage>) -> &SymbolEditorMsg {
+        let ActiveBarItem::Button(button) = item else {
+            panic!("expected a Button item");
+        };
+        match button
+            .on_press
+            .as_ref()
+            .expect("trigger button must have a left-click action")
+        {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Symbol(sym_msg),
+                ..
+            } => sym_msg,
+            _ => panic!("expected a Symbol primitive-editor event"),
+        }
+    }
+
+    /// #426 — the Place/Move trigger's left-click used to emit a dead
+    /// `ActiveBarStub("Move")`. It now arms the Select tool directly,
+    /// same as the Select trigger next to it: a symbol has no separate
+    /// move tool, so Move IS drag-under-Select.
+    #[test]
+    fn move_trigger_left_click_arms_select_tool() {
+        let editor = new_editor();
+        let items = dropdown_trigger_items(&editor, ThemeId::Signex);
+        let place = &items[2]; // Filter, Snap, Place, Select, Align, Pin, Text, Shapes
+        assert!(matches!(
+            left_click_symbol_msg(place),
+            SymbolEditorMsg::SetTool(SymbolToolMsg::Select)
+        ));
+    }
+
+    /// #426 — the Align trigger's left-click used to emit a dead
+    /// `ActiveBarStub("Align To Grid")`. It now dispatches the real
+    /// `AlignSelectedToGrid` snap.
+    #[test]
+    fn align_trigger_left_click_snaps_selection_to_grid() {
+        let editor = new_editor();
+        let items = dropdown_trigger_items(&editor, ThemeId::Signex);
+        let align = &items[4];
+        assert!(matches!(
+            left_click_symbol_msg(align),
+            SymbolEditorMsg::AlignSelectedToGrid
+        ));
+    }
 }

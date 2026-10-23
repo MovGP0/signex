@@ -6,24 +6,29 @@
 
 use super::*;
 use crate::fonts;
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
+use crate::render_config::{
+    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
+};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
-pub(super) fn content_appearance<'a>(
-    draft_theme: ThemeId,
-    _saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-) -> Element<'a, PrefMsg> {
+pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let PrefsView {
+        draft_theme,
+        draft_font,
+        draft_power_port_style,
+        draft_label_style,
+        draft_multisheet_style,
+        draft_grid_style,
+        draft_pcb_gpu_render,
+        draft_symbol_grid_size_mm,
+        draft_symbol_grid_style,
+        draft_symbol_pin_selection,
+        custom_name,
+        theme_status,
+        ..
+    } = v;
     let mut col = column![].spacing(0).padding([16, 20]);
 
     // ── Section: Theme ──
@@ -111,6 +116,16 @@ pub(super) fn content_appearance<'a>(
         .align_y(iced::Alignment::Center),
     );
 
+    // Export writes a file the user picked in a save dialog; the write
+    // can fail (read-only volume, full disk, a path that vanished
+    // between pick and write). Report it here rather than letting the
+    // user assume the theme was saved (#533). Empty = nothing painted,
+    // so the row keeps its old height until there is something to say.
+    if !theme_status.is_empty() {
+        col = col.push(Space::new().height(6));
+        col = col.push(text(theme_status).size(10).style(text_muted));
+    }
+
     // ── Divider ──
     col = col.push(Space::new().height(16));
     col = col.push(h_sep());
@@ -169,6 +184,38 @@ pub(super) fn content_appearance<'a>(
             )
             .text_size(12)
             .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
+    // ── Section: PCB Editor ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16));
+    col = col.push(section_title("PCB Editor"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("GPU Render (experimental)")
+                    .size(12)
+                    .style(text_primary),
+                text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
+                    .size(10)
+                    .style(text_muted),
+                // This used to carry a second line naming the known GPU gaps.
+                // The last of them is closed: dashed lines, concave fills and
+                // overlay z-order earlier, the faded hairline (#645), and the
+                // fill-over-trace stacking (#653) — see the `scene::order`
+                // parity tests. "experimental" stays because GPU parity is
+                // still unconfirmed on hardware.
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::checkbox(draft_pcb_gpu_render)
+                .size(16)
+                .on_toggle(PrefMsg::DraftPcbGpuRender),
         ]
         .align_y(iced::Alignment::Center),
     );

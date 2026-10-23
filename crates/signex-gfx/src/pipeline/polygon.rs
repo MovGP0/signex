@@ -9,49 +9,172 @@ use crate::shader;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct PolygonVertex {
-    position: [f32; 2],
-    color: [f32; 4],
+pub(crate) struct PolygonVertex {
+    pub(crate) position: [f32; 2],
+    pub(crate) color: [f32; 4],
+    /// Unit direction the shader pushes this vertex along, by the stroke's
+    /// half-width — the edge normal, signed for the side of the edge it sits
+    /// on. Zero for fill vertices, which therefore never move.
+    pub(crate) extrude: [f32; 2],
+    /// Half the stroke width in world mm. The shader raises it to the
+    /// camera's screen-space floor, so a stroke cannot fade to sub-pixel
+    /// zoomed out, and a zero-width stroke draws as a hairline — the CPU
+    /// replay's `stroke_px` rule. Doing it in the shader keeps the vertices
+    /// zoom-independent; flooring here would re-tessellate on every zoom.
+    pub(crate) half_width: f32,
 }
 
-fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex> {
+impl PolygonVertex {
+    fn fill(position: [f32; 2], color: [f32; 4]) -> Self {
+        Self {
+            position,
+            color,
+            extrude: [0.0, 0.0],
+            half_width: 0.0,
+        }
+    }
+}
+
+/// Build the triangle-list vertices for a batch of polygons: an ear-clip fill
+/// for every contour, followed by a stroke outline (expanded edge quads) for
+/// polygons that carry one. Fill and stroke share this pipeline's
+/// `PolygonVertex` format, so they draw in a single pass — the stroke vertices
+/// come last and composite on top of the fill under alpha blending, matching
+/// the CPU `draw_polygons` order (fill, then stroke).
+///
+/// so misdrew any 3/6/9-vertex pour. Fill uses `signex_sketch::ear_clip`
+/// (below), which is exact for concave contours too — the CPU path
+/// (`frame.fill`, lyon) tessellates the same contour, so the two now agree.
+///
+/// `pub(crate)` (rather than private) so `scene::scenario_tests`'s full-board
+/// scenario can exercise this exact CPU-side vertex generation instead of
+/// re-deriving the vertex-count formula independently.
+pub(crate) fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex> {
     let mut vertices = Vec::new();
 
     for polygon in polygons {
-        let points = &polygon.vertices;
-        if points.len() < 3 {
+        // Skip degenerate contours entirely (no fill, no stroke), as the CPU
+        // path does.
+        if polygon.vertices.len() < 3 {
             continue;
         }
-
-        if points.len() % 3 == 0 {
-            for point in points {
-                vertices.push(PolygonVertex {
-                    position: *point,
-                    color: polygon.fill_color,
-                });
-            }
-            continue;
-        }
-
-        // Fallback triangle fan for simple contours.
-        let origin = points[0];
-        for idx in 1..(points.len() - 1) {
-            vertices.push(PolygonVertex {
-                position: origin,
-                color: polygon.fill_color,
-            });
-            vertices.push(PolygonVertex {
-                position: points[idx],
-                color: polygon.fill_color,
-            });
-            vertices.push(PolygonVertex {
-                position: points[idx + 1],
-                color: polygon.fill_color,
-            });
-        }
+        append_fill(&mut vertices, polygon);
+        append_stroke(&mut vertices, polygon);
     }
 
     vertices
+}
+
+/// Ear-clip fill, concave-safe. Assumes `polygon.vertices.len() >= 3`.
+///
+/// A triangle fan from `points[0]` is exact only for convex contours — a
+/// concave copper pour/rule-area (an arbitrary user outline, frequently
+/// non-convex) would bridge triangles across the notch and paint copper where
+/// the pour has none. `signex_sketch::ear_clip` is the authoritative
+/// triangulator for exactly this contract (already driving the sketch
+/// overlay's filled-loop renderer), reused here instead of re-derived so the
+/// GPU fill partitions the same polygon area the CPU `frame.fill` (lyon)
+/// tessellates. Falls back to the fan only for the degenerate cases
+/// `ear_clip` refuses (self-intersecting / all-collinear contours) — the CPU
+/// path has no defined behaviour for those either, so a fan is a reasonable
+/// best-effort rather than drawing nothing.
+fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
+    let points = &polygon.vertices;
+    let points_2d: Vec<signex_sketch::geom::Point2> = points
+        .iter()
+        .map(|p| signex_sketch::geom::Point2::new(p[0] as f64, p[1] as f64))
+        .collect();
+    let triangles = signex_sketch::geom::ear_clip(&points_2d);
+
+    if triangles.is_empty() {
+        append_fan_fill(vertices, points, polygon.fill_color);
+        return;
+    }
+
+    for [a, b, c] in triangles {
+        for idx in [a, b, c] {
+            vertices.push(PolygonVertex::fill(points[idx], polygon.fill_color));
+        }
+    }
+}
+
+/// Triangle-fan fill from the first vertex — exact for convex contours only.
+/// Used as the [`append_fill`] fallback when `ear_clip` can't triangulate the
+/// contour at all.
+fn append_fan_fill(vertices: &mut Vec<PolygonVertex>, points: &[[f32; 2]], fill_color: [f32; 4]) {
+    let origin = points[0];
+    for idx in 1..(points.len() - 1) {
+        vertices.push(PolygonVertex::fill(origin, fill_color));
+        vertices.push(PolygonVertex::fill(points[idx], fill_color));
+        vertices.push(PolygonVertex::fill(points[idx + 1], fill_color));
+    }
+}
+
+/// Stroke outline: one width-expanded quad per edge of the closed contour
+/// (including the closing edge, `last -> first`), so fill-only-invisible areas
+/// such as rule/keepout zones still read as an outline. World-space width in
+/// mm — the shader's ortho projection scales it with zoom, mirroring the CPU's
+/// `stroke_width * camera.scale` — raised in the shader to the camera's
+/// screen-space floor, as the CPU replay's `stroke_px` does. No miter joins
+/// (thin strokes only). No-op when the polygon has no stroke colour.
+fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
+    // `is_stroked()` is the shared definition of "this contour carries an
+    // outline". Keeping the guard here in terms of that predicate is what the
+    // CPU↔GPU parity test locks against.
+    if !polygon.is_stroked() {
+        return;
+    }
+    let stroke_color = polygon
+        .stroke_color
+        .expect("is_stroked() guarantees a stroke colour");
+
+    let points = &polygon.vertices;
+    let half = polygon.stroke_width.max(0.0) * 0.5;
+    for i in 0..points.len() {
+        let a = points[i];
+        let b = points[(i + 1) % points.len()];
+        append_edge_quad(vertices, a, b, half, stroke_color);
+    }
+}
+
+/// Emit two triangles for the rectangle centred on edge `a -> b`, `half` units
+/// to either side along the edge normal. The corners are emitted ON the edge,
+/// each carrying the signed normal; the shader moves them out by the floored
+/// half-width.
+fn append_edge_quad(
+    vertices: &mut Vec<PolygonVertex>,
+    a: [f32; 2],
+    b: [f32; 2],
+    half: f32,
+    color: [f32; 4],
+) {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f32::EPSILON {
+        return;
+    }
+
+    let normal = [-dy / len, dx / len];
+    let outward = normal;
+    let inward = [-normal[0], -normal[1]];
+    let corner = |position, extrude| PolygonVertex {
+        position,
+        color,
+        extrude,
+        half_width: half,
+    };
+
+    for vertex in [
+        corner(a, outward),
+        corner(a, inward),
+        corner(b, outward),
+        corner(b, outward),
+        corner(a, inward),
+        corner(b, inward),
+    ] {
+        vertices.push(vertex);
+    }
 }
 
 /// GPU polygon pipeline for filled triangle-list geometry.
@@ -60,6 +183,17 @@ pub struct PolygonPipeline {
     vertex_buffer: wgpu::Buffer,
     vertex_capacity: usize,
     vertex_count: u32,
+    /// Buffer for the polygons that draw above the stroke buckets (PCB pads);
+    /// separate so the GPU can interleave it after circles, before text.
+    top_vertex_buffer: wgpu::Buffer,
+    top_vertex_capacity: usize,
+    top_vertex_count: u32,
+    /// Second, independent vertex buffer for overlay geometry — see
+    /// `LinePipeline`'s equivalent field doc for why this is a separate
+    /// buffer rather than a shared one with a base/overlay split index.
+    overlay_vertex_buffer: wgpu::Buffer,
+    overlay_vertex_capacity: usize,
+    overlay_vertex_count: u32,
 }
 
 impl PolygonPipeline {
@@ -100,6 +234,16 @@ impl PolygonPipeline {
                             shader_location: 1,
                             format: wgpu::VertexFormat::Float32x4,
                         },
+                        wgpu::VertexAttribute {
+                            offset: 24,
+                            shader_location: 2,
+                            format: wgpu::VertexFormat::Float32x2,
+                        },
+                        wgpu::VertexAttribute {
+                            offset: 32,
+                            shader_location: 3,
+                            format: wgpu::VertexFormat::Float32,
+                        },
                     ],
                 }],
             },
@@ -135,35 +279,115 @@ impl PolygonPipeline {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let top_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("signex_gfx_polygon_top_vertices"),
+            size: std::mem::size_of::<PolygonVertex>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let overlay_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("signex_gfx_polygon_overlay_vertices"),
+            size: std::mem::size_of::<PolygonVertex>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         Self {
             render_pipeline,
             vertex_buffer,
             vertex_capacity,
             vertex_count: 0,
+            top_vertex_buffer,
+            top_vertex_capacity: vertex_capacity,
+            top_vertex_count: 0,
+            overlay_vertex_buffer,
+            overlay_vertex_capacity: vertex_capacity,
+            overlay_vertex_count: 0,
         }
     }
 
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, polygons: &[GpuPolygon]) {
         let vertices = triangulate_polygons(polygons);
-        self.vertex_count = vertices.len() as u32;
+        Self::upload_into(
+            device,
+            queue,
+            &vertices,
+            &mut self.vertex_buffer,
+            &mut self.vertex_capacity,
+            &mut self.vertex_count,
+            "signex_gfx_polygon_vertices",
+        );
+    }
 
+    /// Upload the polygons that composite above the stroke buckets into
+    /// their own buffer, drawn by [`Self::draw_top`] after circles.
+    pub fn upload_top(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        polygons: &[GpuPolygon],
+    ) {
+        let vertices = triangulate_polygons(polygons);
+        Self::upload_into(
+            device,
+            queue,
+            &vertices,
+            &mut self.top_vertex_buffer,
+            &mut self.top_vertex_capacity,
+            &mut self.top_vertex_count,
+            "signex_gfx_polygon_top_vertices",
+        );
+    }
+
+    /// Upload overlay polygon geometry into the dedicated overlay buffer,
+    /// drawn by [`Self::draw_overlay`] in a separate later pass.
+    pub fn upload_overlay(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        polygons: &[GpuPolygon],
+    ) {
+        let vertices = triangulate_polygons(polygons);
+        Self::upload_into(
+            device,
+            queue,
+            &vertices,
+            &mut self.overlay_vertex_buffer,
+            &mut self.overlay_vertex_capacity,
+            &mut self.overlay_vertex_count,
+            "signex_gfx_polygon_overlay_vertices",
+        );
+    }
+
+    fn upload_into(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        vertices: &[PolygonVertex],
+        buffer: &mut wgpu::Buffer,
+        capacity: &mut usize,
+        count: &mut u32,
+        label: &'static str,
+    ) {
         if vertices.is_empty() {
+            *count = 0;
             return;
         }
 
-        if vertices.len() > self.vertex_capacity {
-            self.vertex_capacity = vertices.len().next_power_of_two();
-            self.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("signex_gfx_polygon_vertices"),
-                size: (self.vertex_capacity * std::mem::size_of::<PolygonVertex>())
-                    as wgpu::BufferAddress,
+        let writable = super::growth::ensure_capacity(
+            device,
+            buffer,
+            capacity,
+            vertices.len(),
+            &super::growth::GrowthParams {
+                elem_size: std::mem::size_of::<PolygonVertex>(),
+                label,
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
+                max_buffer_size: device.limits().max_buffer_size,
+            },
+        );
+        *count = writable as u32;
 
-        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+        queue.write_buffer(buffer, 0, bytemuck::cast_slice(&vertices[..writable]));
     }
 
     pub fn draw(
@@ -171,14 +395,64 @@ impl PolygonPipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         camera_bind_group: &wgpu::BindGroup,
     ) {
-        if self.vertex_count == 0 {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.vertex_buffer,
+            self.vertex_count,
+        );
+    }
+
+    /// Draw the polygons uploaded by [`Self::upload_top`]. Callers place this
+    /// after the stroke buckets and before text — see
+    /// `crate::scene::GPU_SCENE_DRAW_ORDER`.
+    pub fn draw_top(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.top_vertex_buffer,
+            self.top_vertex_count,
+        );
+    }
+
+    /// Draw all uploaded overlay polygon geometry. Callers composite this in
+    /// a pass strictly after every base bucket, so overlay content always
+    /// renders on top — see `crate::scene_shader::ScenePrimitive::draw`.
+    pub fn draw_overlay(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        Self::draw_from(
+            render_pass,
+            camera_bind_group,
+            &self.render_pipeline,
+            &self.overlay_vertex_buffer,
+            self.overlay_vertex_count,
+        );
+    }
+
+    fn draw_from(
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
+        render_pipeline: &wgpu::RenderPipeline,
+        vertex_buffer: &wgpu::Buffer,
+        vertex_count: u32,
+    ) {
+        if vertex_count == 0 {
             return;
         }
 
-        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_pipeline(render_pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.draw(0..self.vertex_count, 0..1);
+        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        render_pass.draw(0..vertex_count, 0..1);
     }
 
     pub fn vertex_count(&self) -> u32 {
@@ -191,8 +465,25 @@ mod tests {
     use super::triangulate_polygons;
     use crate::primitive::polygon::GpuPolygon;
 
+    /// Shoelace area of a closed contour — the ground truth a correct
+    /// triangulation's total triangle area must equal exactly, whether the
+    /// contour is convex or concave.
+    fn shoelace_area(points: &[[f32; 2]]) -> f64 {
+        let mut sum = 0.0f64;
+        for i in 0..points.len() {
+            let [x0, y0] = points[i].map(f64::from);
+            let [x1, y1] = points[(i + 1) % points.len()].map(f64::from);
+            sum += x0 * y1 - x1 * y0;
+        }
+        (sum / 2.0).abs()
+    }
+
+    fn triangle_area(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> f64 {
+        shoelace_area(&[a, b, c])
+    }
+
     #[test]
-    fn triangulates_simple_contour_with_fan() {
+    fn triangulates_simple_convex_contour() {
         let polygons = vec![GpuPolygon {
             vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
             fill_color: [0.3, 0.4, 0.5, 1.0],
@@ -205,15 +496,18 @@ mod tests {
     }
 
     #[test]
-    fn keeps_pretriangulated_vertex_count() {
+    fn triangulates_every_contour_and_never_treats_it_as_triangle_soup() {
+        // #2 regression: a six-vertex contour must triangulate into (6 - 2) = 4
+        // triangles (12 vertices), NOT be passed through as two triangles
+        // because its vertex count is divisible by three.
         let polygons = vec![GpuPolygon {
             vertices: vec![
                 [0.0, 0.0],
-                [1.0, 0.0],
-                [0.0, 1.0],
-                [1.0, 0.0],
-                [1.0, 1.0],
-                [0.0, 1.0],
+                [2.0, 0.0],
+                [3.0, 1.0],
+                [2.0, 2.0],
+                [0.0, 2.0],
+                [-1.0, 1.0],
             ],
             fill_color: [0.9, 0.2, 0.1, 1.0],
             stroke_color: None,
@@ -221,7 +515,126 @@ mod tests {
         }];
 
         let vertices = triangulate_polygons(&polygons);
-        assert_eq!(vertices.len(), 6);
+        assert_eq!(vertices.len(), 12);
+    }
+
+    /// Correctness — a concave contour (e.g. an L-shaped copper pour) must
+    /// fill EXACTLY its own area, no more and no less. A triangle-fan from
+    /// `points[0]` bridges triangles across the notch and over-fills; ear-clip
+    /// partitions the polygon exactly, so the fill vertices' total triangle
+    /// area must equal the contour's shoelace area. This is the regression
+    /// test for the GPU-paints-copper-where-the-pour-has-none bug.
+    #[test]
+    fn concave_contour_fills_exactly_its_own_area() {
+        // L-shape: a 2x2 square with a 1x1 corner notched out (area = 3).
+        let l_shape = vec![
+            [0.0, 0.0],
+            [2.0, 0.0],
+            [2.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 2.0],
+            [0.0, 2.0],
+        ];
+        let polygons = vec![GpuPolygon {
+            vertices: l_shape.clone(),
+            fill_color: [0.9, 0.2, 0.1, 1.0],
+            stroke_color: None,
+            stroke_width: 0.0,
+        }];
+
+        let vertices = triangulate_polygons(&polygons);
+        // (6 - 2) triangles = 12 vertices.
+        assert_eq!(vertices.len(), 12);
+
+        let expected_area = shoelace_area(&l_shape);
+        assert!((expected_area - 3.0).abs() < 1e-9, "fixture area is 3.0");
+
+        let total_area: f64 = vertices
+            .chunks_exact(3)
+            .map(|tri| triangle_area(tri[0].position, tri[1].position, tri[2].position))
+            .sum();
+        assert!(
+            (total_area - expected_area).abs() < 1e-6,
+            "concave fill must cover exactly the contour's area: expected \
+             {expected_area}, got {total_area} (a fan would over-fill across \
+             the notch)"
+        );
+    }
+
+    #[test]
+    fn emits_a_stroke_outline_after_the_fill() {
+        // #3: a stroked contour emits the fill plus one quad (6 vertices) per
+        // edge of the closed contour, and the stroke comes last so it
+        // composites on top.
+        let stroke = [0.1, 0.9, 0.3, 1.0];
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: Some(stroke),
+            stroke_width: 0.2,
+        }];
+
+        let vertices = triangulate_polygons(&polygons);
+        // fill: (4 - 2) * 3 = 6; stroke: 4 edges * 6 = 24.
+        assert_eq!(vertices.len(), 30);
+        // Fill first, stroke last (drawn on top).
+        assert_eq!(vertices[0].color, [0.3, 0.4, 0.5, 1.0]);
+        assert_eq!(vertices.last().unwrap().color, stroke);
+    }
+
+    #[test]
+    fn no_stroke_when_color_is_absent() {
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: None,
+            stroke_width: 0.5,
+        }];
+
+        // Fill only — 6 vertices, no stroke quads.
+        assert_eq!(triangulate_polygons(&polygons).len(), 6);
+    }
+
+    /// A coloured zero-width outline is a hairline: its quads are emitted
+    /// with a zero half-width and the shader raises them to the camera's
+    /// `min_stroke_px`. It used to emit nothing, while the CPU replay drew it.
+    #[test]
+    fn zero_width_stroke_emits_hairline_quads() {
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
+            stroke_width: 0.0,
+        }];
+
+        let vertices = triangulate_polygons(&polygons);
+        assert_eq!(vertices.len(), 6 + 4 * 6);
+        assert!(vertices[6..].iter().all(|v| v.half_width == 0.0));
+    }
+
+    /// Stroke corners sit on the edge and carry a unit normal; fill vertices
+    /// carry none, so the shader's extrusion can only ever move a stroke.
+    #[test]
+    fn stroke_corners_carry_the_edge_normal_and_fills_do_not() {
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
+            stroke_width: 0.2,
+        }];
+
+        let vertices = triangulate_polygons(&polygons);
+        let (fill, stroke) = vertices.split_at(6);
+        assert!(fill.iter().all(|v| v.extrude == [0.0, 0.0]));
+
+        // First edge runs (0,0) -> (2,0): its corners stay on y = 0 and
+        // extrude along ±Y by half of 0.2 mm.
+        for v in &stroke[..6] {
+            assert_eq!(v.position[1], 0.0);
+            assert_eq!(v.extrude[0], 0.0);
+            assert_eq!(v.extrude[1].abs(), 1.0);
+            assert!((v.half_width - 0.1).abs() < 1e-6);
+        }
     }
 
     #[test]

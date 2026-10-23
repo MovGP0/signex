@@ -7,6 +7,9 @@
 
 use super::*;
 
+#[cfg(test)]
+mod cache_refresh_tests;
+
 impl Signex {
     /// Open a standalone primitive editor tab for the file at `path`.
     /// Fired by the Component Preview tab's right-click context menu on
@@ -29,10 +32,32 @@ impl Signex {
     /// `FootprintEditor(path)` tab into `DocumentState.tabs`.
     ///
     /// Activates an existing tab when the same path is already open
-    /// instead of duplicating; surfaces parse / IO failures via
-    /// `tracing::warn` (and silently bails — leaving the tab bar
-    /// untouched).
+    /// instead of duplicating.
+    ///
+    /// The error boundary for [`Self::open_primitive`] (#532). Every
+    /// failure leg used to be a `tracing::warn!` and a bare return: the
+    /// user double-clicked a corrupt `.snxsym` in the project tree and
+    /// **nothing happened** — no tab, no card, indistinguishable from a
+    /// mis-click. The warning did reach the Messages panel, but that is
+    /// a panel you have to already suspect something to open.
+    ///
+    /// Routes the failure the way `handle_document_file_opened` already
+    /// does, plus the shared error card so it is impossible to miss.
     pub(crate) fn handle_open_primitive(&mut self, path: std::path::PathBuf) -> Task<Message> {
+        match self.open_primitive(path) {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Failed to open primitive", &error);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                Task::none()
+            }
+        }
+    }
+
+    /// Open a `.snxsym` / `.snxfpt` tab, or say why it could not be
+    /// opened. Never surfaces anything itself — see the boundary above.
+    fn open_primitive(&mut self, path: std::path::PathBuf) -> anyhow::Result<Task<Message>> {
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {
@@ -40,7 +65,40 @@ impl Signex {
                 self.document_state.active_tab = idx;
                 self.sync_active_tab();
             }
-            return Task::none();
+            return Ok(Task::none());
+        }
+
+        // A dirty draft parked by a tab close wins over the disk copy, and
+        // is reachable even if the file has since vanished or broke. A
+        // parked editor that is clean is stale and is replaced below.
+        if self.primitive_draft_is_dirty(&path) {
+            let parked_kind = if self.document_state.symbol_editors.contains_key(&path) {
+                Some(crate::app::TabKind::SymbolEditor(path.clone()))
+            } else if self.document_state.footprint_editors.contains_key(&path) {
+                Some(crate::app::TabKind::FootprintEditor(path.clone()))
+            } else {
+                None
+            };
+            if let Some(kind) = parked_kind {
+                let title = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+                self.park_active_schematic_session();
+                self.document_state.tabs.push(crate::app::TabInfo {
+                    title,
+                    path: path.clone(),
+                    cached_document: None,
+                    dirty: true,
+                    project_id,
+                    kind,
+                });
+                self.document_state.active_tab = self.document_state.tabs.len() - 1;
+                self.document_state.active_path = None;
+                self.refresh_panel_ctx();
+                return Ok(Task::none());
+            }
         }
 
         // Dispatch on extension. `.snxsym` → Symbol; `.snxfpt` →
@@ -55,39 +113,19 @@ impl Signex {
 
         match ext.as_str() {
             "snxsym" => {
-                let bytes = match std::fs::read(&path) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %path.display(),
-                            error = %e,
-                            "open primitive: read .snxsym failed",
-                        );
-                        return Task::none();
-                    }
-                };
+                let bytes = std::fs::read(&path)
+                    .map_err(|e| anyhow::anyhow!("could not read {}: {e}", path.display()))?;
                 // v0.18.4 — auto-detect TOML vs legacy JSON.
-                let file = match signex_library::SymbolFile::from_bytes(&bytes) {
-                    Ok(f) if !f.symbols.is_empty() => f,
-                    Ok(_) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %path.display(),
-                            "open primitive: .snxsym contains zero symbols",
-                        );
-                        return Task::none();
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %path.display(),
-                            error = %e,
-                            "open primitive: parse .snxsym failed",
-                        );
-                        return Task::none();
-                    }
-                };
+                let file = signex_library::SymbolFile::from_bytes(&bytes)
+                    .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
+                // Reported, not ignored: a container that decodes but
+                // holds nothing is a different problem from a corrupt
+                // one, and staying silent on it is what #532 is about.
+                anyhow::ensure!(
+                    !file.symbols.is_empty(),
+                    "{} contains no symbols",
+                    path.display()
+                );
 
                 let title = path
                     .file_stem()
@@ -120,7 +158,7 @@ impl Signex {
                 // — clear so the canvas doesn't render a stale schematic.
                 self.document_state.active_path = None;
                 self.refresh_panel_ctx();
-                Task::none()
+                Ok(Task::none())
             }
             "snxfpt" => {
                 // v0.13.0 — footprint editor gated off for release.
@@ -130,48 +168,27 @@ impl Signex {
                 // stay available elsewhere. Flip
                 // `feature_flags::FOOTPRINT_EDITOR_ENABLED` to re-enable.
                 if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                    // A deliberate release gate, not a failure — stays
+                    // silent, and must not raise the error card.
                     tracing::info!(
                         target: "signex::library",
                         path = %path.display(),
                         "open primitive: footprint editor disabled (v0.13.0) — ignoring .snxfpt open",
                     );
-                    return Task::none();
+                    return Ok(Task::none());
                 }
-                let bytes = match std::fs::read_to_string(&path) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %path.display(),
-                            error = %e,
-                            "open primitive: read .snxfpt failed",
-                        );
-                        return Task::none();
-                    }
-                };
+                let bytes = std::fs::read_to_string(&path)
+                    .map_err(|e| anyhow::anyhow!("could not read {}: {e}", path.display()))?;
                 // v0.18.4 — parse TOML+TSV envelope and use the first
                 // footprint as the editor primitive. Multi-footprint
                 // containers are not yet exposed in the editor UI.
-                let file = match signex_library::FootprintFile::from_toml_str(&bytes) {
-                    Ok(f) if !f.footprints.is_empty() => f,
-                    Ok(_) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %path.display(),
-                            "open primitive: .snxfpt contains zero footprints",
-                        );
-                        return Task::none();
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            target: "signex::library",
-                            path = %path.display(),
-                            error = %e,
-                            "open primitive: parse .snxfpt failed",
-                        );
-                        return Task::none();
-                    }
-                };
+                let file = signex_library::FootprintFile::from_toml_str(&bytes)
+                    .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
+                anyhow::ensure!(
+                    !file.footprints.is_empty(),
+                    "{} contains no footprints",
+                    path.display()
+                );
                 // v0.18.6 — keep the FootprintFile envelope around so
                 // saves preserve `file_uuid` + any future multi-
                 // footprint siblings instead of minting a fresh
@@ -205,17 +222,12 @@ impl Signex {
                 self.document_state.active_tab = self.document_state.tabs.len() - 1;
                 self.document_state.active_path = None;
                 self.refresh_panel_ctx();
-                Task::none()
+                Ok(Task::none())
             }
-            other => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    ext = %other,
-                    "open primitive: unsupported extension",
-                );
-                Task::none()
-            }
+            other => anyhow::bail!(
+                "{} is not a symbol or footprint file (.{other})",
+                path.display()
+            ),
         }
     }
 
@@ -239,11 +251,11 @@ impl Signex {
             // — same gate as the top-level `Message::File(FileMsg::Save)` path uses.
             PrimitiveEdit::Save => {
                 if !path.exists() {
-                    return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(
-                        path,
-                    );
+                    return crate::app::handlers::document_files::spawn_save_as_for_primitive(path);
                 }
-                self.save_primitive_tab_at(&path);
+                if let Err(e) = self.save_primitive_tab_at(&path) {
+                    crate::diagnostics::log_error("Save failed", &e);
+                }
                 Task::none()
             }
             PrimitiveEdit::Symbol(msg) => self.handle_symbol_primitive_edit(path, msg),
@@ -409,7 +421,15 @@ impl Signex {
     /// mounted `.snxlib/`), mark the tab clean, and ask the
     /// `LibrarySet` to reload its cached copy so any open Component
     /// Preview tabs see the new bytes.
-    pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) {
+    ///
+    /// Returns the save failure — serialize vs write, the target path,
+    /// and the underlying OS/serializer reason — so the caller can
+    /// surface WHY a save failed (Ctrl+S diagnostics, the Save-All-on-
+    /// exit dialog) instead of silently dropping it. Historically both
+    /// error legs emitted a `tracing::warn!` and returned `()`; those
+    /// events never reached `SignexLogger`, so a failed primitive save
+    /// was invisible in both stderr and the Messages panel.
+    pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
         // Symbol path — write the full multi-symbol container back to
         // disk so other symbols in the same file are preserved.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
@@ -422,23 +442,14 @@ impl Signex {
             let toml_text = match editor.file.to_toml_string() {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "save primitive: serialize symbol file failed",
-                    );
-                    return;
+                    return Err(anyhow::anyhow!(
+                        "serialize symbol library {}: {e}",
+                        path.display()
+                    ));
                 }
             };
             if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "save primitive: write .snxsym failed",
-                );
-                return;
+                return Err(anyhow::anyhow!("write .snxsym {}: {e}", path.display()));
             }
             // Capture the symbol name for the commit message before
             // dropping the editor borrow.
@@ -473,7 +484,7 @@ impl Signex {
             // dirty dot drops on the row (same F10 fix as the
             // footprint branch below + the schematic save handler).
             self.refresh_panel_ctx();
-            return;
+            return Ok(());
         }
 
         // Footprint path.
@@ -497,23 +508,14 @@ impl Signex {
             let toml_text = match editor.file.to_toml_string() {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "save primitive: serialize footprint failed",
-                    );
-                    return;
+                    return Err(anyhow::anyhow!(
+                        "serialize footprint library {}: {e}",
+                        path.display()
+                    ));
                 }
             };
             if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %path.display(),
-                    error = %e,
-                    "save primitive: write .snxfpt failed",
-                );
-                return;
+                return Err(anyhow::anyhow!("write .snxfpt {}: {e}", path.display()));
             }
             let fp_name = editor.primitive().name.clone();
             editor.dirty = false;
@@ -537,7 +539,14 @@ impl Signex {
             // call the dot lingers on the row even though
             // `dirty_paths` no longer contains the path.
             self.refresh_panel_ctx();
+            return Ok(());
         }
+
+        // Path backs no open primitive editor — nothing to write. The
+        // three direct callers gate on an open tab, and the Save-All
+        // dispatcher gates on `symbol_editors`/`footprint_editors`
+        // membership, so this leg is only reached on a stale path.
+        Ok(())
     }
 
     /// Find the open library whose root contains `path`, then ask its
@@ -575,6 +584,14 @@ impl Signex {
     /// picker modal sees the just-saved primitive without waiting
     /// for the next full `refresh_components` round-trip. No-op when
     /// `path` lives outside any mounted library.
+    ///
+    /// A failing listing must not blank the caches. This runs right
+    /// after a primitive save, so the three caches it touches are
+    /// known-good; overwriting them with empty vecs made every symbol,
+    /// footprint and sim vanish from the library's picker and read as
+    /// "my save didn't work" while the file was fine on disk.
+    /// [`OpenLibrary::reload_primitives`] keeps each previous cache on
+    /// error and reports the failure to the Messages panel at `warn`.
     fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) {
         // Same `root_dir()` ancestor walk as
         // `commit_external_change_for` — `lib.root` is the `.snxlib`
@@ -588,15 +605,10 @@ impl Signex {
             Some(lib) => lib.library_id,
             None => return,
         };
-        // Two-step borrow dance: snapshot the listings through the
-        // mounted adapter, then move them onto the OpenLibrary entry.
-        let (symbols, footprints, sims) = match self.library.set.get(library_id) {
-            Some(adapter) => (
-                adapter.list_symbols().unwrap_or_default(),
-                adapter.list_footprints().unwrap_or_default(),
-                adapter.list_sims().unwrap_or_default(),
-            ),
-            None => return,
+        // `set` and `open_libraries` are disjoint fields, so the
+        // adapter borrow and the entry's `&mut` coexist.
+        let Some(adapter) = self.library.set.get(library_id) else {
+            return;
         };
         if let Some(lib) = self
             .library
@@ -604,9 +616,7 @@ impl Signex {
             .iter_mut()
             .find(|lib| lib.library_id == library_id)
         {
-            lib.cached_symbols = symbols;
-            lib.cached_footprints = footprints;
-            lib.cached_sims = sims;
+            lib.reload_primitives(adapter);
         }
     }
 

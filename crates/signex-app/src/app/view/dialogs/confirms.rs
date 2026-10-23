@@ -51,7 +51,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = draggable_header(
             header_content,
             super::super::super::state::ModalId::RemoveDialog,
@@ -96,6 +95,34 @@ impl Signex {
                 .into()
             };
 
+        let exclude_card = option_card(
+            "Exclude from project",
+            if st.is_outside_project {
+                "Library is shared or lives outside this project's folder. It will be excluded from the project and is not deleted from disk."
+            } else {
+                "File will be excluded from project but left in local folder. Not recommended for projects stored in version control."
+            },
+            Message::Remove(RemoveMsg::Confirm(
+                crate::app::RemoveChoice::ExcludeFromProject,
+            )),
+        );
+        // Shared / Global libraries are owned by other projects too:
+        // never offer to delete them from disk (#139).
+        let remove_options: Element<'_, Message> = if st.is_outside_project {
+            column![exclude_card].spacing(8).into()
+        } else {
+            column![
+                option_card(
+                    "Delete file",
+                    "File will be removed from project and permanently deleted.",
+                    Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
+                ),
+                exclude_card,
+            ]
+            .spacing(8)
+            .into()
+        };
+
         let dialog = container(
             column![
                 header,
@@ -108,37 +135,16 @@ impl Signex {
                     .color(text_muted)
                 )
                 .padding([14, 14]),
-                container(
-                    column![
-                        option_card(
-                            "Delete file",
-                            "File will be removed from project and permanently deleted.",
-                            Message::Remove(RemoveMsg::Confirm(
-                                crate::app::RemoveChoice::DeleteFile,
-                            )),
-                        ),
-                        option_card(
-                            "Exclude from project",
-                            "File will be excluded from project but left in local folder. Not recommended for projects stored in version control.",
-                            Message::Remove(RemoveMsg::Confirm(
-                                crate::app::RemoveChoice::ExcludeFromProject,
-                            )),
-                        ),
-                    ]
-                    .spacing(8)
-                )
-                .padding([0, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::Remove(RemoveMsg::Close),
-                            text_c,
-                            border_c,
-                        ),
-                    ],
-                )
+                container(remove_options).padding([0, 14]),
+                container(row![
+                    Space::new().width(Length::Fill),
+                    secondary_button(
+                        "Cancel",
+                        Message::Remove(RemoveMsg::Close),
+                        text_c,
+                        border_c,
+                    ),
+                ])
                 .padding([14, 14]),
             ]
             .width(560),
@@ -188,7 +194,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = draggable_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
@@ -199,37 +204,72 @@ impl Signex {
         // has dozens of unsaved sheets. Filenames only — paths would
         // overflow narrow modals and the project context already
         // implies the parent dir.
-        let mut file_rows: Vec<Element<'_, Message>> = Vec::new();
-        for path in &st.dirty_paths {
-            let name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("(unnamed)")
-                .to_string();
-            file_rows.push(
-                container(text(name).size(11).color(text_c))
-                    .padding([4, 8])
-                    .into(),
-            );
-        }
+        let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
+
+        // An unreadable sheet hides its children: no Discard All, and why.
+        let discard_blocked = st.sheet_refs.discard_blocked_reason();
+        let discard_note: Element<'_, Message> = match &discard_blocked {
+            Some(reason) => container(text(reason.clone()).size(11).color(text_muted))
+                .padding([10, 14])
+                .into(),
+            None => Space::new().height(0).into(),
+        };
+        let discard_button: Element<'_, Message> = if discard_blocked.is_some() {
+            Space::new().width(0).into()
+        } else {
+            secondary_button(
+                "Discard All",
+                Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::DiscardAll)),
+                text_c,
+                border_c,
+            )
+        };
+        let discard_gap: Element<'_, Message> = if discard_blocked.is_some() {
+            Space::new().width(0).into()
+        } else {
+            Space::new().width(8).into()
+        };
+
+        // Kept documents stay open and are never discarded; say so, by name.
+        let kept_note: Element<'_, Message> = if st.kept_paths.is_empty() {
+            Space::new().height(0).into()
+        } else {
+            let names: Vec<String> = st
+                .kept_paths
+                .iter()
+                .map(|p| crate::app::state::sheet_refs::file_label(p))
+                .collect();
+            container(
+                text(format!(
+                    "Kept open, not provably this project's alone: {}",
+                    crate::app::state::sheet_refs::bounded_names(&names)
+                ))
+                .size(11)
+                .color(text_muted),
+            )
+            .padding([10, 14])
+            .into()
+        };
 
         let dialog = container(
             column![
                 header,
                 container(
                     text(format!(
-                        "'{}' has {} unsaved file(s). What would you like to do?",
+                        "'{}' has {} unsaved item(s). What would you like to do?",
                         st.project_name,
-                        st.dirty_paths.len()
+                        st.dirty_paths.len() + st.dirty_rows.len()
                     ))
                     .size(11)
                     .color(text_muted)
                 )
                 .padding([14, 14]),
                 container(file_list).padding([0, 14]),
+                kept_note,
+                discard_note,
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -240,15 +280,8 @@ impl Signex {
                             border_c,
                         ),
                         Space::new().width(8),
-                        secondary_button(
-                            "Discard All",
-                            Message::Project(ProjectMsg::CloseConfirm(
-                                ProjectCloseChoice::DiscardAll,
-                            )),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
+                        discard_button,
+                        discard_gap,
                         primary_button(
                             "Save All",
                             Some(Message::Project(ProjectMsg::CloseConfirm(
@@ -274,6 +307,33 @@ impl Signex {
         // confirm is never up at the same time as the rename dialog.
         let offset = (0.0, 0.0);
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+    }
+
+    /// One list row per unsaved entry in a confirm modal: file
+    /// basenames first, then Component Preview rows by part number.
+    fn dirty_entry_rows(
+        &self,
+        paths: &[std::path::PathBuf],
+        rows: &[crate::library::state::EditorAddress],
+        text_c: iced::Color,
+    ) -> Vec<Element<'_, Message>> {
+        let path_labels = paths.iter().map(|path| {
+            path.file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("(unnamed)")
+                .to_string()
+        });
+        let row_labels = rows
+            .iter()
+            .map(|address| self.library.editor_label(address));
+        path_labels
+            .chain(row_labels)
+            .map(|name| {
+                container(text(name).size(11).color(text_c))
+                    .padding([4, 8])
+                    .into()
+            })
+            .collect()
     }
 
     fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
@@ -315,19 +375,7 @@ impl Signex {
         // List of dirty filenames across the whole workspace,
         // scrollable in case many files are unsaved. Basenames only —
         // full paths would overflow the modal.
-        let mut file_rows: Vec<Element<'_, Message>> = Vec::new();
-        for path in &st.dirty_paths {
-            let name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("(unnamed)")
-                .to_string();
-            file_rows.push(
-                container(text(name).size(11).color(text_c))
-                    .padding([4, 8])
-                    .into(),
-            );
-        }
+        let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
             .height(Length::Fixed(160.0))
             .width(Length::Fill);
@@ -337,8 +385,8 @@ impl Signex {
                 header,
                 container(
                     text(format!(
-                        "You have {} unsaved file(s). Save before exiting?",
-                        st.dirty_paths.len()
+                        "You have {} unsaved item(s). Save before exiting?",
+                        st.dirty_paths.len() + st.dirty_rows.len()
                     ))
                     .size(11)
                     .color(text_muted)

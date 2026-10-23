@@ -1,15 +1,19 @@
-use iced::widget::{canvas, column, container, row, text_input};
+use iced::widget::{canvas, column, container, row, shader, stack, text_input};
 use iced::{Element, Length};
 
 pub(crate) mod dialogs;
+/// Overlay identity + paint order — shared with the Esc ladder in
+/// `app/bootstrap/subscription.rs`, hence `pub(crate)` and not a child
+/// of the private `overlays` module.
+pub(crate) mod overlay_id;
 pub(crate) mod translate;
 
+mod chrome;
 mod context_menu;
+mod modals;
+mod overlays;
 mod pdf_preview;
 mod print_preview;
-mod modals;
-mod chrome;
-mod overlays;
 
 use super::*;
 
@@ -23,11 +27,12 @@ use super::*;
 const SUBMENU_ARROW: &str = "›";
 const SUBMENU_ARROW_SIZE: f32 = 18.0;
 
-/// Chrome strip search bar width in pixels.
+/// Chrome strip search bar width in pixels — the widest it ever gets;
+/// `chrome_search_bar_geometry` shrinks it below this on narrow windows.
 pub(crate) const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
-/// Fixed gap between the chrome search bar's right edge and the
-/// chrome controls (min/max/close).
-pub(crate) const CHROME_SEARCH_BAR_RIGHT_GAP: f32 = 12.0;
+/// Narrowest the chrome search bar shrinks to before it starts
+/// overlapping the menu row. Still wide enough for a few query words.
+pub(crate) const CHROME_SEARCH_BAR_MIN_WIDTH: f32 = 160.0;
 /// One chrome control button (min / max / close) width — see
 /// `chrome_btn` in `view_main_window_chrome`.
 pub(crate) const CHROME_CONTROL_BTN_W: f32 = 46.0;
@@ -39,6 +44,31 @@ pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 /// Minimum right padding between the chrome search bar's right edge
 /// and the window-controls strip.
 pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
+
+/// `(x, width)` of the chrome strip's search bar for a window `window_w`
+/// pixels wide. Single source of truth: the chrome strip lays the bar
+/// out with this width, and the command-palette dropdown anchors to this
+/// `x`, so the two can never drift apart.
+///
+/// The bar is centred on the **window**, not on the gap between the menu
+/// row and the window controls — that gap is off-centre because the menu
+/// row is much wider than the three control buttons. To stay centred
+/// without overlapping either side, both sides reserve the same width:
+/// whichever of the two is wider. Whatever is left over is the bar,
+/// clamped to `[CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH]`,
+/// so it shrinks as the window narrows and never grows past its design
+/// width on a wide monitor.
+pub(crate) fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
+    let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
+    let side = menu_end.max(CHROME_CONTROLS_W + CHROME_SEARCH_RIGHT_GAP);
+    let width = (window_w - 2.0 * side).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH);
+    // Once the window is too narrow to centre a `MIN_WIDTH` bar, centring
+    // would slide it under the menu items. Below that threshold it gives
+    // up on centring and sits flush right of the menu instead — still
+    // fully usable, which beats a pretty bar you can't click.
+    let x = ((window_w - width) / 2.0).max(menu_end);
+    (x, width)
+}
 
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -89,10 +119,6 @@ impl Signex {
                         // so the daemon doesn't panic.
                         iced::widget::container(iced::widget::Space::new()).into()
                     }
-                }
-                super::state::WindowKind::PcbTraceCalculator => {
-                    crate::pcb_trace_calculator::view(&self.ui_state.pcb_trace_calculator)
-                        .map(Message::PcbTraceCalculator)
                 }
             };
         }
@@ -176,6 +202,7 @@ impl Signex {
             // a secondary window onto a monitor with a different DPI.
             scale_factor: ui.main_window_scale,
             active_keymap: Some(ui.active_keymap.clone()),
+            recent_projects: ui.recent_projects.entries().to_vec(),
         };
         let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
@@ -379,12 +406,15 @@ impl Signex {
                     ed.state.placement_paused
                         || ed.state.active_bar_menu.is_some()
                         || ed.state.move_by_modal.is_some()
+                        || ed.state.align_modal.is_some()
                 })
                 .unwrap_or(false)
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
             || ui.keyboard_shortcuts_open
+            || ui.about_open
+            || ui.passive_calculator_open
             || ui.first_run_tour_open
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
@@ -466,7 +496,7 @@ impl Signex {
                 .push(Self::resize_edges_overlay())
                 .into()
         } else {
-            main.into()
+            main
         }
     }
 
@@ -529,9 +559,8 @@ impl Signex {
                     .containing_library(path)
                     .map(|lib| lib.display)
                     .unwrap_or_default();
-                let theme_id = self.ui_state.theme_id;
                 return crate::library::editor::standalone::view_symbol(
-                    editor, panel_ctx, display, theme_id, path,
+                    editor, panel_ctx, display, path,
                 )
                 .map(Message::Library);
             }
@@ -540,12 +569,8 @@ impl Signex {
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 let theme_id = self.ui_state.theme_id;
-                let custom_presets = &self.interaction_state.custom_filter_presets;
                 return crate::library::editor::standalone::view_footprint(
-                    editor,
-                    tokens,
-                    theme_id,
-                    custom_presets,
+                    editor, tokens, theme_id,
                 )
                 .map(Message::Library);
             }
@@ -591,11 +616,15 @@ impl Signex {
             // per-window canvas receives the mutation. Keyboard
             // shortcuts that synthesize `Message::CanvasEvent` keep
             // targeting the main canvas unchanged.
-            let base: Element<'_, Message> =
-                canvas(self.interaction_state.canvas_for_window(window_id))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into();
+            // #631 — the canvas Program is built here, per frame, from a
+            // borrow of the window's `CanvasSlot` plus settings read
+            // straight off `UiState`. It no longer owns copies of them.
+            let slot = self.interaction_state.canvas_for_window(window_id);
+            let program = crate::canvas::SchematicCanvas::new(slot, self.canvas_view_prefs());
+            let base: Element<'_, Message> = canvas(program)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
             if is_main {
                 base
             } else {
@@ -607,44 +636,49 @@ impl Signex {
                 })
             }
         } else if self.has_active_pcb() {
-            canvas(&self.interaction_state.pcb_canvas)
+            let pcb_canvas = &self.interaction_state.pcb_canvas;
+            let base: Element<'_, Message> = canvas(pcb_canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
-        } else {
-            // Distinguish "nothing loaded at all" from "project loaded,
-            // but no document picked yet" — the second case is what
-            // the user sees right after opening a .standard_pro before
-            // clicking any node in the project tree.
-            let (title, hint) = if self.document_state.active_project.is_some() {
-                (
-                    "No document selected",
-                    "Choose a schematic or PCB from the project tree".to_string(),
-                )
+                .into();
+            if pcb_canvas.gpu_render {
+                // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
+                // the opaque background + grid and owns pan/zoom/cursor/fit;
+                // the shader draws the board content on top, compositing over
+                // the grid. The shader's `update` is a no-op that never
+                // captures, so pointer events fall through to the canvas below.
+                let scene = pcb_canvas.gpu_scene().unwrap_or_default();
+                // Read the generation after `gpu_scene()` so it matches the
+                // geometry just returned; it lets the shader skip re-uploading
+                // unchanged geometry on pan/zoom.
+                let generation = pcb_canvas.scene_generation();
+                let (offset_x, offset_y, scale) = pcb_canvas.live_camera();
+                // `PcbSurface` selects this surface's pipeline slot — iced keys
+                // a stored pipeline by the primitive's TypeId, process-wide, so
+                // every surface needs its own marker (see `scene_shader`).
+                let content_shader = shader(crate::scene_shader::SceneShaderProgram::<
+                    crate::scene_shader::PcbSurface,
+                >::new(
+                    scene, Some(generation), [offset_x, offset_y], scale
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill);
+                stack![base, content_shader].into()
             } else {
-                let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
-                (
-                    "No document open",
-                    format!("Open a project with File > Open or {open_shortcut}"),
-                )
-            };
-            container(
-                column![
-                    iced::widget::text(title).size(14).color(crate::styles::ti(
-                        self.document_state.panel_ctx.tokens.text_secondary
-                    )),
-                    iced::widget::text(hint).size(11).color(crate::styles::ti(
-                        self.document_state.panel_ctx.tokens.text_secondary
-                    )),
-                ]
-                .spacing(8)
-                .align_x(iced::Alignment::Center),
-            )
-            .center(Length::Fill)
-            .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
-            ))
-            .into()
+                base
+            }
+        } else {
+            // "Nothing loaded" gets the actionable start screen; "project
+            // loaded, no document picked" keeps its own quieter hint.
+            use crate::start_screen::{self, Surface};
+            let tokens = &self.document_state.panel_ctx.tokens;
+            match Surface::select(self.document_state.active_project.is_some()) {
+                Surface::ProjectHint => start_screen::hint_view(tokens),
+                Surface::Start => {
+                    let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
+                    start_screen::view(tokens, &open_shortcut)
+                }
+            }
         }
     }
 
@@ -652,71 +686,80 @@ impl Signex {
     ///
     /// Pure assembler: each overlay's guard + widget tree lives in a
     /// dedicated `*_overlay` builder (see the `overlays` module and its
-    /// `bars` / `modals` submodules). Call ORDER here is
-    /// load-bearing — overlays stack visually in push order, so the
-    /// sequence below reproduces the original inline push order exactly.
-    /// `has_blocking_modal` short-circuits the tool/menu overlays just as
-    /// the inline code did once a blocking modal owns the stack.
+    /// `bars` / `modals` submodules), and the order they stack in lives
+    /// in [`overlay_id::PAINT_ORDER`] — walked FORWARD here, so later
+    /// entries paint on top of earlier ones.
+    ///
+    /// That same array is walked BACKWARD by the Esc ladder
+    /// (`app/bootstrap/subscription.rs`), which is the whole point of
+    /// #535: "Esc closes the topmost overlay" stops being a rule two
+    /// files must obey by hand — in opposite directions — and becomes
+    /// one list read from both ends.
+    ///
+    /// [`overlay_id::visible`] applies the blocking-modal cutoff, which
+    /// is why this loop has no early return of its own.
     fn collect_overlays(&self) -> Vec<Element<'_, Message>> {
         let mut layers = Vec::new();
-
-        // Pre-blocking overlays: export-error, print/BOM preview, and
-        // the custom net-colour picker.
-        layers.extend(self.export_error_overlay());
-        layers.extend(self.print_preview_overlay());
-        layers.extend(self.bom_preview_overlay());
-        layers.extend(self.net_color_custom_overlay());
-
-        // Blocking modals must own the overlay stack — stop here so no
-        // tool/menu overlay paints above them.
-        if self.has_blocking_modal() {
-            return layers;
+        for id in overlay_id::visible(self.has_blocking_modal()) {
+            let first_new = layers.len();
+            self.extend_overlay(&mut layers, *id);
+            // #562 — stop the wheel here rather than let it reach the
+            // canvas. Applied per overlay id, not per builder: most
+            // builders wrap their card in neither `wrap_modal` nor
+            // `dismiss_layer` (Preferences renders its body directly), so
+            // a guard placed in those two helpers alone missed them.
+            // Every overlay passes through this loop exactly once.
+            //
+            // `mouse_area` captures the wheel only where the cursor is
+            // over the wrapped element, and only wheel events — clicks
+            // still fall through exactly as before, which matters for the
+            // overlays that deliberately leave the canvas its right-press
+            // pan (see `dismiss_layer`).
+            if overlay_id::swallows_scroll(*id) {
+                for layer in &mut layers[first_new..] {
+                    let inner = std::mem::replace(layer, iced::widget::Space::new().into());
+                    *layer = iced::widget::mouse_area(inner)
+                        .on_scroll(|_| Message::Noop)
+                        .into();
+                }
+            }
         }
-
-        // Editor-surface chrome: pause card, active bars (schematic /
-        // footprint / symbol), and the in-canvas text-edit input.
-        layers.extend(self.placement_paused_overlay());
-        layers.extend(self.schematic_active_bar_overlay());
-        layers.extend(self.footprint_active_bar_overlay());
-        layers.extend(self.footprint_context_menu_overlay());
-        layers.extend(self.footprint_move_by_overlay());
-        layers.extend(self.symbol_editor_active_bar_overlay());
-        layers.extend(self.text_edit_overlay());
-
-        // Right-click menus, grid picker, panel list, dock drag zones,
-        // and floating panels.
-        layers.extend(self.active_bar_menu_overlay());
-        layers.extend(self.context_menu_overlay());
-        layers.extend(self.tab_context_menu_overlay());
-        layers.extend(self.project_tree_context_menu_overlay());
-        layers.extend(self.grid_picker_overlay());
-        layers.extend(self.panel_list_overlay());
-        layers.extend(self.dock_drag_zone_overlay());
-        layers.extend(self.floating_panels_overlay());
-
-        // Dialogs + library modals.
-        layers.extend(self.preferences_overlay());
-        layers.extend(self.find_replace_overlay());
-        layers.extend(self.keyboard_shortcuts_overlay());
-        layers.extend(self.first_run_tour_overlay());
-        layers.extend(self.simple_dialogs_overlay());
-        layers.extend(self.detachable_dialogs_overlay());
-        layers.extend(self.library_picker_overlay());
-        layers.extend(self.new_component_overlay());
-        layers.extend(self.edit_row_modal_overlay());
-        layers.extend(self.delete_confirm_overlay());
-        layers.extend(self.primitive_picker_overlay());
-        layers.extend(self.document_options_overlay());
-        layers.extend(self.create_options_overlay());
-        layers.extend(self.close_library_confirm_overlay());
-        layers.extend(self.library_recovery_overlay());
-
-        // Command palette dropdown, hover tooltip, and library-updates
-        // modal — painted last so they sit above every other layer.
-        layers.extend(self.command_palette_overlay());
-        layers.extend(self.view_hover_tooltip());
-        layers.extend(self.library_updates_overlay());
-
         layers
+    }
+}
+
+#[cfg(test)]
+mod chrome_geometry_tests {
+    use super::*;
+
+    /// The bar is centred on the window, shrinks monotonically as the
+    /// window narrows, and never runs off the right edge or under the
+    /// menu items.
+    #[test]
+    fn search_bar_stays_centred_and_clamped() {
+        let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
+        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
+            let (x, w) = chrome_search_bar_geometry(window_w);
+            assert!(
+                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
+                "bar width {w} out of range at {window_w}"
+            );
+            assert!(
+                x >= menu_end,
+                "bar slid under the menu at {window_w}: x={x}"
+            );
+            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
+            // Centred whenever the window is wide enough for it.
+            if window_w - 2.0 * menu_end >= CHROME_SEARCH_BAR_MIN_WIDTH {
+                assert!(
+                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
+                    "bar off window centre at {window_w}: x={x} w={w}"
+                );
+            }
+        }
+        // Narrowing the window never widens the bar.
+        let (_, wide) = chrome_search_bar_geometry(1920.0);
+        let (_, narrow) = chrome_search_bar_geometry(1100.0);
+        assert!(narrow <= wide, "bar grew as the window shrank");
     }
 }

@@ -105,25 +105,20 @@ pub(super) fn bbox_corner_points(
     plane_id: PlaneId,
     pad: &EditorPad,
 ) -> [SketchEntityId; 4] {
-    let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
-    [
-        push_point(sketch, plane_id, xmax, ymin), // ne
-        push_point(sketch, plane_id, xmax, ymax), // se
-        push_point(sketch, plane_id, xmin, ymax), // sw
-        push_point(sketch, plane_id, xmin, ymin), // nw
-    ]
+    let c = pad.rotated_corners_mm(); // [ne, se, sw, nw]
+    std::array::from_fn(|i| push_point(sketch, plane_id, c[i].0, c[i].1))
 }
 
 /// Set an existing Point entity's coordinates by ID. Returns `true`
 /// when the entity was found (and is a Point); `false` otherwise.
 /// Shared between the move-mirror path and the post-solve mirrors.
 pub(super) fn set_point_xy(sketch: &mut SketchData, id: SketchEntityId, x: f64, y: f64) -> bool {
-    if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) {
-        if let EntityKind::Point { x: ex, y: ey } = &mut entity.kind {
-            *ex = x;
-            *ey = y;
-            return true;
-        }
+    if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id)
+        && let EntityKind::Point { x: ex, y: ey } = &mut entity.kind
+    {
+        *ex = x;
+        *ey = y;
+        return true;
     }
     false
 }

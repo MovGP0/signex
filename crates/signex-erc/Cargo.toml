@@ -2,6 +2,7 @@
 name = "signex-erc"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
@@ -9,3 +10,7 @@ signex-types.workspace = true
 signex-net.workspace = true
 uuid.workspace = true
 serde.workspace = true
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

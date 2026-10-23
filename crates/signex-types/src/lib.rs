@@ -1,10 +1,12 @@
 pub mod anchor2d;
 pub mod atomic_io;
 pub mod coord;
+pub mod designator;
 pub mod format;
 pub mod layer;
 pub mod markup;
 pub mod net;
+pub mod pad_outline;
 pub mod pcb;
 pub mod project;
 pub mod property;

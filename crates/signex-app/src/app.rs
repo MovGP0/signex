@@ -13,8 +13,10 @@ use crate::toolbar::ToolMessage;
 
 mod actions;
 mod bootstrap;
+pub(crate) mod command;
 pub mod command_palette;
 pub mod contracts;
+mod dir_listing;
 pub(crate) mod dispatch;
 mod documents;
 mod handlers;
@@ -25,6 +27,7 @@ mod pcb_dirty_adapter;
 pub(crate) mod project_sheets;
 mod runtime;
 mod selection_request;
+pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) mod view;
 
@@ -40,15 +43,16 @@ pub use contracts::{
     TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintEditorState, GraphicFillPicker, LocalColorPicker,
-    LocalColorSlot, SchematicTabSession, SymbolEditorState, TabDocument, TabInfo, TabKind, Tool,
+    ComponentEditorTab, DrawMode, FootprintEditorState, FootprintHistorySnapshot,
+    GraphicFillPicker, LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolEditorState,
+    SymbolViewRequest, TabDocument, TabInfo, TabKind, Tool,
 };
 pub use state::{
-    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
+    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
+    PreviewState, ProjectId, Signex, UiState,
 };
 
 // Re-exported so modal dialogs outside `state` can reference the type.
-#[allow(unused_imports)]
 pub use state::AnnotateOrder;
 
 impl Signex {

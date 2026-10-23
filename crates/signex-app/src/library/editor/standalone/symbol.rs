@@ -29,16 +29,15 @@ pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    theme_id: signex_types::theme::ThemeId,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
     // Active bar moved to the app-view layer (view_main_for) so it
     // shares the schematic's window-absolute coordinate system — see
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
-    // renders just toolbar + canvas; the bar is layered on top there.
-    let _ = theme_id;
+    // renders just toolbar + canvas; the bar is layered on top there,
+    // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
     let body = column![toolbar, canvas_widget]
@@ -70,7 +69,7 @@ fn view_symbol_status<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
@@ -97,7 +96,7 @@ fn view_symbol_status<'a>(
     let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
         })
         .style(symbol_tool_button_style(false, border));
@@ -107,7 +106,7 @@ fn view_symbol_status<'a>(
     let grid_cycle = button(text(grid_size_label).size(11).color(muted))
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
         })
         .style(symbol_tool_button_style(false, border));
@@ -125,13 +124,18 @@ fn view_symbol_status<'a>(
             grid_toggle,
             grid_cycle,
             Space::new().width(Length::Fill),
-            text(if editor.selected.is_some() {
-                "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
-            } else {
-                "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
-            })
-            .size(10)
-            .color(muted),
+            match &editor.status_message {
+                Some(msg) => text(msg.clone())
+                    .size(10)
+                    .color(theme_ext::error_color(tokens)),
+                None => text(if editor.selected.is_some() {
+                    "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
+                } else {
+                    "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
+                })
+                .size(10)
+                .color(muted),
+            },
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
@@ -194,11 +198,14 @@ fn view_symbol_toolbar<'a>(
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
             Space::new().width(6),
-            // Add-unit (+) / remove-unit (−). Wire the existing
-            // NewPart / RemovePart messages; Phase B fixes their
-            // semantics (real delete + persistent empty unit).
+            // Add-unit (+) / remove-unit (−), wired to NewPart /
+            // RemovePart, which add a part and call `delete_unit`
+            // (real delete, refusing to remove the only part).
             btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
-            btn("\u{2212}", PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)),
+            btn(
+                "\u{2212}",
+                PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)
+            ),
             Space::new().width(8),
             btn(save_label, PrimitiveEdit::Save),
         ]
@@ -239,10 +246,13 @@ fn view_symbol_canvas<'a>(
         editor.primitive(),
         editor.selected.clone(),
         editor.tool,
+        &editor.polygon_vertices,
         editor.active_part,
+        editor.context_menu.is_some(),
         &editor.camera,
         display.grid_size_mm as f64,
         display.grid_visible,
+        panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),
         display.sheet_color.to_color(),
         crate::styles::ti(tokens.accent),
@@ -252,7 +262,9 @@ fn view_symbol_canvas<'a>(
             a: 0.18,
             ..crate::styles::ti(tokens.text_secondary)
         },
-    );
+    )
+    .with_selection_filter(editor.selection_filter)
+    .with_view_pending(editor.pending_view.is_some());
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -264,7 +276,7 @@ fn view_symbol_canvas<'a>(
     })
 }
 
-fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
+pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
     use sym_canvas::CanvasAction;
     match action {
         CanvasAction::AddPin { x, y } => SymbolEditorMsg::AddPin { x, y },
@@ -304,7 +316,11 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
             start_deg,
             end_deg,
         },
+        CanvasAction::ArcSweepRejected => SymbolEditorMsg::ArcSweepRejected,
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
+        CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
+        CanvasAction::PolygonCommit => SymbolEditorMsg::PolygonCommit,
+        CanvasAction::PolygonCancel => SymbolEditorMsg::PolygonCancel,
         CanvasAction::Select(sel) => SymbolEditorMsg::Select(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => SymbolEditorMsg::Deselect,
         CanvasAction::Move { x, y } => SymbolEditorMsg::MoveSelected { x, y },
@@ -328,10 +344,37 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
         CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
         CanvasAction::Fit => SymbolEditorMsg::Fit,
+        CanvasAction::ViewportMeasured {
+            width,
+            height,
+            then,
+        } => SymbolEditorMsg::ViewportMeasured {
+            width,
+            height,
+            then: then.map(|action| Box::new(symbol_action_to_primitive_msg(*action))),
+        },
         CanvasAction::CursorAt { x_mm, y_mm } => SymbolEditorMsg::CursorAt { x_mm, y_mm },
         CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
         CanvasAction::Undo => SymbolEditorMsg::Undo,
         CanvasAction::Redo => SymbolEditorMsg::Redo,
+        CanvasAction::ShowContextMenu { x, y, target } => SymbolEditorMsg::ShowContextMenu {
+            x,
+            y,
+            target: symbol_context_target_to_msg(target),
+        },
+        CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
+    }
+}
+
+fn symbol_context_target_to_msg(
+    target: sym_state::SymbolContextTarget,
+) -> crate::library::messages::SymbolContextTargetMsg {
+    use crate::library::messages::SymbolContextTargetMsg;
+    use sym_state::SymbolContextTarget;
+    match target {
+        SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
+        SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
+        SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
     }
 }
 
@@ -345,6 +388,7 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::ArcStart => GraphicHandleMsg::ArcStart,
         GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
+        GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
     }
 }
 

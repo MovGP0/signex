@@ -51,7 +51,6 @@ pub enum TabKind {
 }
 
 impl TabKind {
-    #[allow(dead_code)]
     pub fn is_component_editor(&self) -> bool {
         matches!(self, TabKind::ComponentEditor(_))
     }
@@ -158,13 +157,11 @@ impl SchematicTabSession {
 /// an enum so future tab kinds (symbol editor, footprint editor, 3D
 /// viewer) can slot in without reshaping callers.
 #[derive(Debug)]
-#[allow(dead_code, clippy::large_enum_variant)]
 pub enum TabDocument {
     Pcb(PcbBoard),
 }
 
 impl TabDocument {
-    #[allow(dead_code)]
     pub fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
             Self::Pcb(board) => Some(board),
@@ -230,6 +227,16 @@ pub struct LocalColorPicker {
     pub advanced: bool,
 }
 
+/// A camera placement the symbol editor cannot compute until the canvas
+/// reports its real size (see `SymbolEditorMsg::ViewportMeasured`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolViewRequest {
+    /// Fit the symbol's bounding box into the viewport.
+    Fit,
+    /// Park world origin in the middle of the viewport (fresh tab).
+    CenterOrigin,
+}
+
 #[derive(Debug)]
 pub struct SymbolEditorState {
     pub path: PathBuf,
@@ -263,6 +270,11 @@ pub struct SymbolEditorState {
     /// outside the canvas. Per-tab — tracking the cursor is
     /// inherently a single-canvas concept.
     pub cursor_mm: Option<(f64, f64)>,
+    /// Camera request waiting for the canvas to report its real size.
+    /// Set by `Fit` and by a fresh tab / symbol switch; cleared when
+    /// `ViewportMeasured` applies it. Mirrors the footprint editor's
+    /// `fit_pending`, but carries which placement to apply.
+    pub pending_view: Option<SymbolViewRequest>,
     /// v0.13 — SchLib selection filter. Per-kind selectable flags
     /// gate which entities the canvas hit-tester considers. Mirrors
     /// the footprint editor's `selection_filter`.
@@ -294,6 +306,33 @@ pub struct SymbolEditorState {
     /// closed. Transient UI-only state: never serialized, never
     /// snapshotted for undo.
     pub local_color_picker: Option<LocalColorPicker>,
+    /// Click-collect vertex stash for the canvas's `PlacePolygon`
+    /// tool (grid-snapped mm world positions). Lives here — on the
+    /// per-document editor model — rather than on the canvas
+    /// `Program::State`, which iced reuses across tab switches for
+    /// whichever `.snxsym` tab is currently rendered; a stash kept
+    /// there would survive a switch to a different document and could
+    /// mis-commit into it. Mirrors the footprint editor's
+    /// `FootprintEditorState::place_polygon_vertices`. Mutated only by
+    /// `SymbolEditorMsg::PolygonClick` / `PolygonCommit` /
+    /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
+    /// handler when the user switches away from `PlacePolygon`.
+    pub polygon_vertices: Vec<(f64, f64)>,
+    /// Transient, user-visible status line rendered in the symbol
+    /// editor's status footer (see `standalone::symbol::view_symbol_
+    /// status`). `None` most of the time; set to `Some(reason)` when
+    /// an action fails in a way the user needs to see explained (e.g.
+    /// `JoinSelectionIntoPolygon` on a non-connecting selection).
+    /// Cleared centrally at the top of `apply_symbol_primitive_edit`
+    /// (see `updates::clear_stale_status_message`) on the next message
+    /// that represents an attempted mutation, so it never lingers past
+    /// the action it described. Never serialized, never snapshotted
+    /// for undo.
+    pub status_message: Option<String>,
+    /// Open right-click context menu, if any. `None` = closed. Mirrors
+    /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —
+    /// see `crate::library::editor::symbol::state::SymbolContextMenuState`.
+    pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
 }
 
 impl SymbolEditorState {
@@ -316,6 +355,7 @@ impl SymbolEditorState {
             dirty: false,
             camera: crate::canvas::Camera::default(),
             cursor_mm: None,
+            pending_view: None,
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
@@ -324,6 +364,9 @@ impl SymbolEditorState {
             mid_drag: false,
             graphic_fill_picker: None,
             local_color_picker: None,
+            polygon_vertices: Vec::new(),
+            status_message: None,
+            context_menu: None,
         };
         state.reset_camera_origin_center();
         state
@@ -337,6 +380,9 @@ impl SymbolEditorState {
             Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
             Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
         );
+        // The default size above is only a placeholder until the
+        // canvas reports its real one.
+        self.pending_view = Some(SymbolViewRequest::CenterOrigin);
     }
 
     /// Borrow the symbol currently being edited. Falls back to the
@@ -404,7 +450,22 @@ pub struct FootprintEditorState {
     /// mutation that calls `push_history` so the redo lineage stays
     /// consistent with single-history-tree semantics.
     pub redo: Vec<FootprintHistorySnapshot>,
+    /// The field the last [`Self::record_edit`] changed, tagged with the
+    /// footprint it belonged to: a field key names a pad index or a
+    /// sketch id, which only identify something within one footprint of
+    /// a multi-footprint file. A text input
+    /// fires one message per keystroke; while the same field keeps
+    /// being edited, those edits share the one snapshot taken before
+    /// the first of them, so typing a description is one undo step and
+    /// does not push earlier edits out of the depth-capped history.
+    /// Cleared by every other history push, undo and redo.
+    last_edit_key: Option<(FieldEditKey, usize)>,
 }
+
+/// Identifies one field of one target (a pad index, a sketch entity or
+/// array id as `u128`) for [`FootprintEditorState::record_edit`]
+/// coalescing.
+pub type FieldEditKey = (&'static str, u128);
 
 /// v0.24 Phase 1 (Track B) — coarse-grained undo snapshot. Captures
 /// the canonical state needed to roll back any footprint edit:
@@ -434,8 +495,9 @@ impl FootprintEditorState {
     /// user opened. The editor opens on the first footprint in the
     /// file. The caller is responsible for confirming the file is
     /// non-empty before this call.
-    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+    pub fn new(path: PathBuf, mut file: signex_library::FootprintFile) -> Self {
         let active_idx = 0;
+        let repaired = Self::take_load_repairs(&path, &mut file);
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
@@ -446,10 +508,36 @@ impl FootprintEditorState {
             panel_selected_idx: None,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
-            dirty: false,
+            // An arc repaired on load differs from what is on disk, so the
+            // document opens dirty and a save persists the repair.
+            dirty: repaired,
             history: Vec::new(),
             redo: Vec::new(),
+            last_edit_key: None,
         }
+    }
+
+    /// Report, once, the arcs the loader moved onto their circles (the
+    /// Messages panel names them) and clear the transient record so history
+    /// snapshots never carry it. Returns whether anything was repaired.
+    /// Opening a footprint into an editor is the only place this logs;
+    /// previews, mounts and history reads stay quiet.
+    fn take_load_repairs(path: &std::path::Path, file: &mut signex_library::FootprintFile) -> bool {
+        let mut moved: Vec<String> = Vec::new();
+        for footprint in &mut file.footprints {
+            moved.extend(footprint.load_repairs.drain(..).map(|id| id.to_string()));
+        }
+        if moved.is_empty() {
+            return false;
+        }
+        crate::diagnostics::log_warning(format!(
+            "{}: moved the end point of {} arc(s) onto its circle (centre and start \
+             unchanged); save the file to keep the repair: {}",
+            path.display(),
+            moved.len(),
+            moved.join(", ")
+        ));
+        true
     }
 
     /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
@@ -470,11 +558,59 @@ impl FootprintEditorState {
     /// natural integration site.
     pub fn push_history(&mut self) {
         let snap = self.snapshot();
+        self.commit_history(snap);
+    }
+
+    /// Snapshot taken before an edit whose outcome is not known yet; hand it
+    /// to [`Self::commit_history`] only if the edit is kept.
+    pub(crate) fn begin_edit(&self) -> FootprintHistorySnapshot {
+        self.snapshot()
+    }
+
+    /// Record `snap` as an undo step: clears redo and evicts the oldest step
+    /// at [`Self::HISTORY_DEPTH`]. Not called for a rejected edit, so a
+    /// rejection leaves history and redo exactly as they were.
+    pub(crate) fn commit_history(&mut self, snap: FootprintHistorySnapshot) {
         self.history.push(snap);
         if self.history.len() > Self::HISTORY_DEPTH {
             self.history.remove(0);
         }
         self.redo.clear();
+        self.last_edit_key = None;
+    }
+
+    /// True when the footprint and pad list equal `snap`, i.e. the edit
+    /// since `snap` was taken changed nothing that history restores.
+    pub(crate) fn is_unchanged_since(&self, snap: &FootprintHistorySnapshot) -> bool {
+        self.file == snap.file && self.state.pads == snap.pads
+    }
+
+    /// Run a Properties-panel edit as one undo step. `edit` returns
+    /// whether it changed anything; the snapshot is only recorded then,
+    /// so a rejected input (unparsable, missing target) leaves the
+    /// history and the redo stack untouched. With a `key`, repeated
+    /// edits of the same field coalesce into the first one's snapshot
+    /// (see [`Self::last_edit_key`]).
+    pub fn record_edit(
+        &mut self,
+        key: Option<FieldEditKey>,
+        edit: impl FnOnce(&mut Self) -> bool,
+    ) -> bool {
+        let key = key.map(|field| (field, self.active_idx));
+        let coalesce = key.is_some() && self.last_edit_key == key;
+        let snap = (!coalesce).then(|| self.snapshot());
+        if !edit(self) {
+            return false;
+        }
+        if let Some(snap) = snap {
+            self.history.push(snap);
+            if self.history.len() > Self::HISTORY_DEPTH {
+                self.history.remove(0);
+            }
+            self.redo.clear();
+        }
+        self.last_edit_key = key;
+        true
     }
 
     /// v0.24 Phase 1 — undo the most recent edit. Returns `true` if
@@ -485,6 +621,7 @@ impl FootprintEditorState {
         let Some(snap) = self.history.pop() else {
             return false;
         };
+        self.last_edit_key = None;
         let current = self.snapshot();
         self.redo.push(current);
         if self.redo.len() > Self::HISTORY_DEPTH {
@@ -501,6 +638,7 @@ impl FootprintEditorState {
         let Some(snap) = self.redo.pop() else {
             return false;
         };
+        self.last_edit_key = None;
         let current = self.snapshot();
         self.history.push(current);
         if self.history.len() > Self::HISTORY_DEPTH {
@@ -618,9 +756,7 @@ pub enum Tool {
     Label,
     Component,
     Text,
-    #[allow(dead_code)]
     NoConnect,
-    #[allow(dead_code)]
     BusEntry,
     Line,
     Rectangle,

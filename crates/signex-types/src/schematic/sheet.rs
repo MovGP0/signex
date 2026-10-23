@@ -1,6 +1,7 @@
 //! Placed schematic-sheet elements and the sheet container.
 
 use super::*;
+use crate::format::{SheetUnknown, UnknownColumns};
 
 // ---------------------------------------------------------------------------
 
@@ -12,6 +13,10 @@ pub struct Wire {
     /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
     #[serde(default)]
     pub stroke_width: f64,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +26,20 @@ pub struct Junction {
     /// 0.0 means use the theme default size.
     #[serde(default)]
     pub diameter: f64,
+    /// `true` when this dot was minted by the wire-junction autoplacer
+    /// (`reconcile_wire_junctions` / `junctions_for_wire` in
+    /// `signex-engine`) rather than placed by the user. Minted dots are
+    /// re-validated on every wire-geometry command and removed once no
+    /// wire meeting justifies them any more; a user-placed dot — which
+    /// includes every junction in a `.snxsch` written before this field
+    /// existed, via the `#[serde(default)]` below — is left alone even
+    /// if it no longer sits on a wire (issue #422).
+    #[serde(default)]
+    pub minted: bool,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +58,10 @@ pub struct Label {
     pub justify: HAlign,
     #[serde(default = "default_label_v_align")]
     pub justify_v: VAlign,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 fn default_label_v_align() -> VAlign {
@@ -243,10 +266,75 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: HashMap<String, LibSymbol>,
+    /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
+    /// build does not recognise, kept per section so a save re-emits
+    /// each where it was found. Empty for every file written by this
+    /// build.
+    #[serde(default, skip_serializing_if = "SheetUnknown::is_empty")]
+    pub unknown: SheetUnknown,
 }
 
 fn default_root_sheet_page() -> String {
     "1".to_string()
+}
+
+/// An empty sheet with a nil uuid; every other field equals its serde default
+/// (pinned by `sheet_default_equals_deserialized_empty_manifest`).
+/// For fixtures and partial literals; production code builds sheets
+/// exhaustively and mints real uuids.
+impl Default for SchematicSheet {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: String::new(),
+            root_sheet_page: default_root_sheet_page(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: HashMap::new(),
+            lib_symbols: HashMap::new(),
+            unknown: SheetUnknown::default(),
+        }
+    }
+}
+
+/// Zero-length wire at the origin with a nil uuid. For fixtures and partial
+/// literals; production code builds wires exhaustively and mints real uuids.
+impl Default for Wire {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            start: Point::default(),
+            end: Point::default(),
+            stroke_width: 0.0,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
+/// Junction at the origin with a nil uuid. For fixtures and partial literals;
+/// production code builds junctions exhaustively and mints real uuids.
+impl Default for Junction {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            position: Point::default(),
+            diameter: 0.0,
+            minted: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -403,4 +491,3 @@ pub fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f6
     let proj_y = ay + t * dy;
     ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
 }
-

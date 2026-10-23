@@ -1,6 +1,8 @@
 //! Standalone `.snxfpt` footprint-editor document tab view builders.
 //! Split from `library/editor/standalone.rs` as pure code motion.
 
+use std::path::Path;
+
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
@@ -23,8 +25,7 @@ use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, Pr
 pub fn view_footprint<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
-    theme_id: signex_types::theme::ThemeId,
-    custom_filter_presets: &'a [crate::active_bar::CustomFilterPreset],
+    _theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -71,9 +72,8 @@ pub fn view_footprint<'a>(
     // the schematic's window-absolute coordinate system. The body
     // here renders just canvas + layers strip + footer; the bar
     // (and its dropdown overlay) is layered on top in
-    // `view_main_for`. `custom_filter_presets` is unused here now
-    // but kept on the signature for backwards compat with callers.
-    let _ = custom_filter_presets;
+    // `view_main_for`, which is where the Selection Filter presets
+    // are consumed — this view no longer takes them.
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
@@ -108,7 +108,10 @@ pub fn view_footprint<'a>(
 /// mode. Hosts the mode segmented control + Save button. Stays the
 /// same height across mode switches so the active bar's vertical
 /// position is constant.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_top_strip<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -328,7 +331,10 @@ fn view_footprint_layers_strip<'a>(
     .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_sketch_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -406,7 +412,10 @@ fn view_footprint_sketch_toolbar<'a>(
         .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_toolbar<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
@@ -636,13 +645,7 @@ fn view_footprint_canvas<'a>(
         .height(Length::Fill)
         .into();
     let path = editor.path.clone();
-    let translated = canvas_widget.map(move |msg| match msg {
-        LibraryMessage::EditorEvent { msg, .. } => LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
-            msg: editor_msg_to_primitive_msg(msg),
-        },
-        other => other,
-    });
+    let translated = canvas_widget.map(move |msg| translate_footprint_canvas_msg(msg, &path));
 
     container(translated)
         .padding(0)
@@ -660,23 +663,41 @@ fn view_footprint_canvas<'a>(
         .into()
 }
 
-/// Translate a Footprint canvas `EditorMsg` into the standalone
-/// primitive-editor envelope. Only the canvas-emitted variants are
-/// ever produced here — non-footprint variants fall through to a
-/// no-op `Save` (the dispatcher discards on path-keyed lookup
-/// mismatch anyway).
-fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEdit {
+/// Translate a message emitted by the footprint canvas widget
+/// (`canvas::Program<LibraryMessage>` — see `canvas/mod.rs`) into the
+/// standalone `.snxfpt` tab's primitive-editor envelope. The canvas
+/// only ever emits `EditorEvent { msg: EditorMsg::Footprint(_), .. }`
+/// (every message it builds goes through that wrapper — see e.g.
+/// `canvas/input/tools.rs`'s `select_msg`), so that shape becomes a
+/// real, path-carrying `PrimitiveEditorEvent`. This routing decision
+/// used to live inline in the `.map()` closure at the call site, where
+/// nothing could unit-test it; it's a free function here so a
+/// regression (a special-cased variant routed to `PrimitiveEdit::Save`
+/// ahead of the general arm) is directly testable.
+fn translate_footprint_canvas_msg(msg: LibraryMessage, path: &Path) -> LibraryMessage {
     match msg {
-        // Pre-existing quirk preserved: Tab during sketch placement input
-        // is emitted by the canvas but was never wired through to the
-        // standalone dispatcher, so it lands as a no-op Save. Kept as-is
-        // to keep this refactor behavior-neutral.
-        EditorMsg::Footprint(FootprintEditorMsg::SketchPlacementInputTab) => PrimitiveEdit::Save,
-        EditorMsg::Footprint(fp) => PrimitiveEdit::Footprint(fp),
-        // Anything not emitted by the footprint canvas is dropped via a
-        // benign "save of the wrong tab" — the path-keyed dispatcher
-        // ignores mismatches.
-        _ => PrimitiveEdit::Save,
+        LibraryMessage::EditorEvent {
+            msg: EditorMsg::Footprint(msg),
+            ..
+        } => LibraryMessage::PrimitiveEditorEvent {
+            path: path.to_path_buf(),
+            msg: PrimitiveEdit::Footprint(msg),
+        },
+        other => {
+            // Enforced, not just documented: a future non-Footprint
+            // variant would otherwise pass through as a bare
+            // `EditorEvent` carrying the sentinel address built in
+            // `view_footprint_canvas` (empty `table`, nil `row_id`),
+            // which `handle_editor_event`
+            // (`app/dispatch/library/mod.rs`) hands to a path-keyed
+            // lookup that cannot match a standalone tab — the message
+            // would be silently dropped instead of erroring.
+            debug_assert!(
+                false,
+                "footprint canvas emitted a non-Footprint message: {other:?}"
+            );
+            other
+        }
     }
 }
 
@@ -717,4 +738,61 @@ fn view_footprint_footer<'a>(
     .style(crate::styles::modal_footer_strip(tokens))
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    //! Issue #180 — `translate_footprint_canvas_msg` is the canvas-to-
+    //! dispatcher bridge and is private to this module, so it can only
+    //! be exercised from an in-crate unit test (an integration test
+    //! under `tests/` has no visibility into it: `standalone::footprint`
+    //! is a private submodule re-exporting only `view_footprint`).
+    use super::*;
+    use std::path::PathBuf;
+
+    fn wrap(msg: FootprintEditorMsg) -> LibraryMessage {
+        LibraryMessage::EditorEvent {
+            library_path: PathBuf::new(),
+            table: String::new(),
+            row_id: signex_library::RowId::from_uuid(uuid::Uuid::nil()),
+            msg: EditorMsg::Footprint(msg),
+        }
+    }
+
+    #[test]
+    fn sketch_placement_tab_routes_to_footprint_not_save() {
+        let path = PathBuf::from("t.snxfpt");
+        let out = translate_footprint_canvas_msg(
+            wrap(FootprintEditorMsg::SketchPlacementInputTab),
+            &path,
+        );
+        match out {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputTab),
+                ..
+            } => {}
+            other => panic!(
+                "expected SketchPlacementInputTab to pass through to the footprint \
+                 dispatcher (which cycles the placement-input field), got {other:?}"
+            ),
+        }
+    }
+
+    // Every other Footprint variant already passed through uniformly;
+    // pin that down too so a future special-case regresses loudly.
+    #[test]
+    fn sketch_placement_char_routes_to_footprint_uniformly() {
+        let path = PathBuf::from("t.snxfpt");
+        let out = translate_footprint_canvas_msg(
+            wrap(FootprintEditorMsg::SketchPlacementInputChar('5')),
+            &path,
+        );
+        match out {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchPlacementInputChar('5')),
+                ..
+            } => {}
+            other => panic!("expected uniform Footprint passthrough, got {other:?}"),
+        }
+    }
 }

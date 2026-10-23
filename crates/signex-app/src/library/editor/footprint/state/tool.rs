@@ -45,6 +45,11 @@ pub enum SketchTool {
     RoundedRectangle,
     Circle,
     Arc,
+    /// #467 — 3-point Edge Arc: click start, click end, click a third
+    /// point the arc passes through. Centre + radius are derived from
+    /// the circumcircle of the three picks (shared solver, #461/#483)
+    /// instead of the centre-first `Arc` tool's gesture.
+    EdgeArc,
     /// v0.22 Phase B1 — Mirror tool.
     Mirror,
     /// v0.22 Phase B2 — Offset tool.
@@ -66,6 +71,26 @@ pub enum SketchTool {
     /// you want gone. EDA use: cleaning up overlapping silk/outline
     /// without manual delete + redraw.
     Trim,
+    /// #372 — Break Track. Single click on a sketch `Line`: hit-test
+    /// the click against every Line (0.30 mm tolerance, nearest stroke
+    /// wins — the same pick as Trim), project it onto that Line to a
+    /// parameter `t`, and call the `split_line` primitive (#360) to
+    /// divide the Line into two Lines meeting at a new mid `Point`. EDA
+    /// use: dropping a vertex into a silk / courtyard / outline segment
+    /// so each half can be dragged or re-routed independently — unlike
+    /// Trim (which deletes a segment), Break Track keeps both halves.
+    /// Splits only sketch Lines — arcs, circles, pads and regions are
+    /// out of scope.
+    BreakTrack,
+    /// #361 — "Drag Track End" (Place ▸ Drag Track End). An
+    /// endpoint-biased segment grab: a left-press anywhere on a sketch
+    /// `Line` grabs that line's NEARER endpoint and drives the existing
+    /// Point-drag path (`try_drag_track_end_grab` → `DragState.sketch_point`
+    /// in `canvas/input/`), so the endpoint follows the cursor with the
+    /// solver live — no 12 px point-snap precision required. Not a
+    /// placement tool: it never mints geometry, it only re-arms the
+    /// endpoint drag. Arc / circle endpoints are out of scope.
+    DragTrackEnd,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -101,6 +126,19 @@ pub enum ToolPending {
     ArcStart {
         center: signex_sketch::id::SketchEntityId,
         start: signex_sketch::id::SketchEntityId,
+    },
+    /// #467 — Edge Arc tool, start click landed; awaiting end click.
+    EdgeArcStart {
+        start: signex_sketch::id::SketchEntityId,
+    },
+    /// #467 — Edge Arc tool, start + end clicks landed; awaiting the
+    /// third "point on arc" click. That click's position is fed into
+    /// the circumcircle of (start, third, end) to derive the centre +
+    /// sweep direction; collinear picks are rejected via
+    /// `solve_warnings` instead of minting a degenerate arc.
+    EdgeArcEnd {
+        start: signex_sketch::id::SketchEntityId,
+        end: signex_sketch::id::SketchEntityId,
     },
     /// v0.23 — "Re-pick centre" affordance from the Pattern Properties
     /// sub-form.

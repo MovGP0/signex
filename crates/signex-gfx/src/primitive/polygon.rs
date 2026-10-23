@@ -12,3 +12,17 @@ pub struct GpuPolygon {
     pub stroke_color: Option<[f32; 4]>,
     pub stroke_width: f32,
 }
+
+impl GpuPolygon {
+    /// Whether this contour carries a stroked outline on top of its fill: a
+    /// stroke colour is enough. A zero width is a hairline, raised to the
+    /// surface's screen-space floor on both paths — the CPU replay's
+    /// `stroke_px`, the GPU's `polygon.wgsl`.
+    ///
+    /// Until #645 this also required a positive width, so a coloured
+    /// zero-width outline drew on the CPU and vanished on the GPU. The CPU
+    /// rule won: a colour with no outline would be a contradiction.
+    pub fn is_stroked(&self) -> bool {
+        self.stroke_color.is_some()
+    }
+}

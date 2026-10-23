@@ -7,9 +7,15 @@
 
 use super::*;
 
+/// Rendered em size for hit-testing — the same rule the draw path uses.
+///
+/// This used to be a second copy of the sizing arithmetic with the clamp
+/// bounds written out again. The two agreed, so nothing was visibly broken;
+/// what they were was two places to edit. Change the draw path's bounds and
+/// the hit box silently keeps the old ones, and a click near a pin label
+/// starts landing where the text no longer is.
 pub(super) fn text_size_px_from_mm(size_mm: f32, scale: f32) -> f32 {
-    let em_mm = size_mm.max(0.1) / MM_PER_EM;
-    (em_mm * scale).clamp(2.0, 96.0)
+    signex_gfx::primitive::text::text_px(size_mm, scale, SYMBOL_TEXT_SIZE)
 }
 
 pub(super) fn stroke_px_at_zoom(base_width_px_at_100: f32, _scale: f32) -> f32 {
@@ -115,6 +121,10 @@ pub(super) fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> 
                     SymbolGraphicKind::Circle { center, .. }
                     | SymbolGraphicKind::Arc { center, .. } => (center[0], center[1]),
                     SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
+                    SymbolGraphicKind::Polygon { vertices } => {
+                        let c = state::polygon_centroid(vertices);
+                        (c[0], c[1])
+                    }
                 })
         }
         SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. } => None,

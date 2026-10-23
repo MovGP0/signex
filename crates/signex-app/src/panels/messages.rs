@@ -4,9 +4,12 @@ use super::*;
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PanelMsg {
     Tree(TreeMsg),
+    /// The Navigator panel's sheet-hierarchy tree. Separate from
+    /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
+    /// one shared variant would act on the wrong tree.
+    Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
     /// v0.14.2 — Properties panel toggle for the active footprint
@@ -403,6 +406,9 @@ pub enum PanelMsg {
     HistoryRestoreClicked {
         sha: String,
     },
+    /// Cancel on the History panel's "Discard unsaved edits and restore"
+    /// confirmation row.
+    HistoryRestoreCancelled,
     /// v0.22 Phase E3+E4 polish — Hover state for the Properties
     /// panel's "Conflicts (worst first)" list. `true` on row
     /// `on_enter`, `false` on `on_exit`. The handler flips
@@ -820,7 +826,7 @@ pub enum PanelMsg {
     },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
-    /// + the on-disk container's `display_name` when the active
+    /// and the on-disk container's `display_name` when the active
     /// symbol is the only one in the file.
     SymEditorSetSymbolName(String),
     /// Properties panel — edit the active symbol's designator
@@ -917,7 +923,6 @@ pub enum PanelMsg {
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).
-    #[allow(dead_code)]
     SetUiFont(String),
     /// Change the canvas font (applied immediately to schematic/PCB text).
     SetCanvasFont(String),
@@ -966,4 +971,3 @@ pub enum PanelMsg {
     /// No-op placeholder for unimplemented UI controls.
     Noop,
 }
-

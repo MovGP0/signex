@@ -30,9 +30,14 @@ use super::super::super::*;
 use crate::panels::PanelMsg;
 
 mod footprint;
+mod numeric_input;
 mod symbol;
 
 use footprint::{SilkLineEndpoint, SilkTextField};
+use numeric_input::{
+    CORNER_RADIUS_PCT_MAX, CORNER_RADIUS_PCT_MIN, fp_parse_optional_number,
+    fp_parse_optional_number_in, fp_resolve_optional_number,
+};
 
 impl Signex {
     /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`
@@ -57,7 +62,8 @@ impl Signex {
         let mut follow = Task::none();
         let handled = match panel_msg {
             PanelMsg::FpLibraryOpenSibling(sibling_path) => {
-                self.handle_fp_library_open_sibling(sibling_path)
+                follow = self.handle_fp_library_open_sibling(sibling_path);
+                true
             }
             PanelMsg::FpLibrarySelectInternal(idx) => self.handle_fp_library_select_internal(idx),
             PanelMsg::FpLibraryAddInternal => {
@@ -266,7 +272,7 @@ impl Signex {
                 self.with_selected_pad(*idx, |pad| pad.electrical_type = *value)
             }
             PanelMsg::FpEditorSetSelectedPadNet { idx, value } => {
-                self.with_selected_pad(*idx, |pad| pad.net = value.clone())
+                self.with_selected_pad_field(*idx, Some("pad_net"), |pad| pad.net = value.clone())
             }
             PanelMsg::FpEditorToggleSelectedPadLocked { idx, value } => {
                 self.with_selected_pad(*idx, |pad| pad.locked = *value)
@@ -333,10 +339,23 @@ impl Signex {
                 .with_selected_pad(*idx, |pad| {
                     pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
+            // #599 — an unreadable rotation must not overwrite the
+            // stored one; `Some(stored)` is the only path that writes.
+            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
+                match fp_resolve_optional_number(
+                    "Hole rotation (°), selected pad",
+                    value,
+                    fp_parse_optional_number(value),
+                ) {
+                    Some(stored) => {
+                        self.with_selected_pad(*idx, |pad| pad.hole_rotation_deg = stored)
+                    }
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => self
                 .with_selected_pad(*idx, |pad| {
                     pad.copper_offset_x_mm = fp_parse_optional_mm(value)
@@ -414,10 +433,22 @@ impl Signex {
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
+            // #599 — same refusal for the sketch-mode pad attribute.
+            PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
+                match fp_resolve_optional_number(
+                    "Hole rotation (°), sketch pad",
+                    value,
+                    fp_parse_optional_number(value),
+                ) {
+                    Some(stored) => {
+                        self.with_selected_sketch_pad(*id, |attr| attr.hole_rotation_deg = stored)
+                    }
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.copper_offset_x_mm = fp_parse_optional_mm(value)
@@ -426,14 +457,27 @@ impl Signex {
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.copper_offset_y_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.stack.corner_radius_pct = value
-                        .trim()
-                        .parse::<f64>()
-                        .ok()
-                        .filter(|v| (0.0..=50.0).contains(v))
-                }),
+            // #599 — out of range clamps to the nearest bound, an
+            // unreadable buffer is refused; neither clears the value.
+            PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
+                match fp_resolve_optional_number(
+                    "Corner radius %, sketch pad",
+                    value,
+                    fp_parse_optional_number_in(
+                        value,
+                        CORNER_RADIUS_PCT_MIN,
+                        CORNER_RADIUS_PCT_MAX,
+                    ),
+                ) {
+                    Some(stored) => self.with_selected_sketch_pad(*id, |attr| {
+                        attr.stack.corner_radius_pct = stored
+                    }),
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorEditPadInSketch { pad_idx } => {
                 self.handle_fp_editor_edit_pad_in_sketch(pad_idx)
             }
@@ -464,6 +508,11 @@ impl Signex {
                 // the file dirty so the next save commits the
                 // restored content.
                 self.handle_history_restore_clicked(sha);
+                true
+            }
+            PanelMsg::HistoryRestoreCancelled => {
+                self.document_state.history.pending_restore = None;
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
                 true
             }
             PanelMsg::FpEditorHoverOverConstraint { constraint } => {
@@ -682,7 +731,9 @@ impl Signex {
             PanelMsg::SymEditorOpenLocalColorAdvanced(slot) => {
                 self.sym_editor_open_local_color_advanced(*slot)
             }
-            PanelMsg::SymEditorCancelLocalColorPicker => self.sym_editor_cancel_local_color_picker(),
+            PanelMsg::SymEditorCancelLocalColorPicker => {
+                self.sym_editor_cancel_local_color_picker()
+            }
             PanelMsg::SymEditorSetLocalColor { slot, color } => {
                 self.sym_editor_set_local_color(*slot, Some(*color))
             }
@@ -770,8 +821,25 @@ fn apply_graphic_field(
             SymbolGraphicKind::Circle { radius, .. } | SymbolGraphicKind::Arc { radius, .. },
             GraphicFieldId::Radius,
         ) => *radius = value.max(0.1),
-        (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => *start_deg = value,
-        (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => *end_deg = value,
+        // Reduce each endpoint into `[0, 360)` on write. The Properties
+        // `text_input` accepts any `f64` including negatives, and the CCW-
+        // wraparound render/hit-test `rem_euclid` both endpoints anyway, so
+        // this is transparent to what the user sees (reducing an endpoint by
+        // a whole turn can't change the CCW sweep). But it is NOT transparent
+        // to persistence: a raw negative like `end_deg = -60` survives to disk
+        // and, on reload, trips `migrate_legacy_arc` (which fires on
+        // `end_deg < 0.0`) into swapping the pair to its complement — a 270°
+        // arc silently reloads as 90°. Normalising here keeps every persisted
+        // endpoint in `[0, 360)` so the migration never sees a raw drag pair
+        // it can't tell apart from a Properties edit. NOT
+        // `normalize_arc_endpoints_deg`: its swap would collapse the visible
+        // 270° to the 90° complement, the same round-trip loss in reverse.
+        (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => {
+            *start_deg = value.rem_euclid(360.0)
+        }
+        (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => {
+            *end_deg = value.rem_euclid(360.0)
+        }
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => {
             position[0] = value
         }
@@ -780,5 +848,47 @@ fn apply_graphic_field(
         }
         (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value.max(0.1),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod arc_field_edit_tests {
+    use super::apply_graphic_field;
+    use crate::panels::GraphicFieldId;
+    use signex_library::{SymbolGraphic, SymbolGraphicKind};
+
+    // Regression: a Properties-panel arc-degree edit must persist endpoints
+    // already reduced into [0, 360). A raw negative endpoint reaching disk
+    // trips `migrate_legacy_arc` on reload (it fires on `end_deg < 0.0`) into
+    // swapping the pair to its complement — a 270° arc silently reloads as
+    // 90°, and the migration is idempotent so the loss is unrecoverable.
+    #[test]
+    fn arc_degree_edits_stay_in_range_and_preserve_sweep() {
+        let mut g = SymbolGraphic {
+            kind: SymbolGraphicKind::Arc {
+                center: [0.0, 0.0],
+                radius: 5.0,
+                start_deg: 0.0,
+                end_deg: 0.0,
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        };
+        apply_graphic_field(&mut g, GraphicFieldId::StartDeg, 30.0);
+        apply_graphic_field(&mut g, GraphicFieldId::EndDeg, -60.0);
+        let SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } = g.kind
+        else {
+            panic!("expected Arc");
+        };
+        // Nothing < 0.0 or >= 360.0 reaches disk, so the raw-drag
+        // discriminator in `migrate_legacy_arc` never fires on this edit.
+        assert!((0.0..360.0).contains(&start_deg), "start {start_deg}");
+        assert!((0.0..360.0).contains(&end_deg), "end {end_deg}");
+        // (30, -60) is a 270° CCW arc in-session; it must persist as the same
+        // 270° (30, 300), not collapse to the 90° complement (300, 30).
+        assert_eq!((start_deg, end_deg), (30.0, 300.0));
     }
 }

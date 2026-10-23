@@ -59,7 +59,8 @@ impl FootprintCanvas<'_> {
         // the min-corner + abs-delta box as a single message. A drag
         // that collapses to ~0 in either axis is a cancelled gesture,
         // not a degenerate frame.
-        if self.state.pads_tool == crate::library::editor::footprint::state::PadsTool::PlaceTextFrame
+        if self.state.pads_tool
+            == crate::library::editor::footprint::state::PadsTool::PlaceTextFrame
         {
             let anchor = drag.grab_offset_mm;
             let release_world = cursor
@@ -121,10 +122,10 @@ impl FootprintCanvas<'_> {
         };
         // v0.27 — Sketch-mode rubber-band: pick every entity whose
         // bbox is inside the rect.
-        if matches!(self.state.mode, EditorMode::Sketch) {
-            if let Some(sketch) = self.sketch {
-                return self.box_select_sketch(sketch, x0, y0, x1, y1);
-            }
+        if matches!(self.state.mode, EditorMode::Sketch)
+            && let Some(sketch) = self.sketch
+        {
+            return self.box_select_sketch(sketch, x0, y0, x1, y1);
         }
         self.box_select_pads(cstate, x0, y0, x1, y1)
     }
@@ -210,7 +211,7 @@ impl FootprintCanvas<'_> {
         // the first hit.
         let mut hits: Vec<usize> = Vec::new();
         for (idx, pad) in self.state.pads.iter().enumerate() {
-            let (px0, py0, px1, py1) = pad.bbox_mm();
+            let (px0, py0, px1, py1) = pad.rotated_aabb_mm();
             let fully_inside = px0 >= x0 && px1 <= x1 && py0 >= y0 && py1 <= y1;
             let fully_outside = px1 < x0 || px0 > x1 || py1 < y0 || py0 > y1;
             let touching = !fully_outside;
@@ -284,6 +285,11 @@ impl FootprintCanvas<'_> {
                 id: select_id,
                 shift: false,
             }),
+            // #361 — Drag Track End arms its endpoint grab on PRESS
+            // (`try_drag_track_end_grab`); a release reaching here means
+            // the press missed every line, so an un-moved empty click is
+            // a no-op — it never places geometry.
+            SketchTool::DragTrackEnd => return None,
             SketchTool::Point => EditorMsg::Footprint(FootprintEditorMsg::SketchPlacePoint {
                 x_mm: click_world.0,
                 y_mm: click_world.1,
@@ -293,13 +299,18 @@ impl FootprintCanvas<'_> {
             | SketchTool::RoundedRectangle
             | SketchTool::Circle
             | SketchTool::Arc
+            | SketchTool::EdgeArc
             | SketchTool::Mirror
             | SketchTool::Offset
             | SketchTool::RectPattern
             | SketchTool::CircularPattern
             | SketchTool::TangentArc
             | SketchTool::Fillet
-            | SketchTool::Trim => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
+            | SketchTool::Trim
+            // #372 — Break Track routes its single click through the
+            // same SketchToolClick path as Trim; the dispatcher's edit
+            // arm hit-tests the Line and hands off to `split_line`.
+            | SketchTool::BreakTrack => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
                 x_mm: click_world.0,
                 y_mm: click_world.1,
                 snap_id,

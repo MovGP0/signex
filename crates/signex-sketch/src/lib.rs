@@ -13,6 +13,7 @@
 //! See `docs/internal/SKETCH_MODE_v0.13_PLAN.md` for the
 //! release plan.
 
+pub mod arc_snap;
 pub mod array;
 pub mod attr;
 pub mod bake;
@@ -26,9 +27,12 @@ pub mod parameter;
 pub mod plane;
 pub mod sketch;
 pub mod solver;
+pub mod split;
 pub mod unit;
 
+pub use arc_snap::snap_arc_ends_onto_circles;
 pub use attr::LinkedRadius;
 pub use error::{SketchError, SolveError};
 pub use sketch::SketchData;
 pub use solver::Solver;
+pub use split::{SplitError, SplitResult, split_line};

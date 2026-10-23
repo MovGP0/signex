@@ -7,9 +7,13 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod interaction;
+mod pdf_page_setup;
+pub(crate) mod scope;
+pub(crate) mod sheet_refs;
 mod ui;
 
 pub use interaction::InteractionState;
+pub use pdf_page_setup::PageSetupInputs;
 pub use ui::UiState;
 
 pub struct Signex {
@@ -21,7 +25,6 @@ pub struct Signex {
     /// without colliding with schematic / PCB engine borrows.
     pub library: crate::library::LibraryState,
 }
-
 
 /// Chord-recorder overlay state for the Preferences ▸ Keyboard
 /// Shortcuts pane. Holds the binding being edited plus the strokes
@@ -80,7 +83,6 @@ impl KeymapRecorderState {
 /// modals; Phase 3 adds `UndockedTab(tab_index)` so a schematic sheet
 /// can live in its own OS window.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum WindowKind {
     DetachedModal(ModalId),
     /// Undocked document tab. Stores the tab's file path (unique per
@@ -103,8 +105,6 @@ pub enum WindowKind {
         table: String,
         row_id: signex_library::RowId,
     },
-    /// Dedicated Tools -> PCB Trace Calculator utility window.
-    PcbTraceCalculator,
 }
 
 /// Kind of z-order picker currently armed. Drives the first-click
@@ -143,8 +143,106 @@ pub struct MoveSelectionState {
     pub dy: String,
 }
 
+/// A user-visible error card: a short heading plus the detail line.
+///
+/// One card serves every operation that has to stop and tell the user
+/// something failed. The heading is data rather than a literal in the
+/// view because the card was already shared by operations that are not
+/// exports — see [`DocumentState::error_notice`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorNotice {
+    /// Heading, e.g. "Export Failed". Names the operation, not the cause.
+    pub title: String,
+    /// What went wrong, in the user's terms. May span several lines.
+    pub detail: String,
+}
+
+impl ErrorNotice {
+    /// An export deliverable (PDF, netlist, BOM) could not be produced.
+    pub fn export(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Export Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A write failed, and the operation that needed it did not proceed.
+    pub fn save(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Save Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// An external page could not be opened in the default browser.
+    pub fn link(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Could Not Open Link".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A delete was refused because it would have removed a file the
+    /// project does not own (#139).
+    pub fn delete(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Delete Refused".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The BOM was written, but validation found issues the user should
+    /// still see. Advisory: the file exists.
+    pub fn export_advisory(detail: impl Into<String>) -> Self {
+        Self {
+            title: "BOM Exported with Issues".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A rename moved the file but could not finish updating what refers to it.
+    pub fn rename(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Rename Incomplete".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A file could not be opened — unreadable, unparseable, or empty
+    /// where it must not be (#532).
+    pub fn open(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Open Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A History restore did not happen.
+    pub fn restore(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Restore Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// A new project or document could not be created.
+    pub fn create(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Create Failed".to_owned(),
+            detail: detail.into(),
+        }
+    }
+
+    /// The requested action has no backing flow yet.
+    pub fn unavailable(detail: impl Into<String>) -> Self {
+        Self {
+            title: "Not Available".to_owned(),
+            detail: detail.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
@@ -228,9 +326,53 @@ pub struct LoadedProject {
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
     /// explicit user save" invariant. Keyed by a temporary handle that
     /// becomes the eventual `library_id` once materialised.
-    #[allow(clippy::implicit_hasher)]
     pub pending_libraries:
         std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
+}
+
+impl LoadedProject {
+    /// The project's directory — the *one* convention for "where this
+    /// project's relative sheet filenames resolve from".
+    ///
+    /// Two conventions used to coexist: the parent of the `.snxprj` on disk,
+    /// and the persisted `data.dir` string. The loader patches `data.dir` to
+    /// the opened path's parent, so they agree for a freshly-loaded project —
+    /// but a `LoadedProject` assembled any other way (project creation, a
+    /// `.snxprj` that recorded an absolute `dir` that no longer matches) can
+    /// have them disagree, and then ownership resolution succeeds while the
+    /// sheet paths it produces do not exist. The export skips those pages
+    /// silently. `path.parent()` is the only one that cannot be stale: it is
+    /// derived from the file actually opened.
+    pub fn dir(&self) -> &std::path::Path {
+        self.path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(""))
+    }
+}
+
+/// #431 — pending "Export anyway (incomplete)?" prompt for netlist export.
+///
+/// Raised (instead of a dead-end error) when `File ▸ Export Netlist` derives a
+/// netlist that does not cover the whole project. Holds the picked `save_path`
+/// and the omitted-page `messages` so the two prompt actions can act without
+/// re-deriving: "Export anyway" writes the partial `.net` (a clean file —
+/// Protel has no comment syntax) and logs these messages as a warning;
+/// "Cancel" writes nothing. The
+/// refusal stays the default — nothing reaches disk until the user acts.
+#[derive(Debug, Clone)]
+pub struct NetlistIncompletePrompt {
+    /// Where the file dialog said to write the `.net`.
+    pub save_path: PathBuf,
+    /// One user-facing line per omitted / uncovered page — the same
+    /// `ExportIssues::messages()` shown in the prompt and logged as a
+    /// warning when the user exports anyway.
+    pub messages: Vec<String>,
+    /// The export scope snapshotted when the prompt was raised. "Export anyway"
+    /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
+    /// the warning (drawn from `messages`, the same derivation) always
+    /// describe the same project state, even if the document changes while the
+    /// modal is up (#431 review).
+    pub ctx: signex_output::ExportContext,
 }
 
 pub struct DocumentState {
@@ -270,9 +412,15 @@ pub struct DocumentState {
     /// project becomes active on load; subsequent opens append.
     pub projects: Vec<LoadedProject>,
     /// Which project is "active" for handlers that operate on the workspace
-    /// at large (ERC / annotate / export / save-all). Currently tracks the
+    /// at large (save-all, the Projects panel). Currently tracks the
     /// most-recently-loaded project plus whichever project contains the
     /// active tab; single source of truth for "where am I focused".
+    ///
+    /// Sticky by design: focusing a tab with no project of its own leaves it
+    /// pointing at the last-loaded project. Anything scoped to the *document
+    /// set the user is working in* — export, ERC, annotate, child-sheet
+    /// resolution — must use [`DocumentState::active_document_project`]
+    /// instead, or it silently operates on another project's sheets (#406).
     pub active_project: Option<ProjectId>,
     /// Files with unsaved edits, keyed by absolute path. Tracks the
     /// "Altium-style" project-scoped dirty state — a file stays in this
@@ -312,10 +460,19 @@ pub struct DocumentState {
     /// be dropped on export and the actual file would be a default
     /// 6-column Grouped Base BOM. Cleared after export.
     pub pending_bom_options: Option<signex_output::BomOptions>,
-    /// User-visible export error. `Some(msg)` while the error modal is shown.
-    /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
-    /// itself (not the file dialog) fails. Cleared by DismissExportError.
-    pub export_error: Option<String>,
+    /// The app's one user-visible error card. `Some` while it is shown;
+    /// cleared by `OverlayMsg::DismissErrorNotice`.
+    ///
+    /// Not export-only, despite the heading it used to hardcode: the
+    /// project-close path already raised it for "could not save N
+    /// file(s)", so a failed close announced itself to the user as
+    /// "Export Failed" (#532). The title now travels with the message.
+    pub error_notice: Option<ErrorNotice>,
+    /// #431 — pending "Export anyway (incomplete)?" prompt. `Some` while the
+    /// netlist-incomplete modal is up, waiting on the user's choice. Set by
+    /// `handle_export_netlist_finished` when the derived netlist has a hole;
+    /// cleared by both prompt actions (Export anyway / Cancel).
+    pub netlist_incomplete_prompt: Option<NetlistIncompletePrompt>,
     /// BOM preview state. `Some` while the BOM Export modal is open.
     /// Mirrors the Print Preview pattern: the user adjusts grouping /
     /// include flags / format / variant in the modal and clicks
@@ -337,6 +494,15 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// #478 review — paths whose async schematic/PCB read+parse
+    /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
+    /// hasn't completed yet. Without this, firing the same open twice
+    /// before the first `Task::perform` resolves races two tabs into
+    /// existence aliasing one `engines` entry; closing either then
+    /// orphans the other. Inserted right before the `Task::perform` is
+    /// spawned; cleared in both the `Ok` and `Err` arms of
+    /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
+    pub pending_opens: std::collections::HashSet<PathBuf>,
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays
@@ -350,11 +516,12 @@ pub struct PendingGitCommit {
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
-/// Properties panel — Altium-style General / Columns split.
+/// Properties panel — Altium-style General / Columns / Rules split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BomSidebarTab {
     General,
     Columns,
+    Rules,
 }
 
 /// Live BOM preview state — the rolled-up table for the active project
@@ -363,10 +530,13 @@ pub enum BomSidebarTab {
 pub struct BomPreviewState {
     pub options: signex_output::BomOptions,
     pub table: signex_output::BomTable,
+    /// Live validation of `table` under `options.rule_options`. Refreshed on
+    /// every rollup and every rule toggle so it never goes stale against the
+    /// displayed table. Advisory only — it never blocks export.
+    pub validation_report: signex_output::BomValidationReport,
     /// Available variants for the active project. Reserved for the
     /// variant picker dropdown — empty when no variants are defined.
     /// Currently only seeded; the picker UI lands in v0.8.1.
-    #[allow(dead_code)]
     pub variants: Vec<String>,
     /// Active sort spec — `(column index in options.columns, ascending)`.
     /// `None` = render rollup order (the default emit order from
@@ -500,10 +670,16 @@ pub struct PreviewState {
     /// while the user is holding the mouse down on the preview
     /// surface. Updated every move via the global mouse handler.
     pub panning: Option<((f32, f32), f32, f32)>,
-    /// Files chosen for export from the active project's sheet list.
-    /// Empty = all files (default at open). When non-empty, only the
-    /// listed paths are rasterised + exported. Driven by the file
-    /// picker in the Settings tab.
+    /// Every sheet this export could cover, as `(path, display name)` in
+    /// page order — a snapshot of the `ExportContext` sheet set taken when
+    /// the modal opened. The Settings-tab file picker renders from this
+    /// rather than re-deriving from the project, so the checkbox list is
+    /// guaranteed to match the pages the exporter will emit (a loose
+    /// schematic lists itself; a project lists its sheets).
+    pub sheet_files: Vec<(PathBuf, String)>,
+    /// Files the user has ticked for export, a subset of `sheet_files`.
+    /// Seeded to all of them on open. Empty = nothing selected, which the
+    /// export path rejects with a user-visible error.
     pub selected_files: std::collections::HashSet<PathBuf>,
     /// Available variants for the active project — drives the variant
     /// picker dropdown options. The currently-selected value lives on
@@ -513,6 +689,9 @@ pub struct PreviewState {
     /// `pdf_options.dpi` at export time; the preview always rasterises
     /// at 96 DPI for speed.
     pub quality: PdfQuality,
+    /// Typed text of the page-setup fields (custom size, margins, percent)
+    /// plus the reason the last edit was rejected or clamped.
+    pub page_setup: PageSetupInputs,
 }
 
 impl PreviewState {
@@ -545,6 +724,67 @@ impl DocumentState {
     /// workspace is empty or no project has been made active yet.
     pub fn active_loaded_project(&self) -> Option<&LoadedProject> {
         self.active_project.and_then(|id| self.project_by_id(id))
+    }
+
+    /// Project that owns the *active document* — the scope for export, ERC,
+    /// annotate and hierarchical child-sheet resolution.
+    ///
+    /// Deliberately not `active_loaded_project()`: `active_project` is a
+    /// sticky workspace-wide pointer that survives focusing a tab with no
+    /// project of its own, so scoping off it makes an export of a loose
+    /// schematic emit another project's sheets (#406). Resolution rules and
+    /// the hierarchy walk live in [`scope::project_owning_sheet`].
+    ///
+    /// - active schematic owned by a project → that project;
+    /// - active schematic owned by none (loose) → `None`, i.e. operate on
+    ///   this one document;
+    /// - no active schematic at all (a PCB / symbol / footprint tab is
+    ///   focused, or nothing is open) → the sticky pointer, which is what
+    ///   "the workspace at large" means when there is no document to scope by.
+    pub fn active_document_project(&self) -> Option<&LoadedProject> {
+        let Some(path) = self.active_path.as_ref() else {
+            return self.active_loaded_project();
+        };
+        scope::project_owning_sheet(&self.projects, &self.child_sheet_refs(), path)
+    }
+
+    /// Open engine paths that belong to no loaded project — the page set of a
+    /// loose-document export. An open tab belonging to some *other* loaded
+    /// project would otherwise ride along as an extra page.
+    ///
+    /// Sorted by path: `engines` is a `HashMap`, so an unsorted result orders
+    /// the loose export's pages (and the print-preview file-picker rows, which
+    /// are re-seeded from this set on every rerasterize) by hash iteration
+    /// order — visibly reshuffling between rerasterizes with two or more loose
+    /// schematics open. Callers that want a specific page first re-order after.
+    pub fn unowned_engine_paths(&self) -> Vec<PathBuf> {
+        let refs = self.child_sheet_refs();
+        let mut paths: Vec<PathBuf> = self
+            .engines
+            .keys()
+            .filter(|p| scope::project_owning_sheet(&self.projects, &refs, p).is_none())
+            .cloned()
+            .collect();
+        paths.sort();
+        paths
+    }
+
+    /// `sheet path → the `filename` strings it references as child sheets`,
+    /// over every loaded engine. Input to the hierarchy walk in
+    /// [`active_document_project`](Self::active_document_project).
+    pub(crate) fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
+        self.engines
+            .iter()
+            .map(|(path, engine)| {
+                let refs = engine
+                    .document()
+                    .child_sheets
+                    .iter()
+                    .map(|cs| cs.filename.clone())
+                    .collect();
+                (path.clone(), refs)
+            })
+            .collect()
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {

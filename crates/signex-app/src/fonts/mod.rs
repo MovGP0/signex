@@ -9,11 +9,21 @@
 //! on Windows, `~/Library/Application Support/signex/prefs.json` on
 //! macOS, `$XDG_CONFIG_HOME/signex/prefs.json` on Linux).
 //! Format: `{"ui_font": "Roboto"}`
+//!
+//! Fallback: if the OS reports no config directory at all
+//! (`dirs::config_dir()` returns `None` — rare, e.g. a daemon or
+//! container with neither `$HOME` nor `$XDG_CONFIG_HOME`), preferences
+//! resolve to a random-named per-process subdirectory of the OS temp
+//! dir instead (see [`production_temp_fallback_path`]), and a
+//! `tracing::error!` names the fact that they will not survive a
+//! temp-directory sweep or a restart.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
+use crate::render_config::{
+    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
+};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
@@ -21,19 +31,28 @@ use signex_types::theme::ThemeId;
 pub const DEFAULT_UI_FONT: &str = "Roboto";
 
 /// MD-32: persist `bytes` to `path` atomically (tmp + rename via
-/// `signex_types::atomic_io`) and `tracing::debug!` on failure
-/// instead of the `let _ = std::fs::write(...)` pattern that swallows
-/// disk-full / permission errors silently. Used by every preferences
-/// write in this module so a single source of failures shows up in
-/// `RUST_LOG=signex_app::fonts=debug` instead of nowhere.
+/// `signex_types::atomic_io`) and report on failure, instead of the
+/// `let _ = std::fs::write(...)` pattern that swallows disk-full /
+/// permission errors silently. Every preferences write in this module
+/// tree funnels through here, so this is the single place a failed write
+/// can be seen from.
+///
+/// Reported at `Error` and not `debug!`: the default filter is
+/// `LevelFilter::Info` (`crate::diagnostics`), so a `debug!` here never
+/// reaches the user's Messages panel and the failure is invisible in
+/// every shipped build — which is the whole class of bug #594 and #602
+/// were about. The setting the user just changed did not persist and
+/// will be gone at the next launch; that is not a `debug!`.
 fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
     if let Err(e) = signex_types::atomic_io::atomic_write(path, bytes) {
-        tracing::debug!(
-            target = "signex::prefs",
+        tracing::error!(
+            target: "signex::prefs",
             path = %path.display(),
             context = context,
             error = %e,
-            "preference write failed (best-effort, will retry on next change)"
+            "a preference was not saved: writing the preferences file failed, so this \
+             change will be gone at the next launch — the setting itself is still \
+             applied for this session"
         );
     }
 }
@@ -122,7 +141,7 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
     // hold this lock.
     let mut map = map_lock.lock().unwrap_or_else(|e| e.into_inner());
     let static_name: &'static str = match map.get(name) {
-        Some(s) => *s,
+        Some(s) => s,
         None => {
             let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
             map.insert(name.to_string(), leaked);
@@ -173,19 +192,106 @@ pub fn system_font_families() -> &'static Vec<String> {
 ///
 /// Computed once per process (via `OnceLock`) so the legacy-prefs
 /// migration runs at most once.
+///
+/// The directory itself comes from [`crate::config_root::config_root`],
+/// shared by the other three config-file resolvers. Under
+/// `cfg(test)`/`test-prefs-redirect` that resolves to a per-process
+/// tempdir, and this function returns *before* touching
+/// `legacy_posix_prefs_path()` at all — so the legacy migration never
+/// runs and never reads/writes the developer's real config directory.
+/// Issue #437, hoisted in #440.
 fn prefs_path() -> PathBuf {
     use std::sync::OnceLock;
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
-        let canonical = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("signex")
-            .join("prefs.json");
+        let root = crate::config_root::config_root();
+        if crate::config_root::is_test_redirect_active() {
+            // Branch on the gate itself, not on whether `root` happens
+            // to be `Some` — `config_root()` always resolves under the
+            // redirect today, but a `Some(dir) if is_test_redirect_
+            // active()` match guard is correct only *because* of that
+            // coincidence. If `config_root()` ever grows an env
+            // override or an early `?` that can return `None` while
+            // the redirect is active, that guard would silently fall
+            // through to the arm below and run migrate_legacy_prefs
+            // against the developer's real legacy path mid-test-suite
+            // (#440 review). Deciding on the gate alone rules that out.
+            let dir = root.expect("config_root() always resolves under the test/dev redirect");
+            return dir.join("prefs.json");
+        }
+        let canonical = match root {
+            Some(dir) => dir.join("prefs.json"),
+            None => production_temp_fallback_path(),
+        };
         let legacy = legacy_posix_prefs_path();
         migrate_legacy_prefs(&canonical, &legacy);
         canonical
     })
     .clone()
+}
+
+/// Fallback used only when `dirs::config_dir()` returns `None` (rare — a
+/// Windows account with no `%APPDATA%`, a daemon/container with neither
+/// `$XDG_CONFIG_HOME` nor `$HOME`). Issue #437's review flagged the naive
+/// version of this fallback (a bare `<tmp>/signex/prefs.json`) as
+/// predictable and shared: two users on one host collide (the second gets
+/// `EACCES` from `atomic_write`, visible only at `tracing::debug!`, or
+/// silently reads the first user's prefs), and an attacker who pre-creates
+/// `prefs.json.tmp` as a symlink gets `atomic_write`'s `File::create` to
+/// write through it.
+///
+/// A later per-user `<tmp>/signex-{user}` scheme fixed the sharing
+/// problem but leaned on `USER`/`USERNAME`/`LOGNAME` being set — a
+/// bare-uid container or a systemd unit with a scrubbed environment has
+/// none of those, and that version `panic!`ed there, taking the whole
+/// app down before the window ever appeared (#440 review: "fail loudly"
+/// was meant to mean a visible log line, not a vanished process).
+///
+/// `tempfile::Builder::tempdir()` replaces that scheme outright: the
+/// directory name is process-random (nothing to pre-guess for the
+/// symlink attack above, no username needed) and it's created 0700 on
+/// Unix — strictly safer than the username-keyed scheme even on the
+/// happy path. If even creating a temp directory fails (the temp
+/// filesystem itself is unwritable — every other option has already
+/// failed too), this hands back a path anyway rather than panicking:
+/// every write through it fails at `atomic_write`'s own
+/// `tracing::debug!`, and the app simply runs the session on in-memory
+/// defaults. Degrade, don't die.
+fn production_temp_fallback_path() -> PathBuf {
+    let dir = match tempfile::Builder::new().prefix("signex-").tempdir() {
+        Ok(dir) => {
+            // Leak the `TempDir` handle rather than let it delete the
+            // directory when dropped at the end of this function:
+            // `prefs_path()` caches the returned path for the whole
+            // process lifetime and writes to it repeatedly across the
+            // session, so the directory has to outlive any handle we
+            // could hold instead. `keep()` is `tempfile`'s
+            // documented opt-out of the drop-time cleanup; the OS's
+            // own temp-dir sweep remains the intended eventual
+            // cleanup, matching the "will NOT persist" contract below.
+            dir.keep()
+        }
+        Err(e) => {
+            tracing::error!(
+                target: "signex::prefs",
+                error = %e,
+                "no OS config directory (dirs::config_dir() returned None) and \
+                 creating a random per-process temp directory also failed; \
+                 preferences will not persist for this session"
+            );
+            return std::env::temp_dir()
+                .join("signex-prefs-unavailable")
+                .join("prefs.json");
+        }
+    };
+    tracing::error!(
+        target: "signex::prefs",
+        path = %dir.display(),
+        "no OS config directory found (dirs::config_dir() returned None); \
+         falling back to a random-named per-process temp directory — \
+         preferences will NOT persist across a temp-directory sweep or a restart"
+    );
+    dir.join("prefs.json")
 }
 
 /// One-shot startup migrations applied to `prefs.json` before any
@@ -212,13 +318,16 @@ fn prefs_path() -> PathBuf {
 /// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
 pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     // F1: copy legacy path → canonical, but only if canonical is empty.
-    if !canonical.exists() {
-        if legacy != canonical && legacy.exists() {
-            if let Some(parent) = canonical.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::copy(legacy, canonical);
-        }
+    // Routed through `write_pref_atomic` (temp + fsync + rename) rather
+    // than `std::fs::copy`: a kill mid-copy with a bare copy can leave a
+    // truncated `canonical` file, which then blocks re-migration forever
+    // because `canonical.exists()` is already true on the next launch.
+    if !canonical.exists()
+        && legacy != canonical
+        && legacy.exists()
+        && let Ok(bytes) = std::fs::read(legacy)
+    {
+        write_pref_atomic(canonical, &bytes, "migrate_legacy_prefs_copy");
     }
 
     // F3: rewrite any non-canonical label_style discriminant → "standard".
@@ -285,8 +394,11 @@ pub fn write_ui_font_pref(font_name: &str) {
 }
 
 pub fn write_ui_font_pref_at(path: &Path, font_name: &str) {
-    update_prefs_json(path, |json| {
-        json["ui_font"] = serde_json::Value::String(font_name.to_string());
+    update_prefs_json(path, "ui_font", |prefs| {
+        prefs.insert(
+            "ui_font".to_string(),
+            serde_json::Value::String(font_name.to_string()),
+        );
     })
 }
 
@@ -318,17 +430,11 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
 /// without clobbering other preference keys. Silent on I/O failure
 /// — preferences are best-effort.
 pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(value) = serde_json::to_value(classes) {
-        json["component_classes"] = value;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "component_classes");
-    }
+    update_prefs_json(&prefs_path(), "component_classes", |prefs| {
+        if let Ok(value) = serde_json::to_value(classes) {
+            prefs.insert("component_classes".to_string(), value);
+        }
+    })
 }
 
 /// Read `power_port_style` from preferences file.
@@ -358,8 +464,11 @@ pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
         PowerPortStyle::Standard => "standard",
         PowerPortStyle::Altium => "altium",
     };
-    update_prefs_json(path, |json| {
-        json["power_port_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "power_port_style", |prefs| {
+        prefs.insert(
+            "power_port_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -390,8 +499,11 @@ pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
         LabelStyle::Standard => "standard",
         LabelStyle::Altium => "altium",
     };
-    update_prefs_json(path, |json| {
-        json["label_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "label_style", |prefs| {
+        prefs.insert(
+            "label_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -422,8 +534,11 @@ pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
         MultisheetStyle::Standard => "standard",
         MultisheetStyle::Altium => "altium",
     };
-    update_prefs_json(path, |json| {
-        json["multisheet_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "multisheet_style", |prefs| {
+        prefs.insert(
+            "multisheet_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -460,8 +575,11 @@ pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
         GridStyle::Lines => "lines",
         GridStyle::SmallCrosses => "crosses",
     };
-    update_prefs_json(path, |json| {
-        json["grid_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(path, "grid_style", |prefs| {
+        prefs.insert(
+            "grid_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -484,21 +602,6 @@ pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
 fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
     let bytes = std::fs::read(path).ok()?;
     serde_json::from_slice::<serde_json::Value>(&bytes).ok()
-}
-
-/// Update one key of `prefs.json` at `path` without clobbering other
-/// keys. Creates the parent dir if missing. I/O failures are
-/// best-effort but logged at `debug` (MD-32) — set
-/// `RUST_LOG=signex_app::fonts=debug` to see them.
-fn update_prefs_json(path: &Path, mut mutator: impl FnMut(&mut serde_json::Value)) {
-    let mut json: serde_json::Value = std::fs::read(path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    mutator(&mut json);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(path, serialized.as_bytes(), "update_prefs_json");
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -526,9 +629,9 @@ pub fn write_theme_pref(theme: ThemeId) {
 
 /// Same as [`write_theme_pref`] but writes to `path` — exposed for tests.
 pub fn write_theme_pref_at(path: &Path, theme: ThemeId) {
-    update_prefs_json(path, |json| {
+    update_prefs_json(path, "theme", |prefs| {
         if let Ok(value) = serde_json::to_value(theme) {
-            json["theme"] = value;
+            prefs.insert("theme".to_string(), value);
         }
     })
 }
@@ -555,9 +658,9 @@ pub fn write_unit_pref(unit: Unit) {
 }
 
 pub fn write_unit_pref_at(path: &Path, unit: Unit) {
-    update_prefs_json(path, |json| {
+    update_prefs_json(path, "unit", |prefs| {
         if let Ok(value) = serde_json::to_value(unit) {
-            json["unit"] = value;
+            prefs.insert("unit".to_string(), value);
         }
     })
 }
@@ -582,8 +685,39 @@ pub fn write_grid_visible_pref(visible: bool) {
 }
 
 pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
-    update_prefs_json(path, |json| {
-        json["grid_visible"] = serde_json::Value::Bool(visible);
+    update_prefs_json(path, "grid_visible", |prefs| {
+        prefs.insert("grid_visible".to_string(), serde_json::Value::Bool(visible));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// PCB GPU render (experimental)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Read the PCB GPU-render toggle. A saved value always wins; the
+/// compile-time [`crate::feature_flags::PCB_GPU_RENDER_DEFAULT`] applies only
+/// when the key is absent, so it is a factory default rather than a gate and
+/// old prefs files stay compatible.
+pub fn read_pcb_gpu_render_pref() -> bool {
+    read_pcb_gpu_render_pref_at(&prefs_path())
+}
+
+pub fn read_pcb_gpu_render_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["pcb_gpu_render"].as_bool())
+        .unwrap_or(crate::feature_flags::PCB_GPU_RENDER_DEFAULT)
+}
+
+pub fn write_pcb_gpu_render_pref(enabled: bool) {
+    write_pcb_gpu_render_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_pcb_gpu_render_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "pcb_gpu_render", |prefs| {
+        prefs.insert(
+            "pcb_gpu_render".to_string(),
+            serde_json::Value::Bool(enabled),
+        );
     })
 }
 
@@ -607,8 +741,8 @@ pub fn write_snap_enabled_pref(enabled: bool) {
 }
 
 pub fn write_snap_enabled_pref_at(path: &Path, enabled: bool) {
-    update_prefs_json(path, |json| {
-        json["snap_enabled"] = serde_json::Value::Bool(enabled);
+    update_prefs_json(path, "snap_enabled", |prefs| {
+        prefs.insert("snap_enabled".to_string(), serde_json::Value::Bool(enabled));
     })
 }
 
@@ -631,8 +765,8 @@ pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
 }
 
 pub fn write_grid_size_mm_pref_at(path: &Path, grid_size_mm: f32) {
-    update_prefs_json(path, |json| {
-        json["grid_size_mm"] = serde_json::json!(grid_size_mm);
+    update_prefs_json(path, "grid_size_mm", |prefs| {
+        prefs.insert("grid_size_mm".to_string(), serde_json::json!(grid_size_mm));
     })
 }
 
@@ -644,8 +778,11 @@ pub fn read_symbol_grid_size_mm_pref() -> f32 {
 }
 
 pub fn write_symbol_grid_size_mm_pref(grid_size_mm: f32) {
-    update_prefs_json(&prefs_path(), |json| {
-        json["symbol_grid_size_mm"] = serde_json::json!(grid_size_mm);
+    update_prefs_json(&prefs_path(), "symbol_grid_size_mm", |prefs| {
+        prefs.insert(
+            "symbol_grid_size_mm".to_string(),
+            serde_json::json!(grid_size_mm),
+        );
     })
 }
 
@@ -672,8 +809,11 @@ pub fn write_symbol_grid_style_pref(style: GridStyle) {
         GridStyle::Lines => "lines",
         GridStyle::SmallCrosses => "crosses",
     };
-    update_prefs_json(&prefs_path(), |json| {
-        json["symbol_grid_style"] = serde_json::Value::String(token.to_string());
+    update_prefs_json(&prefs_path(), "symbol_grid_style", |prefs| {
+        prefs.insert(
+            "symbol_grid_style".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
     })
 }
 
@@ -686,17 +826,108 @@ pub fn read_symbol_pin_selection_pref() -> PinSelectionMode {
 }
 
 pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
-    update_prefs_json(&prefs_path(), |json| {
-        json["symbol_pin_selection"] = serde_json::Value::String(mode.pref_token().to_string());
+    update_prefs_json(&prefs_path(), "symbol_pin_selection", |prefs| {
+        prefs.insert(
+            "symbol_pin_selection".to_string(),
+            serde_json::Value::String(mode.pref_token().to_string()),
+        );
     })
 }
 
 mod dock_layout;
 mod erc;
 mod misc;
+mod prefs_file;
 mod presets;
+mod recent;
+
+/// The one read-modify-write every preference writer in this module
+/// tree goes through (#594). Imported here rather than re-exported —
+/// the sibling modules pick it up through their own `use super::*;`.
+use prefs_file::update_prefs_json;
+
+/// The prefs file's health probe and its one in-app recovery (#602).
+/// Re-exported because the app shell owns the reporting: `Signex::new`
+/// probes at boot, the Preferences handler re-probes on open and runs the
+/// recovery, and the dialog names [`prefs_file_path`] in its banner.
+/// `prefs_path()` itself stays private — callers get the resolved path
+/// through the accessor rather than a second resolver of their own.
+pub use prefs_file::{
+    PrefsLoadError, check_prefs_file, check_prefs_file_at, move_prefs_file_aside,
+    move_prefs_file_aside_at, prefs_file_path,
+};
 
 pub use dock_layout::*;
 pub use erc::*;
 pub use misc::*;
 pub use presets::*;
+pub use recent::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `prefs_path()` is private (unlike the other three prefs
+    /// resolvers, which are all `pub`), so it can't be reached from an
+    /// integration test in `tests/` — this is that resolver's half of
+    /// the #440 guard. Proves fonts' prefs file lands under the same
+    /// `config_root()` the other three share, under the test redirect.
+    #[test]
+    fn prefs_path_lives_under_the_shared_config_root() {
+        let root = crate::config_root::config_root().expect("test redirect always resolves");
+        assert!(
+            prefs_path().starts_with(&root),
+            "fonts::prefs_path() must live under config_root(), got {}",
+            prefs_path().display()
+        );
+    }
+
+    fn temp_prefs(contents: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::Builder::new()
+            .prefix("signex-flags-")
+            .tempdir()
+            .expect("temp dir");
+        let path = dir.path().join("prefs.json");
+        std::fs::write(&path, contents).expect("write prefs");
+        (dir, path)
+    }
+
+    /// `PCB_GPU_RENDER_DEFAULT` is a factory default, not a gate: a saved
+    /// value wins over it in both directions. The module doc in
+    /// `feature_flags` used to claim the opposite, which would make someone
+    /// reach for that const to disable the feature for everyone and ship a
+    /// release where it was still on.
+    #[test]
+    fn a_saved_pcb_gpu_render_value_overrides_the_compile_time_default() {
+        let (_dir, on) = temp_prefs(r#"{"pcb_gpu_render": true}"#);
+        assert!(
+            read_pcb_gpu_render_pref_at(&on),
+            "a saved `true` must win even though the default is {}",
+            crate::feature_flags::PCB_GPU_RENDER_DEFAULT
+        );
+
+        let (_dir, off) = temp_prefs(r#"{"pcb_gpu_render": false}"#);
+        assert!(
+            !read_pcb_gpu_render_pref_at(&off),
+            "a saved `false` must win too"
+        );
+    }
+
+    /// The other half of the contract: with no saved key, the const is what
+    /// a fresh profile gets.
+    #[test]
+    fn an_absent_pcb_gpu_render_key_falls_back_to_the_compile_time_default() {
+        let (_dir, empty) = temp_prefs("{}");
+        assert_eq!(
+            read_pcb_gpu_render_pref_at(&empty),
+            crate::feature_flags::PCB_GPU_RENDER_DEFAULT
+        );
+
+        let (_dir, missing) = temp_prefs(r#"{"theme": "nord"}"#);
+        assert_eq!(
+            read_pcb_gpu_render_pref_at(&missing),
+            crate::feature_flags::PCB_GPU_RENDER_DEFAULT,
+            "an unrelated prefs file must not disturb the default"
+        );
+    }
+}
