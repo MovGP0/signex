@@ -4,6 +4,7 @@
 pub mod control;
 pub mod diagram;
 pub mod domain;
+pub mod results;
 
 pub use control::{
     TraceCalculatorControl, TraceCalculatorError, TraceCalculatorMessage, format_number,

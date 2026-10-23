@@ -674,7 +674,21 @@ impl Signex {
             Subscription::none()
         };
 
+        // Frames only while the calculator's fade is running; idle otherwise.
+        let trace_calculator_fade = if self.ui_state.pcb_trace_calculator_open
+            && self.ui_state.pcb_trace_calculator.is_animating()
+        {
+            iced::window::frames().map(|at| {
+                Message::Overlay(OverlayMsg::PcbTraceCalculatorEdited(
+                    signex_widgets::trace_calculator::TraceCalculatorMessage::FrameArrived(at),
+                ))
+            })
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
+            trace_calculator_fade,
             kbd,
             mouse_sub,
             window_close,

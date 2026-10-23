@@ -3,18 +3,19 @@
 //! [`super::domain`]; this file only parses text, calls it and draws.
 
 use std::fmt;
+use std::time::{Duration, Instant};
 
-use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Alignment, Background, Border, Element, Length, Theme};
+use iced::animation::Easing;
+use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
+use iced::{Alignment, Animation, Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
 use super::diagram::{self, DiagramCache, width_labels};
 use super::domain::{
-    AmbientUnit, CalculationError, InputField, LayerResult, LengthUnit, RiseUnit, ThicknessUnit,
+    AmbientUnit, CalculationError, InputField, LengthUnit, RiseUnit, ThicknessUnit,
     TraceCalculation, TraceInput, WidthUnit, calculate,
 };
+use super::results;
 use crate::theme_ext;
 
 const BODY_SIZE: f32 = 11.0;
@@ -24,16 +25,16 @@ const SECTION_SPACING: f32 = 14.0;
 const ROW_SPACING: f32 = 8.0;
 const LABEL_WIDTH: f32 = 120.0;
 const UNIT_PICKER_WIDTH: f32 = 90.0;
-const OUTPUT_VALUE_WIDTH: f32 = 84.0;
-const OUTPUT_UNIT_WIDTH: f32 = 40.0;
-const PANEL_PADDING: u16 = 12;
-const PANEL_RADIUS: f32 = 6.0;
 const STATIC_BOX_RADIUS: f32 = 2.0;
 const BUTTON_RADIUS: f32 = 4.0;
 const CONTROL_PADDING: [u16; 2] = [4, 6];
 
 /// The curves already carry about 10 % current derating.
 const DERATING_NOTE: &str = "The curves include about 10 % derating; consider a further 15 % for boards up to 0.8 mm thick or copper of 108 \u{b5}m and above.";
+
+/// How long the values and the status text take to fade in after the
+/// result state changes.
+const FADE_DURATION: Duration = Duration::from_millis(150);
 
 const DEFAULT_CURRENT: &str = "5";
 const DEFAULT_THICKNESS: &str = "1";
@@ -81,6 +82,8 @@ pub enum TraceCalculatorMessage {
     InnerWidthUnitChanged(WidthUnit),
     OuterWidthUnitChanged(WidthUnit),
     ResetPressed,
+    /// A display frame while the fade runs; carries the frame time.
+    FrameArrived(Instant),
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +104,12 @@ pub struct TraceCalculatorControl {
     reported: Option<TraceCalculatorError>,
     /// Geometry cache of the explanatory diagram.
     diagram_cache: DiagramCache,
+    /// What the result area last showed: whether it had values, and its
+    /// status text. A change restarts the fade.
+    shown: (bool, String),
+    fade: Animation<f32>,
+    /// Time of the latest edit or frame; the fade is read at this instant.
+    now: Instant,
 }
 
 impl Default for TraceCalculatorControl {
@@ -119,6 +128,9 @@ impl Default for TraceCalculatorControl {
             outer_width_unit: WidthUnit::Millimeter,
             reported: None,
             diagram_cache: DiagramCache::default(),
+            shown: (true, String::new()),
+            fade: Animation::new(1.0),
+            now: Instant::now(),
         }
     }
 }
@@ -126,8 +138,13 @@ impl Default for TraceCalculatorControl {
 impl TraceCalculatorControl {
     /// Apply an edit. Returns the failure this edit newly produced, if
     /// any: the dialog already shows it, and the caller is expected to
-    /// route it to the application log as well. `None` when the state is
-    /// valid or the same failure was already returned for an earlier edit.
+    /// route it to the application log as well.
+    ///
+    /// A failure is returned once and then remembered, whatever valid or
+    /// invalid states follow, until a different failure occurs or
+    /// [`Self::forget_reported_failure`] is called. Typing `1`, clearing
+    /// the field, typing `1` again would otherwise log the same line on
+    /// every other keystroke.
     pub fn update(&mut self, message: TraceCalculatorMessage) -> Option<TraceCalculatorError> {
         match message {
             TraceCalculatorMessage::CurrentChanged(value) => self.current = value,
@@ -142,13 +159,50 @@ impl TraceCalculatorControl {
             TraceCalculatorMessage::InnerWidthUnitChanged(unit) => self.inner_width_unit = unit,
             TraceCalculatorMessage::OuterWidthUnitChanged(unit) => self.outer_width_unit = unit,
             TraceCalculatorMessage::ResetPressed => *self = Self::default(),
+            TraceCalculatorMessage::FrameArrived(at) => {
+                self.now = at;
+                return None;
+            }
         }
-        let failure = self.calculation().err();
-        if failure == self.reported {
+        let outcome = self.calculation();
+        self.restart_fade_if_the_result_state_changed(&outcome);
+        let failure = outcome.err()?;
+        if self.reported.as_ref() == Some(&failure) {
             return None;
         }
-        self.reported.clone_from(&failure);
-        failure
+        self.reported = Some(failure.clone());
+        Some(failure)
+    }
+
+    /// Start a new reporting session: the next failure is returned again
+    /// even if it equals the last one. Called when the dialog is opened.
+    pub fn forget_reported_failure(&mut self) {
+        self.reported = None;
+    }
+
+    /// Whether the fade is still running, so a host knows to deliver
+    /// [`TraceCalculatorMessage::FrameArrived`] and otherwise not to.
+    #[must_use]
+    pub fn is_animating(&self) -> bool {
+        self.fade.is_animating(self.now)
+    }
+
+    fn restart_fade_if_the_result_state_changed(
+        &mut self,
+        outcome: &Result<TraceCalculation, TraceCalculatorError>,
+    ) {
+        let status =
+            results::results_model(outcome, self.inner_width_unit, self.outer_width_unit).status;
+        let shown = (outcome.is_ok(), status.text);
+        if shown == self.shown {
+            return;
+        }
+        self.shown = shown;
+        self.now = Instant::now();
+        self.fade = Animation::new(0.0)
+            .easing(Easing::EaseOut)
+            .duration(FADE_DURATION)
+            .go(1.0, self.now);
     }
 
     /// Parse the fields, convert to canonical units and run the domain.
@@ -199,10 +253,9 @@ impl TraceCalculatorControl {
             self.inner_width_unit,
         );
         let diagram = diagram::view(&self.diagram_cache, labels, tokens);
-        let results = match &outcome {
-            Ok(calculation) => self.results_view(calculation, tokens),
-            Err(error) => message_panel(error.to_string(), theme_ext::error_color(tokens), tokens),
-        };
+        let model = results::results_model(&outcome, self.inner_width_unit, self.outer_width_unit);
+        let alpha = self.fade.interpolate_with(|value| value, self.now);
+        let results = results::view(model, alpha, tokens);
 
         let content = column![header, self.inputs_view(tokens), diagram, results]
             .spacing(SECTION_SPACING)
@@ -256,115 +309,6 @@ impl TraceCalculatorControl {
         .spacing(ROW_SPACING)
         .into()
     }
-
-    fn results_view<'a>(
-        &'a self,
-        calculation: &TraceCalculation,
-        tokens: &'a ThemeTokens,
-    ) -> Element<'a, TraceCalculatorMessage> {
-        let panels = row![
-            result_panel(
-                "Inner layer",
-                calculation.inner,
-                self.inner_width_unit,
-                TraceCalculatorMessage::InnerWidthUnitChanged,
-                tokens,
-            ),
-            result_panel(
-                "Outer layer",
-                calculation.outer,
-                self.outer_width_unit,
-                TraceCalculatorMessage::OuterWidthUnitChanged,
-                tokens,
-            ),
-        ]
-        .spacing(ROW_SPACING);
-        if calculation.warnings.is_empty() {
-            return panels.into();
-        }
-        let warnings = calculation
-            .warnings
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" ");
-        column![
-            panels,
-            message_panel(
-                format!("{warnings} The result is an extrapolation."),
-                theme_ext::warning_color(tokens),
-                tokens,
-            ),
-        ]
-        .spacing(ROW_SPACING)
-        .into()
-    }
-}
-
-fn result_panel<'a>(
-    title: &'static str,
-    result: LayerResult,
-    width_unit: WidthUnit,
-    on_width_unit: fn(WidthUnit) -> TraceCalculatorMessage,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, TraceCalculatorMessage> {
-    let body = column![
-        row![
-            text(title)
-                .size(BODY_SIZE)
-                .color(theme_ext::text_primary(tokens)),
-            Space::new().width(Length::Fill),
-            unit_picker(WidthUnit::ALL, width_unit, on_width_unit),
-        ]
-        .align_y(Alignment::Center),
-        output_row(
-            "Required width",
-            result.width(width_unit),
-            width_unit.to_string(),
-            tokens,
-        ),
-        output_row("Area", result.area_mil2, "mil\u{b2}".into(), tokens),
-        output_row(
-            "Resistance",
-            result.resistance_ohm,
-            "\u{3a9}".into(),
-            tokens
-        ),
-        output_row("Voltage drop", result.voltage_drop_v, "V".into(), tokens),
-        output_row("Power loss", result.power_loss_w, "W".into(), tokens),
-    ]
-    .spacing(ROW_SPACING);
-    container(body)
-        .padding(PANEL_PADDING)
-        .width(Length::Fill)
-        .style(move |_theme| panel_style(tokens))
-        .into()
-}
-
-fn output_row<'a>(
-    label: &'static str,
-    value: f64,
-    unit: String,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, TraceCalculatorMessage> {
-    let primary = theme_ext::text_primary(tokens);
-    row![
-        text(label)
-            .size(BODY_SIZE)
-            .color(theme_ext::text_secondary(tokens))
-            .width(Length::Fill),
-        text(format_number(value))
-            .size(BODY_SIZE)
-            .color(primary)
-            .width(OUTPUT_VALUE_WIDTH),
-        text(unit)
-            .size(BODY_SIZE)
-            .color(primary)
-            .width(OUTPUT_UNIT_WIDTH),
-    ]
-    .align_y(Alignment::Center)
-    .spacing(ROW_SPACING)
-    .into()
 }
 
 fn input_row<'a>(
@@ -416,7 +360,7 @@ fn static_unit_box<'a>(
     .into()
 }
 
-fn unit_picker<'a, U, const N: usize>(
+pub(super) fn unit_picker<'a, U, const N: usize>(
     units: [U; N],
     selected: U,
     on_change: fn(U) -> TraceCalculatorMessage,
@@ -429,31 +373,6 @@ where
         .padding(CONTROL_PADDING)
         .width(UNIT_PICKER_WIDTH)
         .into()
-}
-
-/// A bordered note: the failure line or the extrapolation warning.
-fn message_panel<'a>(
-    message: String,
-    color: iced::Color,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, TraceCalculatorMessage> {
-    container(text(message).size(BODY_SIZE).color(color))
-        .padding(PANEL_PADDING)
-        .width(Length::Fill)
-        .style(move |_theme| panel_style(tokens))
-        .into()
-}
-
-fn panel_style(tokens: &ThemeTokens) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(theme_ext::to_color(&tokens.panel_bg))),
-        border: Border {
-            width: 1.0,
-            radius: PANEL_RADIUS.into(),
-            color: theme_ext::border_color(tokens),
-        },
-        ..container::Style::default()
-    }
 }
 
 fn button_style(tokens: &ThemeTokens, status: button::Status) -> button::Style {
@@ -607,17 +526,70 @@ mod tests {
     }
 
     #[test]
-    fn a_persisting_failure_is_reported_once_and_again_after_recovery() {
+    fn a_failure_is_reported_once_even_across_recoveries() {
         let mut control = TraceCalculatorControl::default();
         let first = control.update(TraceCalculatorMessage::CurrentChanged("x".into()));
         let repeat = control.update(TraceCalculatorMessage::CurrentChanged("xy".into()));
         let recovered = control.update(TraceCalculatorMessage::CurrentChanged("5".into()));
-        let again = control.update(TraceCalculatorMessage::CurrentChanged("y".into()));
+        let same_again = control.update(TraceCalculatorMessage::CurrentChanged("y".into()));
 
         assert!(first.is_some());
         assert!(repeat.is_none(), "same failure must not be re-reported");
         assert!(recovered.is_none());
-        assert!(again.is_some(), "a new failure after recovery is reported");
+        assert!(
+            same_again.is_none(),
+            "the same failure after a recovery is not new"
+        );
+    }
+
+    #[test]
+    fn a_different_failure_is_reported_and_so_is_the_first_after_forgetting() {
+        let mut control = TraceCalculatorControl::default();
+        control.update(TraceCalculatorMessage::CurrentChanged("x".into()));
+        control.update(TraceCalculatorMessage::CurrentChanged("5".into()));
+        let other = control.update(TraceCalculatorMessage::LengthChanged("y".into()));
+        assert_eq!(
+            other,
+            Some(TraceCalculatorError::InvalidNumber(InputField::TraceLength))
+        );
+
+        control.forget_reported_failure();
+        let after_reopen = control.update(TraceCalculatorMessage::LengthChanged("z".into()));
+        assert!(after_reopen.is_some(), "a new session reports again");
+    }
+
+    #[test]
+    fn replaying_valid_and_empty_on_one_field_reports_exactly_once() {
+        let mut control = TraceCalculatorControl::default();
+        let mut reported = 0;
+        for text in ["1", "", "1", "", "1", ""] {
+            let failure = control.update(TraceCalculatorMessage::ThicknessChanged(text.into()));
+            reported += usize::from(failure.is_some());
+        }
+        assert_eq!(reported, 1);
+    }
+
+    #[test]
+    fn a_result_state_change_starts_the_fade_and_a_frame_past_it_ends_it() {
+        let mut control = TraceCalculatorControl::default();
+        assert!(!control.is_animating(), "idle on open: no frame loop");
+
+        control.update(TraceCalculatorMessage::CurrentChanged("x".into()));
+        assert!(control.is_animating());
+
+        let later = Instant::now() + FADE_DURATION * 2;
+        control.update(TraceCalculatorMessage::FrameArrived(later));
+        assert!(
+            !control.is_animating(),
+            "the fade ends, so the host can stop ticking"
+        );
+    }
+
+    #[test]
+    fn typing_another_valid_value_does_not_restart_the_fade() {
+        let mut control = TraceCalculatorControl::default();
+        control.update(TraceCalculatorMessage::CurrentChanged("6".into()));
+        assert!(!control.is_animating());
     }
 
     #[test]

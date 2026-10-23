@@ -52,6 +52,11 @@ impl Signex {
                 Task::none()
             }
             OverlayMsg::OpenPcbTraceCalculator => {
+                // Re-invoking while open is a no-op; a real open starts a
+                // new session, so its failures are logged afresh.
+                if !self.ui_state.pcb_trace_calculator_open {
+                    self.ui_state.pcb_trace_calculator.forget_reported_failure();
+                }
                 self.ui_state.pcb_trace_calculator_open = true;
                 Task::none()
             }

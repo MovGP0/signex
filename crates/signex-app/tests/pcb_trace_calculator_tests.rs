@@ -169,3 +169,41 @@ fn a_calculation_failure_reaches_the_messages_panel() {
         "an identical failing edit must not add a second entry"
     );
 }
+
+/// The live log showed one line seven times: a field typed valid, emptied,
+/// valid, emptied. The same failure is logged once per modal session.
+#[test]
+fn replaying_valid_and_empty_input_logs_exactly_one_entry() {
+    let _ = diagnostics::init_logging();
+    let (mut app, _startup) = Signex::new();
+    let marker = "Enter a numeric value for copper thickness.";
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+
+    for text in ["1", "", "1", "", "1", ""] {
+        edit(
+            &mut app,
+            TraceCalculatorMessage::ThicknessChanged(text.into()),
+        );
+    }
+
+    assert_eq!(panel_count(&app, marker), 1);
+}
+
+/// Closing and reopening starts a new session: the same failure is
+/// reported again.
+#[test]
+fn reopening_the_modal_reports_the_same_failure_again() {
+    let _ = diagnostics::init_logging();
+    let (mut app, _startup) = Signex::new();
+    let marker = "Enter a numeric value for trace length.";
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+    edit(&mut app, TraceCalculatorMessage::LengthChanged("".into()));
+    let before = panel_count(&app, marker);
+    assert_eq!(before, 1);
+
+    let _ = app.update(Message::Overlay(OverlayMsg::ClosePcbTraceCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+    edit(&mut app, TraceCalculatorMessage::LengthChanged(" ".into()));
+
+    assert_eq!(panel_count(&app, marker), 2);
+}

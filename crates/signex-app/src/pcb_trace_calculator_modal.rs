@@ -21,7 +21,7 @@ use crate::styles;
 /// result panels side by side. The height follows the content up to
 /// `MODAL_MAX_H`; the control scrolls only past that.
 const MODAL_W: f32 = 640.0;
-const MODAL_MAX_H: f32 = 760.0;
+const MODAL_MAX_H: f32 = 840.0;
 
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
