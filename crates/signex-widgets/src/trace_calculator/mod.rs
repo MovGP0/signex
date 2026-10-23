@@ -2,6 +2,7 @@
 //! dialog body that drives it.
 
 pub mod control;
+pub mod diagram;
 pub mod domain;
 
 pub use control::{

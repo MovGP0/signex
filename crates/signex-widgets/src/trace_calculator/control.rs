@@ -10,6 +10,7 @@ use iced::widget::{
 use iced::{Alignment, Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
+use super::diagram::{self, DiagramCache, width_labels};
 use super::domain::{
     AmbientUnit, CalculationError, InputField, LayerResult, LengthUnit, RiseUnit, ThicknessUnit,
     TraceCalculation, TraceInput, WidthUnit, calculate,
@@ -98,6 +99,8 @@ pub struct TraceCalculatorControl {
     /// The failure last handed to the caller by [`Self::update`], so a
     /// persisting error is reported once and not on every keystroke.
     reported: Option<TraceCalculatorError>,
+    /// Geometry cache of the explanatory diagram.
+    diagram_cache: DiagramCache,
 }
 
 impl Default for TraceCalculatorControl {
@@ -115,6 +118,7 @@ impl Default for TraceCalculatorControl {
             inner_width_unit: WidthUnit::Millimeter,
             outer_width_unit: WidthUnit::Millimeter,
             reported: None,
+            diagram_cache: DiagramCache::default(),
         }
     }
 }
@@ -188,12 +192,19 @@ impl TraceCalculatorControl {
         ]
         .align_y(Alignment::Start);
 
-        let results = match self.calculation() {
-            Ok(calculation) => self.results_view(&calculation, tokens),
+        let outcome = self.calculation();
+        let labels = width_labels(
+            outcome.as_ref().ok(),
+            self.outer_width_unit,
+            self.inner_width_unit,
+        );
+        let diagram = diagram::view(&self.diagram_cache, labels, tokens);
+        let results = match &outcome {
+            Ok(calculation) => self.results_view(calculation, tokens),
             Err(error) => message_panel(error.to_string(), theme_ext::error_color(tokens), tokens),
         };
 
-        let content = column![header, self.inputs_view(tokens), results]
+        let content = column![header, self.inputs_view(tokens), diagram, results]
             .spacing(SECTION_SPACING)
             .padding(CONTENT_PADDING);
         scrollable(content).height(Length::Shrink).into()
