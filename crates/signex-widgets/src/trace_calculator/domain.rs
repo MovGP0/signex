@@ -42,14 +42,18 @@
 //! | `k` outer / inner layer | 0.048 / 0.024 | IPC-2221, conductor sizing |
 //! | Mil | 25.4 micrometres, exactly | international inch = 25.4 mm (1959 agreement), mil = inch / 1000 |
 //! | Inch | 0.0254 m, exactly | same |
-//! | Copper weight | 1 oz/ft^2 = 1.37 mil | industry nominal foil thickness for 1 oz copper, as used in IPC-2221 conductor-thickness tables |
+//! | Copper weight | 1/2, 1, 2, 3 oz/ft^2 = 0.7, 1.4, 2.8, 4.2 mil | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
 //! | Resistivity `rho20` | 1.7241e-8 ohm*m at 20 degC | annealed copper, International Annealed Copper Standard (100 % IACS = 58 MS/m); CRC Handbook of Chemistry and Physics |
 //! | Temperature coefficient `alpha` | 0.00393 per kelvin, referenced to 20 degC | annealed copper, IACS / CRC Handbook |
 //! | Reference temperature | 20 degC | the temperature `rho20` and `alpha` are quoted at |
 //! | Fahrenheit-degree rise to Celsius | x 5/9 | definition of the scales |
 //! | Fahrenheit to Celsius | (F - 32) x 5/9 | definition of the scales |
 //! | Absolute zero | -273.15 degC | SI definition of the kelvin |
-//! | Chart extent | see [`ChartRange`] | the extent of the IPC-2221 conductor-sizing chart, as summarised in D. Brooks and J. Adam, "PCB Design Guide to Via and Trace Currents and Temperatures" |
+//! | Outer-layer chart extent | up to 35 A, rise 10-100 degC | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
+//! | Inner-layer chart extent | up to 17.5 A, rise 10-45 degC | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
+//! | Cross-section / width extent | up to 700 mil^2 / 400 mil | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
+//! | Copper-weight extent | 0.5-3 oz/ft^2 | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
+//! | Current derating | about 10 % built in; a further 15 % for panels up to 0.8 mm or copper from 108 um | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
 //!
 //! # Defaults
 //!
@@ -70,34 +74,59 @@ const INNER_LAYER_K: f64 = 0.024;
 const METRES_PER_MIL: f64 = 25.4e-6;
 const METRES_PER_INCH: f64 = 0.0254;
 const SQUARE_METRES_PER_SQUARE_MIL: f64 = METRES_PER_MIL * METRES_PER_MIL;
-/// Nominal thickness of 1 oz/ft^2 copper foil, in mils.
-const MILS_PER_OUNCE_COPPER: f64 = 1.37;
+/// Thickness of 1 oz/ft^2 copper foil, in mils (IPC-2221, Figure 6-4).
+const MILS_PER_OUNCE_COPPER: f64 = 1.4;
 
 const COPPER_RESISTIVITY_20C_OHM_M: f64 = 1.7241e-8;
 const COPPER_ALPHA_PER_K: f64 = 0.00393;
 const REFERENCE_TEMPERATURE_C: f64 = 20.0;
 const ABSOLUTE_ZERO_C: f64 = -273.15;
 
-/// Extent of the IPC-2221 conductor-sizing chart the curve fit was drawn
-/// from. Outside it the formula still evaluates but is an extrapolation.
+/// What one layer kind's current chart covers.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ChartRange {
+pub struct LayerChart {
     pub max_current_a: f64,
     pub min_rise_c: f64,
     pub max_rise_c: f64,
-    pub min_copper_oz: f64,
-    pub max_copper_oz: f64,
-    pub max_width_mil: f64,
 }
 
-/// The chart extent, see the "Sources" table.
+/// Extent of the IPC-2221 conductor-sizing charts the curve fit was drawn
+/// from. Outside it the formula still evaluates but is an extrapolation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChartRange {
+    pub outer: LayerChart,
+    pub inner: LayerChart,
+    pub max_area_mil2: f64,
+    pub max_width_mil: f64,
+    pub min_copper_oz: f64,
+    pub max_copper_oz: f64,
+}
+
+impl ChartRange {
+    const fn layer(&self, layer: LayerKind) -> LayerChart {
+        match layer {
+            LayerKind::Inner => self.inner,
+            LayerKind::Outer => self.outer,
+        }
+    }
+}
+
+/// The chart extents, see the "Sources" table.
 pub const CHART_RANGE: ChartRange = ChartRange {
-    max_current_a: 35.0,
-    min_rise_c: 10.0,
-    max_rise_c: 100.0,
+    outer: LayerChart {
+        max_current_a: 35.0,
+        min_rise_c: 10.0,
+        max_rise_c: 100.0,
+    },
+    inner: LayerChart {
+        max_current_a: 17.5,
+        min_rise_c: 10.0,
+        max_rise_c: 45.0,
+    },
+    max_area_mil2: 700.0,
+    max_width_mil: 400.0,
     min_copper_oz: 0.5,
     max_copper_oz: 3.0,
-    max_width_mil: 400.0,
 };
 
 /// Which side of the board stack the conductor sits on.
@@ -211,38 +240,45 @@ impl fmt::Display for CalculationError {
 
 impl std::error::Error for CalculationError {}
 
-/// A reason the result sits outside the IPC-2221 chart.
+/// A reason the result sits outside the IPC-2221 charts.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RangeWarning {
-    CurrentAboveChart,
-    RiseOutsideChart,
-    CopperOutsideChart,
+    CurrentAboveChart(LayerKind),
+    RiseOutsideChart(LayerKind),
+    AreaAboveChart(LayerKind),
     WidthAboveChart(LayerKind),
+    CopperOutsideChart,
 }
 
 impl fmt::Display for RangeWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let range = CHART_RANGE;
-        match self {
-            Self::CurrentAboveChart => write!(
+        match *self {
+            Self::CurrentAboveChart(layer) => write!(
                 f,
-                "Current exceeds the chart's {} A ceiling.",
-                range.max_current_a
+                "The {layer}-layer chart stops at {} A.",
+                range.layer(layer).max_current_a
             ),
-            Self::RiseOutsideChart => write!(
+            Self::RiseOutsideChart(layer) => write!(
                 f,
-                "Temperature rise is outside the chart's {}-{} \u{b0}C span.",
-                range.min_rise_c, range.max_rise_c
+                "The {layer}-layer chart covers a {}-{} \u{b0}C rise only.",
+                range.layer(layer).min_rise_c,
+                range.layer(layer).max_rise_c
             ),
-            Self::CopperOutsideChart => write!(
+            Self::AreaAboveChart(layer) => write!(
                 f,
-                "Copper weight is outside the chart's {}-{} oz/ft\u{b2} span.",
-                range.min_copper_oz, range.max_copper_oz
+                "The {layer}-layer cross-section exceeds the {} mil\u{b2} the chart reaches.",
+                range.max_area_mil2
             ),
             Self::WidthAboveChart(layer) => write!(
                 f,
-                "The {layer}-layer width exceeds the chart's {} mil limit.",
+                "The {layer}-layer width exceeds the {} mil the chart's width scale reaches.",
                 range.max_width_mil
+            ),
+            Self::CopperOutsideChart => write!(
+                f,
+                "The chart spans {}-{} oz/ft\u{b2} copper only.",
+                range.min_copper_oz, range.max_copper_oz
             ),
         }
     }
@@ -447,19 +483,23 @@ fn range_warnings(input: TraceInput, inner: LayerResult, outer: LayerResult) -> 
     let range = CHART_RANGE;
     let copper_oz = input.copper_thickness_m / ThicknessUnit::OuncePerSquareFoot.to_metres(1.0);
     let mut warnings = Vec::new();
-    if input.current_a > range.max_current_a {
-        warnings.push(RangeWarning::CurrentAboveChart);
-    }
-    if !(range.min_rise_c..=range.max_rise_c).contains(&input.temperature_rise_c) {
-        warnings.push(RangeWarning::RiseOutsideChart);
-    }
-    if !(range.min_copper_oz..=range.max_copper_oz).contains(&copper_oz) {
-        warnings.push(RangeWarning::CopperOutsideChart);
-    }
     for (layer, result) in [(LayerKind::Inner, inner), (LayerKind::Outer, outer)] {
+        let chart = range.layer(layer);
+        if input.current_a > chart.max_current_a {
+            warnings.push(RangeWarning::CurrentAboveChart(layer));
+        }
+        if !(chart.min_rise_c..=chart.max_rise_c).contains(&input.temperature_rise_c) {
+            warnings.push(RangeWarning::RiseOutsideChart(layer));
+        }
+        if result.area_mil2 > range.max_area_mil2 {
+            warnings.push(RangeWarning::AreaAboveChart(layer));
+        }
         if result.width(WidthUnit::Mil) > range.max_width_mil {
             warnings.push(RangeWarning::WidthAboveChart(layer));
         }
+    }
+    if !(range.min_copper_oz..=range.max_copper_oz).contains(&copper_oz) {
+        warnings.push(RangeWarning::CopperOutsideChart);
     }
     warnings
 }
@@ -564,7 +604,11 @@ mod tests {
         assert_close(result.inner.width(WidthUnit::Mil), 368.41801683497005);
         assert_close(result.outer.area_mil2, 390.29357025918654);
         assert_close(result.outer.width(WidthUnit::Mil), 141.620809779762);
-        assert!(result.warnings.is_empty());
+        // 1015 mil^2 is beyond the 700 mil^2 the inner chart reaches.
+        assert_eq!(
+            result.warnings,
+            vec![RangeWarning::AreaAboveChart(LayerKind::Inner)]
+        );
     }
 
     #[test]
@@ -579,18 +623,18 @@ mod tests {
     }
 
     #[test]
-    fn one_ounce_copper_is_137_mil_thick() {
+    fn one_ounce_copper_is_14_mil_thick() {
         assert_close(
             ThicknessUnit::OuncePerSquareFoot.to_metres(1.0),
-            1.37 * 25.4e-6,
+            1.4 * 25.4e-6,
         );
-        // 2 oz at the nominal foil thickness: width = area / (2 * 1.37 mil).
+        // 2 oz is 2.8 mil: width = area / 2.8 mil, about 362.6 mil.
         let input = TraceInput {
             copper_thickness_m: ThicknessUnit::OuncePerSquareFoot.to_metres(2.0),
             ..worked_example()
         };
         let width = calculate(input).unwrap().inner.width(WidthUnit::Mil);
-        assert_close(width, 1015.3252432459805 / (2.0 * 1.37));
+        assert_close(width, 1015.3252432459805 / 2.8);
     }
 
     #[test]
@@ -664,29 +708,59 @@ mod tests {
         assert!(calculate(cold_room).is_ok());
     }
 
+    fn warnings_for(input: TraceInput) -> Vec<RangeWarning> {
+        calculate(input).expect("finite extrapolation").warnings
+    }
+
     #[test]
     fn leaving_the_chart_is_reported_per_cause() {
-        let result = calculate(TraceInput {
+        let warnings = warnings_for(TraceInput {
             current_a: 36.0,
             copper_thickness_m: ThicknessUnit::OuncePerSquareFoot.to_metres(4.0),
             temperature_rise_c: 5.0,
             ..worked_example()
-        })
-        .expect("finite extrapolation");
+        });
+        for layer in [LayerKind::Inner, LayerKind::Outer] {
+            assert!(warnings.contains(&RangeWarning::CurrentAboveChart(layer)));
+            assert!(warnings.contains(&RangeWarning::RiseOutsideChart(layer)));
+            assert!(warnings.contains(&RangeWarning::AreaAboveChart(layer)));
+            assert!(warnings.contains(&RangeWarning::WidthAboveChart(layer)));
+        }
+        assert!(warnings.contains(&RangeWarning::CopperOutsideChart));
+    }
 
-        assert!(result.warnings.contains(&RangeWarning::CurrentAboveChart));
-        assert!(result.warnings.contains(&RangeWarning::RiseOutsideChart));
-        assert!(result.warnings.contains(&RangeWarning::CopperOutsideChart));
-        assert!(
-            result
-                .warnings
-                .contains(&RangeWarning::WidthAboveChart(LayerKind::Inner))
-        );
-        assert!(
-            result
-                .warnings
-                .contains(&RangeWarning::WidthAboveChart(LayerKind::Outer))
-        );
+    #[test]
+    fn the_inner_chart_stops_at_a_lower_current_than_the_outer() {
+        let warnings = warnings_for(TraceInput {
+            current_a: 20.0,
+            ..worked_example()
+        });
+        assert!(warnings.contains(&RangeWarning::CurrentAboveChart(LayerKind::Inner)));
+        assert!(!warnings.contains(&RangeWarning::CurrentAboveChart(LayerKind::Outer)));
+    }
+
+    #[test]
+    fn the_inner_chart_covers_a_narrower_rise_span_than_the_outer() {
+        let warnings = warnings_for(TraceInput {
+            temperature_rise_c: 60.0,
+            ..worked_example()
+        });
+        assert!(warnings.contains(&RangeWarning::RiseOutsideChart(LayerKind::Inner)));
+        assert!(!warnings.contains(&RangeWarning::RiseOutsideChart(LayerKind::Outer)));
+        // Both charts start at 10 degC.
+        let low = warnings_for(TraceInput {
+            temperature_rise_c: 5.0,
+            ..worked_example()
+        });
+        assert!(low.contains(&RangeWarning::RiseOutsideChart(LayerKind::Outer)));
+    }
+
+    #[test]
+    fn a_cross_section_beyond_700_mil_squared_warns_per_layer() {
+        // 10 A / 10 degC: 1015 mil^2 inner, 390 mil^2 outer.
+        let warnings = warnings_for(worked_example());
+        assert!(warnings.contains(&RangeWarning::AreaAboveChart(LayerKind::Inner)));
+        assert!(!warnings.contains(&RangeWarning::AreaAboveChart(LayerKind::Outer)));
     }
 
     #[test]
@@ -705,10 +779,14 @@ mod tests {
     }
 
     #[test]
-    fn warning_text_names_the_chart_limit() {
+    fn warning_text_names_the_layer_and_the_chart_limit() {
         assert_eq!(
-            RangeWarning::CurrentAboveChart.to_string(),
-            "Current exceeds the chart's 35 A ceiling."
+            RangeWarning::CurrentAboveChart(LayerKind::Inner).to_string(),
+            "The inner-layer chart stops at 17.5 A."
+        );
+        assert_eq!(
+            RangeWarning::CurrentAboveChart(LayerKind::Outer).to_string(),
+            "The outer-layer chart stops at 35 A."
         );
         assert!(
             RangeWarning::WidthAboveChart(LayerKind::Outer)

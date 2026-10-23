@@ -31,6 +31,9 @@ const PANEL_RADIUS: f32 = 6.0;
 const BUTTON_RADIUS: f32 = 4.0;
 const CONTROL_PADDING: [u16; 2] = [4, 6];
 
+/// The curves already carry about 10 % current derating.
+const DERATING_NOTE: &str = "The curves include about 10 % derating; consider a further 15 % for boards up to 0.8 mm thick or copper of 108 \u{b5}m and above.";
+
 const DEFAULT_CURRENT: &str = "5";
 const DEFAULT_THICKNESS: &str = "1";
 const DEFAULT_RISE: &str = "20";
@@ -177,9 +180,10 @@ impl TraceCalculatorControl {
                 text("IPC-2221 curve fit; IPC-2152 supersedes it for current capacity.")
                     .size(CAPTION_SIZE)
                     .color(secondary),
+                text(DERATING_NOTE).size(CAPTION_SIZE).color(secondary),
             ]
-            .spacing(2),
-            Space::new().width(Length::Fill),
+            .spacing(2)
+            .width(Length::Fill),
             button(text("Reset").size(BODY_SIZE))
                 .padding(CONTROL_PADDING)
                 .on_press(TraceCalculatorMessage::ResetPressed)

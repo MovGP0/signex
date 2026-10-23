@@ -8,7 +8,7 @@ pub use control::{
     TraceCalculatorControl, TraceCalculatorError, TraceCalculatorMessage, format_number,
 };
 pub use domain::{
-    AmbientUnit, CHART_RANGE, CalculationError, ChartRange, InputField, LayerKind, LayerResult,
-    LengthUnit, RangeWarning, RiseUnit, ThicknessUnit, TraceCalculation, TraceInput, WidthUnit,
-    calculate,
+    AmbientUnit, CHART_RANGE, CalculationError, ChartRange, InputField, LayerChart, LayerKind,
+    LayerResult, LengthUnit, RangeWarning, RiseUnit, ThicknessUnit, TraceCalculation, TraceInput,
+    WidthUnit, calculate,
 };
