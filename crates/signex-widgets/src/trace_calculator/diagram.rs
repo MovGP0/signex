@@ -19,7 +19,7 @@ use super::domain::{LayerResult, TraceCalculation, WidthUnit};
 use crate::theme_ext;
 
 /// Height the control reserves for the drawing.
-pub const DIAGRAM_HEIGHT: f32 = 190.0;
+pub const DIAGRAM_HEIGHT: f32 = 158.0;
 
 const LABEL_SIZE: f32 = 10.0;
 const LINE_WIDTH: f32 = 1.0;
@@ -174,41 +174,109 @@ fn label(
     });
 }
 
+/// Where everything sits, in frame pixels. Pure so the spacing rules can
+/// be tested without rendering. Inner is on the left and outer on the
+/// right, the same order as the result panels below.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Layout {
+    slab: Rectangle,
+    /// Joint of the two dielectric layers; the inner trace is centred on it.
+    joint_y: f32,
+    inner: Rectangle,
+    outer: Rectangle,
+    outer_dimension_y: f32,
+    outer_label_y: f32,
+    inner_dimension_y: f32,
+    inner_label_y: f32,
+    caption_y: f32,
+    legend: Point,
+}
+
+const COPPER_DRAWN: f32 = 18.0;
+const TOP_BAND: f32 = 48.0;
+const UPPER_LAYER: f32 = 46.0;
+const LOWER_LAYER: f32 = 38.0;
+const DIMENSION_GAP: f32 = 12.0;
+const LABEL_GAP: f32 = 9.0;
+const CAPTION_GAP: f32 = 14.0;
+
+fn layout(width: f32) -> Layout {
+    let slab_top = TOP_BAND;
+    let joint_y = slab_top + UPPER_LAYER;
+    let slab_bottom = joint_y + LOWER_LAYER;
+    let trace_w = 0.22 * width;
+    let outer = Rectangle::new(
+        Point::new(0.62 * width, slab_top - COPPER_DRAWN),
+        Size::new(trace_w, COPPER_DRAWN),
+    );
+    let inner = Rectangle::new(
+        Point::new(0.12 * width, joint_y - COPPER_DRAWN / 2.0),
+        Size::new(trace_w, COPPER_DRAWN),
+    );
+    let inner_dimension_y = inner.y - DIMENSION_GAP;
+    let outer_dimension_y = outer.y - DIMENSION_GAP;
+    Layout {
+        slab: Rectangle::new(
+            Point::new(0.05 * width, slab_top),
+            Size::new(0.90 * width, slab_bottom - slab_top),
+        ),
+        joint_y,
+        inner,
+        outer,
+        outer_dimension_y,
+        outer_label_y: outer_dimension_y - LABEL_GAP,
+        inner_dimension_y,
+        inner_label_y: inner_dimension_y - LABEL_GAP,
+        caption_y: slab_bottom + CAPTION_GAP,
+        legend: Point::new(0.12 * width, 12.0),
+    }
+}
+
 fn paint(frame: &mut canvas::Frame, key: &DiagramKey) {
     let palette = key.palette;
-    let (w, h) = (frame.width(), frame.height());
-    let slab_left = 0.05 * w;
-    let slab_right = 0.95 * w;
-    let slab_top = 0.42 * h;
-    let slab_mid = 0.64 * h;
-    let slab_bottom = 0.82 * h;
-    let copper_t = 0.10 * h;
-    let trace_w = 0.22 * w;
+    let layout = layout(frame.width());
+    let slab = layout.slab;
 
-    // Two dielectric layers, the inner trace sits on their joint.
-    for (top, bottom) in [(slab_top, slab_mid), (slab_mid, slab_bottom)] {
-        let origin = Point::new(slab_left, top);
-        let size = Size::new(slab_right - slab_left, bottom - top);
+    // Two dielectric layers; the inner trace sits on their joint.
+    let layers = [
+        (slab.y, layout.joint_y),
+        (layout.joint_y, slab.y + slab.height),
+    ];
+    for (top, bottom) in layers {
+        let origin = Point::new(slab.x, top);
+        let size = Size::new(slab.width, bottom - top);
         frame.fill_rectangle(origin, size, palette.dielectric);
         frame.stroke(&Path::rectangle(origin, size), stroke(palette.outline));
     }
 
-    let outer = Rectangle::new(
-        Point::new(0.12 * w, slab_top - copper_t),
-        Size::new(trace_w, copper_t),
-    );
-    let inner = Rectangle::new(
-        Point::new(0.62 * w, slab_mid - copper_t / 2.0),
-        Size::new(trace_w, copper_t),
-    );
-    for trace in [outer, inner] {
+    for trace in [layout.inner, layout.outer] {
         draw_trace(frame, trace, &palette);
     }
 
-    annotate_outer(frame, outer, key);
-    annotate_inner(frame, inner, key);
-    layer_names(frame, outer, inner, slab_bottom, &palette);
-    legend(frame, w, h, &palette);
+    annotate(
+        frame,
+        layout.inner,
+        (layout.inner_dimension_y, layout.inner_label_y),
+        &key.labels.inner_width,
+        &palette,
+    );
+    annotate(
+        frame,
+        layout.outer,
+        (layout.outer_dimension_y, layout.outer_label_y),
+        &key.labels.outer_width,
+        &palette,
+    );
+    for (name, trace) in [("Inner layer", layout.inner), ("Outer layer", layout.outer)] {
+        label(
+            frame,
+            name,
+            Point::new(trace.center_x(), layout.caption_y),
+            palette.text,
+            alignment::Horizontal::Center,
+        );
+    }
+    legend(frame, layout.legend, &palette);
 }
 
 fn draw_trace(frame: &mut canvas::Frame, trace: Rectangle, palette: &Palette) {
@@ -282,99 +350,62 @@ fn width_text(value: &Option<String>) -> &str {
     value.as_deref().unwrap_or("W")
 }
 
-fn annotate_outer(frame: &mut canvas::Frame, trace: Rectangle, key: &DiagramKey) {
-    let p = &key.palette;
-    let y = trace.y - 12.0;
-    horizontal_dimension(frame, trace.x, trace.x + trace.width, y, p.muted);
-    let center = Point::new(trace.center_x(), y - 9.0);
+/// W above the trace, T on its left, A = W x T on its right. The W
+/// dimension line and its label sit above the trace, clear of the slab's
+/// borders and of the layer caption below the slab.
+fn annotate(
+    frame: &mut canvas::Frame,
+    trace: Rectangle,
+    (dimension_y, label_y): (f32, f32),
+    width: &Option<String>,
+    palette: &Palette,
+) {
+    horizontal_dimension(
+        frame,
+        trace.x,
+        trace.x + trace.width,
+        dimension_y,
+        palette.muted,
+    );
     label(
         frame,
-        width_text(&key.labels.outer_width),
-        center,
-        p.text,
+        width_text(width),
+        Point::new(trace.center_x(), label_y),
+        palette.text,
         alignment::Horizontal::Center,
     );
     let t_x = trace.x - 10.0;
-    vertical_dimension(frame, t_x, trace.y, trace.y + trace.height, p.muted);
+    vertical_dimension(frame, t_x, trace.y, trace.y + trace.height, palette.muted);
     label(
         frame,
         "T",
         Point::new(t_x - 6.0, trace.center_y()),
-        p.text,
+        palette.text,
         alignment::Horizontal::Right,
     );
     label(
         frame,
         "A = W \u{d7} T",
         Point::new(trace.x + trace.width + 10.0, trace.center_y()),
-        p.text,
+        palette.text,
         alignment::Horizontal::Left,
     );
 }
 
-fn annotate_inner(frame: &mut canvas::Frame, trace: Rectangle, key: &DiagramKey) {
-    let p = &key.palette;
-    let y = trace.y + trace.height + 12.0;
-    horizontal_dimension(frame, trace.x, trace.x + trace.width, y, p.muted);
-    label(
-        frame,
-        width_text(&key.labels.inner_width),
-        Point::new(trace.center_x(), y + 9.0),
-        p.text,
-        alignment::Horizontal::Center,
-    );
-    let t_x = trace.x + trace.width + 10.0;
-    vertical_dimension(frame, t_x, trace.y, trace.y + trace.height, p.muted);
-    label(
-        frame,
-        "T",
-        Point::new(t_x + 6.0, trace.center_y()),
-        p.text,
-        alignment::Horizontal::Left,
-    );
-    label(
-        frame,
-        "A = W \u{d7} T",
-        Point::new(trace.x - 10.0, trace.center_y()),
-        p.text,
-        alignment::Horizontal::Right,
-    );
-}
-
-fn layer_names(
-    frame: &mut canvas::Frame,
-    outer: Rectangle,
-    inner: Rectangle,
-    slab_bottom: f32,
-    palette: &Palette,
-) {
-    for (name, trace) in [("Outer layer", outer), ("Inner layer", inner)] {
-        label(
-            frame,
-            name,
-            Point::new(trace.center_x(), slab_bottom + 12.0),
-            palette.text,
-            alignment::Horizontal::Center,
-        );
-    }
-}
-
-/// What the symbols mean, in the free space above the slab.
-fn legend(frame: &mut canvas::Frame, w: f32, h: f32, palette: &Palette) {
-    let x = 0.40 * w;
-    let y = 0.14 * h;
-    marker(frame, Point::new(x, y), palette);
+/// What the symbols mean, in the free band above the slab, over the inner trace.
+fn legend(frame: &mut canvas::Frame, at: Point, palette: &Palette) {
+    marker(frame, at, palette);
     label(
         frame,
         "I and L run along the trace",
-        Point::new(x + 12.0, y),
+        Point::new(at.x + 12.0, at.y),
         palette.muted,
         alignment::Horizontal::Left,
     );
     label(
         frame,
         "\u{394}T = rise above ambient",
-        Point::new(x, y + 18.0),
+        Point::new(at.x, at.y + 18.0),
         palette.muted,
         alignment::Horizontal::Left,
     );
@@ -438,5 +469,62 @@ mod tests {
             dark.copper,
             theme_ext::accent(&theme_tokens(ThemeId::Signex))
         );
+    }
+
+    const WIDTHS: [f32; 3] = [560.0, 616.0, 1100.0];
+
+    #[test]
+    fn inner_is_left_and_outer_right_like_the_result_panels() {
+        for width in WIDTHS {
+            let l = layout(width);
+            assert!(l.inner.x + l.inner.width < l.outer.x, "at {width}");
+        }
+    }
+
+    #[test]
+    fn the_outer_trace_is_on_the_surface_and_the_inner_one_is_buried() {
+        let l = layout(616.0);
+        assert_eq!(l.outer.y + l.outer.height, l.slab.y);
+        assert!(l.inner.y > l.slab.y);
+        assert!(l.inner.y + l.inner.height < l.slab.y + l.slab.height);
+    }
+
+    #[test]
+    fn the_inner_dimension_label_clears_the_slab_border_and_the_trace() {
+        let l = layout(616.0);
+        let half = LABEL_SIZE / 2.0;
+        assert!(
+            l.inner_label_y - half > l.slab.y,
+            "label touches the top border"
+        );
+        assert!(l.inner_label_y + half < l.inner_dimension_y);
+        assert!(l.inner_dimension_y < l.inner.y);
+    }
+
+    #[test]
+    fn captions_sit_below_the_slab_and_inside_the_canvas() {
+        let l = layout(616.0);
+        let half = LABEL_SIZE / 2.0;
+        assert!(l.caption_y - half > l.slab.y + l.slab.height + 4.0);
+        assert!(l.caption_y + half <= DIAGRAM_HEIGHT);
+    }
+
+    #[test]
+    fn the_legend_stays_clear_of_both_width_labels() {
+        for width in WIDTHS {
+            let l = layout(width);
+            // Rough text extent: LABEL_SIZE * 0.55 per character.
+            let legend_right = l.legend.x + 12.0 + 27.0 * LABEL_SIZE * 0.55;
+            let outer_label_left = l.outer.center_x() - 6.0 * LABEL_SIZE * 0.55;
+            assert!(legend_right < outer_label_left, "at {width}");
+            assert!(l.legend.x <= l.inner.x, "at {width}");
+        }
+    }
+
+    #[test]
+    fn the_top_band_holds_the_outer_label_and_the_legend() {
+        let l = layout(616.0);
+        assert!(l.outer_label_y - LABEL_SIZE / 2.0 >= 0.0);
+        assert!(l.legend.y + 18.0 + LABEL_SIZE / 2.0 < l.slab.y);
     }
 }
