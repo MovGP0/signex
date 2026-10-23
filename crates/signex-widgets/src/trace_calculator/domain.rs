@@ -42,9 +42,9 @@
 //! | `k` outer / inner layer | 0.048 / 0.024 | IPC-2221, conductor sizing |
 //! | Mil | 25.4 micrometres, exactly | international inch = 25.4 mm (1959 agreement), mil = inch / 1000 |
 //! | Inch | 0.0254 m, exactly | same |
-//! | Copper weight | 1/2, 1, 2, 3 oz/ft^2 = 0.7, 1.4, 2.8, 4.2 mil | IPC-2221 (February 1998), §6.2 and Figure 6-4 |
-//! | Resistivity `rho20` | 1.7241e-8 ohm*m at 20 degC | annealed copper, International Annealed Copper Standard (100 % IACS = 58 MS/m); CRC Handbook of Chemistry and Physics |
-//! | Temperature coefficient `alpha` | 0.00393 per kelvin, referenced to 20 degC | annealed copper, IACS / CRC Handbook |
+//! | Copper weight | 1/2, 1, 2, 3 oz/ft^2 = 0.7, 1.4, 2.8, 4.2 mil | IPC-2221 (February 1998), §6.2, Figure 6-4 |
+//! | Resistivity `rho20` | 1.7241e-8 ohm*m at 20 degC | International Annealed Copper Standard value for annealed copper (100 % IACS = 58 MS/m), IEC 60028 |
+//! | Temperature coefficient `alpha` | 0.00393 per kelvin, referenced to 20 degC | International Annealed Copper Standard value for annealed copper, IEC 60028 |
 //! | Reference temperature | 20 degC | the temperature `rho20` and `alpha` are quoted at |
 //! | Fahrenheit-degree rise to Celsius | x 5/9 | definition of the scales |
 //! | Fahrenheit to Celsius | (F - 32) x 5/9 | definition of the scales |
@@ -611,15 +611,29 @@ mod tests {
         );
     }
 
+    /// The dialog's own defaults: 5 A, 1 oz/ft^2, 20 degC rise, 20 degC
+    /// ambient, 50 mm.
+    fn dialog_defaults() -> TraceInput {
+        TraceInput {
+            current_a: 5.0,
+            copper_thickness_m: ThicknessUnit::OuncePerSquareFoot.to_metres(1.0),
+            temperature_rise_c: 20.0,
+            ambient_c: 20.0,
+            length_m: LengthUnit::Millimeter.to_metres(50.0),
+        }
+    }
+
     #[test]
     fn resistance_follows_the_temperature_corrected_copper_model() {
-        let result = calculate(worked_example()).expect("valid example");
+        let result = calculate(dialog_defaults()).expect("valid defaults");
 
-        // rho20 * L / A * (1 + alpha * (35 - 20)), with the inner area.
-        assert_close(result.inner.resistance_ohm, 0.0007079441641879094);
-        assert_close(result.inner.voltage_drop_v, 0.007079441641879094);
-        assert_close(result.inner.power_loss_w, 0.07079441641879095);
-        assert_close(result.outer.resistance_ohm, 0.0018416741537179927);
+        // rho20 * L / A * (1 + alpha * (40 - 20)), with the inner area.
+        assert_close(result.inner.resistance_ohm, 0.005623777223592189);
+        assert_close(result.inner.voltage_drop_v, 0.028118886117960946);
+        assert_close(result.inner.power_loss_w, 0.14059443058980473);
+        assert_close(result.outer.resistance_ohm, 0.014629918124741499);
+        assert_close(result.outer.voltage_drop_v, 0.07314959062370749);
+        assert_close(result.outer.power_loss_w, 0.36574795311853747);
     }
 
     #[test]
@@ -765,14 +779,7 @@ mod tests {
 
     #[test]
     fn the_dialog_defaults_stay_inside_the_chart() {
-        let result = calculate(TraceInput {
-            current_a: 5.0,
-            copper_thickness_m: ThicknessUnit::OuncePerSquareFoot.to_metres(1.0),
-            temperature_rise_c: 20.0,
-            ambient_c: 20.0,
-            length_m: LengthUnit::Millimeter.to_metres(50.0),
-        })
-        .expect("defaults are valid");
+        let result = calculate(dialog_defaults()).expect("defaults are valid");
         assert!(result.warnings.is_empty());
         assert_close(result.inner.area_mil2, 256.2697412447107);
         assert_close(result.outer.resistance_ohm, 0.014629918124741499);

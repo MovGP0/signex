@@ -17,10 +17,11 @@ use crate::app::view::dialogs::{
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
 
-/// Card size. Wide enough for the label / field / unit rows and the two
-/// result panels side by side.
+/// Card width, wide enough for the label / field / unit rows and the two
+/// result panels side by side. The height follows the content up to
+/// `MODAL_MAX_H`; the control scrolls only past that.
 const MODAL_W: f32 = 640.0;
-const MODAL_H: f32 = 560.0;
+const MODAL_MAX_H: f32 = 680.0;
 
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
@@ -56,12 +57,11 @@ pub fn view<'a>(
             .view(tokens)
             .map(|message| Message::Overlay(OverlayMsg::PcbTraceCalculatorEdited(message))),
     )
-    .width(Length::Fill)
-    .height(Length::Fill);
+    .width(Length::Fill);
 
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(MODAL_W))
-        .height(Length::Fixed(MODAL_H))
+        .max_height(MODAL_MAX_H)
         .clip(true)
         .style(styles::modal_card(tokens));
 

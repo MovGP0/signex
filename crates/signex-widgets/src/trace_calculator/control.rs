@@ -16,7 +16,6 @@ use super::domain::{
 };
 use crate::theme_ext;
 
-const TITLE_SIZE: f32 = 16.0;
 const BODY_SIZE: f32 = 11.0;
 const CAPTION_SIZE: f32 = 10.0;
 const CONTENT_PADDING: u16 = 12;
@@ -28,6 +27,7 @@ const OUTPUT_VALUE_WIDTH: f32 = 84.0;
 const OUTPUT_UNIT_WIDTH: f32 = 40.0;
 const PANEL_PADDING: u16 = 12;
 const PANEL_RADIUS: f32 = 6.0;
+const STATIC_BOX_RADIUS: f32 = 2.0;
 const BUTTON_RADIUS: f32 = 4.0;
 const CONTROL_PADDING: [u16; 2] = [4, 6];
 
@@ -171,9 +171,6 @@ impl TraceCalculatorControl {
         let secondary = theme_ext::text_secondary(tokens);
         let header = row![
             column![
-                text("PCB Trace Calculator")
-                    .size(TITLE_SIZE)
-                    .color(theme_ext::text_primary(tokens)),
                 text("IPC-2221 conductor sizing")
                     .size(BODY_SIZE)
                     .color(secondary),
@@ -199,7 +196,7 @@ impl TraceCalculatorControl {
         let content = column![header, self.inputs_view(tokens), results]
             .spacing(SECTION_SPACING)
             .padding(CONTENT_PADDING);
-        scrollable(content).height(Length::Fill).into()
+        scrollable(content).height(Length::Shrink).into()
     }
 
     fn inputs_view<'a>(&'a self, tokens: &'a ThemeTokens) -> Element<'a, TraceCalculatorMessage> {
@@ -208,7 +205,7 @@ impl TraceCalculatorControl {
             input_row(
                 "Current",
                 &self.current,
-                text("A").size(BODY_SIZE).width(UNIT_PICKER_WIDTH),
+                static_unit_box("A", tokens),
                 M::CurrentChanged,
                 tokens,
             ),
@@ -263,7 +260,7 @@ impl TraceCalculatorControl {
                 tokens,
             ),
             result_panel(
-                "Outer layer, in air",
+                "Outer layer",
                 calculation.outer,
                 self.outer_width_unit,
                 TraceCalculatorMessage::OuterWidthUnitChanged,
@@ -383,6 +380,31 @@ fn input_row<'a>(
     .into()
 }
 
+/// A unit that cannot be changed (the current is always in amperes),
+/// drawn with the size and border of the pickers so the unit column lines
+/// up.
+fn static_unit_box<'a>(
+    label: &'static str,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, TraceCalculatorMessage> {
+    container(
+        text(label)
+            .size(BODY_SIZE)
+            .color(theme_ext::text_secondary(tokens)),
+    )
+    .padding(CONTROL_PADDING)
+    .width(UNIT_PICKER_WIDTH)
+    .style(move |_theme| container::Style {
+        border: Border {
+            width: 1.0,
+            radius: STATIC_BOX_RADIUS.into(),
+            color: theme_ext::border_color(tokens),
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
 fn unit_picker<'a, U, const N: usize>(
     units: [U; N],
     selected: U,
@@ -441,13 +463,36 @@ fn button_style(tokens: &ThemeTokens, status: button::Status) -> button::Style {
     }
 }
 
-/// Read a field. A comma is accepted as the decimal separator; the text
-/// is trimmed first.
+/// Read a field. The text is trimmed, and one comma is accepted as the
+/// decimal separator. Input that could be read two ways is refused rather
+/// than guessed: several commas, a comma next to a point, and a comma
+/// followed by exactly three digits (`1,000` is a thousand to some and one
+/// to others).
 fn parse_field(field: InputField, text: &str) -> Result<f64, TraceCalculatorError> {
-    text.trim()
+    let invalid = || TraceCalculatorError::InvalidNumber(field);
+    let trimmed = text.trim();
+    if is_ambiguous_comma(trimmed) {
+        return Err(invalid());
+    }
+    trimmed
         .replace(',', ".")
         .parse::<f64>()
-        .map_err(|_| TraceCalculatorError::InvalidNumber(field))
+        .map_err(|_| invalid())
+}
+
+fn is_ambiguous_comma(text: &str) -> bool {
+    match text.matches(',').count() {
+        0 => false,
+        1 => {
+            let (whole, fraction) = text.split_once(',').unwrap_or((text, ""));
+            text.contains('.')
+                || (fraction.len() == 3
+                    && fraction.bytes().all(|b| b.is_ascii_digit())
+                    && !whole.is_empty()
+                    && whole.bytes().all(|b| b.is_ascii_digit()))
+        }
+        _ => true,
+    }
 }
 
 /// About three significant figures in plain notation, scientific outside
@@ -502,6 +547,24 @@ mod tests {
             control.calculation(),
             Err(TraceCalculatorError::InvalidNumber(InputField::TraceLength))
         );
+    }
+
+    #[test]
+    fn ambiguous_comma_input_is_refused_not_guessed() {
+        for text in ["1,000", "1,2,3", "1,000.5", "1.000,5", "12,345"] {
+            let mut control = TraceCalculatorControl::default();
+            control.update(TraceCalculatorMessage::CurrentChanged(text.into()));
+            assert_eq!(
+                control.calculation(),
+                Err(TraceCalculatorError::InvalidNumber(InputField::Current)),
+                "{text:?} must not parse"
+            );
+        }
+        for text in ["1,5", "0,25", "1,50", "1,5000", ",5"] {
+            let mut control = TraceCalculatorControl::default();
+            control.update(TraceCalculatorMessage::CurrentChanged(text.into()));
+            assert!(control.calculation().is_ok(), "{text:?} is a decimal comma");
+        }
     }
 
     #[test]

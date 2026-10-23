@@ -18,12 +18,13 @@ fn edit(app: &mut Signex, message: TraceCalculatorMessage) {
     )));
 }
 
-fn panel_has(app: &Signex, needle: &str) -> bool {
+fn panel_count(app: &Signex, needle: &str) -> usize {
     app.document_state
         .panel_ctx
         .diagnostics
         .iter()
-        .any(|entry| entry.message.contains(needle))
+        .filter(|entry| entry.message.contains(needle))
+        .count()
 }
 
 #[test]
@@ -126,13 +127,21 @@ fn escape_closes_the_modal_and_keeps_the_active_tool() {
 }
 
 /// A calculation failure shows in the modal AND is a log record on the
-/// Messages panel: the dialog is not a substitute for the log.
+/// Messages panel: the dialog is not a substitute for the log. The same
+/// failure repeated by the next keystroke is logged once, not per edit.
+///
+/// Relies on the default log level: `SIGNEX_LOG=error` filters the `warn`
+/// record out and fails this test.
 #[test]
 fn a_calculation_failure_reaches_the_messages_panel() {
     let _ = diagnostics::init_logging();
     let (mut app, _startup) = Signex::new();
     let marker = "Enter a numeric value for current.";
-    assert!(!panel_has(&app, marker), "precondition: nothing logged yet");
+    assert_eq!(
+        panel_count(&app, marker),
+        0,
+        "precondition: nothing logged yet"
+    );
 
     edit(
         &mut app,
@@ -143,8 +152,20 @@ fn a_calculation_failure_reaches_the_messages_panel() {
         app.ui_state.pcb_trace_calculator.calculation().is_err(),
         "the modal itself shows the failure"
     );
-    assert!(
-        panel_has(&app, marker),
+    assert_eq!(
+        panel_count(&app, marker),
+        1,
         "the failure must be on the Messages panel snapshot as well"
+    );
+
+    edit(
+        &mut app,
+        TraceCalculatorMessage::CurrentChanged("five".into()),
+    );
+
+    assert_eq!(
+        panel_count(&app, marker),
+        1,
+        "an identical failing edit must not add a second entry"
     );
 }
