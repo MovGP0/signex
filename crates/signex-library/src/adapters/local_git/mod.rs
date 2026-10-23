@@ -28,6 +28,9 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+mod symbol_problems;
+
+pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -105,6 +108,8 @@ pub struct LocalGitAdapter {
     /// libgit2's responsibility; this only addresses the in-process
     /// race that `RwLock<LibraryFile>` does NOT cover.)
     git_lock: Mutex<()>,
+    /// `.snxsym` containers the last symbol scan could not read (#690).
+    symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
     /// Stamp and content hash of the `.snxlib` text behind `library_file`
     /// (#531). `None` forces a reload on the next access. Lock order:
     /// `library_file` before `disk_stamp`.
@@ -209,6 +214,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
         })
@@ -249,6 +255,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
         })
@@ -339,6 +346,7 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
             disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
             warned_state: Mutex::new(None),
         })
