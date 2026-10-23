@@ -567,6 +567,45 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
     }
 }
 
+/// The path a child-sheet reference names, for OWNERSHIP questions: which
+/// open project reaches this file. Unlike [`resolve_child_reference`], which
+/// refuses to open a file outside its parent's directory, ownership follows
+/// EVERY reference, absolute and `../` alike: a sheet one project reaches
+/// through an escape is still that project's, and under-claiming it is the
+/// data-loss direction (#741). The path is joined to `parent_dir`, normalized
+/// with `..` clamped at the filesystem root (`/..` is `/`), so a chain of
+/// `..` cannot grow the path without bound and a loop folds onto a key
+/// already seen. `None` only for an empty reference.
+pub(crate) fn ownership_reference(parent_dir: &Path, reference: &str) -> Option<PathBuf> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(normalize_clamped(&parent_dir.join(PathBuf::from(trimmed))))
+}
+
+/// [`lexically_normalize`] that drops a `..` standing directly on a root or
+/// drive prefix instead of keeping it, matching how the OS resolves `/..`.
+/// A `..` at the head of a *relative* path is still kept: there is no root
+/// to clamp against.
+pub(crate) fn normalize_clamped(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                Some(std::path::Component::RootDir | std::path::Component::Prefix(_)) => {}
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
 /// Lexically normalize `path` — resolve `.` and `..` components without
 /// touching the filesystem (unlike `std::fs::canonicalize`, which needs the
 /// path to exist). A `..` with nothing left to pop is kept as a literal `..`
