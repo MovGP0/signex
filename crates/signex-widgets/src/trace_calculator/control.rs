@@ -508,6 +508,15 @@ mod tests {
     }
 
     #[test]
+    fn a_valid_edit_reports_no_failure() {
+        let mut control = TraceCalculatorControl::default();
+        assert_eq!(
+            control.update(TraceCalculatorMessage::CurrentChanged("8".into())),
+            None
+        );
+    }
+
+    #[test]
     fn a_domain_rejection_is_surfaced_as_a_failure() {
         let mut control = TraceCalculatorControl::default();
         let failure = control.update(TraceCalculatorMessage::CurrentChanged("-1".into()));
@@ -582,7 +591,7 @@ mod tests {
         assert_eq!(format_number(256.27), "256");
         assert_eq!(format_number(0.0123), "0.0123");
         assert_eq!(format_number(123_456.0), "123456");
-        assert_eq!(format_number(-3.14159), "-3.14");
+        assert_eq!(format_number(-4.5678), "-4.57");
     }
 
     #[test]

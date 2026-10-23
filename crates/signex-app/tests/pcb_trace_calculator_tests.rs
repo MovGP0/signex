@@ -1,0 +1,150 @@
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
+#![expect(
+    clippy::let_underscore_must_use,
+    reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
+)]
+
+use signex_app::app::{Message, OverlayMsg, Signex, Tool};
+use signex_app::diagnostics;
+use signex_app::menu_bar::MenuMessage;
+use signex_widgets::trace_calculator::{LengthUnit, TraceCalculatorMessage};
+
+fn edit(app: &mut Signex, message: TraceCalculatorMessage) {
+    let _ = app.update(Message::Overlay(OverlayMsg::PcbTraceCalculatorEdited(
+        message,
+    )));
+}
+
+fn panel_has(app: &Signex, needle: &str) -> bool {
+    app.document_state
+        .panel_ctx
+        .diagnostics
+        .iter()
+        .any(|entry| entry.message.contains(needle))
+}
+
+#[test]
+fn tools_menu_message_opens_the_modal_without_a_window_task() {
+    let (mut app, _startup) = Signex::new();
+    assert!(!app.ui_state.pcb_trace_calculator_open);
+
+    let task = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+
+    assert!(
+        app.ui_state.pcb_trace_calculator_open,
+        "the Tools menu entry should open the in-app modal"
+    );
+    assert_eq!(
+        task.units(),
+        0,
+        "the modal is an overlay, so no OS window task should be emitted"
+    );
+}
+
+#[test]
+fn reopening_while_open_is_a_no_op() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+    assert!(app.ui_state.pcb_trace_calculator_open);
+}
+
+#[test]
+fn the_overlay_open_message_opens_the_modal_without_the_menu() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Overlay(OverlayMsg::OpenPcbTraceCalculator));
+    assert!(app.ui_state.pcb_trace_calculator_open);
+}
+
+#[test]
+fn edit_messages_update_the_dedicated_control_state() {
+    let (mut app, _startup) = Signex::new();
+    edit(
+        &mut app,
+        TraceCalculatorMessage::LengthUnitChanged(LengthUnit::Inch),
+    );
+    edit(
+        &mut app,
+        TraceCalculatorMessage::CurrentChanged("12".into()),
+    );
+
+    assert_eq!(
+        app.ui_state.pcb_trace_calculator.length_unit,
+        LengthUnit::Inch
+    );
+    assert_eq!(app.ui_state.pcb_trace_calculator.current, "12");
+}
+
+#[test]
+fn close_message_dismisses_the_modal() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+
+    let _ = app.update(Message::Overlay(OverlayMsg::ClosePcbTraceCalculator));
+
+    assert!(!app.ui_state.pcb_trace_calculator_open);
+}
+
+#[test]
+fn closing_the_modal_keeps_the_entered_state() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+    edit(&mut app, TraceCalculatorMessage::CurrentChanged("7".into()));
+
+    let _ = app.update(Message::Overlay(OverlayMsg::ClosePcbTraceCalculator));
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+
+    assert_eq!(
+        app.ui_state.pcb_trace_calculator.current, "7",
+        "reopening should show the state the user left behind"
+    );
+}
+
+#[test]
+fn escape_closes_the_modal_and_keeps_the_active_tool() {
+    let (mut app, _startup) = Signex::new();
+    // Keep the first-run tour out of the ladder so the calculator is the
+    // only rung, and arm a tool that the Select reset would visibly undo.
+    app.ui_state.first_run_tour_open = false;
+    app.interaction_state.current_tool = Tool::Wire;
+    let _ = app.update(Message::Menu(MenuMessage::OpenPcbTraceCalculator));
+
+    let _ = app.update(Message::EscapePressed { window: None });
+
+    assert!(
+        !app.ui_state.pcb_trace_calculator_open,
+        "Esc should dismiss the calculator"
+    );
+    assert_eq!(
+        app.interaction_state.current_tool,
+        Tool::Wire,
+        "Esc must not fall through to the tool reset behind the modal"
+    );
+}
+
+/// A calculation failure shows in the modal AND is a log record on the
+/// Messages panel: the dialog is not a substitute for the log.
+#[test]
+fn a_calculation_failure_reaches_the_messages_panel() {
+    let _ = diagnostics::init_logging();
+    let (mut app, _startup) = Signex::new();
+    let marker = "Enter a numeric value for current.";
+    assert!(!panel_has(&app, marker), "precondition: nothing logged yet");
+
+    edit(
+        &mut app,
+        TraceCalculatorMessage::CurrentChanged("five".into()),
+    );
+
+    assert!(
+        app.ui_state.pcb_trace_calculator.calculation().is_err(),
+        "the modal itself shows the failure"
+    );
+    assert!(
+        panel_has(&app, marker),
+        "the failure must be on the Messages panel snapshot as well"
+    );
+}
